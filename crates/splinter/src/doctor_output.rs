@@ -12,6 +12,7 @@
 use std::fmt::Write as _;
 
 use splinter_sdk::doctor::{Doctor, Verdict};
+use splinter_sdk::serving::Serving;
 
 use crate::output::Report;
 
@@ -34,6 +35,22 @@ impl Report for Doctor {
         } else {
             "not ready: fix the failed checks above\n"
         });
+        out
+    }
+}
+
+impl Report for Serving {
+    fn human(&self) -> String {
+        let mut out = String::new();
+        for url in &self.endpoints {
+            let _ = writeln!(out, "serving: {url}");
+        }
+        let _ = writeln!(out, "endpoints file: {}", self.endpoints_file.display());
+        let _ = writeln!(out, "key file: {}", self.key_file.display());
+        if let Some(authority) = &self.authority_file {
+            let _ = writeln!(out, "certificate authority: {}", authority.display());
+        }
+        out.push_str("until interrupted (Ctrl-C)\n");
         out
     }
 }

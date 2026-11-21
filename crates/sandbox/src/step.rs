@@ -69,15 +69,16 @@ pub struct Placement {
 impl NodeSteps {
     /// The script a step runs in `dir`: it writes the step id into
     /// `dir/`[`STEP_ID_FILE`], enters `dir` and starts `command` under the
-    /// exec prefix, with the placeholders as the scheduler's task variables.
+    /// exec prefix, with the placeholders (in the prefix too, so a wrapper
+    /// can be told a rank's card) as the scheduler's task variables.
     #[must_use]
     pub fn script(&self, dir: &Path, command: &[String]) -> String {
         let dir = quote(&dir.display().to_string());
         let words: Vec<String> = self
             .exec_prefix
             .iter()
-            .map(|word| quote(word))
-            .chain(command.iter().map(|word| shell_word(word)))
+            .chain(command)
+            .map(|word| shell_word(word))
             .collect();
         format!(
             "#!/bin/sh\n\

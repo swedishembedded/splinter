@@ -21,8 +21,8 @@ brain-survival = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 libc = { workspace = true }
+rcgen = { workspace = true }
 reqwest = { workspace = true }
-rustls = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

@@ -172,13 +172,12 @@ pub fn call(
     std::thread::scope(|scope| {
         scope
             .spawn(move || {
-                let _ = rustls::crypto::ring::default_provider().install_default();
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .map_err(|e| JobError::Failed(format!("starting a runtime: {e}")))?;
                 runtime.block_on(async {
-                    let client = reqwest::Client::builder()
+                    let client = sven_sdk::http::model_client_builder()
                         .no_proxy()
                         .connect_timeout(Duration::from_secs(15))
                         .build()
@@ -247,15 +246,12 @@ fn drive(
     cancel: Option<&dyn Cancel>,
     frames: &Sender<Value>,
 ) -> Result<Value, JobError> {
-    // The provider sven's own clients install; a second install (or sven's
-    // first) leaves the one in place.
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| JobError::Failed(format!("starting a runtime: {e}")))?;
     runtime.block_on(async {
-        let client = reqwest::Client::builder()
+        let client = sven_sdk::http::model_client_builder()
             .no_proxy()
             .connect_timeout(Duration::from_secs(15))
             .build()

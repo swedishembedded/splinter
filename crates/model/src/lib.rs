@@ -51,12 +51,14 @@ pub mod answer;
 pub mod capabilities;
 pub mod consolidate;
 pub mod device;
+pub mod distributed;
 pub mod embed;
 pub mod endpoint;
 pub mod error;
 pub mod exam;
 #[cfg(feature = "scripted")]
 pub mod fixture;
+pub mod fleet_tls;
 pub mod local;
 pub mod manifest;
 pub mod measure;

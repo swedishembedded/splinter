@@ -65,6 +65,8 @@ splinter doctor --cluster-nodes n442
 | `--cluster auto\|off` | `auto` (the default) uses an allocation of more than one node, or the nodes `--cluster-nodes` names; `off` keeps everything on this machine, as outside an allocation. An allocation of one node with no nodes named is a single-machine run. |
 | `--cluster-nodes HOSTLIST` | The nodes this process may use, in host-list syntax (default: every node of the allocation). Other sessions may own some nodes of a shared allocation; name yours. A node outside the allocation is refused. |
 | `--cluster-exec-prefix WORDS` | What a program started on a node runs under, split at spaces. A step starts on the node's host, not in a container this process runs in. |
+| `--cluster-rank-exec-prefix WORDS` | What a distributed job's ranks run under instead (default: `--cluster-exec-prefix`); `{local_rank}` in it is a rank's card. |
+| `--cluster-insecure-plaintext` | Serve the fleet's HTTP in plaintext instead of TLS under its own certificate authority; only on a trusted cluster network. |
 | `--slurm-srun PATH` | The `srun` steps are started with (default: the first on `PATH`); `--slurm-scancel PATH` stops one. |
 | `--slurm-step-arg ARG` | An argument every step passes to `srun` (`--mem=64G`); repeats. |
 | `--slurm-single-node-step-arg ARG` | An argument a single-node step passes besides; on an HPE Slingshot fabric `--network=single_node_vni`, without which a single-node step has no fabric access; repeats. |
@@ -88,31 +90,51 @@ run, naming its node), asks as many attempts at once as the servers decode
 together, and stops every step on exit: `SIGTERM` to `srun`, then `scancel`
 of the step if it has not ended.
 
-The servers speak plain HTTP on the cluster's network (`brain serve
---insecure-plaintext`): the key travels in the clear between the nodes of the
-allocation. Use `--brain-endpoint` with servers behind TLS where that network
-is not trusted.
+The servers serve TLS. The fleet makes a certificate authority of its own
+when it starts, name-constrained to the fleet's nodes, issues each node a
+certificate for its name and address, and discards the authority's key, so
+no other certificate can ever chain to it. The authority's certificate is
+`ca.pem` in the fleet's directory, for clients outside Splinter; Splinter's
+own model clients, and the agents it runs, trust it and verify every
+server's certificate. `--cluster-insecure-plaintext` serves plaintext HTTP
+instead, and then the fleet's key crosses the network readable: use it only
+on a cluster network you trust.
 
 A step starts on the node's host. When Splinter runs in a container, the
-server must enter it again there; for example, with Apptainer, a wrapper
-named by `--cluster-exec-prefix`:
+step must enter it again there. Two wrappers in `scripts/cluster/` do it:
+`apptainer-step --image SIF [--bind DIR]... --` enters an Apptainer image
+(dropping the bind and library variables of the container the step was
+started from), and `rank-env [--env FILE]... [--card N] --` sources the
+site's files inside the task and pins it to the CPUs of the NUMA node card
+N's PCI device sits on, as sysfs says. `--cluster-exec-prefix` names what a
+fleet's servers start under, and `--cluster-rank-exec-prefix` what a job's
+ranks start under (`{local_rank}` in it is a rank's card):
 
 ```bash
-#!/bin/sh
-# node-exec.sh: the workstation image, with the CUDA user space, on a node's host
-unset APPTAINER_BIND SINGULARITY_BIND LD_LIBRARY_PATH
-exec apptainer exec --nv -B /nobackup "$HOME/images/workstation.sif" \
-  bash -c '. "$HOME/cuda-env.sh" && exec "$@"' node-exec "$@"
-```
-
-```bash
-splinter doctor --cluster-nodes n442 --cluster-exec-prefix ~/bin/node-exec.sh \
+step="scripts/cluster/apptainer-step --image $HOME/images/workstation.sif --bind /nobackup --"
+splinter doctor --cluster-nodes 'n[442,467]' \
+    --cluster-exec-prefix "$step scripts/cluster/rank-env --env $HOME/cuda-env.sh --" \
+    --cluster-rank-exec-prefix "$step scripts/cluster/rank-env --env $HOME/nccl-env.sh --card {local_rank} --" \
     --slurm-step-arg=--mem=64G --backend cuda
 ```
 
+A site whose task prolog re-exports its own communication defaults (NCCL's
+network plugin and transport, libfabric's settings) into every task needs
+them set in the `--env` file, inside the rank; set in `srun`'s environment
+they are overwritten.
+
+`splinter serve` starts the same servers (a fleet in an allocation that
+spans nodes, else one server here), prints their endpoints, the file listing
+them, the key file and the certificate authority, and keeps them until
+interrupted, for another program (a benchmark, a campaign loop) to use. A
+client outside Splinter trusts the authority file (`curl --cacert`, or a
+bundle in `SSL_CERT_FILE` for an agent that reads the system's roots).
+
 ### A distributed job across the allocation
 
-`jobs submit --distributed` writes the job's plan (`job-plan.json`) and a
+`jobs submit --distributed` refuses a `brain` command whose action does
+not take a job plan, as `brain caps --json` lists the actions (`splinter
+doctor` names the ones that do), then writes the job's plan (`job-plan.json`) and a
 fresh owner-only secret (`job.secret`) into each attempt directory before any
 rank starts, and appends `--job-plan job-plan.json --job-rank {rank}
 --job-secret job.secret` to the command; the plan's coordinator is on the
@@ -120,17 +142,13 @@ address of rank 0's node. A four-rank Qwen3 LoRA run on one node's four
 cards:
 
 ```bash
-splinter --cluster-nodes n442 --cluster-exec-prefix ~/bin/node-exec.sh \
+splinter --cluster-nodes n442 --cluster-rank-exec-prefix "$step scripts/cluster/rank-env --env $HOME/nccl-env.sh --card {local_rank} --" \
     --slurm-step-arg=--mem=128G --slurm-single-node-step-arg=--network=single_node_vni \
     jobs submit --distributed --ranks-per-node 4 --gpus-per-rank 1 -- \
     brain --device 'gpu{local_rank}' --backend cuda qwen3 lora_train \
     --in dataset=/shared/data.jsonl --out 'adapter=out{rank}.safetensors' --steps 8
 splinter jobs reconcile
 ```
-
-Settings a rank needs in its own environment (a communication library's
-network settings re-exported by the site into every task) belong in the exec
-prefix's wrapper, which runs inside each task, not in `srun`'s environment.
 
 ## Machine and models
 

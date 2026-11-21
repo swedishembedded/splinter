@@ -233,6 +233,22 @@ impl Runtime {
         Ok(endpoints)
     }
 
+    /// The scratch directory of the brain servers this runtime started, which
+    /// lists their endpoints and holds their key (and, for a fleet serving
+    /// TLS, the certificate authority) for clients outside this process;
+    /// `None` before they are started, or when the endpoints were given.
+    #[must_use]
+    pub fn brain_directory(&self) -> Option<std::path::PathBuf> {
+        let held = self
+            .brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match held.as_ref()? {
+            BrainConnection::Owned(managed) => Some(managed.work_dir().to_path_buf()),
+            BrainConnection::Given(_) => None,
+        }
+    }
+
     /// The configuration.
     #[must_use]
     pub fn config(&self) -> &Config {

@@ -59,6 +59,7 @@
 //!   tree, trained on what its own checks confirm.
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`doctor`] - whether a run can start here, before one does;
+//! * [`serving`] - the brain servers kept for other programs until interrupted;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`compare`] - two experience sets of the same tasks compared, a family
 //!   counted once; [`arm_compare`] - graded trials of several arms (Harbor
@@ -135,6 +136,7 @@ pub mod retrieval;
 mod rl_build;
 pub mod router;
 pub mod sealed;
+pub mod serving;
 pub mod sessions;
 pub mod set_import;
 pub mod skill_library;

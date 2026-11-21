@@ -62,16 +62,23 @@ pub fn start_brain(config: &Config, cancel: &CancelToken) -> Result<BrainConnect
         steps: node_steps(config)?,
         nodes: cluster.nodes,
         gpus_per_node: cluster.allocation.gpus_per_node,
+        insecure_plaintext: config.cluster.insecure_plaintext,
     };
     let managed = ManagedBrain::start_fleet(&fleet, cancel)?;
+    let work = managed.work_dir();
+    let transport = if fleet.insecure_plaintext {
+        "plaintext".to_string()
+    } else {
+        format!(
+            "TLS under {}",
+            work.join(splinter_model::service::AUTHORITY_FILE).display()
+        )
+    };
     eprintln!(
-        "brain: serving on {} ({} GPUs each); endpoints listed in {}",
+        "brain: serving on {} ({} GPUs each, {transport}); endpoints listed in {}",
         fleet.nodes.join(","),
         fleet.gpus_per_node,
-        managed
-            .work_dir()
-            .join(splinter_model::service::ENDPOINTS_FILE)
-            .display()
+        work.join(splinter_model::service::ENDPOINTS_FILE).display()
     );
     Ok(BrainConnection::Owned(managed))
 }

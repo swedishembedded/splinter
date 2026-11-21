@@ -20,9 +20,11 @@ Every command takes these.
 - `--cluster <MODE>`: Whether a Slurm allocation this process runs inside is used: `auto` (default) serves models on every usable node of a multi-node allocation and spreads a distributed job's ranks over them; `off` keeps everything on this machine.
 - `--cluster-nodes <HOSTLIST>`: The nodes of the allocation this process may use, as a Slurm host list (`n[442,445]`); default: every node of the allocation. Naming nodes uses them even when only one is named.
 - `--cluster-exec-prefix <WORDS>`: The words a program started on a node runs under, split at spaces: a step starts on the node's host, so a container this process runs in is entered again there (`apptainer exec --nv IMAGE`, or a wrapper script that also sets the node's environment)
+- `--cluster-rank-exec-prefix <WORDS>`: The words a distributed job's ranks are started under instead of --cluster-exec-prefix, split at spaces; `{local_rank}` in them is a rank's place on its node, the card a wrapper pins it to.
 - `--slurm-srun <PATH>`: The `srun` program steps on the allocation's nodes are started with (default: the first on `PATH`)
 - `--slurm-step-arg <ARG>...`: An argument every step passes to `srun` (`--mem=64G`); repeat for more.
 - `--slurm-single-node-step-arg <ARG>...`: An argument a step on a single node passes to `srun` besides `--slurm-step-arg` (on an HPE Slingshot fabric, `--network=single_node_vni`, without which a single-node step has no fabric access); repeat for more.
+- `--cluster-insecure-plaintext`: Serve plaintext HTTP between the allocation's nodes instead of TLS: only on a cluster network you trust, since the servers' key then crosses it readable. By default the servers serve TLS under a certificate authority made for them, whose key is discarded at once.
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--detach-on-interrupt`: On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs of the command running, instead of cancelling them through brain's API (`DELETE /v1/jobs/{id}`) first; running the same command again continues each job from its last saved state. A second Ctrl-C always exits at once.
@@ -79,6 +81,7 @@ Every command takes these.
 - [splinter ask](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [splinter status](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [splinter doctor](#splinter-doctor) - Check that a run can start here
+- [splinter serve](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
 - [splinter baseline](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
 - [splinter source](#splinter-source) - Capture and inspect sources
   - [splinter source add](#splinter-source-add) - Capture a file (a document), a directory (a repository) or cmd:COMMAND
@@ -230,6 +233,7 @@ Subcommands:
 - [`ask`](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [`status`](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [`doctor`](#splinter-doctor) - Check that a run can start here
+- [`serve`](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
 - [`baseline`](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
 - [`source`](#splinter-source) - Capture and inspect sources
 - [`env`](#splinter-env) - Compile a learning objective into validated, versioned training environments
@@ -481,6 +485,14 @@ Check that a run can start here: the state root is writable with room to spare, 
 
 ```text
 splinter doctor [OPTIONS]
+```
+
+### splinter serve
+
+Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
+
+```text
+splinter serve [OPTIONS]
 ```
 
 ### splinter baseline

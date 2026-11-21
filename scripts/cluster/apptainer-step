@@ -1,0 +1,33 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for running learning workloads on
+# the nodes of a batch allocation from inside a container for its clients. If
+# your team needs expertise in containerised multi-node GPU jobs then you can
+# procure our services by sending an email to info@swedishembedded.com.
+
+# Enter an Apptainer image on a node's host and run a command in it: what a
+# Splinter step (a brain server of a fleet, a rank of a job) needs when
+# Splinter itself runs in that image, since a step starts on the node's host.
+# Name it as the start of --cluster-exec-prefix.
+#
+# Usage: apptainer-step --image SIF [--bind DIR]... -- command [args...]
+#
+# The bind variables of the container the step was started from name paths
+# of that container, not of the host, so they are dropped, and so is the
+# library path it exported. GPUs are passed in (--nv).
+set -eu
+image="" binds=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --image) image=${2:?--image needs a path}; shift 2 ;;
+        --bind) binds="$binds -B ${2:?--bind needs a directory}"; shift 2 ;;
+        --) shift; break ;;
+        *) echo "apptainer-step: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+[ -n "$image" ] && [ "$#" -gt 0 ] || { echo "apptainer-step: usage: apptainer-step --image SIF [--bind DIR]... -- command..." >&2; exit 2; }
+unset APPTAINER_BIND SINGULARITY_BIND LD_LIBRARY_PATH
+# shellcheck disable=SC2086 # each bind is its own -B word
+exec apptainer exec --nv $binds "$image" "$@"

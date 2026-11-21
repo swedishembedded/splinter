@@ -88,8 +88,11 @@ impl<'a> Jobs<'a> {
         self.submit_at(spec, splinter_core::clock::unix_now())
     }
 
-    /// [`Self::submit`], judging the claim's expiry from `now_unix`.
+    /// [`Self::submit`], judging the claim's expiry from `now_unix`. A job
+    /// with a plan whose program is brain is first checked against brain's
+    /// own manifests: an action that takes no plan is refused.
     pub fn submit_at(&self, spec: &JobSpec, now_unix: u64) -> Result<JobSubmission, Error> {
+        check_brain_plan(spec)?;
         let (launched, job) = match self.controller().submit_at(spec, now_unix)? {
             Submission::Launched(job) => (true, job),
             Submission::Existing(job) => (false, job),
@@ -175,6 +178,25 @@ fn names(spec: &Digest, id: &str) -> bool {
     let hex = spec.hex();
     let wanted = id.split_once(':').map_or(id, |(_, rest)| rest);
     !wanted.is_empty() && hex.starts_with(wanted)
+}
+
+/// Refuses a planned job whose program is a `brain` that does not list its
+/// action as one that joins a job plan (`brain caps --json`).
+fn check_brain_plan(spec: &JobSpec) -> Result<(), Error> {
+    let Some(program) = spec.command.first() else {
+        return Ok(());
+    };
+    let path = std::path::Path::new(program);
+    let is_brain = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("brain"));
+    if spec.plan.is_none() || !is_brain {
+        return Ok(());
+    }
+    let actions = crate::model::distributed::brain_actions(path)
+        .map_err(|e| Error::Refused(format!("asking brain which actions join a job plan: {e}")))?;
+    crate::model::distributed::check_plan_command(&spec.command, &actions).map_err(Error::Refused)
 }
 
 #[cfg(test)]

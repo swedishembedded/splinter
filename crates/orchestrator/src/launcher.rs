@@ -83,7 +83,10 @@ pub fn launcher(
                 scancel: cluster.scancel.clone(),
                 args: cluster.step_args.clone(),
                 single_node_args: cluster.single_node_step_args.clone(),
-                exec_prefix: cluster.exec_prefix.clone(),
+                exec_prefix: cluster
+                    .rank_exec_prefix
+                    .clone()
+                    .unwrap_or_else(|| cluster.exec_prefix.clone()),
             };
             Ok(Box::new(NodeStepLauncher::new(
                 steps,

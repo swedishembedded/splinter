@@ -85,6 +85,10 @@ pub enum Command {
     /// resolves to weights on disk. Loads no model and uses no network. Exits 1
     /// when a check fails.
     Doctor,
+    /// Start the brain servers (one per usable node of a multi-node
+    /// allocation, else one here), print where they are and keep them until
+    /// interrupted.
+    Serve,
     /// Print the `baseline-v1` record of what a registered run runs on: the
     /// three commits, toolchain, binaries, model and tokenizer digests, seeds
     /// and hardware.

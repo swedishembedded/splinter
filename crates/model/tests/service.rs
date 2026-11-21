@@ -168,6 +168,7 @@ while [ $# -gt 0 ]; do
     --runtime-dir) runtime=$2; shift ;;
     --ready-file) ready=$2; shift ;;
     --api-key-file) key=$2; shift ;;
+    --tls-cert) cert=$2; shift ;;
   esac
   shift
 done
@@ -178,7 +179,9 @@ echo $$ >> "$0.pids"
 if [ -n "$FAIL_ON" ] && [ "${runtime##*/}" = "$FAIL_ON" ]; then echo "no card" >&2; exit 3; fi
 test -s "$key" || exit 4
 host=${addr%:0}
-printf '{"pid":%s,"surfaces":[{"provider":"openai","url":"http://%s:%s"}]}' $$ "$host" $((40000 + $$ % 1000)) > "$runtime/serve-$$.json"
+scheme=http
+if [ -n "$cert" ]; then grep -q 'BEGIN CERTIFICATE' "$cert" || exit 5; scheme=https; fi
+printf '{"pid":%s,"surfaces":[{"provider":"openai","url":"%s://%s:%s"}]}' $$ "$scheme" "$host" $((40000 + $$ % 1000)) > "$runtime/serve-$$.json"
 : > "$ready"
 exec sleep 600
 "#,
@@ -200,6 +203,7 @@ exec sleep 600
             },
             nodes: nodes.iter().map(|n| (*n).to_string()).collect(),
             gpus_per_node: 4,
+            insecure_plaintext: false,
         }
     }
 
@@ -223,7 +227,10 @@ exec sleep 600
         let endpoints = brain.endpoints();
         assert_eq!(endpoints.urls().len(), 2, "{:?}", endpoints.urls());
         for url in endpoints.urls() {
-            assert!(url.starts_with("http://127.0.0.1:4"), "{url}");
+            assert!(
+                url.starts_with("https://127.0.0.1:4"),
+                "TLS by default: {url}"
+            );
         }
         assert_eq!(endpoints.attempt_concurrency(), 48, "24 slots on each node");
         assert!(endpoints.artifact_store().is_ok());
@@ -234,6 +241,11 @@ exec sleep 600
         let listed = std::fs::read_to_string(work.join("endpoints")).unwrap();
         assert_eq!(listed.lines().collect::<Vec<_>>(), endpoints.urls());
         assert_eq!(brain.work_dir(), work);
+        let authority = std::fs::read_to_string(work.join("ca.pem")).unwrap();
+        assert!(
+            authority.contains("BEGIN CERTIFICATE"),
+            "clients outside find the CA"
+        );
         let key = std::fs::read_to_string(work.join("key")).unwrap();
         assert_eq!(
             endpoints.key(),
@@ -263,11 +275,20 @@ exec sleep 600
                 "--device gpu0,gpu1,gpu2,gpu3",
                 "serve --openai 127.0.0.1:0",
                 "--api-key-file",
-                "--insecure-plaintext",
+                "--tls-cert",
+                "--tls-key",
                 "--serve-adapters",
                 "--artifact-store",
             ] {
                 assert!(args.contains(wanted), "{node}: {wanted} in {args}");
+            }
+            assert!(!args.contains("--insecure-plaintext"), "{args}");
+            for private in ["tls.key", "tls.crt"] {
+                let mode = std::fs::metadata(work.join(node).join(private))
+                    .unwrap()
+                    .permissions()
+                    .mode();
+                assert_eq!(mode & 0o777, 0o600, "{private}");
             }
             let mode = std::fs::metadata(work.join(node))
                 .unwrap()
@@ -298,6 +319,21 @@ exec sleep 600
             );
         }
         assert!(!work.exists(), "the key does not outlive the fleet");
+    }
+
+    #[test]
+    fn plaintext_between_nodes_is_served_only_when_asked_for_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = FleetSettings {
+            insecure_plaintext: true,
+            ..fleet(dir.path(), &["localhost"])
+        };
+        let brain = ManagedBrain::start_fleet(&settings, &CancelToken::default()).unwrap();
+        assert!(brain.endpoints().urls()[0].starts_with("http://127.0.0.1:"));
+        let work = brain.work_dir().to_path_buf();
+        let args = std::fs::read_to_string(work.join("localhost/args")).unwrap();
+        assert!(args.contains("--insecure-plaintext") && !args.contains("--tls-cert"));
+        assert!(!work.join("ca.pem").exists());
     }
 
     #[test]

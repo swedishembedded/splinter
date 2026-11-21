@@ -101,6 +101,7 @@ impl Doctor {
 pub fn doctor(ctx: &Context) -> Doctor {
     let mut checks = storage(ctx);
     checks.push(cluster_check(&ctx.config().cluster));
+    checks.extend(distributed_check(ctx));
     checks.extend(gpu_check(ctx));
     checks.extend(roles_resolve(ctx));
     Doctor { checks }
@@ -314,6 +315,52 @@ pub fn cluster_check(cluster: &ClusterSettings) -> Check {
             Check::ok(name, using)
         }
     }
+}
+
+/// Which brain actions can run as the ranks of one job across the
+/// allocation, as the `brain` binary's own manifests say; no check outside an
+/// allocation that spans nodes, or without a binary to ask.
+fn distributed_check(ctx: &Context) -> Option<Check> {
+    let spans = ctx
+        .config()
+        .cluster
+        .usable()
+        .ok()
+        .flatten()
+        .is_some_and(|usable| usable.spans_nodes());
+    let binary = ctx.config().brain_binary.as_ref().filter(|_| spans)?;
+    let name = "distributed-training";
+    Some(match splinter_model::distributed::brain_actions(binary) {
+        Err(e) => Check::problem(
+            Verdict::Warn,
+            name,
+            format!("brain could not say which actions join a job plan: {e}"),
+            "name a `brain` binary that lists its actions with --brain-bin",
+        ),
+        Ok(actions) => {
+            let able: Vec<String> = actions
+                .iter()
+                .filter(|a| a.joins_plan)
+                .map(|a| format!("{} {}", a.model, a.action))
+                .collect();
+            if able.is_empty() {
+                Check::problem(
+                    Verdict::Warn,
+                    name,
+                    "this brain lists no action that joins a job plan: a job runs on one card",
+                    "use a brain build whose trainers take --job-plan",
+                )
+            } else {
+                Check::ok(
+                    name,
+                    format!(
+                        "actions that run as the ranks of one job: {}",
+                        able.join(", ")
+                    ),
+                )
+            }
+        }
+    })
 }
 
 const GIB: u64 = 1 << 30;

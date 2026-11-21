@@ -95,6 +95,10 @@ pub struct NodeService<'a> {
     pub gpus: u32,
     /// The key every server of the fleet answers to (`--api-key-file`).
     pub key_file: &'a Path,
+    /// The certificate chain and private key the server serves TLS with
+    /// (`--tls-cert`, `--tls-key`); `None` serves plaintext off the loopback
+    /// (`--insecure-plaintext`), which the caller asked for by name.
+    pub tls: Option<(&'a Path, &'a Path)>,
 }
 
 /// The server's process: a child of this one, or the `srun` of its step.
@@ -134,8 +138,8 @@ pub struct Service {
     pub lines: Receiver<String>,
     /// The last lines it wrote.
     pub kept: Vec<String>,
-    /// Where it listens, `host:port`.
-    pub address: String,
+    /// Where it listens, `scheme://host:port`.
+    pub origin: String,
     /// The OpenAI surface's key.
     pub key: String,
     /// The sequences it was started to decode together.
@@ -146,7 +150,7 @@ impl Service {
     /// The OpenAI base URL clients request the service at.
     #[must_use]
     pub fn url(&self) -> String {
-        format!("http://{}/v1", self.address)
+        format!("{}/v1", self.origin)
     }
 }
 
@@ -158,9 +162,9 @@ pub struct Pending {
     ready: PathBuf,
     /// The key file the server writes, or the one it was given.
     key: KeySource,
-    /// Where it listens, when known before it is ready (the loopback port
-    /// this process chose).
-    address: Option<String>,
+    /// Where it listens, `scheme://host:port`, when known before it is
+    /// ready (the loopback port this process chose).
+    origin: Option<String>,
     slots: u32,
     startup: Duration,
 }
@@ -246,7 +250,7 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
         }
     }
     let slots = launch.max_batch.unwrap_or(DEFAULT_SERVE_SLOTS).max(1);
-    let (mut command, key, address) = match &launch.host {
+    let (mut command, key, origin) = match &launch.host {
         ServiceHost::Local => {
             let port =
                 free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
@@ -256,17 +260,23 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
             command.args(service_args(launch, &address, &key, &ready));
             // SIGINT, so a training job saves its state as on a cancel.
             die_with_caller(&mut command, libc::SIGINT);
-            (command, key, Some(address))
+            (command, key, Some(format!("http://{address}")))
         }
         ServiceHost::Node(node) => {
             let key = KeySource::Given(node.key_file.to_path_buf());
             // Port 0: the node's system picks a free one, which the server's
             // connection record names once it is bound.
             let mut args = service_args(launch, &format!("{}:0", node.address), &key, &ready);
-            // Off the loopback brain wants TLS; the allocation's nodes reach
-            // each other on the cluster's private network, and the key is the
-            // fleet's own, in an owner-only file.
-            args.push("--insecure-plaintext".into());
+            match node.tls {
+                Some((chain, private_key)) => {
+                    args.push("--tls-cert".into());
+                    args.push(chain.into());
+                    args.push("--tls-key".into());
+                    args.push(private_key.into());
+                }
+                // Off the loopback brain serves plaintext only when told.
+                None => args.push("--insecure-plaintext".into()),
+            }
             let program: Vec<String> = std::iter::once(launch.binary.as_os_str())
                 .chain(args.iter().map(OsString::as_os_str))
                 .map(|word| word.to_string_lossy().into_owned())
@@ -321,7 +331,7 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
         work: launch.work.to_path_buf(),
         ready,
         key,
-        address,
+        origin,
         slots,
         startup: launch.startup,
     })
@@ -353,28 +363,28 @@ impl Pending {
             }
         }
         .map_err(|why| with_output(why, &mut kept))?;
-        let address = match self.address.take() {
-            Some(address) => address,
-            None => bound_address(&self.work, cancel).map_err(|why| with_output(why, &mut kept))?,
+        let origin = match self.origin.take() {
+            Some(origin) => origin,
+            None => bound_origin(&self.work, cancel).map_err(|why| with_output(why, &mut kept))?,
         };
         Ok(Service {
             process: self.process,
             lines: self.lines,
             kept,
-            address,
+            origin,
             key,
             slots: self.slots,
         })
     }
 }
 
-/// The `host:port` the OpenAI surface of the server whose runtime directory
-/// is `work` bound, from its connection record (`serve-<pid>.json`).
-fn bound_address(work: &Path, cancel: &CancelToken) -> Result<String, String> {
+/// The `scheme://host:port` the OpenAI surface of the server whose runtime
+/// directory is `work` bound, from its connection record (`serve-<pid>.json`).
+fn bound_origin(work: &Path, cancel: &CancelToken) -> Result<String, String> {
     let deadline = Instant::now() + RECORD_WAIT;
     loop {
-        if let Some(address) = read_record(work)? {
-            return Ok(address);
+        if let Some(origin) = read_record(work)? {
+            return Ok(origin);
         }
         if cancel.is_cancelled() {
             return Err("cancelled while reading the server's connection record".into());
@@ -390,8 +400,8 @@ fn bound_address(work: &Path, cancel: &CancelToken) -> Result<String, String> {
     }
 }
 
-/// The OpenAI surface's `host:port` from a connection record in `work`, if
-/// one is there yet.
+/// The OpenAI surface's `scheme://host:port` from a connection record in
+/// `work`, if one is there yet.
 fn read_record(work: &Path) -> Result<Option<String>, String> {
     let entries =
         std::fs::read_dir(work).map_err(|e| format!("cannot read {}: {e}", work.display()))?;
@@ -416,12 +426,16 @@ fn read_record(work: &Path) -> Result<Option<String>, String> {
         let Some(url) = url else {
             return Err(format!("{name} names no openai surface: {text}"));
         };
-        let address = url
-            .strip_prefix("http://")
-            .map(|rest| rest.trim_end_matches('/'))
-            .filter(|rest| !rest.is_empty() && !rest.ends_with(":0"))
-            .ok_or_else(|| format!("{name} names an unusable openai url {url:?}"))?;
-        return Ok(Some(address.to_string()));
+        let origin = url.trim_end_matches('/');
+        let usable = ["http://", "https://"].iter().any(|scheme| {
+            origin
+                .strip_prefix(scheme)
+                .is_some_and(|rest| !rest.is_empty() && !rest.ends_with(":0"))
+        });
+        if !usable {
+            return Err(format!("{name} names an unusable openai url {url:?}"));
+        }
+        return Ok(Some(origin.to_string()));
     }
     Ok(None)
 }
@@ -441,7 +455,16 @@ mod tests {
         .unwrap();
         assert_eq!(
             read_record(dir.path()).unwrap().as_deref(),
-            Some("10.0.0.5:41234")
+            Some("http://10.0.0.5:41234")
+        );
+        std::fs::write(
+            dir.path().join("serve-77.json"),
+            r#"{"pid":77,"surfaces":[{"provider":"openai","url":"https://10.0.0.5:41234/"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            read_record(dir.path()).unwrap().as_deref(),
+            Some("https://10.0.0.5:41234")
         );
         std::fs::write(
             dir.path().join("serve-77.json"),

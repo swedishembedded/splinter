@@ -81,6 +81,7 @@ test: deps/lua-dialects
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
 	python3 scripts/campaigns/flywheel/test_loop.py
+	python3 -I scripts/cluster/test_rank_env.py
 
 ## test/crate - lists the per-package test targets; tests nothing
 test/crate:

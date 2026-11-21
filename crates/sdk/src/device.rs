@@ -69,6 +69,11 @@ pub struct DeviceFlags {
     /// script that also sets the node's environment).
     #[arg(long, global = true, value_name = "WORDS")]
     pub cluster_exec_prefix: Option<String>,
+    /// The words a distributed job's ranks are started under instead of
+    /// --cluster-exec-prefix, split at spaces; `{local_rank}` in them is a
+    /// rank's place on its node, the card a wrapper pins it to.
+    #[arg(long, global = true, value_name = "WORDS")]
+    pub cluster_rank_exec_prefix: Option<String>,
     /// The `srun` program steps on the allocation's nodes are started with
     /// (default: the first on `PATH`).
     #[arg(long, global = true, value_name = "PATH")]
@@ -93,6 +98,19 @@ pub struct DeviceFlags {
         allow_hyphen_values = true
     )]
     pub slurm_single_node_step_arg: Vec<String>,
+    /// Serve plaintext HTTP between the allocation's nodes instead of TLS:
+    /// only on a cluster network you trust, since the servers' key then
+    /// crosses it readable. By default the servers serve TLS under a
+    /// certificate authority made for them, whose key is discarded at once.
+    #[arg(long, global = true)]
+    pub cluster_insecure_plaintext: bool,
+}
+
+/// Removes every `name` from `args`; whether there was one.
+fn take_flag(args: &mut Vec<String>, name: &str) -> bool {
+    let before = args.len();
+    args.retain(|arg| arg != name);
+    args.len() != before
 }
 
 fn cluster_mode(text: &str) -> Result<ClusterMode, String> {
@@ -108,6 +126,7 @@ impl DeviceFlags {
     /// # Errors
     /// A flag has no value after it, or `--vram-budget` is not a positive number.
     pub fn take(args: &mut Vec<String>) -> Result<Self, String> {
+        let cluster_insecure_plaintext = take_flag(args, "--cluster-insecure-plaintext");
         let mut take_all = |name: &str| -> Result<Vec<String>, String> {
             let mut values = Vec::new();
             while let Some(at) = args.iter().position(|a| a == name) {
@@ -147,9 +166,11 @@ impl DeviceFlags {
             cluster,
             cluster_nodes: take_all("--cluster-nodes")?.pop(),
             cluster_exec_prefix: take_all("--cluster-exec-prefix")?.pop(),
+            cluster_rank_exec_prefix: take_all("--cluster-rank-exec-prefix")?.pop(),
             slurm_srun: take_all("--slurm-srun")?.pop().map(PathBuf::from),
             slurm_step_arg: take_all("--slurm-step-arg")?,
             slurm_single_node_step_arg: take_all("--slurm-single-node-step-arg")?,
+            cluster_insecure_plaintext,
         })
     }
 
@@ -165,6 +186,9 @@ impl DeviceFlags {
         if let Some(prefix) = &self.cluster_exec_prefix {
             cluster.exec_prefix = prefix.split_whitespace().map(String::from).collect();
         }
+        if let Some(prefix) = &self.cluster_rank_exec_prefix {
+            cluster.rank_exec_prefix = Some(prefix.split_whitespace().map(String::from).collect());
+        }
         if let Some(srun) = &self.slurm_srun {
             cluster.srun = Some(srun.clone());
         }
@@ -172,6 +196,7 @@ impl DeviceFlags {
         cluster
             .single_node_step_args
             .clone_from(&self.slurm_single_node_step_arg);
+        cluster.insecure_plaintext = self.cluster_insecure_plaintext;
         cluster
     }
 
@@ -341,11 +366,12 @@ mod tests {
         let mut args = words(
             "run --cluster off --cluster-nodes n[442,445] --slurm-srun /s/srun \
              --slurm-step-arg --mem=64G --slurm-single-node-step-arg --network=single_node_vni \
-             --cluster-exec-prefix x --x",
+             --cluster-exec-prefix x --cluster-insecure-plaintext --x",
         );
         let flags = DeviceFlags::take(&mut args).unwrap();
         assert_eq!(args, words("run --x"));
         assert_eq!(flags.cluster, Some(ClusterMode::Off));
+        assert!(flags.cluster_insecure_plaintext);
         let flags = DeviceFlags {
             cluster_exec_prefix: Some("apptainer exec --nv /img.sif".into()),
             ..flags
@@ -364,6 +390,10 @@ mod tests {
         );
         assert_eq!(cluster.step_args, ["--mem=64G"]);
         assert_eq!(cluster.single_node_step_args, ["--network=single_node_vni"]);
+        assert!(
+            cluster.insecure_plaintext,
+            "plaintext only when asked by name"
+        );
         assert_eq!(
             cluster.exec_prefix,
             ["apptainer", "exec", "--nv", "/img.sif"]

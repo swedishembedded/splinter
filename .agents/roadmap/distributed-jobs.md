@@ -186,6 +186,37 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       Tests: `crates/sandbox/tests/it/distributed_plan.rs` (a stand-in
       `srun` running both ranks of one step), the launcher factory tests,
       `crates/core/src/job.rs`.
+- [x] **The fleet serves TLS, ranks get the site's environment, brain says
+      which actions join a plan, and `serve` hands the servers to other
+      programs (2026-11-21).** A fleet makes a certificate authority of its
+      own (name-constrained to its nodes' names and addresses), issues each
+      node a certificate, discards the authority's key, serves
+      `--tls-cert`/`--tls-key`, publishes `ca.pem`, and this process's model
+      clients trust it through `sven_sdk::http::trust_model_authorities`
+      (sven aa2e5b02); every Splinter request to brain is built by
+      `sven_sdk::http::model_client_builder`. Plaintext only with
+      `--cluster-insecure-plaintext`. `scripts/cluster/apptainer-step`
+      enters an image on a node's host and `scripts/cluster/rank-env`
+      sources the site's files inside the task and pins it to the CPUs of
+      its card's NUMA node as sysfs says; `--cluster-rank-exec-prefix` is
+      what a job's ranks start under (`{local_rank}` expands there too).
+      `jobs submit --distributed` refuses a brain action that takes no
+      `job_plan` per `brain caps --json` (the served listing omits
+      host-resolved parameters), and `doctor` names those that do.
+      `splinter serve` starts the servers, prints endpoints, key file and
+      authority, and keeps them until interrupted. Measured 2026-11-21 in
+      job 5600435 on n442+n445 (brain 7248e0604 from lane C2, Qwen3-4B):
+      `doctor` listed the 8 cards over TLS in 11.2 s wall; `ask` answered
+      in 17.9 s wall from fleet start to teardown; an 8-rank LoRA (rank 8,
+      8 steps, batch 1, block 128, bf16 base) ran as one step
+      (5600435.173) in 22 s from launch to exit, exit 0, the eight adapters
+      byte-identical, brain reducing on the device over NCCL with "Using
+      network Libfabric" and the cross-node channels via
+      NET/Libfabric/*/GDRDMA; no process was left on either node. Tests:
+      `crates/model/tests/service.rs` (TLS by default, plaintext by name),
+      `crates/model/src/{fleet_tls,distributed}.rs`,
+      `scripts/cluster/test_rank_env.py`, sven's
+      `crates/http/tests/model_authorities.rs`.
 
 ## Decisions
 
@@ -207,17 +238,29 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       scheduler programs. A real cluster run is still unproven; the adapter
       maps the scheduler's terminal states to distinct outcomes, and job
       accounting (exit codes from a scheduler) is not wired yet.
-- [ ] No pipeline stage runs a training job through the job plan. The train
-      stage trains as a job of the brain service (`/v1/jobs`, one card per
-      run, with held-out scores, curve and selection in its report); the
-      plan path is the `brain qwen3 lora_train` / `brain gpt2 train` action,
-      whose output is an adapter alone. Using the plan from the stage needs
-      either brain's service job to take a world of ranks (brain C2) or the
-      stage to rebuild the report from the action's outputs; a distributed
-      run is submitted with `jobs submit --distributed` meanwhile. A
-      coordinator reachable across nodes exists (`slurm-step`); `--job-launcher
-      slurm` (sbatch) still registers on the loopback, since rank 0's node
-      is not known at submission.
+- [ ] No pipeline stage trains one run over several cards. The stage
+      trains through brain's service (`POST /v1/jobs`, action `brain/train`)
+      on one card per run, and its report (held-out base and tuned scores,
+      the monitoring curve, the selected step, the training record) is the
+      service's; with several endpoints, independent runs (variants, seeds)
+      are pinned to endpoints by seed and fail over on 429. What brain's API
+      needs for one run to span cards: `brain/train` taking a world (cards
+      of one server, then ranks over a job plan whose coordinator,
+      `job_plan`, `job_rank` and `job_secret` the caller supplies, or the
+      server forms itself from its fleet peers) and returning the same
+      report, so Splinter changes no report code (brain C2, routed by the
+      coordinator 2026-11-21). The job-plan CLI actions (`brain qwen3
+      lora_train`, `brain gpt2 train`) run across nodes now through
+      `jobs submit --distributed`, but return an adapter alone.
+- [ ] The flywheel loop (`scripts/campaigns/flywheel/loop.py`) still starts
+      its own per-card servers on one node (`serve.host` lets agents on
+      other nodes reach them). Delegating to `splinter serve` needs the
+      loop's per-card placement (models served side by side on groups of
+      cards, trainers taking a card from its server) replaced by one fleet
+      serving every model and adapter from its adapter directory, and the
+      benchmark's agents told the fleet's authority (`SSL_CERT_FILE`).
+- [ ] `--job-launcher slurm` (sbatch) still registers a plan's ranks on
+      the loopback: rank 0's node is not known at submission.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a
       content address; a parallel filesystem works as it is, while an object
       store needs a fetch path brain can read (brain resolves a local path

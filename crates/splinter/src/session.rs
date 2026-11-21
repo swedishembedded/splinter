@@ -311,6 +311,13 @@ impl Session {
                 return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
             }
             Command::Status => emit(json, &status(ctx)?),
+            Command::Serve => {
+                let serving = splinter_sdk::serving::start(ctx)?;
+                emit(json, &serving);
+                use std::io::Write as _;
+                let _ = std::io::stdout().flush();
+                splinter_sdk::serving::hold_until_interrupted();
+            }
             Command::Doctor => {
                 let report = doctor(ctx);
                 emit(json, &report);

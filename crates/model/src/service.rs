@@ -86,7 +86,20 @@ pub struct FleetSettings {
     pub nodes: Vec<String>,
     /// The GPUs each node gives its server.
     pub gpus_per_node: u32,
+    /// Serve plaintext HTTP between the nodes instead of TLS: only where the
+    /// cluster's network is trusted, since the key crosses it readable. By
+    /// default the fleet makes a certificate authority of its own, serves
+    /// TLS under it and this process's model clients trust it.
+    pub insecure_plaintext: bool,
 }
+
+/// The file in a server's or a fleet's directory holding the key its
+/// endpoints answer to, readable by its owner only.
+pub const KEY_FILE: &str = "key";
+
+/// The file in a fleet's directory holding the certificate authority its
+/// servers' certificates chain to, for clients outside this process.
+pub const AUTHORITY_FILE: &str = "ca.pem";
 
 /// The brain servers this process started: stopped, and their scratch
 /// directory removed, when dropped.
@@ -145,6 +158,13 @@ impl ManagedBrain {
                 ));
             }
         };
+        // The same files a fleet publishes, for a client outside this process.
+        let published = write_private(&work.join(ENDPOINTS_FILE), &format!("{}\n", service.url()))
+            .and_then(|()| write_private(&work.join(KEY_FILE), &format!("{}\n", service.key)));
+        if let Err(error) = published {
+            let _ = std::fs::remove_dir_all(&work);
+            return Err(error);
+        }
         let endpoints = BrainEndpoints::new(vec![service.url()], service.key.clone())?
             .with_attempt_concurrency(service.slots as usize)
             .with_adapter_directory(adapters)
@@ -216,7 +236,7 @@ impl ManagedBrain {
     ) -> Result<Vec<(String, Service)>, PolicyError> {
         // Owner-only: the key and the scripts of every server.
         set_owner_only(work)?;
-        let key_file = work.join("key");
+        let key_file = work.join(KEY_FILE);
         write_secret(&key_file).map_err(|source| PolicyError::Io {
             path: key_file.clone(),
             source,
@@ -228,11 +248,21 @@ impl ManagedBrain {
                 .join(",")
         });
         let device = settings.service.device.clone().or(every_card);
+        let addresses = settings
+            .nodes
+            .iter()
+            .map(|node| node_address(node).map(|address| (node.clone(), address)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let identities = if settings.insecure_plaintext {
+            None
+        } else {
+            Some(Self::trust_fleet(work, &addresses)?)
+        };
         let mut pending = Vec::with_capacity(settings.nodes.len());
         // Started from this thread, one after the other, so each loads while
         // the next starts; a server dies with the thread that started it.
-        for node in &settings.nodes {
-            let address = node_address(node)?;
+        for (index, (node, address)) in addresses.iter().enumerate() {
+            let address = *address;
             let node_work = work.join(node);
             std::fs::create_dir_all(&node_work).map_err(|source| PolicyError::Io {
                 path: node_work.clone(),
@@ -241,6 +271,16 @@ impl ManagedBrain {
             // brain publishes its connection record only in a directory no
             // other user can enter.
             set_owner_only(&node_work)?;
+            let tls = match &identities {
+                Some(identities) => {
+                    let chain = node_work.join("tls.crt");
+                    let private_key = node_work.join("tls.key");
+                    write_private(&chain, &identities[index].chain_pem)?;
+                    write_private(&private_key, &identities[index].key_pem)?;
+                    Some((chain, private_key))
+                }
+                None => None,
+            };
             let log = work.join(format!("{node}.log"));
             let mut service = settings.service.clone();
             service.device.clone_from(&device);
@@ -250,6 +290,7 @@ impl ManagedBrain {
                 address,
                 gpus: settings.gpus_per_node,
                 key_file: &key_file,
+                tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
             });
             let launch = service.launch(&node_work, adapters, artifacts, Some(&log), host);
             let started = spawn_service(&launch).map_err(|failure| {
@@ -274,6 +315,20 @@ impl ManagedBrain {
             services.push((node, service));
         }
         Ok(services)
+    }
+
+    /// Issues the fleet's certificates for `nodes`, publishes the authority
+    /// as [`AUTHORITY_FILE`] in `work` and makes this process's model clients
+    /// trust it.
+    fn trust_fleet(
+        work: &Path,
+        nodes: &[(String, IpAddr)],
+    ) -> Result<Vec<crate::fleet_tls::ServerIdentity>, PolicyError> {
+        let issued = crate::fleet_tls::issue(nodes)?;
+        write_private(&work.join(AUTHORITY_FILE), &issued.authority_pem)?;
+        sven_sdk::http::trust_model_authorities(issued.authority_pem.as_bytes())
+            .map_err(|reason| refused("fleet", reason))?;
+        Ok(issued.servers)
     }
 
     fn running(services: Vec<(String, Service)>, endpoints: BrainEndpoints, work: PathBuf) -> Self {
@@ -401,6 +456,23 @@ fn node_address(node: &str) -> Result<IpAddr, PolicyError> {
         .or_else(|| addresses.first())
         .copied()
         .ok_or_else(|| refused(node, format!("the node {node} resolves to no address")))
+}
+
+/// Writes `text` to a new file at `path` that only its owner can read.
+fn write_private(path: &Path, text: &str) -> Result<(), PolicyError> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let io = |source| PolicyError::Io {
+        path: path.to_path_buf(),
+        source,
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(io)?;
+    file.write_all(text.as_bytes()).map_err(io)
 }
 
 fn set_owner_only(dir: &Path) -> Result<(), PolicyError> {

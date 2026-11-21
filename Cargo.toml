@@ -86,6 +86,9 @@ async-trait = "0.1"
 # (TLS through rustls with the ring provider), so the build links one crypto library.
 reqwest = { version = "0.13", features = ["rustls-no-provider"], default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# The certificates a brain fleet on a cluster serves TLS with, made at start
+# and signed by a key that is discarded at once (MIT OR Apache-2.0).
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 # Process groups, exit polling and resource limits for bounded process runs.

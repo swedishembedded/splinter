@@ -518,15 +518,12 @@ fn request(
     std::thread::scope(|scope| {
         scope
             .spawn(|| {
-                // The provider sven's own clients install; a second install
-                // (or sven's first) leaves the one in place.
-                let _ = rustls::crypto::ring::default_provider().install_default();
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .map_err(|e| e.to_string())?;
                 runtime.block_on(async {
-                    let client = reqwest::Client::builder()
+                    let client = sven_sdk::http::model_client_builder()
                         .no_proxy()
                         .timeout(timeout)
                         .build()

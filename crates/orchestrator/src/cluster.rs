@@ -173,6 +173,10 @@ pub struct ClusterSettings {
     pub nodes: Option<String>,
     /// `--cluster-exec-prefix`: the words a step's program is started under.
     pub exec_prefix: Vec<String>,
+    /// `--cluster-rank-exec-prefix`: the words a job's ranks are started
+    /// under instead (`{local_rank}` names a rank's card, for a wrapper that
+    /// pins it); [`ClusterSettings::exec_prefix`] when `None`.
+    pub rank_exec_prefix: Option<Vec<String>>,
     /// The `srun` program a step is started with.
     pub srun: Option<PathBuf>,
     /// The `scancel` program a step is stopped with when `srun` does not end
@@ -184,6 +188,9 @@ pub struct ClusterSettings {
     /// network access per multi-node step only, the option that grants it
     /// to a single-node step too.
     pub single_node_step_args: Vec<String>,
+    /// Serve plaintext between the nodes instead of TLS under the fleet's
+    /// own certificate authority (`--cluster-insecure-plaintext`).
+    pub insecure_plaintext: bool,
 }
 
 impl Default for ClusterSettings {
@@ -193,10 +200,12 @@ impl Default for ClusterSettings {
             detected: Ok(None),
             nodes: None,
             exec_prefix: Vec::new(),
+            rank_exec_prefix: None,
             srun: None,
             scancel: None,
             step_args: Vec::new(),
             single_node_step_args: Vec::new(),
+            insecure_plaintext: false,
         }
     }
 }

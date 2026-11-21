@@ -1,0 +1,59 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for placing distributed training
+# ranks next to their GPU and network on cluster nodes for its clients. If
+# your team needs expertise in multi-node training performance then you can
+# procure our services by sending an email to info@swedishembedded.com.
+
+# Run one task of a Splinter step (a rank of a job, a brain server) with the
+# site's environment applied inside it and, for a rank, pinned to the cores
+# of its card's NUMA node. Name it in --cluster-exec-prefix after whatever
+# enters the node's container:
+#
+#   --cluster-exec-prefix "apptainer-step --image SIF -- rank-env --env SITE.sh --card {local_rank} --"
+#
+# Usage: rank-env [--env FILE]... [--card N] [--sysfs DIR] [--nvidia-smi PATH] -- command [args...]
+#
+# --env FILE    sourced in order, inside the task: settings the scheduler's
+#               task prolog would otherwise overwrite (a communication
+#               library's network plugin and transport) belong here, not in
+#               srun's environment.
+# --card N      pin to the CPUs of the NUMA node card N's PCI device is
+#               attached to, as sysfs says (no mapping is assumed). A card
+#               with no such node is run unpinned, and that is said on stderr.
+# --sysfs, --nvidia-smi  where sysfs and nvidia-smi are (for a test).
+set -eu
+card="" sysfs=/sys smi=nvidia-smi
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --env)
+            file=${2:?--env needs a file}
+            [ -r "$file" ] || { echo "rank-env: cannot read $file" >&2; exit 2; }
+            # shellcheck disable=SC1090 # the site's file, named by the caller
+            . "$file"
+            shift 2 ;;
+        --card) card=${2:?--card needs an index}; shift 2 ;;
+        --sysfs) sysfs=${2:?}; shift 2 ;;
+        --nvidia-smi) smi=${2:?}; shift 2 ;;
+        --) shift; break ;;
+        *) echo "rank-env: unknown argument: $1" >&2; exit 2 ;;
+    esac
+done
+[ "$#" -gt 0 ] || { echo "rank-env: usage: rank-env [--env FILE]... [--card N] -- command..." >&2; exit 2; }
+[ -n "$card" ] || exec "$@"
+case "$card" in *[!0-9]*) echo "rank-env: --card needs an index, got $card" >&2; exit 2 ;; esac
+
+# nvidia-smi spells the domain with 8 hex digits, sysfs with 4.
+bus=$("$smi" --query-gpu=pci.bus_id --format=csv,noheader -i "$card" | tr 'A-F' 'a-f')
+domain=${bus%%:*}
+device=$(printf '%s' "$domain" | tail -c 4):${bus#*:}
+node=$(cat "$sysfs/bus/pci/devices/$device/numa_node" 2>/dev/null || echo -1)
+cpus=""
+[ "$node" -ge 0 ] 2>/dev/null && cpus=$(cat "$sysfs/devices/system/node/node$node/cpulist" 2>/dev/null || true)
+if [ -z "$cpus" ]; then
+    echo "rank-env: card $card ($device) is attached to no NUMA node with CPUs (numa_node $node); running unpinned" >&2
+    exec "$@"
+fi
+exec taskset -c "$cpus" "$@"
