@@ -25,7 +25,7 @@ The loop needs only the verifier, the tools, a token budget and state forks, and
 | GL-P3 | Branch values and decisive-step search: `V(s_t)` as the pass rate of k forked continuations, binary search over turns, about `log2(T) x k` short rollouts | gap (forks exist) | shared-prefix preference pairs at the decisive step; E5 | sven GL-S2, bench GL-B3 |
 | GL-P4 | Per-action advantages `V(s_{t+1}) - V(s_t)` in the PG view | partial: the view already writes one record per action | advantages carried on the records | GL-P3 |
 | GL-P5 | Start-state practice with fork depth as a curriculum variable (path-guided unhinted resampling); the fork moves earlier as the pass rate from `s_t` rises | planned ("signal per GPU-hour" item 3), not built | E4's yield and effect | sven GL-S2, bench GL-B3 |
-| GL-P8 | Human-guided trials (bench's `task play`) as a privileged source for GL-P5: fork the student at a verified guided path's states WITHOUT the person's messages and keep the verified unhinted suffixes. Never supervise a token sampled with a person's message in context | partial: ingestion keeps `extra.sven.origin: human`; `dataset build` withholds guided experiences (`human_context`); `compare-arms` refuses guided trials; the resampling is the `path_guided` intervention of `experiences repair` (`PrivilegedPaths`, `unguided`, `fork_points`; spec `tests/it/path_guided.rs`: no person's text reaches the student's requests, the kept repair has no human turn). No sven change was needed: the SDK fork takes the cut, unguided transcript. Open: (1) a compiled dataset's run (export plus a report naming the dataset) is repaired through the examiner's compiled-task session under the image's Sven configuration and its MCP tools (spec `tests/it/compiled_repair.rs`); on vim, a recorded call whose tool reply names a random scratch path cannot be replayed (bench knowledge 076, about half of `train-k1`'s trials) until the dataset's tool is fixed; (2) a failure's chain stops at its first pass, so the fork settles at the latest state the student completes, not the earliest; (3) a labelled diagnostic view keeping the person's messages, refused by default | a guided trial's verified states yield unhinted records whose requests hold no person's text (met on the scripted spec); E4's yield on never-solved tasks | bench GL-B3 (compiled datasets), bench GL-B4 |
+| GL-P8 | Human-guided trials (bench's `task play`) as a privileged source for GL-P5: fork the student at a verified guided path's states WITHOUT the person's messages and keep the verified unhinted suffixes. Never supervise a token sampled with a person's message in context | partial: ingestion keeps `extra.sven.origin: human`; `dataset build` withholds guided experiences (`human_context`); `compare-arms` refuses guided trials; the resampling is the `path_guided` intervention of `experiences repair` (`PrivilegedPaths`, `unguided`, `fork_points`; spec `tests/it/path_guided.rs`: no person's text reaches the student's requests, the kept repair has no human turn). No sven change was needed: the SDK fork takes the cut, unguided transcript. Open: (1) a compiled dataset's run (export plus a report naming the dataset) is repaired through the examiner's compiled-task session under the image's Sven configuration and its MCP tools (spec `tests/it/compiled_repair.rs`); on vim, a recorded call whose tool reply names a random scratch path cannot be replayed (bench knowledge 076, about half of `train-k1`'s trials) until the dataset's tool is fixed; (2) done: a teacher's passes are privileged paths when the run names their set (`--paths`); the forks are the path's open states (its verifier does not pass there yet), the earliest first, samples beyond them try them again, and a continuation without a tool call is refused (knowledge 211); (3) a labelled diagnostic view keeping the person's messages, refused by default | a guided trial's verified states yield unhinted records whose requests hold no person's text (met on the scripted spec); E4's yield on never-solved tasks | bench GL-B3 (compiled datasets), bench GL-B4 |
 | GL-P6 | Importance-ratio diagnostic `pi_unhinted(trace) / pi_hinted(trace)`, reported as effective sample size per task; a diagnostic, never a gate | gap | reported per task, calibrated on unhinted passes | brain GL-R2 |
 | GL-P7 | E0-E5 entered as problem-state candidates, one variable each; E2a/E2b verdicts recorded (PS-2) | candidates landed 2026-11-21 in `examples/problem-state/problems.toml`; PS-2 open | `campaign problems check` accepts the document | none |
 
@@ -41,7 +41,7 @@ All on Qwen3-4B with A2's LoRA recipe, two seeds, family-clustered `experiences 
 | E1 | **Leave-families-out on vim train.** Three folds over the 14 rungs; retrain v1's recipe on the other rungs' existing teacher traces; examine on held-out rungs x 8. Variable: none (measures the champion) | pooled held-out-family gain over base at least +0.05, interval above 0. If falsified, vim distillation does not cross families and breadth is the bottleneck | 3-4 | `distill-transfer.leave-families-out` |
 | E2 | **Budget-matched selection.** Curation keeps verified teacher passes within the student budget, lowest cost first, from the existing 579 passes. No prompt, no new teacher run | at budget B: gain over v1 at least +0.05, interval above 0; at 4B non-inferior at 0.05; exhaustion share within 10 points of base | 2-3 | `distill-transfer.min-cost-selection` |
 | E3 | **Breadth dose-response.** Number of training families (4, 8, 12 rungs) at equal record count, same held-out rungs | monotone, with 12 minus 4 at least +0.05 and interval above 0. Decides whether to fund the environment factory over algorithms | 3-4 | `distill-transfer.family-breadth` |
-| E4 | **Path-guided unhinted resampling** on tasks the champion never solves: add these suffix records to the champion's data, trained from base. Control: equal-count extra teacher records | yield at least 30% of never-solved tasks get a verified unhinted suffix; from-scratch pass@4 on them +0.10, held-out families +0.05 over control, retention non-inferior at 0.10 | 4-5 | `4b-data.path-guided-resampling` |
+| E4 | **Path-guided unhinted resampling** on tasks the champion never solves: add these suffix records to the champion's data, trained from base. Control: equal-count extra teacher records | yield at least 30% of never-solved tasks get a verified unhinted suffix; from-scratch pass@4 on them +0.10, held-out families +0.05 over control, retention non-inferior at 0.10 | 4-5 | `4b-data.path-guided-resampling`; **gate failed on vim** (7 of 73, knowledge 211): move to a multi-step domain |
 | E5 | **Branch-value step credit** on 0 < p < 1 tasks: shared-prefix pairs at the decisive step against RFT at equal rollout tokens | held-out +0.05 over the RFT control with interval above 0, retention non-inferior. Review's prior about 0.3 | 8-10 | `trajectory-credit.branch-value-pairs` |
 
 E0 to E3 need no new method and fit in one afternoon on four cards.
@@ -269,3 +269,128 @@ non-inferior at 0.05 when the lower end of the family interval is above -0.05. T
 `distill-transfer.min-cost-selection` is revised from it together with the B result: supported only if B's
 gain criterion also held (it did not), so a non-inferior 4B result leaves `exp-e2` inconclusive and an inferior one
 falsifies the candidate.
+
+## E8 (lane EXP): teacher capture under the student's budget (pre-registered 2026-11-21 23:50, before any capture, training or trial)
+
+**Question.** Does teacher data captured under the student's own budget lower the students' exhaustion and raise their
+held-out pass rate? E1's students fail mostly by running out of B (54-55% of trials, almost all on tokens), not by
+wrong answers within B (7%). Their teacher had no per-turn cap and no budget. The single variable is the data source.
+- **Teacher capture.** Qwen3.8-27B-FP8 on brain-bcd67e5ad in the students' mode (thinking on, per-turn
+  `thinking_budget = 2048`, T 0.6 / top-p 0.95 / top-k 20, run seed 20261121), with budget B (15,114 completion
+  tokens, 9 turns, factor 4), sven-fe9cda90 and bench 0d8f13de.
+  - All 168 vim train tasks x 4 attempts, split into three task thirds, one per card on n445 gpu1-3 (one replica per
+    card, `--max-batch 128`).
+  - Four rounds of one attempt each, packed as they finish.
+  - Every counted pass is within B by construction (an exhausted trial is a fail). All passes are kept, curated as v1
+    (`sft-step --pack --only-actions vim-vim --max-block 16384`).
+- **Training (fold a first; held-out rungs 1, 4, 7, 10, 13).** v1's recipe, seeds 1 and 2, steps = round(0.4 x records).
+  - Arm **ub**: the under-budget passes of fold a's training rungs (N records).
+  - If N is below E1's 402, arm **v1m** trains on N records drawn uniformly (seed 20261121) from E1's fold-a
+    selection, so the record count is matched.
+- **Exam.** E1's protocol: fold a's 58 held-out tasks x 8 at B, 16 trials in flight per arm, one slot. Rounds 1-4 run
+  on one exam server and rounds 5-8 on another, every arm on both, with per-arm preflight and the round check.
+  - Arms: ub s1/s2, E1's fold-a students e1 s1/s2 (rerun in this slot), and v1m s1/s2 if trained. Seeds are pooled.
+- **Contrasts and success.**
+  - ub minus e1 (primary) and ub minus v1m: `compare-arms`, two-sided, Holm over the two. Task intervals over 58 tasks
+    are primary, because one fold has only 5 families; family intervals are reported beside them. The exhaustion share
+    per arm is also reported.
+  - **Supported:** ub's exhaustion share is at least 10 points below e1's, and ub minus e1 is at least +0.05 with the
+    task interval above 0 and Holm p below 0.05.
+  - **Falsified:** the upper end of ub minus e1 is below +0.05.
+  - Only if supported do folds b and c follow.
+
+## E4 on vim (lane PLAY, 2026-11-21): gate failed
+
+Phase 1 only; no training and no exam ran. The 4B's failed attempts of the 73 never-solved train tasks (`train-k1`,
+`train-k4`, 145 failures) were forked at the 27B teacher's verified passes (`experiences repair --intervention
+path_guided --paths <teacher set>`, brain-bcd67e5ad on n424 gpu0, E1's sampling).
+- **Routing:** 29 of 73 tasks have a replayable teacher path. 27 tasks: every pass uses `shell`, which the task's Sven
+  configuration does not offer; 11: shell or the vim tool's random scratch path (bench knowledge 076); 2: scratch path
+  only; 4: no teacher pass.
+- **Yield:** 7 of 29 routed tasks (24%; 7 of 73, 9.6%) got a verified unhinted suffix with a tool call of the 4B's own
+  (8 samples per failure). Gate: 30% of never-solved tasks. **Failed.** An earlier pass that kept any passing
+  continuation "repaired" 24 tasks, but 101 of its 106 records trained only a final reply after the teacher's work.
+- **Why:** a teacher pass has a median of 1 state-changing action (214 passes; 123 have 1, 65 have 2). There is no
+  intermediate state on vim, so E4 moves to a multi-step domain. Verdict `play-e4-gate` (`falsified`, belief 0.35 to
+  0.15) in the canonical campaign. GPU-hours: about 1.3 (n424 gpu0, three repair passes).
+
+## SD1: one teacher-free self-distillation generation on the champion (pre-registered 2026-11-21, before any trial)
+
+Advisory 2026-11-21, section 4. The distilled students' failures are mostly termination (exhaustion 56-59% at B), and
+within B they are right about 83% of the time. One generation of their own budgeted passes may teach finishing.
+- **Harvest:** each E1 fold's seed-1 student (`e1-<fold>-s1`, lane EXP) attempts its own training rungs (the tasks of
+  the 9-10 rungs its fold trained on) x 8 at B (15,114 completion tokens, 9 turns, per-turn thinking 2,048, sampling
+  0.6/0.95/20, seed 20261121, `wall_clock_factor` 16 with bench 0d8f13de). Throughput job: replicas fill the cards.
+- **Selection:** verified passes within B, at most 2 per task, lowest total completion tokens first. No teacher
+  record anywhere.
+- **Training:** from base on those records only, v1's recipe (LoRA r16/a32, lr 2e-4, 4 records per step, steps =
+  round(0.4 x records)), seeds 1 and 2, the dataset built as E1's (`sft-step --pack --only-actions vim-vim
+  --max-block 16384`).
+- **Exam:** SD1's students against E1's students (seeds pooled per arm) on each fold's held-out tasks x 4 per seed,
+  in one slot, at E1's rerun load (16 trials in flight per arm), budget B, factor 16. `compare-arms --families`
+  (14 rungs), interval seed 20261121; `infra_timeout` counted per arm.
+- **Fast read first:** fold a is harvested, trained and examined first; folds b and c follow only if fold a is not
+  clearly null (its point estimate above -0.02 or its exhaustion at least 5 points below E1's).
+- **Success:** exhaustion at least 10 points below E1's students, and held-out pass@1 above E1's (family interval).
+  **MDE:** on 14 families the student-against-student SE is about 0.034, so only about +0.07 or more would be
+  supported; a smaller gain reads as not supported, not as ruled out. Wrong-within-B is reported beside the pass rate
+  (the risk: earlier submission with more wrong answers).
+
+## Gaps from the 2026-11-21 late review (advisory `~/project/shared/tmp/lane-advice-1121/advisory.md`)
+
+| Gap | Bridge | Lane |
+|---|---|---|
+| The vim instrument has 14 families; between two students the MDE is about 0.07-0.09, not 0.05 | A calibrated exam of about 40 families: existing bench families plus A2's lineages, with a disjoint calibration pool (bench GL-B2) | KBN, after E7 |
+| No extrapolation test: the folds interleave difficulty rungs | An extrapolation fold: train on rungs 1-9, examine rungs 10-14 | EXP |
+| Teacher-free has never been measured on the instrument that detected the teacher's transfer (mode, task set and record count differ) | Source x support on E1's folds: S, T-same, T-other at matched count | EXP |
+| Students fail by exhausting the budget, not by competence (83% right when they finish) | Autopsy of exhausted trials; a cost curve over per-turn thinking without training; one teacher-free generation from the champion under B | EXP, PLAY |
+| vim tasks have one decisive command, so E4 has no intermediate state; the vim tool names a random scratch path and rarely shows the buffer | E4 moves to a multi-step domain; a new vim tool version with a deterministic scratch path and the changed buffer in every observation, published as a new private dataset version for the user to promote | PLAY |
+| The 4B consults a mounted knowledge base in about 6% of trials | E7 with preloaded pages, harm measured against correct evidence | KBN |
+| On-policy distillation is blocked: teacher scoring of student tokens is unconfirmed | Confirm the 4B and 27B tokenizers are identical and brain's scoring call returns teacher log-probs on student tokens; a reverse-KL term in brain's shared PG path with gradcheck | E6, after E6 |
+| No transition source outside tasks | Task-free tool play, declared before use, as an E6 source | E6, after E6 |
+
+**E8 dropped (2026-11-22 00:00, coordinator, after the late review).** It nearly repeats E2: 555 of the 579 existing
+teacher passes are already within B, and 489 also within 2,048 per turn. The partial capture (started 23:46, OOM-killed
+on two cards at 23:57, stopped at 23:59) is archived unread (`lane-exp/archive/e8-capture-dropped.tar.zst`). Its
+pre-registration header should read 23:43 (commit 2c511ac17), not 23:50.
+
+## E9 and E10 (lane EXP; pre-registered 2026-11-22 00:20, before any of their trials or trainings)
+
+**E9: cost curve without training.**
+- **Question.** Is the students' exhaustion partly a serving parameter?
+- **Arms.** Base and E1's fold-a students (v1 recipe with fold a held out; s1, s2), each at three per-turn thinking
+  budgets: 512, 1,024 and 2,048 tokens. All other settings are E1's: budget B, sampling, sven-fe9cda90, bench 0d8f13de,
+  brain-bcd67e5ad. That is 9 arm jobs.
+- **Exam.** Fold a's 58 held-out tasks x 4 attempts per arm. One round per card: each card runs all 9 arms for one
+  attempt, 12 trials in flight per arm. Rounds 1-2 run on n445 gpu1-2 and rounds 3-4 follow on the first free cards.
+- **Read.** Per thinking budget, pass@1 and exhaustion share per arm, and student minus base (`compare-arms`, task
+  interval over 58 tasks). This is descriptive: a cost curve, with no success rule.
+
+**E10: source by support.** Single variable: the source of about N records per fold (N matched within the fold).
+
+| Arm | Data from the fold's training rungs |
+|---|---|
+| S | The base's own verified passes from E1's base arm (within B by construction), de-duplicated by identical tool-call sequence, at most 2 per task |
+| T-same | Teacher passes (the 579) on the tasks S covers, as many per task as S has, lowest total completion tokens first |
+| T-other | Teacher passes on tasks the base never solved in E1 (0 of 8), at most 4 per task, lowest cost first |
+
+- **Folds.** E1's a, b and c, plus an extrapolation fold x that trains on rungs 1-9 and examines rungs 10-14.
+- **Matching.** Per fold, N = the smallest of the three arms' counts, and each arm is drawn to N uniformly with seed
+  20261121. Datasets are curated as v1. Training: v1's recipe, seeds 1 and 2, steps = round(0.4 x N).
+- **Exam.**
+  - The fold's held-out tasks: base x 8; S, T-same and T-other x 4 per seed; and, in folds a-c, E1's students as an
+    anchor (x 4 per seed).
+  - One fold per exam server, at most 8 adapters, 12 trials in flight per arm, and 4 rounds that each give every
+    student one attempt and the base two. Per-arm preflight and round check. Folds a-c and x are pooled over all 213
+    held-out tasks for the primary contrasts. Fold x is also reported alone as the harder transfer.
+- **Contrasts** (`compare-arms`, family intervals, Holm over the three):
+  - T-same minus S: content.
+  - T-other minus T-same: support.
+  - S minus base: the strict teacher-free number.
+- **Power, stated in advance.**
+  - Student against student at about 100-120 records: E3 measured a family SE of about 0.018, so the minimum detectable
+    effect at 80% power is about 0.05. T-same minus S and T-other minus T-same can detect about +0.05.
+  - Against the base, the family SE was 0.035-0.052, so the minimum detectable effect is 0.10-0.15. **S minus base can
+    neither confirm nor rule out +0.05.** It can only show a gain of about 0.10 or more, or rule out about 0.15.
+- **Rule.** Each contrast's verdict follows the problem-state rule: supported, falsified or inconclusive against
+  d = 0.05. S minus base is reported with that power caveat.

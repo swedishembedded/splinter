@@ -196,3 +196,4 @@ in the same commit.
 | [208](208-a-token-and-turn-budget-makes-an-agent-exam-independent-of-server-load.md) | A token and turn budget makes an agent exam independent of server load, and shows a distilled student's length as failures |
 | [209](209-distilled-vim-skill-transfers-to-held-out-families-once-the-exam-is-budgeted.md) | Distilled vim skill transfers to held-out families once the exam is budgeted and wide enough |
 | [210](210-at-a-fixed-small-record-count-more-training-families-did-not-improve-held-out-families.md) | At a fixed small record count, more training families did not improve held-out families |
+| [211](211-path-guided-resampling-needs-intermediate-states-a-vim-task-has-none.md) | Path-guided resampling needs intermediate states, and a vim task has almost none |
