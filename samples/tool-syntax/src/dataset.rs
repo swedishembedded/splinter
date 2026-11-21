@@ -135,6 +135,7 @@ fn context(role: &str, text: &str) -> WireMessage {
         tool_call_id: None,
         reasoning_content: None,
         train: false,
+        loss_weight: None,
     }
 }
 
@@ -214,6 +215,7 @@ pub fn records_from_performance(
             tool_call_id: None,
             reasoning_content: None,
             train: true,
+            loss_weight: None,
         });
         messages.push(WireMessage {
             images: Vec::new(),

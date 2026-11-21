@@ -353,6 +353,7 @@ fn abstain(record: &mut splinter_data::Record, question: &str, context: &[&Passa
         content: reply.to_string(),
         reasoning_content: None,
         train: true,
+        loss_weight: None,
         tool_calls: Vec::new(),
         tool_call_id: None,
     });

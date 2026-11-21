@@ -12,7 +12,7 @@
 use serde_json::json;
 use splinter_sdk::agent::CancelToken;
 use splinter_sdk::datasets::{
-    build, build_dropping_leaks, BuildRequest, Control, RlBuild, VoiceBuild,
+    build, build_dropping_leaks, BuildRequest, Control, RlBuild, TransitionBuild, VoiceBuild,
 };
 use splinter_sdk::describe::DescribeRequest;
 use splinter_sdk::experiences::resolve_set;
@@ -64,6 +64,8 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
         overlong_buffer,
         pairs_per_group,
         pair_seed,
+        loss_weight,
+        per_transition_cap,
     } = args;
     let request = BuildRequest {
         sets: sets
@@ -105,6 +107,10 @@ pub fn run(ctx: &Context, json: bool, args: BuildArgs) -> Result<(), Error> {
             overlong_buffer: overlong_buffer.map(|n| n as u64),
             pairs_per_group,
             pair_seed: pair_seed.map(splinter_sdk::seed::Seed::value),
+        },
+        transition: TransitionBuild {
+            loss_weight,
+            per_transition_cap,
         },
         practice,
         history: repository_history.unwrap_or_default(),

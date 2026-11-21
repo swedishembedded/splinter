@@ -20,6 +20,7 @@ mod retrieval;
 mod rewards;
 mod sft_final;
 mod sft_step;
+mod transition;
 mod verifier;
 mod voice;
 
@@ -40,6 +41,7 @@ pub use rewards::{
 };
 pub use sft_final::SftFinal;
 pub use sft_step::{Control, SftStep};
+pub use transition::{Transition, DEFAULT_PER_TRANSITION_CAP};
 pub use verifier::VerifierView;
 pub use voice::description;
 pub use voice::{chars_as_tokens, DescriptionOf, Sectioner, Voice, DEFAULT_MAX_FAMILY_SHARE};

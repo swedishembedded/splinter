@@ -80,6 +80,7 @@ fn wire(turns: &[Turn]) -> Vec<WireMessage> {
             tool_call_id: None,
             reasoning_content: None,
             train: false,
+            loss_weight: None,
         })
         .collect()
 }

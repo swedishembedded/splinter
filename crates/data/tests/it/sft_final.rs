@@ -342,6 +342,7 @@ fn a_prompt_is_inserted_where_a_conversation_has_no_system_turn() {
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     };
     let exp = experience();
     let mut corpus = Corpus::new();

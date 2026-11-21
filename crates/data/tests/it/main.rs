@@ -37,5 +37,6 @@ mod supervision_mask;
 mod timeline_projection;
 mod timeline_store;
 mod trajectory_views;
+mod transition;
 mod workspace_hygiene;
 mod workspace_views;

@@ -190,6 +190,7 @@ pub(crate) fn episode_of(
                 tool_call_id: None,
                 reasoning_content: None,
                 train: false,
+                loss_weight: None,
             })
             .collect(),
         completion: experience

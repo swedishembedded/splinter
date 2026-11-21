@@ -20,7 +20,13 @@ experience sets cite; see [Learn how a person thinks](../guides/personas.md)), `
 gave them, every experience with a final answer that no verifier decided
 wrong, under the default prompt), `policy-gradient` (every action of every graded attempt,
 weighted by the attempt's advantage; see below), `self-distill` (the student's own conversation
-of every attempt with a teacher context built from what the verifier knows; see below). `--limit N` keeps at most N records of any
+of every attempt with a teacher context built from what the verifier knows; see below), `transition`
+(what the environment answered: one record per attempt, passed or failed, each tool observation
+supervised in the context through the action it answers and no model turn supervised; an attempt
+made open-book is counted as `open_book`; one transition (task, call, observation) is supervised at
+most `--per-transition-cap` times, default 2, the rest `repeated_transition`; `--loss-weight W` writes
+`loss_weight` on every supervised observation, which brain scales their loss by; `--control shuffled`
+gives each observation another's text as the negative control). `--limit N` keeps at most N records of any
 view, evenly spread over the projection, the rest counted as `over_limit`. The
 default `--min-strength` is `consistency`; `--strip` defaults to `all`
 (the student sees only the instruction - also for a teacher's solve,

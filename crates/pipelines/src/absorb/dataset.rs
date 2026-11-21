@@ -83,6 +83,7 @@ fn held_out_record(task: &splinter_core::experience::Task, statement: &str) -> R
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     };
     Record {
         body: RecordBody::Chat {

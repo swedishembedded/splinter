@@ -32,6 +32,7 @@
 //! | [`Cpt`] | continued pretraining | the raw text of source parts |
 //! | [`Voice`] | SFT | the writer's own text, a stretch of whole sections at a time, as the answer |
 //! | [`Rehearsal`] | SFT | a model's own answers as given, unless a verifier decided one wrong |
+//! | [`Transition`] | SFT | what the environment answered each action of an attempt, passed or failed, in the context through the action |
 //!
 //! Every conversation a view projects starts with [`SYSTEM_PROMPT`], the
 //! system turn every model run on a task is sent: the policy is trained
@@ -132,8 +133,8 @@ pub use views::signals;
 pub use views::{
     chars_as_tokens, description, Control, Cpt, Critic, DecisionView, DenoiseView, DescriptionOf,
     Feedback, FeedbackBalance, OutcomeView, PairingPolicy, PolicyGradient, Preference, Rehearsal,
-    Retrieval, Sectioner, SftFinal, SftStep, VerifierView, Voice, DEFAULT_MAX_FAMILY_SHARE,
-    PAIRING_RULE,
+    Retrieval, Sectioner, SftFinal, SftStep, Transition, VerifierView, Voice,
+    DEFAULT_MAX_FAMILY_SHARE, DEFAULT_PER_TRANSITION_CAP, PAIRING_RULE,
 };
 pub use views::{
     AdvantageFloor, AdvantageKind, AdvantageNorm, Distill, GroupKind, GroupReport, Overlong,

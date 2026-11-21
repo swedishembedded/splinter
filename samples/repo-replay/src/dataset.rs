@@ -178,6 +178,7 @@ pub fn build_dataset(ctx: &Context, sets: &[String], settings: &DatasetSettings)
         roles: None,
         images: false,
         rl: Default::default(),
+        transition: Default::default(),
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),

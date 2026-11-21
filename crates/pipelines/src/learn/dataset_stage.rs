@@ -88,6 +88,7 @@ pub(super) fn dataset_stage(
         roles: None,
         images: false,
         rl: Default::default(),
+        transition: Default::default(),
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),

@@ -35,6 +35,7 @@ fn message(role: &str, content: &str, train: bool) -> WireMessage {
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     }
 }
 

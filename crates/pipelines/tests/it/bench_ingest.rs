@@ -487,3 +487,55 @@ fn a_confidential_trial_and_an_export_of_sealed_material_are_refused() {
     assert!(refused.refused[0].reason.contains("sealed-export.json"));
     assert_eq!(ctx.experiences().list().unwrap().len(), 1);
 }
+
+#[test]
+fn a_failed_train_trial_yields_a_transition_record_whose_observation_carries_the_loss_weight() {
+    use splinter_pipelines::datasets::{TransitionBuild, ViewName};
+    let (scratch, ctx) = context("bench-transition");
+    let dir = export(
+        &scratch.0.join("export"),
+        &[Trial::new("t-fail", "org/a", Some("train"), false)],
+    );
+    let train = ingest_bench_trials(&ctx, &[dir], NO_OPTIONS)
+        .unwrap()
+        .train_set
+        .unwrap();
+    let mut request = sft_request(train);
+    request.view = ViewName::Transition;
+    // It reads no verdict: every attempt is a source.
+    request.min_strength = None;
+    request.transition = TransitionBuild {
+        loss_weight: Some(0.3),
+        per_transition_cap: None,
+    };
+    let built = build(&ctx, &request).unwrap();
+    assert_eq!(built.records, 1, "the failed trial is a source");
+    let record: Value = serde_json::from_str(
+        fs::read_to_string(&built.path)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    let supervised: Vec<&Value> = record["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["train"] == json!(true))
+        .collect();
+    assert!(!supervised.is_empty());
+    for message in supervised {
+        assert_eq!(message["role"], json!("tool"), "{message}");
+        assert_eq!(
+            message["loss_weight"].as_f64().map(|w| w as f32),
+            Some(0.3),
+            "{message}"
+        );
+    }
+
+    // Another view refuses the transition options instead of ignoring them.
+    request.view = ViewName::SftStep;
+    let refused = build(&ctx, &request).unwrap_err().to_string();
+    assert!(refused.contains("--loss-weight"), "{refused}");
+}

@@ -175,4 +175,12 @@ pub enum Exclusion {
     /// student never sees it, so they are never trained on (same
     /// observation); the experience is a source of verified states only.
     HumanContext,
+    /// An attempt whose solver was prompted open-book (a hint or knowledge
+    /// page beside the instruction, `provenance.teacher`): what the
+    /// environment answered followed actions taken under context a student
+    /// never sees.
+    OpenBook,
+    /// An observation whose task, call and answer the view has already
+    /// supervised as often as its cap allows: it stays context.
+    RepeatedTransition,
 }

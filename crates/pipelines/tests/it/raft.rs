@@ -73,6 +73,7 @@ fn turn(role: &str, content: &str, train: bool) -> WireMessage {
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     }
 }
 
@@ -500,6 +501,7 @@ fn an_abstention_in_a_dataset_is_in_the_group_of_its_source() {
         roles: None,
         images: false,
         rl: Default::default(),
+        transition: Default::default(),
         practice: Vec::new(),
         split_seed: None,
         history: Default::default(),

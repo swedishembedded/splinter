@@ -50,7 +50,34 @@ pub struct WireMessage {
     /// explicit supervision boundary is either a silent no-op or a silent
     /// prompt leak into the loss.
     pub train: bool,
+    /// On a supervised message, how much its tokens weigh in the loss
+    /// relative to a message without one (1): brain scales the cross-entropy
+    /// of the message's supervised tokens by it. `None` on every context
+    /// message.
+    pub loss_weight: Option<LossWeight>,
 }
+
+/// A loss weight: finite and above zero, so a supervised message is never
+/// silently left out of the loss (that is `train: false`) nor inverted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LossWeight(f32);
+
+impl LossWeight {
+    /// `weight` when it is finite and above zero.
+    #[must_use]
+    pub fn new(weight: f32) -> Option<Self> {
+        (weight.is_finite() && weight > 0.0).then_some(Self(weight))
+    }
+
+    /// The weight.
+    #[must_use]
+    pub fn get(self) -> f32 {
+        self.0
+    }
+}
+
+// A weight is never NaN, so equality is total.
+impl Eq for LossWeight {}
 
 /// The JSON a [`WireMessage`] is written as and read from.
 #[derive(Serialize, Deserialize)]
@@ -64,6 +91,8 @@ struct WireMessageJson {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reasoning_content: Option<String>,
     train: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    loss_weight: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -124,6 +153,7 @@ impl Serialize for WireMessage {
             tool_call_id: self.tool_call_id.clone(),
             reasoning_content: self.reasoning_content.clone(),
             train: self.train,
+            loss_weight: self.loss_weight.map(LossWeight::get),
         }
         .serialize(serializer)
     }
@@ -153,6 +183,19 @@ impl<'de> Deserialize<'de> for WireMessage {
                 "a supervised message holds an image: images belong to the context",
             ));
         }
+        let loss_weight =
+            match json.loss_weight {
+                None => None,
+                Some(_) if !json.train => return Err(D::Error::custom(
+                    "loss_weight on a message that is not supervised: only a supervised message \
+                     carries one",
+                )),
+                Some(weight) => Some(LossWeight::new(weight).ok_or_else(|| {
+                    D::Error::custom(format!(
+                        "loss_weight {weight} is not a finite weight above zero"
+                    ))
+                })?),
+            };
         Ok(Self {
             role: json.role,
             content,
@@ -161,6 +204,7 @@ impl<'de> Deserialize<'de> for WireMessage {
             tool_call_id: json.tool_call_id,
             reasoning_content: json.reasoning_content,
             train: json.train,
+            loss_weight,
         })
     }
 }

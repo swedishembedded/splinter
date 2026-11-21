@@ -165,6 +165,7 @@ mod tests {
                 tool_call_id: None,
                 reasoning_content: None,
                 train: true,
+                loss_weight: None,
             }])
             .with_outcome(RolloutOutcome::of(reward, &["task"], at)),
             metadata: RecordMetadata {

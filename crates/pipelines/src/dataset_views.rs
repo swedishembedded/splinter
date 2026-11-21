@@ -67,11 +67,14 @@ pub enum ViewName {
     /// that failed, the reference change): on-policy self-distillation, dense
     /// per-token credit where no group advantage exists.
     SelfDistill,
+    /// What the environment answered each action of every attempt, passed or
+    /// failed, in the context through the action: implicit world modelling.
+    Transition,
 }
 
 impl ViewName {
     /// Every view, in the order `--help` lists them.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::SftFinal,
         Self::SftStep,
         Self::Critic,
@@ -87,6 +90,7 @@ impl ViewName {
         Self::Rehearsal,
         Self::PolicyGradient,
         Self::SelfDistill,
+        Self::Transition,
     ];
 
     /// The name a command line uses.
@@ -108,6 +112,7 @@ impl ViewName {
             Self::Rehearsal => "rehearsal",
             Self::PolicyGradient => "policy-gradient",
             Self::SelfDistill => "self-distill",
+            Self::Transition => "transition",
         }
     }
 
@@ -118,7 +123,7 @@ impl ViewName {
     pub(crate) fn takes_min_strength(self) -> bool {
         !matches!(
             self,
-            Self::Cpt | Self::Denoise | Self::Voice | Self::Rehearsal
+            Self::Cpt | Self::Denoise | Self::Voice | Self::Rehearsal | Self::Transition
         )
     }
 }

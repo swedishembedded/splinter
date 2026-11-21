@@ -25,8 +25,8 @@ pub struct BuildArgs {
     #[arg(required = true, value_name = "EXPERIENCE-SET")]
     pub sets: Vec<String>,
     /// sft-final, sft-step, critic, preference, feedback, verifier, decision,
-    /// retrieval, outcome, denoise, cpt, voice, rehearsal, policy-gradient or
-    /// self-distill.
+    /// retrieval, outcome, denoise, cpt, voice, rehearsal, policy-gradient,
+    /// self-distill or transition.
     #[arg(long, required = true, value_parser = view, value_name = "VIEW")]
     pub view: ViewName,
     /// What the student sees: all (only the instruction), keep:K,..
@@ -162,6 +162,18 @@ pub struct BuildArgs {
     /// from them pairs the same.
     #[arg(long, value_name = "N")]
     pub pair_seed: Option<Seed>,
+    /// For the transition view: the loss weight written on every supervised
+    /// observation, against 1 for records without one (a dataset of model
+    /// actions trained beside it). Finite and above zero; without it the
+    /// trainer's default weight.
+    #[arg(long, value_name = "W")]
+    pub loss_weight: Option<f32>,
+    /// For the transition view: the most times one transition (a task, a
+    /// tool call and what the environment answered) is supervised, in corpus
+    /// order; the rest stay context, counted as `repeated_transition`
+    /// (default 2).
+    #[arg(long, value_name = "N", value_parser = positive_count)]
+    pub per_transition_cap: Option<usize>,
     /// For the sft-step and policy-gradient views: one record per
     /// trajectory with every admitted action supervised, not one record per
     /// action; a policy-gradient record keeps its trial's reward and group.
@@ -197,7 +209,9 @@ pub struct BuildArgs {
     /// was not verified or failed; the manifest records `outcome-verified`).
     /// The negative controls: `unverified` keeps trajectories whatever their
     /// verdict (never an exposed one); `shuffled` gives each verified
-    /// trajectory the instruction of another task.
+    /// trajectory the instruction of another task. For the transition view,
+    /// `shuffled` gives each supervised observation another's text: the same
+    /// targets with the dynamics broken.
     #[arg(long, value_enum)]
     pub control: Option<ControlKind>,
     /// The seed of the `shuffled` pairing (drawn and printed when not

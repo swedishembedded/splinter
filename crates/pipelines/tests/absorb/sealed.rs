@@ -30,6 +30,7 @@ fn record(user: &str, assistant: &str) -> Record {
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     };
     Record {
         body: RecordBody::Chat {

@@ -76,6 +76,8 @@ pub struct BuildRequest {
     /// For the policy-gradient view: how an attempt's reward and its advantage
     /// are made.
     pub rl: RlBuild,
+    /// For the transition view: how its observations are supervised.
+    pub transition: TransitionBuild,
     /// For the policy-gradient view: the examiner's practice directories
     /// (each holding `practice.json`) the attempts' tasks were staged from:
     /// their naive floors, for `shaped-partial`, and their lineages, which
@@ -130,6 +132,7 @@ impl BuildRequest {
             roles: None,
             images: false,
             rl: RlBuild::default(),
+            transition: TransitionBuild::default(),
             practice: Vec::new(),
             history: HistoryCuration::default(),
             pass_curation: PassCuration::default(),
@@ -143,6 +146,27 @@ fn as_text<S: serde::Serializer>(model: &Option<ModelRef>, out: S) -> Result<S::
     match model {
         Some(model) => out.collect_str(model),
         None => out.serialize_none(),
+    }
+}
+
+/// How the transition view supervises observations; the other views refuse
+/// a value that is not the default.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct TransitionBuild {
+    /// The loss weight written on every supervised observation
+    /// ([`splinter_data::Transition::loss_weight`]); `None` is the trainer's
+    /// default weight.
+    pub loss_weight: Option<f32>,
+    /// The most times one transition (task, call, observation) is supervised;
+    /// `None` is [`splinter_data::DEFAULT_PER_TRANSITION_CAP`].
+    pub per_transition_cap: Option<usize>,
+}
+
+impl TransitionBuild {
+    /// Whether nothing is asked of the transition view.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        self.loss_weight.is_none() && self.per_transition_cap.is_none()
     }
 }
 

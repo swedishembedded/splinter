@@ -157,6 +157,7 @@ pub fn rollout_dataset(ctx: &Context, topic: &str, rewards: &[f64]) -> DatasetId
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     };
     let records = rewards
         .iter()
@@ -230,6 +231,7 @@ fn dataset_made(
             tool_call_id: None,
             reasoning_content: None,
             train,
+            loss_weight: None,
         };
         records.push(Record {
             body: RecordBody::Chat {
@@ -295,6 +297,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         tool_call_id: None,
         reasoning_content: None,
         train,
+        loss_weight: None,
     };
     let mut records = Vec::new();
     for i in 0..n {

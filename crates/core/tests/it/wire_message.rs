@@ -10,7 +10,7 @@
 //! brain's trainer reads.
 
 use serde_json::json;
-use splinter_core::chat::{WireImage, WireMessage};
+use splinter_core::chat::{LossWeight, WireImage, WireMessage};
 
 fn user(content: &str, images: Vec<WireImage>) -> WireMessage {
     WireMessage {
@@ -21,6 +21,7 @@ fn user(content: &str, images: Vec<WireImage>) -> WireMessage {
         tool_call_id: None,
         reasoning_content: None,
         train: false,
+        loss_weight: None,
     }
 }
 
@@ -86,4 +87,33 @@ fn a_supervised_message_with_an_image_is_refused_on_reading() {
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
     ]});
     assert!(serde_json::from_value::<WireMessage>(value).is_err());
+}
+
+#[test]
+fn a_loss_weight_is_written_on_a_supervised_message_and_read_back() {
+    let mut message = user("observed", Vec::new());
+    message.role = "tool".into();
+    message.train = true;
+    message.loss_weight = Some(LossWeight::new(0.3).unwrap());
+    let value = serde_json::to_value(&message).unwrap();
+    assert_eq!(value["loss_weight"].as_f64().map(|w| w as f32), Some(0.3));
+    let back: WireMessage = serde_json::from_value(value).unwrap();
+    assert_eq!(back, message);
+    // Unweighted messages are written as before.
+    assert!(serde_json::to_value(user("x", Vec::new()))
+        .unwrap()
+        .get("loss_weight")
+        .is_none());
+}
+
+#[test]
+fn a_loss_weight_that_is_not_positive_and_finite_or_on_context_is_refused() {
+    for bad in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        assert!(LossWeight::new(bad).is_none(), "{bad}");
+    }
+    let context = json!({"role": "tool", "content": "x", "train": false, "loss_weight": 0.5});
+    let err = serde_json::from_value::<WireMessage>(context).unwrap_err();
+    assert!(err.to_string().contains("loss_weight"), "{err}");
+    let zero = json!({"role": "tool", "content": "x", "train": true, "loss_weight": 0.0});
+    assert!(serde_json::from_value::<WireMessage>(zero).is_err());
 }

@@ -657,6 +657,7 @@ fn line(
                 tool_call_id: None,
                 reasoning_content: None,
                 train: true,
+                loss_weight: None,
             };
             serde_json::to_string(&ChatLine {
                 messages: chat_messages(index, std::slice::from_ref(&message), None)?,
