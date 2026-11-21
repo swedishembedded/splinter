@@ -58,7 +58,7 @@ E0 to E3 need no new method and fit in one afternoon on four cards.
 
 Kept as generic: `--distinct-calls` (structural equality of calls) and `--only-actions` (a tool allow-list).
 
-## E0-E3 runs (lane EXP; pre-registered 2026-11-21 17:30, before any trial or training)
+## E0-E3 runs (lane EXP; pre-registered 2026-11-21 17:17 (commit c26c073bb), before any training (17:18) or trial (17:24))
 
 **Instrument, shared by every arm of E0-E3.**
 - **Builds (frozen):** brain-bcd67e5ad (per-turn thinking budget that always closes, exact reasoning counts) for serving and
@@ -115,3 +115,20 @@ slot. Contrasts r8 minus r4 and r12 minus r4 (Holm over 2). **Success:** monoton
 r12 minus r4 at least +0.05, family interval above 0 and Holm p below 0.05.
 
 Selections and dataset ids: `lane-exp/data/{selections,design}.json` and `datasets.jsonl`; script `lane-exp/scripts/select.py`.
+
+**Deviations (dated 2026-11-21 18:16, before any E1 or E2 trial and before the E3 rerun's analysis).**
+- **E3's first exam slot was invalid and is discarded unread.** Folds p1-p3 (18 adapters) ran on one exam server with
+  brain's `--adapter-slots 8`: brain served the 8 resident adapters and starved the other 10 arms (0 trials graded in 8
+  minutes, 6 requests each waiting) without an error. It was stopped at 17:59 and archived
+  (`lane-exp/archive/e3a-invalid-adapter-starvation.tar.zst`). Eight E3 trainings were cancelled at 17:50 for another
+  session's window and retrained from the same datasets and seeds.
+- **Serving topology for every E1, E2 and E3 exam:** one fold per exam server, each server with `--adapter-slots 24`
+  (every arm's adapter resident), all arms of the fold on that server at equal concurrency (E3 6, E1/E2 8 trials in
+  flight per arm). No router.
+- **Rounds:** each fold's exam runs as consecutive slots of one attempt per task (E3 4 rounds, E1/E2 8 rounds, the 4B
+  check 4 rounds), every arm launched together in each round, each round packed before the next (inode quota). The
+  rounds of one fold are pooled; nothing else changes.
+- **Tooling:** the vim train side is a compiled dataset, so each arm is a plain `harbor run` with sven-fe9cda90 (which
+  enforces the profile's `[budget]`) and `--agent-timeout-multiplier 4`, adopted with `bench adopt`, which now records the
+  budget (bench 0e574fdf), so `bench trials` classifies exhaustion. Gateway usage is not attributed per trial in this
+  path, so bench's own token check reads 0 tokens and exhaustion rests on Sven's enforced stop and the turn count.
