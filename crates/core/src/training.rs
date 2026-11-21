@@ -277,7 +277,8 @@ pub struct PolicyGradientSummary {
 
 impl PolicyGradientSummary {
     /// The summary of `steps`; every figure is `None` where no step measured
-    /// it.
+    /// it. A step carrying a `skipped` reason is one the service's step guard
+    /// skipped, and is counted in `steps_skipped_guard`.
     #[must_use]
     pub fn from_steps(steps: Vec<PolicyGradientStep>, steps_skipped_nonfinite: usize) -> Self {
         fn mean(values: impl Iterator<Item = f32>) -> Option<f32> {
@@ -285,6 +286,7 @@ impl PolicyGradientSummary {
             (n > 0).then(|| (sum / n as f64) as f32)
         }
         let kls = || steps.iter().filter_map(|s| s.kl);
+        let steps_skipped_guard = steps.iter().filter(|s| s.skipped.is_some()).count();
         Self {
             first_kl: kls().next(),
             last_kl: kls().next_back(),
@@ -296,7 +298,7 @@ impl PolicyGradientSummary {
             mean_entropy: mean(steps.iter().map(|s| s.entropy_estimate)),
             steps,
             steps_skipped_nonfinite,
-            steps_skipped_guard: 0,
+            steps_skipped_guard,
         }
     }
 
@@ -615,6 +617,25 @@ mod tests {
         );
         assert_eq!(dual.mean_clip_fraction_dual, Some(0.125));
         assert_eq!(summary.steps_skipped_nonfinite, 1);
+        assert_eq!(
+            summary.steps_skipped_guard, 0,
+            "no step was skipped by the guard"
+        );
+        let guarded = PolicyGradientSummary::from_steps(
+            vec![
+                pg_step(1, Some(0.01), 0.1),
+                PolicyGradientStep {
+                    skipped: Some("the step's gradient norm 44.1 is over the bound 5".into()),
+                    ..pg_step(2, Some(0.02), 0.1)
+                },
+                pg_step(3, Some(0.03), 0.1),
+            ],
+            0,
+        );
+        assert_eq!(
+            guarded.steps_skipped_guard, 1,
+            "a step the service skipped by its guard is counted"
+        );
         let line = summary.line();
         assert!(
             line.contains("4 step(s)") && line.contains("last 0.5000"),
