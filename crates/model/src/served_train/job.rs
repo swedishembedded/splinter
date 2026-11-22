@@ -32,6 +32,9 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+#[path = "job_servers.rs"]
+mod servers;
+
 /// How often the caller's cancel token is read.
 const POLL: Duration = Duration::from_millis(250);
 
@@ -156,6 +159,43 @@ pub fn run(
             .join()
             .unwrap_or_else(|_| Err(JobError::Failed("the job client panicked".into())))
     })
+}
+
+/// [`run`] on `brain`'s endpoints, spread over their cards as
+/// [`crate::endpoint::BrainEndpoints::train_span`] says: one card (as
+/// [`run`]), several cards of the server the run is placed on, or one
+/// data-parallel job over every server ([`servers`]).
+pub fn run_spread(
+    brain: &crate::endpoint::BrainEndpoints,
+    first: usize,
+    (action, params): (&str, &Value),
+    cancel: Option<&dyn Cancel>,
+    on_frame: &mut dyn FnMut(&Value),
+) -> Result<Value, JobError> {
+    use crate::endpoint::TrainSpan;
+    let (urls, key, wait) = (brain.urls(), brain.key(), brain.refused_wait());
+    match brain.train_span() {
+        TrainSpan::OneCard => run(urls, key, wait, first, (action, params), cancel, on_frame),
+        TrainSpan::Cards(cards) => {
+            let mut wide = params.clone();
+            wide["cards"] = serde_json::json!(cards);
+            run(urls, key, wait, first, (action, &wide), cancel, on_frame)
+        }
+        TrainSpan::Servers(job) => {
+            let (frames, received) = channel::<Value>();
+            std::thread::scope(|scope| {
+                let worker = scope.spawn(move || {
+                    servers::drive(urls, key, wait, job, (action, params), cancel, &frames)
+                });
+                for frame in received {
+                    on_frame(&frame);
+                }
+                worker
+                    .join()
+                    .unwrap_or_else(|_| Err(JobError::Failed("the job client panicked".into())))
+            })
+        }
+    }
 }
 
 /// Runs one action synchronously (`POST /run`) on the first of `urls` that

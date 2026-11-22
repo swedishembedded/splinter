@@ -278,6 +278,22 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       allocation bench serves on its own card as configured. Tests: the
       examiner's flag test, the campaign suite; bench's
       `tests/integration/test_examination_endpoints.py`. Not yet run on GPUs.
+- [x] **The training stage trains one run over several cards and servers
+      (2026-11-22).** Supervised and policy-gradient runs (`served_train`'s
+      `run`) follow `BrainEndpoints::train_span`: one card; `cards` of one
+      server (a one-node fleet, or `--brain-train-cards N`); or one job over
+      every server (`job_servers`): the same `train` request to each, with
+      its `cards`, its ranks of one plan (`first_rank` in server order,
+      `dp` = world size), the SHA-256 of the job secret and an explicit
+      seed; followed on every server, the result from rank 0's, a failure
+      or cancel on any server cancelling the others (brain f137f5f94 and
+      after). A fleet starts every server with a fresh owner-only
+      `--train-job-secret`, the first with `--train-job-coordinator`, and
+      reads `GET /v1/capabilities` for `cards` and `job` before it spreads
+      runs (one card otherwise, said). `doctor` says which mode applies.
+      Tests: `served_train/job_servers.rs` against scripted servers (fields
+      per server, rank offsets, secret digest, a failure on one server, a
+      cancel), the fleet's flags and span, the device flags.
 
 ## Decisions
 
@@ -299,20 +315,6 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       scheduler programs. A real cluster run is still unproven; the adapter
       maps the scheduler's terminal states to distinct outcomes, and job
       accounting (exit codes from a scheduler) is not wired yet.
-- [ ] No pipeline stage trains one run over several cards. The stage
-      trains through brain's service (`POST /v1/jobs`, action `brain/train`)
-      on one card per run, and its report (held-out base and tuned scores,
-      the monitoring curve, the selected step, the training record) is the
-      service's; with several endpoints, independent runs (variants, seeds)
-      are pinned to endpoints by seed and fail over on 429. What brain's API
-      needs for one run to span cards: `brain/train` taking a world (cards
-      of one server, then ranks over a job plan whose coordinator,
-      `job_plan`, `job_rank` and `job_secret` the caller supplies, or the
-      server forms itself from its fleet peers) and returning the same
-      report, so Splinter changes no report code (brain C2, routed by the
-      coordinator 2026-11-21). The job-plan CLI actions (`brain qwen3
-      lora_train`, `brain gpt2 train`) run across nodes now through
-      `jobs submit --distributed`, but return an adapter alone.
 - [ ] A local-server test failed once under load and never again:
       `crates/model/tests/service.rs`
       `the_server_a_run_owns_serves_the_store_..._as_wide_as_it_decodes`

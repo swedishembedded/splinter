@@ -291,6 +291,12 @@ exec sleep 600
                     .mode();
                 assert_eq!(mode & 0o777, 0o600, "{private}");
             }
+            assert!(args.contains("--train-job-secret"), "{args}");
+            assert_eq!(
+                args.contains("--train-job-coordinator"),
+                node == "localhost",
+                "only the first server coordinates: {args}"
+            );
             let mode = std::fs::metadata(work.join(node))
                 .unwrap()
                 .permissions()

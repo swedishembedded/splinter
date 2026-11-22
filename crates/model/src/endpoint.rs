@@ -81,11 +81,41 @@ pub struct ServedCard {
     pub adapter_digest: Option<String>,
 }
 
+/// How one training run is spread over the endpoints' cards.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum TrainSpan {
+    /// One card of the server the run is placed on (brain's default).
+    #[default]
+    OneCard,
+    /// This many cards of the one server the run is placed on, one
+    /// data-parallel rank each (brain's `cards`).
+    Cards(u32),
+    /// Every card of every endpoint, one data-parallel job across them
+    /// (brain's `cards` and `job` on each server).
+    Servers(ServersJob),
+}
+
+/// One data-parallel job over several servers, as the fleet that started
+/// them set it up.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServersJob {
+    /// The cards each endpoint trains on, in the order of
+    /// [`BrainEndpoints::urls`]; the first holds rank 0.
+    pub cards: Vec<u32>,
+    /// The address the first endpoint's server binds as the job's
+    /// coordinator (`--train-job-coordinator`).
+    pub coordinator: String,
+    /// The SHA-256, in hex, of the job secret's 32 bytes every server was
+    /// started with (`--train-job-secret`).
+    pub secret_sha256: String,
+}
+
 /// The brain endpoints, their key, and how wide they are asked.
 #[derive(Clone)]
 pub struct BrainEndpoints {
     urls: Vec<String>,
     key: String,
+    train_span: TrainSpan,
     adapter_offer: Option<AdapterOffer>,
     attempt_concurrency: Option<usize>,
     artifact_store: Option<ArtifactStore>,
@@ -100,6 +130,7 @@ impl std::fmt::Debug for BrainEndpoints {
             .field("adapter_offer", &self.adapter_offer)
             .field("attempt_concurrency", &self.attempt_concurrency)
             .field("artifact_store", &self.artifact_store)
+            .field("train_span", &self.train_span)
             .finish_non_exhaustive()
     }
 }
@@ -128,6 +159,7 @@ impl BrainEndpoints {
         Ok(Self {
             urls,
             key: key.into(),
+            train_span: TrainSpan::OneCard,
             adapter_offer: None,
             attempt_concurrency: None,
             artifact_store: None,
@@ -185,6 +217,21 @@ impl BrainEndpoints {
     pub fn with_refused_wait(mut self, wait: Duration) -> Self {
         self.refused_wait = wait;
         self
+    }
+
+    /// These endpoints, a data-parallel training run spread over their cards
+    /// as `span` says (by the fleet that started them: only it knows the
+    /// job secret and the coordinator the servers were started with).
+    #[must_use]
+    pub fn with_train_span(mut self, span: TrainSpan) -> Self {
+        self.train_span = span;
+        self
+    }
+
+    /// How a data-parallel training run is spread over the endpoints' cards.
+    #[must_use]
+    pub fn train_span(&self) -> &TrainSpan {
+        &self.train_span
     }
 
     /// How long a training run waits after every endpoint refused it.

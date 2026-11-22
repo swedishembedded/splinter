@@ -21,10 +21,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use splinter_core::digest::Digest;
 use splinter_sandbox::step::{write_secret, NodeSteps};
 use sven_sdk::CancelToken;
 
-use crate::endpoint::BrainEndpoints;
+use crate::endpoint::{BrainEndpoints, ServersJob, TrainSpan};
 use crate::error::PolicyError;
 use crate::served_train::ArtifactStore;
 use crate::server::{remember, Failure};
@@ -68,6 +69,134 @@ pub struct ServiceSettings {
 /// The file in a fleet's directory that lists its endpoints, one URL per
 /// line; the key is the file `key` beside it.
 pub const ENDPOINTS_FILE: &str = "endpoints";
+
+/// What a training job over the fleet's servers is set up with when the
+/// servers start: the secret every server proves membership with, and the
+/// address the first server binds as the job's coordinator.
+struct TrainJob {
+    secret: PathBuf,
+    secret_sha256: String,
+    coordinator: String,
+}
+
+impl TrainJob {
+    /// A fresh secret in `work` and a coordinator port on `rank0`, the first
+    /// server's address: drawn at random from the range above the usual
+    /// ephemeral ports' start (the node's system cannot be asked from here; a
+    /// clash fails the job with the reason).
+    fn prepare(work: &Path, rank0: IpAddr) -> Result<Self, PolicyError> {
+        use std::io::Read;
+        let secret = work.join("train-job.secret");
+        let io = |path: &Path| {
+            let path = path.to_path_buf();
+            move |source| PolicyError::Io { path, source }
+        };
+        write_secret(&secret).map_err(io(&secret))?;
+        let secret_sha256 = secret_sha256(&secret)?;
+        let mut port = [0u8; 2];
+        std::fs::File::open("/dev/urandom")
+            .and_then(|mut random| random.read_exact(&mut port))
+            .map_err(io(Path::new("/dev/urandom")))?;
+        let port = 20_000 + u16::from_le_bytes(port) % 30_000;
+        Ok(Self {
+            secret,
+            secret_sha256,
+            coordinator: std::net::SocketAddr::new(rank0, port).to_string(),
+        })
+    }
+
+    /// How a data-parallel training run is spread over the fleet: one job
+    /// over every card of every server when there are several, every card of
+    /// the one server when it has several, one card otherwise; and one card
+    /// whenever the servers' `brain/train` does not take `cards` and `job`.
+    fn span(&self, endpoints: &BrainEndpoints, servers: usize, cards: u32) -> TrainSpan {
+        if servers <= 1 && cards <= 1 {
+            return TrainSpan::OneCard;
+        }
+        match trains_across_cards(endpoints) {
+            Ok(true) => {}
+            Ok(false) => {
+                eprintln!(
+                    "brain: these servers' brain/train takes no cards and job: a training run \
+                     uses one card"
+                );
+                return TrainSpan::OneCard;
+            }
+            Err(why) => {
+                eprintln!(
+                    "brain: the servers' capabilities could not be read ({why}): a training run \
+                     uses one card"
+                );
+                return TrainSpan::OneCard;
+            }
+        }
+        if servers <= 1 {
+            return TrainSpan::Cards(cards);
+        }
+        TrainSpan::Servers(ServersJob {
+            cards: vec![cards.max(1); servers],
+            coordinator: self.coordinator.clone(),
+            secret_sha256: self.secret_sha256.clone(),
+        })
+    }
+}
+
+/// The SHA-256, in hex, of the 32 bytes a job secret file holds as 64 hex
+/// digits (what `--train-job-secret` and `--job-secret` read): the digest a
+/// job over several servers names, never the secret.
+///
+/// # Errors
+/// The file cannot be read or is not 64 hex digits.
+pub fn secret_sha256(file: &Path) -> Result<String, PolicyError> {
+    let text = std::fs::read_to_string(file).map_err(|source| PolicyError::Io {
+        path: file.to_path_buf(),
+        source,
+    })?;
+    let hex = text.trim();
+    let bytes: Option<Vec<u8>> = (hex.len() == 64)
+        .then(|| {
+            (0..64)
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok())
+                .collect()
+        })
+        .flatten();
+    let bytes = bytes.ok_or_else(|| {
+        refused(
+            &file.display().to_string(),
+            "a job secret is 32 bytes written as 64 hex digits".into(),
+        )
+    })?;
+    let digest = Digest::sha256_of_reader(bytes.as_slice()).map_err(|source| PolicyError::Io {
+        path: file.to_path_buf(),
+        source,
+    })?;
+    Ok(digest.hex().to_string())
+}
+
+/// Whether the first endpoint's `brain/train` `train` action takes `cards`
+/// and `job` (`GET /v1/capabilities`): what a run over several cards and
+/// servers needs.
+fn trains_across_cards(endpoints: &BrainEndpoints) -> Result<bool, String> {
+    let listing = endpoints
+        .get(0, "capabilities")
+        .map_err(|e| e.to_string())?;
+    Ok(takes_cards_and_job(&listing))
+}
+
+/// Whether a capability listing (`{"data": [{"model", "action", "params":
+/// [{"name"}]}]}`) has `brain/train`'s `train` take `cards` and `job`.
+fn takes_cards_and_job(listing: &serde_json::Value) -> bool {
+    let params: Vec<&str> = listing["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry["model"] == "brain/train" && entry["action"] == "train")
+        .flat_map(|entry| entry["params"].as_array().into_iter().flatten())
+        .filter_map(|param| param["name"].as_str())
+        .collect();
+    params.contains(&"cards") && params.contains(&"job")
+}
 
 /// Where a fleet of servers runs: one `brain serve` per node of the
 /// allocation, each a job step serving every card of its node.
@@ -207,8 +336,8 @@ impl ManagedBrain {
         let work = service.state.join(format!("fleet-{}", std::process::id()));
         let (adapters, artifacts) = prepare(&service.state, &work)?;
         let started = Self::start_steps(settings, &work, &adapters, &artifacts, cancel);
-        let services = match started {
-            Ok(services) => services,
+        let (services, train_job) = match started {
+            Ok(started) => started,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&work);
                 return Err(error);
@@ -234,6 +363,8 @@ impl ManagedBrain {
             .with_attempt_concurrency(slots)
             .with_adapter_directory(adapters)
             .with_artifact_store(ArtifactStore::open(&artifacts)?);
+        let span = train_job.span(&endpoints, settings.nodes.len(), settings.gpus_per_node);
+        let endpoints = endpoints.with_train_span(span);
         Ok(Self::running(services, endpoints, work))
     }
 
@@ -245,7 +376,7 @@ impl ManagedBrain {
         adapters: &Path,
         artifacts: &Path,
         cancel: &CancelToken,
-    ) -> Result<Vec<(String, Service)>, PolicyError> {
+    ) -> Result<(Vec<(String, Service)>, TrainJob), PolicyError> {
         // Owner-only: the key and the scripts of every server.
         set_owner_only(work)?;
         let key_file = work.join(KEY_FILE);
@@ -270,6 +401,7 @@ impl ManagedBrain {
         } else {
             Some(Self::trust_fleet(work, &addresses)?)
         };
+        let train_job = TrainJob::prepare(work, addresses[0].1)?;
         let mut pending = Vec::with_capacity(settings.nodes.len());
         // Started from this thread, one after the other, so each loads while
         // the next starts; a server dies with the thread that started it.
@@ -304,6 +436,10 @@ impl ManagedBrain {
                 key_file: &key_file,
                 tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
                 stage: settings.stage_models.as_deref(),
+                train_job: Some((
+                    train_job.secret.as_path(),
+                    (index == 0).then_some(train_job.coordinator.as_str()),
+                )),
             });
             let launch = service.launch(&node_work, adapters, artifacts, Some(&log), host);
             let started = spawn_service(&launch).map_err(|failure| {
@@ -327,7 +463,7 @@ impl ManagedBrain {
             })?;
             services.push((node, service));
         }
-        Ok(services)
+        Ok((services, train_job))
     }
 
     /// Issues the fleet's certificates for `nodes`, publishes the authority
@@ -514,5 +650,56 @@ impl BrainConnection {
             Self::Given(endpoints) => endpoints,
             Self::Owned(owned) => owned.endpoints(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_job_secrets_digest_is_of_its_32_bytes_and_the_coordinator_on_rank_0s_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = TrainJob::prepare(dir.path(), "10.0.0.7".parse().unwrap()).unwrap();
+        let hex = std::fs::read_to_string(&job.secret).unwrap();
+        let bytes: Vec<u8> = (0..64)
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&hex.trim()[at..at + 2], 16).unwrap())
+            .collect();
+        assert_eq!(bytes.len(), 32);
+        let expected = Digest::sha256_of_reader(bytes.as_slice()).unwrap();
+        assert_eq!(job.secret_sha256, expected.hex());
+        assert!(
+            job.coordinator.starts_with("10.0.0.7:"),
+            "{}",
+            job.coordinator
+        );
+    }
+
+    #[test]
+    fn a_run_spans_cards_and_servers_only_where_brain_takes_cards_and_job() {
+        let listing = |params: &[&str]| {
+            serde_json::json!({"data": [
+                {"model": "brain/train", "action": "check_dataset", "params": [{"name": "cards"}, {"name": "job"}]},
+                {"model": "brain/train", "action": "train",
+                 "params": params.iter().map(|p| serde_json::json!({"name": p})).collect::<Vec<_>>()},
+            ]})
+        };
+        assert!(takes_cards_and_job(&listing(&["seed", "cards", "job"])));
+        assert!(
+            !takes_cards_and_job(&listing(&["seed", "cards"])),
+            "an older brain"
+        );
+        assert!(!takes_cards_and_job(&serde_json::json!({"data": []})));
+
+        let dir = tempfile::tempdir().unwrap();
+        let job = TrainJob::prepare(dir.path(), "10.0.0.7".parse().unwrap()).unwrap();
+        let unreachable = BrainEndpoints::new(vec!["http://127.0.0.1:1/v1".into()], "k").unwrap();
+        assert_eq!(job.span(&unreachable, 1, 1), TrainSpan::OneCard);
+        assert_eq!(
+            job.span(&unreachable, 2, 4),
+            TrainSpan::OneCard,
+            "capabilities that cannot be read train on one card, and say so"
+        );
     }
 }

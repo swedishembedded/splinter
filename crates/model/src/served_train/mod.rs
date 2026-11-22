@@ -201,7 +201,10 @@ pub fn train_policy_gradient_served(
     })
 }
 
-/// Runs the job on the endpoints, mapping how it ended to a [`PolicyError`].
+/// Runs the `train` job (supervised or policy-gradient: the objectives
+/// brain trains data-parallel) on the endpoints, spread over their cards as
+/// they say ([`BrainEndpoints::train_span`]), mapping how it ended to a
+/// [`PolicyError`].
 fn run(
     brain: &BrainEndpoints,
     attempt_dir: &Path,
@@ -210,7 +213,31 @@ fn run(
     cancel: Option<&sven_sdk::CancelToken>,
     on_frame: &mut dyn FnMut(&Value),
 ) -> Result<Value, PolicyError> {
-    run_action(brain, attempt_dir, seed, "train", params, cancel, on_frame)
+    let first = brain.pin(&seed.to_le_bytes());
+    job::run_spread(
+        brain,
+        first,
+        ("train", params),
+        cancel.map(|c| c as &dyn job::Cancel),
+        on_frame,
+    )
+    .map_err(|e| job_error(e, attempt_dir))
+}
+
+/// How a job that ended without a result reads as a [`PolicyError`] for the
+/// attempt in `attempt_dir`.
+fn job_error(error: job::JobError, attempt_dir: &Path) -> PolicyError {
+    match error {
+        job::JobError::Cancelled(job) => PolicyError::Cancelled {
+            dir: attempt_dir.to_path_buf(),
+            job,
+        },
+        job::JobError::Failed(reason) => PolicyError::Train {
+            dir: attempt_dir.to_path_buf(),
+            reason,
+        },
+        job::JobError::Transport(url, reason) => PolicyError::Endpoint { url, reason },
+    }
 }
 
 /// Runs the `brain/train` job `action` (`train`, `init_model`, `pretrain`,
@@ -240,17 +267,7 @@ pub fn run_action(
         cancel.map(|c| c as &dyn job::Cancel),
         on_frame,
     )
-    .map_err(|e| match e {
-        job::JobError::Cancelled(job) => PolicyError::Cancelled {
-            dir: attempt_dir.to_path_buf(),
-            job,
-        },
-        job::JobError::Failed(reason) => PolicyError::Train {
-            dir: attempt_dir.to_path_buf(),
-            reason,
-        },
-        job::JobError::Transport(url, reason) => PolicyError::Endpoint { url, reason },
-    })
+    .map_err(|e| job_error(e, attempt_dir))
 }
 
 /// The adapter and the training record a job published, fetched into the

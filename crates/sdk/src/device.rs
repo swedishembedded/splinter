@@ -20,6 +20,7 @@
 use std::path::PathBuf;
 
 use crate::cluster::{ClusterMode, ClusterSettings, StageModels};
+use crate::model::endpoint::{ServersJob, TrainSpan};
 use crate::model::{BrainConnection, BrainEndpoints, PolicyError};
 use crate::Config;
 
@@ -54,6 +55,21 @@ pub struct DeviceFlags {
     /// place of verification.
     #[arg(long, global = true, value_name = "FILE")]
     pub brain_ca_file: Option<PathBuf>,
+    /// With --brain-endpoint: the cards a data-parallel training run takes
+    /// on each endpoint, in their order (`2,1`); one number for one endpoint
+    /// trains on that many of its cards, several make one job over the
+    /// endpoints, which needs --brain-train-job-secret and
+    /// --brain-train-coordinator. Without it a run takes one card.
+    #[arg(long, global = true, value_name = "N[,N...]", value_delimiter = ',')]
+    pub brain_train_cards: Vec<u32>,
+    /// The job secret the endpoints were started with
+    /// (`brain serve --train-job-secret FILE`, 64 hex digits).
+    #[arg(long, global = true, value_name = "FILE")]
+    pub brain_train_job_secret: Option<PathBuf>,
+    /// The address the first endpoint's server binds as the job's
+    /// coordinator (`brain serve --train-job-coordinator HOST:PORT`).
+    #[arg(long, global = true, value_name = "HOST:PORT")]
+    pub brain_train_coordinator: Option<String>,
     /// The `brain` binary a server is started from (default: the first on
     /// `PATH`).
     #[arg(long, global = true)]
@@ -173,6 +189,19 @@ impl DeviceFlags {
         let brain_key_file = take_all("--brain-key-file")?.pop().map(PathBuf::from);
         let brain_ca_file = take_all("--brain-ca-file")?.pop().map(PathBuf::from);
         let brain_bin = take_all("--brain-bin")?.pop().map(PathBuf::from);
+        let brain_train_cards = take_all("--brain-train-cards")?
+            .iter()
+            .flat_map(|list| list.split(','))
+            .map(|n| {
+                n.trim()
+                    .parse::<u32>()
+                    .map_err(|_| format!("--brain-train-cards needs card counts, got {n}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let brain_train_job_secret = take_all("--brain-train-job-secret")?
+            .pop()
+            .map(PathBuf::from);
+        let brain_train_coordinator = take_all("--brain-train-coordinator")?.pop();
         let cluster = take_all("--cluster")?
             .pop()
             .map(|text| cluster_mode(&text))
@@ -184,6 +213,9 @@ impl DeviceFlags {
             brain_endpoint,
             brain_key_file,
             brain_ca_file,
+            brain_train_cards,
+            brain_train_job_secret,
+            brain_train_coordinator,
             brain_bin,
             cluster,
             cluster_nodes: take_all("--cluster-nodes")?.pop(),
@@ -248,11 +280,22 @@ impl DeviceFlags {
             config.brain_binary = Some(binary.clone());
         }
         if self.brain_endpoint.is_empty() {
-            return match &self.brain_ca_file {
-                Some(_) => Err(PolicyError::Endpoint {
+            let stray = [
+                (self.brain_ca_file.is_some(), "--brain-ca-file"),
+                (!self.brain_train_cards.is_empty(), "--brain-train-cards"),
+                (
+                    self.brain_train_job_secret.is_some(),
+                    "--brain-train-job-secret",
+                ),
+                (
+                    self.brain_train_coordinator.is_some(),
+                    "--brain-train-coordinator",
+                ),
+            ];
+            return match stray.iter().find(|(given, _)| *given) {
+                Some((_, flag)) => Err(PolicyError::Endpoint {
                     url: String::new(),
-                    reason: "--brain-ca-file configures --brain-endpoint, which is not given"
-                        .into(),
+                    reason: format!("{flag} configures --brain-endpoint, which is not given"),
                 }),
                 None => Ok(()),
             };
@@ -276,8 +319,42 @@ impl DeviceFlags {
             });
         };
         let key = BrainEndpoints::read_key(key_file)?;
-        config.brain = Some(BrainEndpoints::new(self.brain_endpoint.clone(), key)?);
+        let endpoints = BrainEndpoints::new(self.brain_endpoint.clone(), key)?;
+        config.brain = Some(endpoints.with_train_span(self.train_span()?));
         Ok(())
+    }
+
+    /// How a training run spreads over the given endpoints' cards.
+    fn train_span(&self) -> Result<TrainSpan, PolicyError> {
+        let refused = |reason: String| PolicyError::Endpoint {
+            url: self.brain_endpoint[0].clone(),
+            reason,
+        };
+        match self.brain_train_cards.as_slice() {
+            [] | [1] => Ok(TrainSpan::OneCard),
+            [cards] if self.brain_endpoint.len() == 1 => Ok(TrainSpan::Cards(*cards)),
+            cards if cards.len() == self.brain_endpoint.len() => {
+                let (Some(secret), Some(coordinator)) =
+                    (&self.brain_train_job_secret, &self.brain_train_coordinator)
+                else {
+                    return Err(refused(
+                        "a training job over several endpoints needs --brain-train-job-secret \
+                         and --brain-train-coordinator, as their servers were started"
+                            .into(),
+                    ));
+                };
+                Ok(TrainSpan::Servers(ServersJob {
+                    cards: cards.to_vec(),
+                    coordinator: coordinator.clone(),
+                    secret_sha256: crate::model::service::secret_sha256(secret)?,
+                }))
+            }
+            cards => Err(refused(format!(
+                "--brain-train-cards names {} counts for {} endpoints",
+                cards.len(),
+                self.brain_endpoint.len()
+            ))),
+        }
     }
 
     /// States the flags as the process's brain settings, for a program that
@@ -478,6 +555,60 @@ mod tests {
         };
         let refused = bad.apply_to(&mut config).unwrap_err().to_string();
         assert!(refused.contains("--brain-ca-file"), "{refused}");
+    }
+
+    #[test]
+    fn given_endpoints_train_on_the_cards_and_as_the_job_they_were_started_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("key");
+        std::fs::write(&key, "k\n").unwrap();
+        let secret = dir.path().join("secret");
+        std::fs::write(&secret, format!("{}\n", "0f".repeat(32))).unwrap();
+        let mut args = words(&format!(
+            "train --brain-endpoint http://a/v1 --brain-endpoint http://b/v1 --brain-key-file {} \
+             --brain-train-cards 2,1 --brain-train-job-secret {} --brain-train-coordinator 10.0.0.1:29500",
+            key.display(),
+            secret.display()
+        ));
+        let flags = DeviceFlags::take(&mut args).unwrap();
+        assert_eq!(flags.brain_train_cards, [2, 1]);
+        let mut config = Config::from_env();
+        flags.apply_to(&mut config).unwrap();
+        let TrainSpan::Servers(job) = config.brain.unwrap().train_span().clone() else {
+            panic!("one job over the two endpoints");
+        };
+        assert_eq!(job.cards, [2, 1]);
+        assert_eq!(job.coordinator, "10.0.0.1:29500");
+        assert_eq!(job.secret_sha256.len(), 64);
+
+        let one = DeviceFlags {
+            brain_endpoint: vec!["http://a/v1".into()],
+            brain_key_file: Some(key.clone()),
+            brain_train_cards: vec![3],
+            ..DeviceFlags::default()
+        };
+        let mut config = Config::from_env();
+        one.apply_to(&mut config).unwrap();
+        assert_eq!(config.brain.unwrap().train_span(), &TrainSpan::Cards(3));
+
+        let unkeyed = DeviceFlags {
+            brain_train_job_secret: None,
+            ..flags
+        };
+        let refused = unkeyed
+            .apply_to(&mut Config::from_env())
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("--brain-train-job-secret"), "{refused}");
+        let stray = DeviceFlags {
+            brain_train_cards: vec![2],
+            ..DeviceFlags::default()
+        };
+        let refused = stray
+            .apply_to(&mut Config::from_env())
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("--brain-train-cards"), "{refused}");
     }
 
     #[test]

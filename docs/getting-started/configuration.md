@@ -270,6 +270,32 @@ a full-parameter run or a merge makes is installed in the server's model store a
 endpoints, Splinter starts a server of its own (`--brain-bin`) and trains through it the same way: nothing
 trains in Splinter's process.
 
+
+#### Training on several cards and several servers
+
+A supervised or policy-gradient run is data-parallel when the servers can do it (their `brain/train`
+`train` action takes `cards` and `job`, as `GET /v1/capabilities` lists it; otherwise it trains on one
+card and says so):
+
+- A fleet of one node trains every run on all the cards of that node (`cards`).
+- A fleet over several nodes trains every run as one job over every card of every server: each server
+  is started with a fresh owner-only job secret (`--train-job-secret`), the first also with the job's
+  coordinator on its address (`--train-job-coordinator`); the same `train` request goes to every
+  server with its `cards` and its ranks of one plan, the result comes from rank 0's server, and a
+  failure or a cancel on any server stops the others. A job over several servers does not resume.
+- Servers you started yourself are used the same way with `--brain-train-cards N[,N...]` (the cards of
+  each `--brain-endpoint`, in order), and for several, `--brain-train-job-secret FILE` and
+  `--brain-train-coordinator HOST:PORT` as they were started:
+
+```text
+splinter --brain-endpoint http://n442:8805/v1 --brain-endpoint http://n442:8806/v1 \
+         --brain-key-file KEY --brain-artifact-store /shared/artifacts \
+         --brain-train-cards 2,1 --brain-train-job-secret SECRET \
+         --brain-train-coordinator 10.150.4.178:29500 train ...
+```
+
+`splinter doctor` says which mode a training run in the allocation will use.
+
 ## Roles
 
 Stages ask for a model by role, never by name: `policy` (the model being trained), `teacher`,

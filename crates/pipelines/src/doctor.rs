@@ -304,6 +304,18 @@ pub fn cluster_check(cluster: &ClusterSettings) -> Check {
                 usable.nodes.join(","),
                 usable.cards()
             );
+            let training = match (usable.nodes.len(), allocation.gpus_per_node) {
+                (servers, cards) if servers > 1 => format!(
+                    "a supervised or policy-gradient run trains as one data-parallel job over \
+                     every card of the {servers} servers ({cards} each)"
+                ),
+                (_, cards) if cards > 1 => format!(
+                    "a supervised or policy-gradient run trains on all {cards} cards of the server"
+                ),
+                _ => "a training run uses one card".to_string(),
+            };
+            let using =
+                format!("{using}; {training}, where the servers' brain/train takes cards and job");
             let staging = cluster.staging();
             let using = match &staging.dir {
                 Some(dir) => format!(

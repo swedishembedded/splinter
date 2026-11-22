@@ -103,6 +103,10 @@ pub struct NodeService<'a> {
     /// (`--stage-models`, from `--models-dir`); `None` reads them from the
     /// shared store.
     pub stage: Option<&'a Path>,
+    /// The secret a training job over several servers proves membership with
+    /// (`--train-job-secret`), and, for the server that holds rank 0, the
+    /// address it binds as the job's coordinator (`--train-job-coordinator`).
+    pub train_job: Option<(&'a Path, Option<&'a str>)>,
 }
 
 /// The server's process: a child of this one, or the `srun` of its step.
@@ -275,6 +279,14 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
                 // Global flags, before the subcommand.
                 let staging = crate::distributed::staging_args(dir, launch.models);
                 args.splice(0..0, staging.into_iter().map(OsString::from));
+            }
+            if let Some((secret, coordinator)) = node.train_job {
+                args.push("--train-job-secret".into());
+                args.push(secret.into());
+                if let Some(address) = coordinator {
+                    args.push("--train-job-coordinator".into());
+                    args.push(address.into());
+                }
             }
             match node.tls {
                 Some((chain, private_key)) => {

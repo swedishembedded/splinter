@@ -181,6 +181,7 @@ mod cluster {
             "using n442",
             "--cluster-nodes",
             "models read from the shared store",
+            "trains on all 4 cards of the server",
         ] {
             assert!(check.detail.contains(shown), "{shown}: {}", check.detail);
         }
@@ -198,6 +199,13 @@ mod cluster {
                 announced.detail
             );
         }
+        assert!(
+            announced
+                .detail
+                .contains("one data-parallel job over every card of the 2 servers (4 each)"),
+            "{}",
+            announced.detail
+        );
         let silent = cluster_check(&inside(&["n424", "n442"]));
         assert!(
             silent.detail.contains("no node-local scratch is announced"),
