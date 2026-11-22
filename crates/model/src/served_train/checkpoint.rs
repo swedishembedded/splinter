@@ -8,8 +8,9 @@
 // email to info@swedishembedded.com.
 
 //! Jobs that produce a checkpoint instead of an adapter: `full_train` (every
-//! weight of a base trained on chat records) and `merge` (an adapter folded
-//! into the weights it targets).
+//! weight of a base trained on chat records, spread over the endpoints' cards
+//! and servers as a `train` job is) and `merge` (an adapter folded into the
+//! weights it targets).
 //!
 //! A checkpoint is a directory, so it leaves the service as a manifest of
 //! per-file digests in the artifact store. The job installs it in the
@@ -139,7 +140,9 @@ pub fn full_fine_tune_served(
     if let Some(precision) = request.train_precision {
         set(&mut params, "train_precision", precision);
     }
-    let report = super::run_action(
+    // brain trains a full fine-tune as ranks, as it does `train`: spread over
+    // the cards and servers the endpoints say, and checked against them.
+    let report = super::run_spread_action(
         brain,
         request.attempt_dir,
         request.seed,
@@ -155,7 +158,14 @@ pub fn full_fine_tune_served(
             }
         },
     )?;
-    received(brain, request.attempt_dir, &report, install)
+    let parallel =
+        super::parallel::observe(brain, &report).map_err(|reason| PolicyError::Train {
+            dir: request.attempt_dir.to_path_buf(),
+            reason,
+        })?;
+    let mut checkpoint = received(brain, request.attempt_dir, &report, install)?;
+    checkpoint.parallel = Some(parallel);
+    Ok(checkpoint)
 }
 
 /// Folds `adapter` into the weights of `base` it targets as a `merge` job,
@@ -271,5 +281,6 @@ fn received(
             .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         initial_loss: report["initial_loss"].as_f64().map(|v| v as f32),
         final_loss: report["final_loss"].as_f64().map(|v| v as f32),
+        parallel: None,
     })
 }

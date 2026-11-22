@@ -77,4 +77,8 @@ pub struct Checkpoint {
     pub initial_loss: Option<f32>,
     /// The last step's training loss; `None` for a merge.
     pub final_loss: Option<f32>,
+    /// How a served full fine-tune was spread over cards and servers, as
+    /// brain reported it and checked against what was asked; `None` for a
+    /// merge and for a run trained in this process.
+    pub parallel: Option<splinter_core::training::ParallelRecord>,
 }

@@ -332,9 +332,26 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       curve to record in. Tests: `crates/core/src/training_parallel.rs`,
       `crates/model/src/served_train/parallel.rs`, `crates/model/tests/served_parallelism.rs`
       (matching, short and missing reports from a scripted service) and
-      `crates/splinter/src/train_output.rs`. Not yet covered: `full_sft`,
-      preference and feedback runs go through `run_action` (one card, no
-      span) and do not read the object.
+      `crates/splinter/src/train_output.rs`.
+- [x] **A full fine-tune spreads like `train` (2026-11-22).** brain's served
+      `full_train` takes `cards` and `job` (and shards its ranks itself,
+      replicated while a replica fits a card), so `full_fine_tune_served`
+      runs through `job::run_spread` on `BrainEndpoints::train_span`, as the
+      `train` job does, and checks the report's `parallel` object
+      (`parallel::observe`); the result is kept on the checkpoint
+      (`Checkpoint::parallel`, `None` for a merge). `doctor`'s cluster check
+      names the mode: supervised, policy-gradient and full fine-tune runs on
+      every card (or one job over every server), full fine-tune sharding as
+      brain chooses, preference, feedback and distillation on one card.
+      brain trains preference, feedback and distillation on one card only
+      (feedback's reference point is a batch statistic; preference and
+      distillation trainers take no group yet), so those keep `run_action`.
+      Tests: `crates/model/tests/served_parallelism.rs`
+      (`a_full_fine_tune_spreads_over_the_cards_asked_for_and_records_its_parallelism`),
+      `crates/pipelines/tests/it/doctor.rs`. Validated against brain on n442
+      (2026-11-22): Qwen3-4B served `full_train` over 4 GH200s, gradient
+      sharding, report `parallel` world 4 over `nccl`; the export served and
+      generated (brain's ledger holds the numbers).
 
 ## Decisions
 

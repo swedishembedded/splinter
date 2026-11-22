@@ -104,6 +104,7 @@ impl Trainer for FullLearner {
             steps_completed: plan.steps,
             initial_loss: Some(2.0),
             final_loss: Some(1.0),
+            parallel: None,
         })
     }
 }

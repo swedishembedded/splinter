@@ -231,6 +231,7 @@ fn checkpoint(ctx: &Context, dir: &Path, answers: &Answers, steps: u32) -> Model
         steps_completed: steps,
         initial_loss: (steps > 0).then_some(2.0),
         final_loss: (steps > 0).then_some(0.1),
+        parallel: None,
     }
 }
 

@@ -604,6 +604,10 @@ fn checkpoint(
         "files": listed,
         "installed_as": if name.is_empty() { Value::Null } else { json!(format!("local/{name}")) },
     });
+    let mut report = report;
+    if let (true, Some(parallel)) = (full, &script.parallel) {
+        report["parallel"] = parallel.clone();
+    }
     (frames, report)
 }
 

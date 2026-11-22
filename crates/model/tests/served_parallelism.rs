@@ -9,14 +9,15 @@
 //! Spec: a served fine-tune records the `parallel` object of the service's
 //! report beside what it asked for, flags a run that trained on fewer ranks
 //! than requested, and records a report without the object (an older brain)
-//! as not reported.
+//! as not reported. A full fine-tune is spread over the cards the same way.
 
 #![allow(clippy::unwrap_used)]
 
+use splinter_model::consolidate::FullTune;
 use splinter_model::endpoint::TrainSpan;
 use splinter_model::scripted_endpoint::ScriptedEndpoint;
 use splinter_model::scripted_jobs::JobScript;
-use splinter_model::served_train::fine_tune_served;
+use splinter_model::served_train::{fine_tune_served, full_fine_tune_served, Install};
 
 #[path = "support/served.rs"]
 mod served;
@@ -77,4 +78,54 @@ fn a_runs_parallelism_is_recorded_and_checked_against_the_cards_asked_for() {
         "{old:?}"
     );
     assert!(old.warnings()[0].contains("not reported"));
+}
+
+/// A full fine-tune spreads over the cards the endpoints say, as a `train`
+/// job does, and its checkpoint carries the parallelism checked against them.
+#[test]
+fn a_full_fine_tune_spreads_over_the_cards_asked_for_and_records_its_parallelism() {
+    let rig = rig();
+    let (train, attempt) = (
+        rig.dir.path().join("train.jsonl"),
+        rig.dir.path().join("attempt-full"),
+    );
+    records(&train, false);
+    let models = rig.dir.path().join("models");
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        models: Some(models.clone()),
+        parallel: Some(parallel_report(4, 4, "nccl")),
+        ..JobScript::over(rig.store.clone())
+    });
+    let brain = endpoints(&service, &rig).with_train_span(TrainSpan::Cards(4));
+    let full = FullTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        replay: &[],
+        replay_share: None,
+        weighted_replay: &[],
+        grad_accum: 1,
+        attempt_dir: &attempt,
+        steps: 3,
+        learning_rate: None,
+        weight_decay: 0.0,
+        train_precision: None,
+        // seed: the job's request carries it.
+        seed: 9,
+        thinking: false,
+        cancel: None,
+        on_step: None,
+    };
+    let install = Install {
+        models_dir: &models,
+        name: "tuned-4",
+    };
+    let checkpoint = full_fine_tune_served(&brain, &full, &install).unwrap();
+    let params = service.jobs().created().last().cloned().unwrap();
+    assert_eq!(
+        params["cards"], 4,
+        "the run asks for the four cards: {params}"
+    );
+    let parallel = checkpoint.parallel.expect("the parallelism is recorded");
+    assert!(parallel.warnings().is_empty(), "{parallel:?}");
+    assert_eq!(parallel.reported.unwrap().devices.len(), 4);
 }

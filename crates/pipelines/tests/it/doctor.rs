@@ -181,7 +181,9 @@ mod cluster {
             "using n442",
             "--cluster-nodes",
             "models read from the shared store",
-            "trains on all 4 cards of the server",
+            "a supervised, policy-gradient or full fine-tune run trains on all 4 cards of the server",
+            "a full fine-tune's ranks shard as brain chooses (replicated while a replica fits a card)",
+            "preference, feedback and distillation runs train on one card",
         ] {
             assert!(check.detail.contains(shown), "{shown}: {}", check.detail);
         }

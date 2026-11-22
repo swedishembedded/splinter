@@ -217,11 +217,27 @@ fn run(
     cancel: Option<&sven_sdk::CancelToken>,
     on_frame: &mut dyn FnMut(&Value),
 ) -> Result<Value, PolicyError> {
+    run_spread_action(brain, attempt_dir, seed, "train", params, cancel, on_frame)
+}
+
+/// Runs the `brain/train` job `action`, one brain trains as ranks (`train`'s
+/// supervised and policy-gradient objectives, `full_train`), spread over the
+/// endpoints' cards and servers as [`BrainEndpoints::train_span`] says; how it
+/// ended maps to a [`PolicyError`] naming `attempt_dir`.
+fn run_spread_action(
+    brain: &BrainEndpoints,
+    attempt_dir: &Path,
+    seed: u64,
+    action: &str,
+    params: &Value,
+    cancel: Option<&sven_sdk::CancelToken>,
+    on_frame: &mut dyn FnMut(&Value),
+) -> Result<Value, PolicyError> {
     let first = brain.pin(&seed.to_le_bytes());
     job::run_spread(
         brain,
         first,
-        ("train", params),
+        (action, params),
         cancel.map(|c| c as &dyn job::Cancel),
         on_frame,
     )
