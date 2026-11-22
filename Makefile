@@ -93,9 +93,9 @@ test/crate/splinter-campaign-lua: deps/lua-dialects
 $(TEST_CRATE_TARGETS): test/crate/%:
 	$(CARGO) test $(PROFILE) -p $*
 
-## test/package - the spec of the release publishing script against a scratch repository and a fake gh (bats; no build, seconds)
+## test/package - the specs of the install and release publishing scripts against scratch directories, a fake make and a fake gh (bats; no build, seconds)
 test/package:
-	bats scripts/package/publish-deb.bats
+	bats scripts/package/install-deb.bats scripts/package/publish-deb.bats
 
 ## test/families - the repository task families: baselines pass identically five times, conventions hold, faults are caught (no model, no GPU, minutes)
 test/families:
@@ -387,6 +387,15 @@ RELEASE_NOTES = target/release-notes-v$(VERSION).md
 package:
 	@bash scripts/make-help.sh package
 
+## install - install this checkout's splinter from its Debian package; idempotent
+##   As a user: builds the release package unless a current one exists and
+##   unpacks it under PREFIX (default ~/.local), no sudo. Under `sudo make install`:
+##   dpkg -i of the package already built, with nothing rebuilt (run it once as
+##   yourself first). As root with no sudo (a container): builds it, then dpkg -i.
+install:
+	@bash scripts/package/install-deb.sh --deb-dir target/debian --version $(VERSION) \
+		--binary target/release/splinter --make "$(MAKE)" $(if $(PREFIX),--prefix "$(PREFIX)")
+
 ## package/deb - default: package/deb/release (output in target/debian/)
 package/deb: package/deb/release
 
@@ -532,7 +541,7 @@ help:
 
 # Declared last so every generated list above is already defined.
 .PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package fmt \
-	package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
+	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
 	env env/measure \

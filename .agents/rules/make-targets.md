@@ -30,7 +30,7 @@ Every public make target is `make <concept>/<subconcept>/.../<action>`:
   `build/crate/<package>`, `papers/<name>/pdf`. Adding a file or directory
   adds its target.
 - A bare single-segment target is allowed only for an area, or for the leaves
-  `fmt` and `help`.
+  `fmt`, `help` and `install` (the conventional `make install`).
 - Every target has a `## name - description` line (a generated family has one
   line with a `<placeholder>`) and sits under a `##@ Section` line, and is
   listed in `.PHONY`.

@@ -30,7 +30,8 @@
 #   5. A single-segment name with no children is a leaf, and only the
 #      LEAVES below may be one: a concept that has sub-actions is an area with
 #      children. `fmt` stays a leaf because it has exactly one action (its
-#      counterpart `check/fmt` checks without applying); `help` is conventional.
+#      counterpart `check/fmt` checks without applying); `help` and `install`
+#      are conventional (`make install` installs from a checkout everywhere).
 #
 # Not machine-checkable and left to review: that a hierarchy's directory
 # levels each became a segment, and that the verb really is last.
@@ -45,7 +46,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 export LC_ALL=C
 
-LEAVES=" fmt help "
+LEAVES=" fmt help install "
 
 public=$(bash scripts/make-help.sh --targets)
 defined=$(bash scripts/make-help.sh --defined)

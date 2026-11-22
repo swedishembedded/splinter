@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (install)
+- `make install` installs this checkout's splinter from its Debian package, as sven's does (`scripts/package/install-deb.sh`, specified by `scripts/package/install-deb.bats` in `make test/package`). As a user it builds the release package when none is current and unpacks it under `PREFIX` (default `~/.local`), with no sudo. Under `sudo make install` it installs the package already built with `dpkg -i` and builds nothing. As root with no sudo (a container whose only user is root) it builds the package itself and installs it with `dpkg -i`. Running it again changes nothing once the package is current.
+
 ### Fixed (promotion rule at small samples)
 - The promotion rule counts a dev gain only over at least six families (`splinter_eval::promotion::MIN_GAIN_FAMILIES`, the fewest whose unanimous agreement the exact sign test finds significant at the dev interval's 2.5% tail). A family-resampled interval of a few unanimous families has no width, so two won families passed as a shown gain. A gain over fewer families, or a verdict whose section reports no `families`, is refused as `too_few_families`; `Measurement` carries `families`. Bench's intervals are read as issued.
 
