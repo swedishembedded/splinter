@@ -197,3 +197,4 @@ in the same commit.
 | [209](209-distilled-vim-skill-transfers-to-held-out-families-once-the-exam-is-budgeted.md) | Distilled vim skill transfers to held-out families once the exam is budgeted and wide enough |
 | [210](210-at-a-fixed-small-record-count-more-training-families-did-not-improve-held-out-families.md) | At a fixed small record count, more training families did not improve held-out families |
 | [211](211-path-guided-resampling-needs-intermediate-states-a-vim-task-has-none.md) | Path-guided resampling needs intermediate states, and a vim task has almost none |
+| [212](212-vim-tool-observations-carry-errors-not-the-buffer.md) | The vim tool's observations carry error dynamics, not the changed buffer |

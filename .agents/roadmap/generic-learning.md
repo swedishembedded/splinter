@@ -68,7 +68,7 @@ New, entered as gap items. Each one tests one variable and is gated like E4/E5:
 | # | Experiment (one variable) | Pre-registered success | Gate |
 |---|---|---|---|
 | E6 | **Early-experience transitions.** v1's recipe plus GL-P9 records from the same trials (failed trials included), against v1 plus an equal token count of extra policy records | held-out families +0.05 over control, interval above 0, retention non-inferior at 0.10 | E1 met; runs after E4 so that only one new data class enters at a time |
-| E7 | **Knowledge necessity (bench GL-B6).** Effect of access to the knowledge base: success with the base minus success without it, on tasks whose rule exists only in the base, under correct, absent, distractor, contradicting and updated evidence | the effect of access is above 0 with its interval, and the distractor and updated-evidence arms are not worse than the absent arm. Until this holds, the A2 knowledge-base result (barely consulted) is uninterpretable | bench GL-B6 |
+| E7 | **Knowledge necessity (bench GL-B6).** Effect of access to the knowledge base: success with the base minus success without it, on tasks whose rule exists only in the base, under correct, absent, distractor, contradicting and updated evidence | the effect of access is above 0 with its interval, and the distractor and updated-evidence arms are not worse than the absent arm. Until this holds, the A2 knowledge-base result (barely consulted) is uninterpretable | bench GL-B6. **Done 2026-11-22 (lane KBN):** pre-registered in bench aa2a3073 (generic-learning.md "GL-B6 run"; after the 2026-11-21 advisory: pages preloaded, harm read against the correct arm, a 27B validity pass); results bench ee8f6ea0, knowledge 080. Base 4B, 24 tasks x 4, company-clustered 95%: correct - absent **+0.115 [+0.042, +0.198]**, updated - absent +0.052 [+0.010, +0.104], distractor - correct **-0.115 [-0.198, -0.042]**, contradicting - correct -0.073 [-0.177, +0.031]; the 27B 64/64 with the page, 0/32 without. Access helps causally; a second plausible page erases it; the 4B mostly fails to apply the rule, not to find it. The registered criterion as written (not worse than absent) holds but is vacuous at the floor |
 
 ## Stop doing (splinter)
 
@@ -335,6 +335,30 @@ within B they are right about 83% of the time. One generation of their own budge
   **MDE:** on 14 families the student-against-student SE is about 0.034, so only about +0.07 or more would be
   supported; a smaller gain reads as not supported, not as ruled out. Wrong-within-B is reported beside the pass rate
   (the risk: earlier submission with more wrong answers).
+
+**SD1 fold a result (read 2026-11-22 01:20): falsified at the fast read; folds b and c not run.**
+- Harvest: E1's fold-a seed-1 student on its 110 training tasks x 8 at B (n424 gpu0 and n445 gpu0, 96 in flight
+  each): 455 of 880 passed (51.7%), 372 exhausted B. Kept 171 passes on 91 tasks (at most 2, lowest cost); one trial
+  the trainer refused (its chat template rendered the final prompt differently) was left out and replaced by the next
+  pass of its task; 169 records. Trained from base, seeds 1 and 2, 68 steps.
+- Exam (fold a's 58 held-out tasks x 4 per seed, one slot on n424 gpu0, 16 in flight per arm, budget B, factor 16;
+  no infrastructure error, no `infra_timeout`, no upstream error in any round):
+
+| arm | trials | pass@1 | exhausted B | wrong within B |
+|---|---:|---:|---:|---:|
+| E1 students (s1, s2) | 464 | 0.287 | 64.7% | 6.7% |
+| SD1 students (s1, s2) | 464 | 0.241 | 68.8% | 7.1% |
+
+  SD1 minus E1: **-0.045**, task interval [-0.093, -0.002], family interval [-0.078, -0.012] (5 rungs), 12 better /
+  20 worse / 26 ties, p two-sided 0.215. Exhaustion rose 4 points instead of falling 10. By the fast-read rule
+  (estimate above -0.02 or exhaustion 5 points down) fold a is clearly null, so folds b and c stopped (fold b's harvest
+  was done, its dataset built: 134 records; fold c's harvest was cancelled). Its own passes within B did not teach the
+  student to finish: a student trained on them still reasons to the budget. Verdict `play-sd1-fold-a` (`falsified`,
+  0.45 to 0.25) on the new candidate `overthink.self-distill-under-budget`. Report: `lane-play/e4/logs/sd1-a.compare.json`.
+- Deviations: training ran with splinter b9ae3a292 and data with d85e06ba4 (both later than the E1 builds; the dataset
+  path reproduced E1's fold datasets bit for bit); bench was aa2a3073 to 6172a711, whose `benchlib/` and `agents/` equal
+  0d8f13de. GPU-hours: about 2.3 (harvest 0.6, training 0.15, exam 0.75, fold b harvest 0.4, cancelled fold c 0.4,
+  plus the E4 repair passes 1.3 counted above).
 
 ## Gaps from the 2026-11-21 late review (advisory `~/project/shared/tmp/lane-advice-1121/advisory.md`)
 
