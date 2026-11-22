@@ -80,3 +80,30 @@ recovery and protected eval.
 - 2026-11-22: code moved from the task repository (classifier, staging, packing,
   examination) is relicensed to Apache-2.0 by its copyright holder and lives in
   Splinter; the moved files carry Splinter's header.
+- 2026-11-22: verification is model-free. Unit and integration tests in this
+  repository prove every stage with stub models and stub agents; a live end-to-end
+  run with a real model follows the work. Live checks are kept small: Sven on the
+  hosted service's cheap models and Claude Code as the independent agent, only to
+  show a path works.
+- 2026-11-22: old paths are deleted once a parity test passes (Splinter's `learn`,
+  `practice`, `campaign`, `generations` lifecycles; the task repository's run,
+  adopt, export, profile and gateway commands); samples are ported to recipes,
+  papers keep their recorded results.
+- 2026-11-22: interactive play moves to `splinter play`, an interactive rollout
+  pass whose trials land in the run's collection like any other.
+- 2026-11-22: the task repository is restructured into the target layout by
+  moving its files.
+- 2026-11-22: YAML for every factory file (recipes, connections, environments,
+  agent presets, eval plans); a TOML file the factory reads is converted.
+- 2026-11-22: commits stay local; nothing is pushed.
+
+## Design
+
+| Piece | Home |
+|---|---|
+| Contracts, outcome classifier, stage identity | `splinter-core::factory` (pure, no I/O) |
+| JSON Schemas and golden fixtures | `schemas/factory/`, `crates/core/tests/it/factory/` |
+| Run state (SQLite WAL, one controller) and the product store (filesystem CAS, atomic manifests) | `splinter-store::factory` (no experience-database import) |
+| Recipe loading, connections, planning, controller, stages | `splinter-factory` (application tier) |
+| Harbor worker | `workers/harbor/` (Python, Harbor's public job API, pinned Harbor) |
+| CLI | `splinter validate/plan/run/status/inspect/cancel/resume/verify/eval/fork/index/export/report/play` |
