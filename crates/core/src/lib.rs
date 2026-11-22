@@ -111,5 +111,6 @@ pub mod teaching;
 pub mod terms;
 pub mod tool_calls;
 pub mod training;
+mod training_parallel;
 pub mod usage;
 pub mod verifiability;

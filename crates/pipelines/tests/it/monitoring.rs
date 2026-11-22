@@ -154,6 +154,7 @@ fn the_gate_repeats_what_the_curve_warns_of() {
         stopped_early: false,
         monitoring_skipped: None,
         speed: None,
+        parallel: None,
     });
     let candidate = train(
         &ctx,

@@ -109,6 +109,8 @@ pub fn fine_tune_request<'a>(
     }
 }
 
+// Shared by test binaries that do not all use it.
+#[allow(dead_code)]
 pub fn data_of(params: &serde_json::Value) -> serde_json::Value {
     serde_json::from_str(params["data"].as_str().unwrap()).unwrap()
 }

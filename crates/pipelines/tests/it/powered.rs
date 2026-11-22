@@ -405,6 +405,7 @@ fn a_kept_evaluation_is_chosen_on_the_dev_suite_by_what_it_answers() {
         stopped_early: false,
         monitoring_skipped: None,
         speed: None,
+        parallel: None,
     });
     let candidate = train(
         &ctx,

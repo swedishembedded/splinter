@@ -178,6 +178,9 @@ fn curve_lines(curve: &TrainingCurve) -> String {
             speed.tail_seconds
         );
     }
+    if let Some(parallel) = &curve.parallel {
+        let _ = writeln!(out, "  parallelism: {}", parallel.line());
+    }
     if curve.eval_every == 0 {
         let _ = writeln!(out, "  monitoring: none");
         return out;
@@ -277,5 +280,25 @@ mod tests {
             !curve_lines(&curve).contains("speed:"),
             "a run with no timed interval prints no speed"
         );
+    }
+
+    /// A run's spread shows in its summary, and one short of the request is
+    /// shouted, not summarised.
+    #[test]
+    fn the_curve_text_shows_the_parallelism_and_flags_a_shortfall() {
+        use splinter_sdk::vocabulary::training::{ParallelRecord, ParallelRequest};
+        let mut curve = TrainingCurve::unmonitored(10, 10);
+        let request = ParallelRequest {
+            world_size: 4,
+            servers: 1,
+            first_server_ranks: 4,
+        };
+        curve.parallel = Some(ParallelRecord::check(request, None));
+        let text = curve_lines(&curve);
+        assert!(
+            text.contains("parallelism: not reported (4 rank(s) asked for)"),
+            "{text}"
+        );
+        assert!(curve.warnings()[0].contains("not reported"));
     }
 }

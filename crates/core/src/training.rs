@@ -13,6 +13,9 @@ use crate::dataset::DatasetId;
 use crate::digest::Digest;
 use crate::release::ReleaseId;
 use crate::terms::Terms;
+pub use crate::training_parallel::{
+    ParallelDevice, ParallelRecord, ParallelRequest, TrainingParallelism,
+};
 
 /// One held-out score: teacher-forced loss and token accuracy over the
 /// supervised positions of the held-out records.
@@ -381,6 +384,10 @@ pub struct TrainingCurve {
     /// steps, which has no interval between step reports to time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed: Option<TrainingSpeed>,
+    /// How the run was spread over cards and servers against what was asked;
+    /// `None` for a run recorded before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parallel: Option<ParallelRecord>,
 }
 
 /// How fast a fine-tune trained, timed between its step reports so that the
@@ -462,6 +469,7 @@ impl TrainingCurve {
             stopped_early: false,
             monitoring_skipped: None,
             speed: None,
+            parallel: None,
         }
     }
 
@@ -496,6 +504,7 @@ impl TrainingCurve {
     #[must_use]
     pub fn warnings(&self) -> Vec<String> {
         let mut warnings: Vec<String> = self.monitoring_skipped.iter().cloned().collect();
+        warnings.extend(self.parallel.iter().flat_map(ParallelRecord::warnings));
         let (Some(selected), Some(best), Some(last)) =
             (self.selected(), self.best(), self.points.last())
         else {
@@ -670,6 +679,7 @@ mod tests {
             stopped_early,
             monitoring_skipped: None,
             speed: None,
+            parallel: None,
         }
     }
 

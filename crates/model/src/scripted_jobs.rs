@@ -62,6 +62,9 @@ pub struct JobScript {
     /// `check_dataset` refuses every chat record whose line holds this text,
     /// as brain refuses a record its chat template or contract does not take.
     pub refuse_records_containing: Option<String>,
+    /// The `parallel` object a training report carries; `None` leaves it out,
+    /// as a brain that predates it does.
+    pub parallel: Option<Value>,
 }
 
 impl JobScript {
@@ -77,6 +80,7 @@ impl JobScript {
             steps: 3,
             models: None,
             refuse_records_containing: None,
+            parallel: None,
         }
     }
 }
@@ -378,6 +382,9 @@ fn train(script: &JobScript, params: &Value) -> (Vec<(u64, String, Value)>, Valu
         "tuned_score": if pg { Value::Null } else { score(1.5) },
         "policy_gradient": if pg { json!({"steps_skipped_nonfinite": 0, "steps_taken": script.steps}) } else { Value::Null },
     });
+    if let Some(parallel) = &script.parallel {
+        report["parallel"] = parallel.clone();
+    }
     if dpo {
         let pairs = json!({"accuracy": 0.75, "mean_margin": 0.5, "pairs": 4, "skipped": 0});
         report["beta"] = params["beta"].clone();

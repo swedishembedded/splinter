@@ -37,6 +37,7 @@ mod check;
 mod checkpoint;
 mod feedback;
 mod job;
+mod parallel;
 mod preference;
 mod request;
 mod score;
@@ -103,6 +104,7 @@ pub fn fine_tune_served(
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
+    let parallel = parallel::observe(brain, &report).map_err(failed)?;
     let delivered = deliver(brain, request.attempt_dir, &report)?;
     let score = |name: &str| -> Result<HeldOutScore, PolicyError> {
         serde_json::from_value(report[name].clone())
@@ -122,6 +124,7 @@ pub fn fine_tune_served(
         stopped_early: field(&report, "stopped_early").map_err(failed)?,
         monitoring_skipped: None,
         speed: None,
+        parallel: Some(parallel),
     };
     curve.speed = clock.finish(request.grad_accum, field(&report, "block").map_err(failed)?);
     let evaluations = match request.keep_evaluations {
@@ -167,6 +170,7 @@ pub fn train_policy_gradient_served(
         dir: request.attempt_dir.to_path_buf(),
         reason,
     };
+    parallel::observe(brain, &report).map_err(failed)?;
     let delivered = deliver(brain, request.attempt_dir, &report)?;
     // The series of every step is in the training record (a frame is droppable
     // on the bus and the report is one message), so it is read from there.

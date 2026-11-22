@@ -314,6 +314,27 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `train_cards = [4]` and the loop trained with `--brain-train-cards 4`;
       the training record is rank 0's and does not count ranks, so the four
       cards are shown by the published span, not by the record.
+- [x] **A run's spread is recorded and checked against the request
+      (2026-11-22).** brain puts a `parallel` object in every training report
+      (`world_size`, `ranks`, `devices`, `collective`, `transport`, `network`,
+      `sharding`). `splinter_core::training::TrainingParallelism` parses it
+      (a field brain did not observe stays `None`); `ParallelRecord` keeps it
+      beside what splinter asked (`TrainSpan`: ranks in all, servers, ranks of
+      the first server) and the mismatches: fewer ranks than asked, the first
+      server running other ranks, a device list that does not match, a
+      `host` collective or a transport other than `in_process`/`tcp` for a
+      multi-rank run. `fine_tune_served` stores it in the run's curve
+      (`curve.parallel`), prints each warning on stderr, and the `train`
+      summary shows a `parallelism:` line plus the warnings; a report without
+      the object is recorded as not reported (a warning only when more than
+      one rank was asked), never as one rank, and an unreadable object fails
+      the run. Policy-gradient runs check and warn the same way but have no
+      curve to record in. Tests: `crates/core/src/training_parallel.rs`,
+      `crates/model/src/served_train/parallel.rs`, `crates/model/tests/served_parallelism.rs`
+      (matching, short and missing reports from a scripted service) and
+      `crates/splinter/src/train_output.rs`. Not yet covered: `full_sft`,
+      preference and feedback runs go through `run_action` (one card, no
+      span) and do not read the object.
 
 ## Decisions
 
