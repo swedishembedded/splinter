@@ -314,6 +314,39 @@ path_guided --paths <teacher set>`, brain-bcd67e5ad on n424 gpu0, E1's sampling)
   intermediate state on vim, so E4 moves to a multi-step domain. Verdict `play-e4-gate` (`falsified`, belief 0.35 to
   0.15) in the canonical campaign. GPU-hours: about 1.3 (n424 gpu0, three repair passes).
 
+## E4 on multi-step domains (lane PLAY, 2026-11-22): gate run, training not started
+
+Phase 1 only. Practice material staged with bench 941bc3fb: support's committed train side (36 tasks) and an accounting
+draw (40 tasks, seed 31). The 27B teacher (Qwen3.8-27B-FP8) practised every task x 2; the 4B, as the base and as the
+champion A2 s1, practised x 4 (sven-fe9cda90, thinking per turn 2,048, 0.6/0.95/20, 32,768 tokens and 30 turns,
+`splinter tasks harbor practice`). State-changing actions per teacher pass: support median 9 (68 passes), accounting
+median 4 (67 passes). Then `experiences repair --intervention path_guided --paths <teacher passes> --samples 8` on the
+failures of the tasks a 4B never passed and the teacher did, with the open-state rule (knowledge 211), splinter
+ca9647c8c, sven 6a1d3ba8.
+
+| student | domain | never passed | routed (teacher passed) | tasks with a verified suffix | of routed | of never passed |
+|---|---|---:|---:|---:|---:|---:|
+| base 4B | support | 32 of 36 | 31 | 9 | 29.0% | 28.1% |
+| base 4B | accounting | 39 of 40 | 35 | 10 | 28.6% | 25.6% |
+| A2 s1 (champion) | accounting | 19 of 40 | 15 | 7 | **46.7%** | **36.8%** |
+| A2 s1 (champion) | support | 0 of 36 | - | - | - | - |
+
+- **Gate (30% of the routed never-solved tasks):** met for the champion on accounting (7 of 15), just missed for the
+  base on both domains. On support the champion leaves no never-solved task, so E4 has no material there.
+- **What loses the rest:** support, base: 672 of 927 attempts (21 tasks) refused because a replayed observation differed
+  from the trial's (a `--help` that printed nothing in the trial and its usage in the session, `date`, outputs of
+  another task's data: the examiner session is not yet a faithful restore of a practice trial, bench GL-B3), 210 failed
+  the verifier. Accounting: mostly the verifier (633 of 1,003 base, 156 of 276 champion), then replay (288; 96).
+- **First, a fix:** before it, every support path was refused: the teacher's calls name `/workspace/repo`, the
+  sandbox's path, which the host fork refused as outside its root. Sven `project_root_seen_as` and the session's
+  `sandbox_workspace` make it the same tree (splinter ca9647c8c, sven 78bcb7fb and 6a1d3ba8).
+- **Not trained:** the passing cell has 24 suffix records on 7 tasks against A2's 420 records. At an E2-sized standard
+  error a student-against-student difference needs about +0.07 to +0.09 to be supported, which 5% more records will
+  not move; a properly sized run needs a larger accounting draw (about 200 tasks for some 30-50 suffix tasks) first.
+  Verdict `play-e4m-gate` (`inconclusive`) in the canonical campaign. GPU-hours: about 5 of work (practice 2.0,
+  repair 3.2), with three cards held about 3.5 h each. Data: `lane-play/e4m/exports/` (states, teacher exports),
+  `logs/gate-*.json`.
+
 ## SD1: one teacher-free self-distillation generation on the champion (pre-registered 2026-11-21, before any trial)
 
 Advisory 2026-11-21, section 4. The distilled students' failures are mostly termination (exhaustion 56-59% at B), and
@@ -594,3 +627,34 @@ against S 0.316, T-same 0.328 and T-other 0.269.
   and teacher data on easy rungs hurts the hard ones.
 
 Reports: `lane-exp/logs/e10-*.compare.json`, `e9-*.compare.json`, `e2-4b-rerun2.compare.json`, `autopsy.json`.
+
+**Harness version check (2026-11-22 05:30).** The local vim dataset was recompiled at 01:48-01:49 with the vim tool
+fix (fixed scratch path, a file diff in every tool reply). I classified every trial by its task checksum against
+E1's (old tool):
+- E1, E2 at B, E3, E9 and the E2 4B rerun 2 ran the old tool, the same tool as their training data. The 4B rerun has 2
+  of 2,688 trials on the new tool.
+- E10 ran 79% of its graded trials on the new tool. Fold a rounds 1-2 and fold x round 1 are old; fold x round 2 is
+  mixed, about a third old, the same in every arm; everything else is new.
+- Every round launched all its arms together, so arms within a round saw the same tool. E10's contrasts compare
+  policies trained on old-tool traces and **examined on a mostly new tool**: a harness change between training and
+  exam. Its verdicts carry that caveat.
+- On new-tool trials only (folds b and c, rounds 3-4 of a and x): content +0.010 [-0.035, +0.052], support **-0.054
+  [-0.083, -0.021]**, strict +0.031 [+0.017, +0.047]; the same as pooled.
+- On old-tool trials only (103 tasks, 8 rungs): content -0.019 [-0.081, +0.054], support +0.033 [-0.041, +0.125],
+  strict +0.027 [-0.016, +0.058]. These are too few to confirm or contradict the pooled numbers, and the support sign
+  is the opposite.
+- The base job lost in fold x round 2 failed because the dataset was being recompiled under it (task.toml missing).
+
+**Loop accounting, before and after the fix (2026-11-22 05:16; a demonstration, not a registered measurement).**
+E1's fold-a student s1 on fold a's 58 tasks x 2 at B, new vim tool, with sven-fe9cda90 and sven-b6b21749 side by side
+on one server:
+
+| Sven | pass | exhausted | reasoning loop | exhausted charged unmetered |
+|---|---:|---:|---:|---:|
+| fe9cda90 | 35 / 116 (0.30) | 68 | 0 | 38 |
+| b6b21749 | 44 / 116 (0.38) | 58 | 3 | 0 |
+
+With the fix the promised retry runs: 44 trials looped once and were asked again, and about 10 of them then finished within B. A loop no longer counts as exhaustion: 3
+runs ended `reasoning_loop`. 31 of the remaining 58 exhaustions followed a loop retry and then ran out of genuine
+tokens. Future budgeted exams should use sven b6b21749 or later and bench f798e7da or later. Exhaustion shares measured
+before that (E0-E3, E9, E10) include loop charges, so the autopsy's 53-57% loop share applies to them.

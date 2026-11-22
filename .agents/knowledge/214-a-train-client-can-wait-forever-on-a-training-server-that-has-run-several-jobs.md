@@ -29,3 +29,7 @@ multi-server runs, cancelled ones included), so a series of runs never fills the
 stderr each round and bounded at `REFUSED_ROUNDS` (120 tries, an hour at the default wait). Past that, the run fails as
 the endpoint's (`PolicyError::Endpoint`), with brain's last reason (`crates/model/tests/served_train.rs`; the scripted
 service now holds jobs per caller as brain does).
+
+**Verified on hardware (2026-11-22):** with the fixed client (splinter-f9c821510) against the same frozen
+brain-bcd67e5ad training server, 12 trainings ran in a row with no hang (each 170-200 s; the old client hung on the
+9th, as did a newer brain, 87a32d2fe), and the server held one job, the running one, instead of 32.
