@@ -71,6 +71,9 @@ pub struct Session {
     /// The Sven configuration the task's environment gives its agent (an
     /// image's system file, or the task's MCP servers), when it gives one.
     pub agent_config: Option<String>,
+    /// Where the sandbox shows the commands the tree (`/workspace/repo`), when
+    /// the session says: the path a trial's agent named its files at.
+    pub sandbox_workspace: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +83,9 @@ struct Announcement {
     /// The image's Sven system configuration, when it has one.
     #[serde(default)]
     sven_config: Option<String>,
+    /// Where the sandbox shows its commands the tree.
+    #[serde(default)]
+    sandbox_workspace: Option<PathBuf>,
     /// The MCP servers the task gives its agent.
     #[serde(default)]
     mcp_servers: Vec<McpServer>,
@@ -189,6 +195,7 @@ impl Session {
             stdout,
             socket: hello.socket,
             agent_config,
+            sandbox_workspace: hello.sandbox_workspace,
         })
     }
 

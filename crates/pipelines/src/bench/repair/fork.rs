@@ -303,6 +303,7 @@ pub(super) fn fork_and_grade(
             shown,
             read_exec: toolchain_dirs(ctx.config().command_env.get("PATH")),
             launcher: Some(session.launcher(checkout)),
+            workspace_seen_as: session.sandbox_workspace.as_deref(),
             briefing,
             role,
             environment: environment.as_ref(),

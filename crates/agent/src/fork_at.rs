@@ -88,6 +88,10 @@ pub struct ForkAt<'a> {
     /// the commands then see what the student's saw, and are not confined
     /// here, the sandbox confines them.
     pub launcher: Option<Vec<String>>,
+    /// Where the commands' sandbox shows the tree, when not at the tree's own
+    /// path (`/workspace/repo`): a recorded call naming a file under it, and a
+    /// continuation's, reaches the same file of the tree.
+    pub workspace_seen_as: Option<&'a Path>,
     /// Text the continuing model is shown after the system prompt the
     /// student ran under, and that no step of the trajectory records:
     /// reference material a teacher may read where the student may not.
@@ -430,9 +434,13 @@ fn fork_engine(
             &system,
         ))
         .toolset(Toolset::coding())
-        .project_root(request.tree)
-        .approvals(ApprovalPolicy::Auto)
-        .build()?;
+        .project_root(request.tree);
+    let engine = match request.workspace_seen_as {
+        Some(path) => engine.project_root_seen_as(path),
+        None => engine,
+    }
+    .approvals(ApprovalPolicy::Auto)
+    .build()?;
     Ok((engine, servers))
 }
 

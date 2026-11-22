@@ -32,7 +32,7 @@ use splinter_pipelines::bench::repair::{repair, InterventionKind, RepairOutcome}
 use sven_sdk::model::ModelProvider;
 
 use crate::bench_repair::{
-    examiner, practice_run, request, steps, student_trajectory, teacher_ref, Step,
+    examiner, examiner_showing, practice_run, request, steps, student_trajectory, teacher_ref, Step,
 };
 use crate::common::{self, Scratch};
 
@@ -564,5 +564,110 @@ fn samples_beyond_the_paths_states_try_its_states_again() {
             (1, RepairOutcome::Rejected, Some(json!(3))),
             (2, RepairOutcome::Accepted, Some(json!(2))),
         ]
+    );
+}
+
+/// A path recorded inside the task's sandbox names its files at the path the
+/// sandbox shows the tree at (`/workspace/repo`); the fork, on the host, reads
+/// them as the same files of its tree, so the path replays and the student
+/// continues.
+#[test]
+fn a_path_naming_the_sandboxs_workspace_replays_on_the_host_tree() {
+    let scratch = Scratch::new("path-guided-seen-as");
+    let student = steps(
+        "pathstudent",
+        vec![Step::Call(
+            "write_file",
+            json!({"path": "answer.json", "text": "42"}),
+        )],
+    );
+    let ctx = splinter_orchestrator::Context::new(common::config(&scratch), true)
+        .unwrap()
+        .with_model(
+            student_ref(),
+            Model::new(
+                Arc::clone(&student) as Arc<dyn ModelProvider>,
+                "scripted/student",
+            ),
+        )
+        .with_model(
+            teacher_ref(),
+            Model::new(
+                steps("teacher", vec![]) as Arc<dyn ModelProvider>,
+                "scripted/teacher",
+            ),
+        );
+    let tree = scratch.0.join("student-tree");
+    fs::create_dir_all(&tree).unwrap();
+    let trajectory = ctx.block_on(student_trajectory(&tree));
+    let runs = vec![practice_run(&ctx, &scratch.0, &trajectory)];
+    let checkout = examiner_showing(&scratch.0, Some("/workspace/repo"));
+    let failed = splinter_pipelines::bench::split::trials(&ctx).unwrap()[0]
+        .experience
+        .clone();
+    let path = privileged_path(&ctx, &failed, false, false, "harbor/sven@5/teacher-27b");
+    // The path as the sandbox recorded it: its read names the input at the
+    // sandbox's path, and comes first, so the earliest fork replays it.
+    let store = ctx.experiences();
+    let mut recorded = store.get(&path).unwrap();
+    let recorded_steps = &mut recorded.trajectory.steps;
+    let read = recorded_steps
+        .iter()
+        .position(|s| {
+            s.tool_calls
+                .as_ref()
+                .is_some_and(|c| c[0].function_name == "read_file")
+        })
+        .unwrap();
+    let mut step = recorded_steps.remove(read);
+    let call = &mut step.tool_calls.as_mut().unwrap()[0];
+    let relative = call.arguments["path"].as_str().unwrap().to_string();
+    call.arguments["path"] = json!(format!("/workspace/repo/{relative}"));
+    let first_action = recorded_steps
+        .iter()
+        .position(|s| s.source == atif::StepOrigin::Agent)
+        .unwrap();
+    recorded_steps.insert(first_action, step);
+    for (index, step) in recorded_steps.iter_mut().enumerate() {
+        step.step_id = index as u64 + 1;
+    }
+    let path = store.put(&recorded).unwrap();
+    store
+        .annotate(&Annotation {
+            experience: path.clone(),
+            producer: Producer {
+                name: "verifier".into(),
+                version: "1".into(),
+            },
+            body: AnnotationBody::Verdict {
+                outcome: Outcome::Pass,
+                strength: Strength::Executable,
+                evidence: json!({}),
+            },
+        })
+        .unwrap();
+    let set = store
+        .put_set(&splinter_store::experiences::ExperienceSet {
+            name: "teacher passes".into(),
+            members: vec![path],
+        })
+        .unwrap();
+    let teacher = teacher_ref();
+    let student_model = student_ref();
+    let only = [InterventionKind::PathGuided];
+    let sets = [set];
+    let mut asked = request(&runs, &checkout, &teacher);
+    asked.student = Some(&student_model);
+    asked.interventions = &only;
+    asked.paths = &sets;
+    let report = repair(&ctx, &asked).unwrap();
+    let [record] = report.repairs.as_slice() else {
+        panic!("one repair: {:?}", report.repairs)
+    };
+    assert_eq!(
+        record.outcome,
+        RepairOutcome::Accepted,
+        "{:?}",
+        record.reason
     );
 }

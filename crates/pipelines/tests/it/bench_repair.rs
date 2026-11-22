@@ -226,6 +226,15 @@ pub(crate) fn practice_run(ctx: &Context, root: &Path, trajectory: &atif::Trajec
 
 /// The examiner: a workspace holds the input; a grade passes an answer of 42.
 pub(crate) fn examiner(root: &Path) -> BenchCheckout {
+    examiner_showing(root, None)
+}
+
+/// [`examiner`] whose session shows its commands the tree at `sandbox_workspace`
+/// (the path a trial's agent worked at), when given.
+pub(crate) fn examiner_showing(root: &Path, sandbox_workspace: Option<&str>) -> BenchCheckout {
+    let shown = sandbox_workspace.map_or(String::new(), |path| {
+        format!(r#","sandbox_workspace":"{path}""#)
+    });
     let dir = root.join("bench");
     fs::create_dir_all(&dir).unwrap();
     let script = format!(
@@ -235,7 +244,7 @@ echo "$@" >> "{log}"
 case "$2" in
 session)
   ws="$7"; mkdir -p "$ws"; printf '{input}' > "$ws/input.csv"
-  echo '{{"schema":"bench.session/1","socket":"/nowhere/session.sock","workspace":"'"$ws"'","service":false}}'
+  echo '{{"schema":"bench.session/1","socket":"/nowhere/session.sock","workspace":"'"$ws"'","service":false{shown}}}'
   while read -r line; do
     case "$line" in
     *grade*)
@@ -248,6 +257,7 @@ esac
 "#,
         log = root.join("bench.log").display(),
         input = INPUT.replace('\n', "\\n"),
+        shown = shown,
     );
     let path = dir.join("bench");
     fs::write(&path, script).unwrap();
