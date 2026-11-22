@@ -38,7 +38,8 @@ use splinter_orchestrator::error::OrchestratorError;
 /// service can be asked: it claims a dataset that base's trainer reads.
 ///
 /// # Errors
-/// `required`, and no brain service can be asked.
+/// `required`, and no brain service can be asked or it cannot read the
+/// records (an endpoint without the artifact store a check goes through).
 pub(crate) fn trainer_checked(
     ctx: &Context,
     base: &Path,
@@ -73,6 +74,13 @@ pub(crate) fn trainer_checked(
         .filter_map(|record| line(record).ok())
         .collect();
     if let Err(e) = meter.measure(&lines.iter().map(String::as_str).collect::<Vec<_>>()) {
+        if required {
+            return Err(OrchestratorError::Refused(format!(
+                "a build for the base {} has every record read by that base's trainer, and the brain \
+                 service could not read them: {e}",
+                base.display()
+            )));
+        }
         return Ok(floor(projection, max_block, split, e.to_string()));
     }
     let tokens = |record: &splinter_data::Record| line(record).and_then(|l| meter.tokens(&l));

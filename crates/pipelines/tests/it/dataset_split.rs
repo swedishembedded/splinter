@@ -404,3 +404,24 @@ fn a_build_that_names_its_base_is_refused_without_a_trainer_to_check_it() {
     assert!(refused.contains("trainer"), "{refused}");
     std::mem::forget(scratch);
 }
+
+/// A service that cannot read the records for the base (here: an endpoint
+/// without the artifact store a check is sent through) is no trainer check: a
+/// build that names its base is refused, never bounded by the floor instead.
+#[test]
+fn a_build_that_names_its_base_is_refused_when_the_trainer_cannot_read_its_records() {
+    let scratch = Scratch::new("dataset-unreadable");
+    let service = ScriptedEndpoint::start(vec![]);
+    let brain = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY).unwrap();
+    let mut settings = config(&scratch);
+    settings.brain = Some(brain);
+    let ctx = Context::new(settings, false).unwrap();
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+    let named = BuildRequest {
+        base: Some(named_base(&scratch)),
+        ..request(set, Some(1_000_000), false)
+    };
+    let refused = project_with(&ctx, &named, None).unwrap_err().to_string();
+    assert!(refused.contains("trainer"), "{refused}");
+}
