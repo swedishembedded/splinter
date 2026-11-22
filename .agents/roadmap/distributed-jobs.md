@@ -302,11 +302,18 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       bf16 base): one run as one job over two servers on the node (gpu0-1
       holding ranks 0-1, gpu2 rank 2), brain reducing on the device over
       NCCL (3 ranks), `splinter train` 82 s wall with exit 0, nothing left
-      running. The loop on a one-node fleet with all four cards is not yet
-      measured: its candidate step found the trained adapter unserved, a
-      brain defect with `--stage-models` (the staged checkpoint and the
-      store's entry are served as two bases, so a served adapter's base is
-      ambiguous), reported to brain with a CPU reproduction.
+      running. A first run of the loop on a one-node fleet found its
+      trained adapter unserved, a brain defect with `--stage-models` (the
+      staged checkpoint and the store's entry served as two bases), fixed in
+      brain e5327ace5. Rerun 2026-11-22 on n442 (all four cards, brain
+      e5327ace5, staging on under `/scratch/local/brain-models`, TLS): one
+      whole flywheel generation in 2 min 52 s wall (fleet ready 21 s after
+      start, explore 30 s, learn 97 s, the candidate's exam 22 s, decide),
+      the candidate served on the staged base and promoted (+0.500 over 2
+      paired tasks), nothing left running. The fleet published
+      `train_cards = [4]` and the loop trained with `--brain-train-cards 4`;
+      the training record is rank 0's and does not count ranks, so the four
+      cards are shown by the published span, not by the record.
 
 ## Decisions
 

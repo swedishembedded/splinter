@@ -518,3 +518,79 @@ live job directories are on node-local disk, and only packed jobs are copied to 
   - Observation tokens per trial.
 - **Training use.** A training arm on play transitions is a later, separately pre-registered experiment. This run
   only measures whether the source carries more state.
+
+**E2 4B rerun 2 result (read 2026-11-22 02:05; 4 rounds per fold, rounds 3 of folds a and b replaced by 5 and 6).**
+0 `infra_timeout`. e2 0.438 against v1 0.409: +0.029, task interval [-0.006, +0.065], family interval
+**[-0.019, +0.082]**, 73 / 53 / 42, p 0.090. **Non-inferior at 0.05.** Exhaustion at 4B is 22.4% for e2 and 26.8% for
+v1. Verdict `exp-e2-4b` is *inconclusive*, as registered: B's gain criterion was not met, so min-cost selection stays
+inconclusive.
+
+**Length decomposition (CPU, from E1 and the 4B rerun; read 2026-11-22).**
+- **Teacher passes:** 555 of the 579 (96%) already meet B (15,114 tokens, 9 turns); 489 (84%) also keep every turn's
+  reasoning within 2,048. Teacher cost: p50 1,413 and p90 4,711 tokens, p50 5 and p90 7 turns.
+- **E1 outcomes at B, per arm.** Pass / exhausted / wrong within B:
+
+  | arm | pass | exhausted | wrong within B |
+  |---|---:|---:|---:|
+  | base | 0.235 | 0.101 | 0.664 |
+  | v1 s1 | 0.366 | 0.559 | 0.075 |
+  | v1 s2 | 0.340 | 0.592 | 0.068 |
+  | E2 s1 | 0.394 | 0.504 | 0.102 |
+  | E2 s2 | 0.385 | 0.507 | 0.108 |
+
+- **Autopsy of the exhausted trials** (`lane-exp/logs/autopsy.json`; structural only).
+  - **53-57% of v1's exhausted trials are Sven's reasoning-loop abort.** The watchdog stops a completion whose reasoning
+    repeats, and the aborted completion is charged the whole remaining budget; the tokens actually reported were under
+    B (sven knowledge "a completion aborted for looping reasoning is charged the whole remaining run budget"). The
+    share is 42-50% for E2 and 8% for the base.
+  - 66-77% of student exhausted trials had a turn that hit the 2,048 per-turn cap. 18% ran out of turns (base: 90%).
+  - 20-29% repeated an identical tool call (base: 92%).
+  - Only 4-7% had a correct file at the stop: the verifier passed, but the trial was out of budget. Whether a file was
+    correct earlier is not observable without a replay.
+- **How much of the gap is length alone.** With 4x the budget (same students, same tasks), v1 goes from
+  pass/exhausted/wrong 0.353 / 0.576 / 0.071 at B to 0.409 / 0.268 / 0.323 at 4B. E2 goes from 0.390 / 0.506 / 0.105 to
+  0.438 / 0.224 / 0.338. Quadrupling the budget converts about 31 points of exhaustion into only about 5-6 points of
+  passes; the other 25 become wrong answers. Most exhausted trials were not on a path to pass: they loop, and the loop
+  is charged as exhaustion. (The B and 4B results come from different slots.)
+
+**E9 result (cost curve, read 2026-11-22 01:10; fold a x 4, 232 base and 464 student trials per budget, no
+infrastructure errors).**
+
+| per-turn thinking | base | v1 (fold a, pooled) | v1 minus base (task 95%) | exhaustion base / v1 |
+|---:|---:|---:|---|---|
+| 512 | 0.220 | 0.328 | +0.108 [+0.028, +0.192] | 7% / 55% |
+| 1,024 | 0.228 | 0.297 | +0.069 [-0.022, +0.162] | 6% / 61% |
+| 2,048 | 0.237 | 0.274 | +0.037 [-0.045, +0.119] | 13% / 64% |
+
+The students gain from a tighter per-turn cap: 512 minus 2,048 is +0.054, task interval [+0.011, +0.095], Holm p 0.067
+over 2. Their exhaustion falls only from 64% to 55%. The base is flat. Exhaustion is partly a serving parameter, but
+mostly not: a tight cap cuts the loops shorter without removing them.
+
+**E10 result (source by support, read 2026-11-22 03:40; 213 held-out tasks over 14 rungs, folds a, b, c and x
+pooled; N per fold 117 / 89 / 118 / 117; students x 4 per seed).** The base has 7 instead of 8 attempts per task in
+folds c and x: one base job per fold was lost to infrastructure (a gateway port collision; the dataset path briefly
+unreadable). Those trials are excluded as infrastructure errors (12 recorded, 45 never graded).
+
+| contrast | difference | task 95% | family 95% (14) | better / worse / ties | p two-sided | Holm (3) | verdict |
+|---|---:|---|---|---|---:|---:|---|
+| T-same minus S (content) | +0.008 | [-0.039, +0.053] | [-0.038, +0.051] | 62 / 63 / 43 | 1.0 | 1.0 | inconclusive (upper end +0.051) |
+| T-other minus T-same (support) | **-0.049** | [-0.079, -0.020] | **[-0.076, -0.017]** | 41 / 70 / 57 | 0.0076 | 0.023 | **falsified**: support hurts |
+| S minus base (strict teacher-free) | +0.036 | [+0.011, +0.061] | [+0.023, +0.049] | 69 / 45 / 54 | 0.031 | 0.062 | falsified for +0.05 (upper end +0.049) |
+
+Pass@1: base 0.282, S 0.317, T-same 0.325, T-other 0.276. In folds a-c the same slot gives E1's students 0.369,
+against S 0.316, T-same 0.328 and T-other 0.269.
+- **Content:** at an equal ~110 records on the same tasks, teacher passes teach no more than the base's own verified
+  passes.
+- **Support:** teacher passes on tasks the base never solved do worse than teacher passes on tasks it does solve
+  (-0.049, Holm p 0.023). Training on out-of-support tasks hurts at this dose.
+- **Strict teacher-free:** the base's own verified passes gain +0.036 over base. The family interval [+0.023, +0.049]
+  lies above 0 (Holm p 0.062), but its upper end is below +0.05, so a +0.05 strict teacher-free gain is ruled out at
+  this record count. This is tighter than the power stated in advance (family SE 0.035-0.052); the realised
+  family-to-family spread of S minus base was small.
+- **Dose:** E1's students (343-403 records) beat every ~110-record arm by 0.04-0.10. As in E3, the record count is the
+  lever we can see.
+- **Extrapolation fold x** (train rungs 1-9, examine 10-14, 45 tasks, 5 rungs): base 0.257, S 0.269, T-same 0.178,
+  T-other 0.217. T-same minus base is -0.079, task interval [-0.151, -0.005]. Nothing transfers upward at this size,
+  and teacher data on easy rungs hurts the hard ones.
+
+Reports: `lane-exp/logs/e10-*.compare.json`, `e9-*.compare.json`, `e2-4b-rerun2.compare.json`, `autopsy.json`.

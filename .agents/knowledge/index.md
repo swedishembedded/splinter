@@ -200,3 +200,4 @@ in the same commit.
 | [212](212-vim-tool-observations-carry-errors-not-the-buffer.md) | The vim tool's observations carry error dynamics, not the changed buffer |
 | [213](213-a-dataset-built-for-a-base-is-read-by-that-bases-trainer-at-build-time.md) | A dataset built for a base is read by that base's trainer at build time |
 | [214](214-a-train-client-can-wait-forever-on-a-training-server-that-has-run-several-jobs.md) | A train client can wait forever on a training server that has already run several jobs |
+| [215](215-at-about-a-hundred-records-own-verified-passes-teach-as-much-as-teacher-passes.md) | At about a hundred records, the base's own verified passes teach as much as teacher passes, and out-of-support teacher passes hurt |
