@@ -111,7 +111,8 @@ pub fn train_preference_served(
     if let Some(lr) = request.learning_rate {
         set(&mut params, "lr", lr);
     }
-    let report = super::run_action(
+    // brain trains a preference run as ranks (a loss per pair): spread like a supervised one.
+    let report = super::run_spread_action(
         brain,
         request.attempt_dir,
         request.seed,

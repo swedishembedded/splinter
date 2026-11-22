@@ -205,8 +205,8 @@ pub fn train_policy_gradient_served(
     })
 }
 
-/// Runs the `train` job (supervised or policy-gradient: the objectives
-/// brain trains data-parallel) on the endpoints, spread over their cards as
+/// Runs the `train` job (supervised or policy-gradient; preference runs
+/// spread too, [`run_spread_action`]) on the endpoints, spread over their cards as
 /// they say ([`BrainEndpoints::train_span`]), mapping how it ended to a
 /// [`PolicyError`].
 fn run(
@@ -221,10 +221,10 @@ fn run(
 }
 
 /// Runs the `brain/train` job `action`, one brain trains as ranks (`train`'s
-/// supervised and policy-gradient objectives, `full_train`), spread over the
+/// supervised, policy-gradient and preference objectives, `full_train`), spread over the
 /// endpoints' cards and servers as [`BrainEndpoints::train_span`] says; how it
 /// ended maps to a [`PolicyError`] naming `attempt_dir`.
-fn run_spread_action(
+pub(super) fn run_spread_action(
     brain: &BrainEndpoints,
     attempt_dir: &Path,
     seed: u64,

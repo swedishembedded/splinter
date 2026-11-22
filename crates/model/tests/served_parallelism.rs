@@ -17,11 +17,14 @@ use splinter_model::consolidate::FullTune;
 use splinter_model::endpoint::TrainSpan;
 use splinter_model::scripted_endpoint::ScriptedEndpoint;
 use splinter_model::scripted_jobs::JobScript;
-use splinter_model::served_train::{fine_tune_served, full_fine_tune_served, Install};
+use splinter_model::served_train::{
+    fine_tune_served, full_fine_tune_served, train_preference_served, Install,
+};
+use splinter_model::train::{PairLoss, PreferenceTune};
 
 #[path = "support/served.rs"]
 mod served;
-use served::{endpoints, fine_tune_request, records, rig};
+use served::{endpoints, fine_tune_request, pairs, records, rig};
 
 /// What brain's `parallel` object says for `world` ranks of this server's `[0, ranks)`.
 fn parallel_report(world: u32, ranks: u32, collective: &str) -> serde_json::Value {
@@ -128,4 +131,46 @@ fn a_full_fine_tune_spreads_over_the_cards_asked_for_and_records_its_parallelism
     let parallel = checkpoint.parallel.expect("the parallelism is recorded");
     assert!(parallel.warnings().is_empty(), "{parallel:?}");
     assert_eq!(parallel.reported.unwrap().devices.len(), 4);
+}
+
+/// Preference optimization trains as ranks too (brain shards the pairs): the
+/// run is spread over the cards the endpoints say, as a supervised one is.
+#[test]
+fn a_preference_run_spreads_over_the_cards_asked_for() {
+    let rig = rig();
+    let (train, held_out, attempt) = (
+        rig.dir.path().join("pairs.jsonl"),
+        rig.dir.path().join("held-pairs.jsonl"),
+        rig.dir.path().join("attempt-dpo"),
+    );
+    pairs(&train);
+    pairs(&held_out);
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(rig.store.clone()));
+    let brain = endpoints(&service, &rig).with_train_span(TrainSpan::Cards(2));
+    let request = PreferenceTune {
+        model_dir: &rig.model_dir,
+        train: &train,
+        held_out: &held_out,
+        attempt_dir: &attempt,
+        steps: 3,
+        rank: 4,
+        alpha: 8.0,
+        beta: 0.1,
+        nll_weight: 0.0,
+        loss: PairLoss::Dpo,
+        gamma: None,
+        grad_accum: 1,
+        learning_rate: None,
+        // seed: the job's request carries it.
+        seed: 5,
+        continue_from: None,
+        cancel: None,
+    };
+    train_preference_served(&brain, &request).unwrap();
+    let params = service.jobs().created().last().cloned().unwrap();
+    assert_eq!(
+        (&params["objective"], &params["cards"]),
+        (&serde_json::json!("preference"), &serde_json::json!(2)),
+        "the preference run asks for both cards: {params}"
+    );
 }

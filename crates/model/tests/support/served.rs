@@ -42,6 +42,21 @@ pub fn rig() -> Rig {
     }
 }
 
+pub fn pairs(path: &Path) {
+    let lines: Vec<String> = ["a", "bb", "ccc"]
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "messages": [{"role": "user", "content": p}],
+                "chosen": {"role": "assistant", "content": format!("{p} yes")},
+                "rejected": {"role": "assistant", "content": "no"}
+            })
+            .to_string()
+        })
+        .collect();
+    std::fs::write(path, lines.join("\n")).unwrap();
+}
+
 pub fn records(path: &Path, rollouts: bool) {
     let lines: Vec<String> = ["cab", "fed", "ace"]
         .iter()

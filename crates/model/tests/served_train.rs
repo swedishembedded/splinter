@@ -20,7 +20,6 @@
 #![allow(clippy::unwrap_used)]
 
 use std::cell::{Cell, RefCell};
-use std::path::Path;
 
 use splinter_core::digest::Digest;
 use splinter_model::consolidate::FullTune;
@@ -41,7 +40,7 @@ use splinter_model::PolicyError;
 
 #[path = "support/served.rs"]
 mod served;
-use served::{data_of, endpoints, fine_tune_request, records, rig};
+use served::{data_of, endpoints, fine_tune_request, pairs, records, rig};
 
 #[test]
 fn a_fine_tune_is_a_job_whose_data_goes_by_digest_and_whose_adapter_comes_back_checked() {
@@ -426,21 +425,6 @@ fn a_dataset_the_trainer_refuses_is_named_by_line_before_a_run_is_asked_for() {
     assert!(error.to_string().contains("line 1"), "{error}");
     assert!(service.jobs().created().is_empty(), "no run was asked for");
     assert_eq!(service.jobs().actions(), vec!["check_dataset"]);
-}
-
-fn pairs(path: &Path) {
-    let lines: Vec<String> = ["a", "bb", "ccc"]
-        .iter()
-        .map(|p| {
-            serde_json::json!({
-                "messages": [{"role": "user", "content": p}],
-                "chosen": {"role": "assistant", "content": format!("{p} yes")},
-                "rejected": {"role": "assistant", "content": "no"}
-            })
-            .to_string()
-        })
-        .collect();
-    std::fs::write(path, lines.join("\n")).unwrap();
 }
 
 #[test]
