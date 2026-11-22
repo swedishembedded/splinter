@@ -745,3 +745,137 @@ and is dropped, not substituted, if that cannot be done test-first. Read: loop i
   --families`). SH is reported beside them.
 - Deviation from the advisory: one fold, not three (464 trials per arm already gives the stated power; the three-fold
   run does not fit the day).
+
+**E6 result (read 2026-11-22 06:45; `compare-arms`, splinter-7d5199191, interval seed 20261121; 168 held-out tasks over
+14 rungs x 8 per arm, seed 1; no infrastructure errors, no timeouts).** **Inconclusive by the rule. The dynamics
+contrast is negative, so any effect is an auxiliary-loss effect, not learned dynamics.**
+
+| arm | pass@1 | minus base | family 95% | exhaustion |
+|---|---:|---:|---|---:|
+| base | 0.249 | | | 9.1% |
+| v1 | 0.355 | +0.106 | [+0.021, +0.207] | 58.4% |
+| v1+T | 0.388 | +0.138 | [+0.040, +0.241] | 51.6% |
+| v1+S | 0.403 | +0.154 | [+0.049, +0.265] | 51.0% |
+| T | 0.013 | -0.236 | [-0.312, -0.162] | 3.3% |
+
+| contrast | difference | task 95% | family 95% | better / worse / ties | p (Holm over 3) |
+|---|---:|---|---|---|---:|
+| v1+T minus v1 (primary) | **+0.033** | [-0.001, +0.066] | [+0.002, +0.066] | 60 / 44 / 64 | 0.141 (0.282) |
+| v1+T minus v1+S | -0.016 | [-0.045, +0.014] | [-0.046, +0.010] | 49 / 61 / 58 | 0.294 (0.294) |
+| T minus base | -0.236 | [-0.279, -0.196] | [-0.312, -0.162] | 1 / 102 / 65 | <1e-28 |
+
+- The primary contrast falls short of +0.05, and its Holm p is not below 0.05. Its family interval reaches +0.066, so
+  +0.05 is not ruled out: **inconclusive** (problem state, `exp-e6`).
+- The shuffled control is at least as good as the real transitions. Whatever adding transition records does, it does
+  not come from the observations' dynamics.
+- **Where the gain sits.** Split by whether the base solves the task in the same exam:
+  - v1+T and v1+S gain +0.056 and +0.081 over v1 on the 103 base-solvable tasks, and -0.004 on the 65 base-unsolved
+    ones.
+  - Both arms also cut exhaustion by about 7 points.
+  - This reads as regularisation of the distilled student towards the base's behaviour, not as new competence.
+- **Transitions alone break the policy.** T falls from 0.249 to 0.013 and ends after 1.4 turns on average, against
+  4.7. On vim's error-heavy observations (knowledge 212), predicting the tool's reply is not a policy.
+
+**Deviations (dated 2026-11-22).**
+- **Exam rerun on the pinned compile.** At 01:48 the shared vim dataset folder was recompiled with a changed tool
+  (fixed scratch path, a file diff in every reply). Every exam of this run started after that.
+  - The primary read above is a full rerun of all arms on the compile the training data came from: bench 20189d91,
+    `lane-e6/vim-old`, whose 168 train-task digests equal E1's.
+  - The new-tool exam is kept as a secondary readout:
+    - base 0.299, v1 0.365, v1+T 0.435, v1+S 0.415, T 0.013;
+    - v1+T minus v1 +0.070, family [+0.037, +0.104], Holm p 0.004;
+    - v1+T minus v1+S +0.020 [-0.020, +0.061].
+  - The tool change itself moves v1+T minus v1 (+0.070 on the new tool, +0.033 on the old). That spread is a
+    measure of how fragile this effect is.
+- **Fold a round 5 discarded** (archived unread, `lane-e6/archive/fold-a-round5-discarded.tar.zst`). Lane EXP's pinned
+  bench worktree was removed during that round, so one arm could not be adopted. Every slot afterwards uses lane E6's
+  own worktree at the same commit (0d8f13de).
+- **Training placement.** Five trainings were cancelled before they started and relaunched in their own Slurm step, so
+  that a tool time limit could not kill the step. Same datasets, seed and build (brain-87a32d2fe).
+  - Early stopping (patience 4) ended t-a at 374 of 522 steps, t-c at 448 (selected step 336), v1s-a at 460 of 684,
+    and v1t-a at 516 of 683.
+- **Serving and training build** brain-87a32d2fe for every arm. The v1 adapters retrained on it reproduce E1's
+  monitoring losses exactly (e1-a seed 1: 0.82763).
+- **Task-free play (declared above).** 168 trials, old tool. 11.6% of 544 observations show buffer lines, against
+  13.6% in E1's base trials: the play instruction does not raise the state content (knowledge 212).
+- **GPU-hours.** n467 gpu0-3 from 00:36 to 06:38, about 24 card-hours allocated:
+  - training about 12 card-hours, partly idle because brain's training server runs one job at a time;
+  - play 0.25;
+  - the discarded and secondary new-tool exam about 6;
+  - the old-tool exam about 6.
+
+## E6b (lane E6, "lane B" of the 2026-11-22 review): replication and the teacher-free arm (pre-registered 2026-11-22 07:05, before any of its trainings or trials)
+
+E6's final read (v1+T minus v1 +0.033, not below +0.03) keeps the full lane. All arms are examined on E1's folds;
+instrument (b), the 100 vim exams, failed its gate.
+
+**Protocol, common to every arm and to lane EXP's dose lane.**
+- One pinned new-tool compile: `lane-e6/vim-new-2aa39242`, bench 2aa39242. Its 268 digests equal the shared folder's
+  recompile, which shows the changed file in every reply.
+- Software: sven-b6b21749, bench 2aa39242, brain-87a32d2fe.
+- Mode: budget B (15,114 tokens, 9 turns), per-turn thinking budget 2,048, E1's sampling, wall-clock factor 4.
+
+**Arms (folds a, b and c; seeds 1 and 2; v1's recipe; steps = round(0.4 x records)).**
+
+| Arm | Data |
+|---|---|
+| v1, v1+T, v1+S | E6's datasets (old-tool transitions). Seed 1 is E6's adapters; seed 2 is new |
+| v1+Tn, v1+Sn | v1 plus transitions, or shuffled transitions, built from lane EXP's base x32 new-tool harvest on the fold's training rungs (`transition` view: weight 0.3, cap 2) |
+| S220, S220+Tn, S220+Sn | The base's own verified passes from the same harvest (sft-step, packed, `vim` actions, de-duplicated by calls, at most 4 per task, lowest reasoning first), alone or with Tn or Sn |
+
+- If the observation-to-policy token ratio of Tn differs from E6's, it is reported and not adjusted.
+
+**Exam.**
+- Every arm and seed and the base, on the fold's held-out tasks.
+- Students x 4 per seed and base x 8, all arms of a fold in one slot at 16 trials in flight per arm.
+- Per-arm preflight and the round check.
+- The fold's adapters are split over at most two servers per fold, with `--adapter-slots 8`.
+
+**Pre-registered criteria** (`compare-arms`, task and family intervals, interval seed 20261121):
+- **Replication:** seed-2 v1+T minus v1 is at least +0.04, and the task interval of v1+T minus v1, pooled over both
+  seeds, is above 0.
+- **Teacher-free:** S220+Tn minus S220 is at least +0.04, with its task interval above 0. Holm over three contrasts:
+  replication, teacher-free, dynamics.
+- **Dynamics:** Tn minus Sn, pooled over both bases (v1 and S220) and both seeds, has its interval above 0. Otherwise
+  the result is reported as "an auxiliary-loss effect, not learned dynamics".
+- Transitions alone are not rerun: E6's T arm scored 0.013, which settles it.
+- The 0-GPU split by base-solvable tasks is reported per arm, as in E6.
+
+**Power.** Between two students, the family MDE is about +0.07 to +0.09 with one seed. Two seeds pooled bring it to
+about +0.05 to +0.06.
+
+**E6b deviations (dated 2026-11-22 07:25, before any new-tool training; seed-2 v1-a and v1-c are trained).**
+- **The new-tool data are about 2.5 times E6's.** From the x32 harvest's training rungs (3,520 / 3,296 / 3,936 trials):
+  - trn-a/b/c hold 3,343 / 3,093 / 3,706 records and 726k / 713k / 858k observation tokens. That is about 1:1 with
+    v1's policy tokens and with S220's (732k / 714k / 855k), the ratio the review advised.
+  - The observations show a file diff in 16% of cases and "no file changed" in 81%.
+  - s220-a/b/c: 318 / 282 / 326 records.
+- **Compute.** At v1's step rule, each Tn arm takes about 1,460 steps, about 2 card-hours on one card. Two training
+  jobs on one card ran about 4 times slower each and ran out of memory once (v1s-a seed 2). The concurrent seed-2 runs
+  were stopped after about 120 of their steps and restart from scratch, one job per card. The arms are cut to what fits
+  by 15:30:
+  - seed-2 v1+T and v1+S (with v1 seed 2);
+  - S220, S220+Tn and S220+Sn with seed 1 only;
+  - v1+Tn and v1+Sn are dropped.
+- **The contrasts change accordingly:**
+  - replication as registered;
+  - teacher-free: S220+Tn minus S220, seed 1;
+  - dynamics: S220+Tn minus S220+Sn, seed 1, on the S220 base only;
+  - Holm over the three.
+- **Exam:** E1's folds, the pinned new-tool compile.
+  - Arms per fold: base x 8; v1, v1+T and v1+S with seeds 1 and 2; S220, S220+Tn and S220+Sn. Students x 4 per seed.
+  - That is 10 arms, all of a fold in one slot over two servers (at most 8 adapters each).
+
+**E6b second cut (dated 2026-11-22 08:30, coordinator; before any E6b exam trial).**
+- **Two folds instead of three.** n467 is returned at 15:35. Fold c is dropped: S220+Sn-c, S220+Tn-c and seed-2 v1+T-c.
+  Seed-2 v1+S is dropped as well, since no criterion uses it.
+- **Training lost.** Stopping the old queues ended their Slurm step, and with it the running jobs, at 08:24 after about
+  45 minutes. S220+Tn a/b and S220+Sn-a restarted from scratch, one job per card, from the same datasets, seeds and
+  build. The cancelled jobs produced no adapter.
+- **Arms per fold (a, b):** base; v1, v1+T and v1+S at seed 1; v1 and v1+T at seed 2; S220, S220+Tn and S220+Sn at
+  seed 1. Exam as registered: students x 4 per seed, base x 8, all arms of a fold in one slot.
+- **Power, recomputed.** 123 tasks over 10 families: the family SE grows by about sqrt(14/10).
+  - A one-seed contrast between students (teacher-free, dynamics) detects only about +0.08 to +0.10.
+  - The two-seed replication contrast detects about +0.06 to +0.07.
+  - With these SEs, +0.04 can be confirmed only if the true effect is larger. A result under the thresholds reads as
+    inconclusive, not falsified, unless its interval excludes +0.04.
