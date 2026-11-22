@@ -658,3 +658,90 @@ With the fix the promised retry runs: 44 trials looped once and were asked again
 runs ended `reasoning_loop`. 31 of the remaining 58 exhaustions followed a loop retry and then ran out of genuine
 tokens. Future budgeted exams should use sven b6b21749 or later and bench f798e7da or later. Exhaustion shares measured
 before that (E0-E3, E9, E10) include loop charges, so the autopsy's 53-57% loop share applies to them.
+
+## Lane A (lane EXP): the strict teacher-free dose curve (pre-registered 2026-11-22 06:20, before the harvest)
+
+**Question.** Does the base 4B's gain from its own verified passes grow with the record count, and does it reach
++0.05? This is the second review's rank 1 (`lane-advice-1122/advisory.md`). No teacher data enter any arm.
+
+**Common protocol.**
+- **Tasks:** the new vim tool, compiled once into the pinned, read-only folder `vim-headless-mastery@2aa39242`
+  (bench 2aa39242, task digests identical to the 01:48 recompile). Every trial's task checksum is checked against it.
+- **Builds:** sven-b6b21749 (loop retry, cut-off accounting), bench 2aa39242 (`reasoning_loop` outcome), brain-bcd67e5ad
+  for serving and training, splinter-f9c821510 (forgets ended jobs).
+- **Mode:** budget B (15,114 tokens, 9 turns), per-turn thinking 2,048, sampling T 0.6 / top-p 0.95 / top-k 20, run
+  seed 20261121.
+- **Cards:** n424 gpu1-3. Live job directories are node-local.
+
+**Harvest (a throughput job, not a measurement).** The base on all 168 train tasks x 32 at B: 8 rounds of 4 attempts,
+the tasks split in thirds over the three cards, about 100 trials in flight per card. A counted pass is a pass within B
+(not `budget_exhausted`, not `reasoning_loop`).
+
+**Arms, per fold a, b, c** (E1's folds; training data only from the fold's training rungs; from base; v1's recipe;
+seeds 1, 2, 3; steps = round(0.4 x records)):
+- **S110:** distinct own passes, at most 2 per task, lowest total completion tokens first, drawn to 110 (seed
+  20261121).
+- **S220:** the same with at most 4 per task, drawn to 220.
+- **S440:** every distinct pass, at most 16 per task (N reported).
+- **S2, the aggregated second generation:** S440's seed-1 student attempts its fold's training tasks x 8 at B. Its
+  distinct passes are added to S440's data (the union, de-duplicated), at most 16 per task, and the student is trained
+  from base.
+- **Distinctness** is structural: two passes of a task are the same when their sequences of tool calls (name and
+  arguments) are equal.
+
+**Exam (E1's protocol).** Each fold's held-out tasks; the base x 8 (two jobs of 4 per round); every student x 4 per
+seed; E1's students (old-tool data, stated) x 4 per seed as anchors. 4 rounds of one attempt per student and two for
+the base, one fold per exam server (`--adapter-slots` at least the number of adapters), 12 trials in flight per arm,
+with per-arm preflight and the round check. If S2 is not trained in time for its fold's slot, it is examined in a
+slot of its own with the base and S440 (seed 1) as anchors. That is a stated deviation, and its contrasts are read
+only inside that slot.
+
+**Pre-registered reads (task-level 95% intervals primary; rung-clustered intervals beside them).**
+- **Supported:** S440 minus base is at least +0.05 with the task interval above 0, Holm over the four arms against
+  base.
+- **Dose:** the slope of pass@1 on log2 N over S110, S220 and S440 is at least +0.02 per doubling, with its interval
+  above 0. The interval comes from a task bootstrap of the per-task slope, seed 20261121.
+- **Falsified for "more samples of the same tasks":** S440 minus S110 has its task interval below +0.02.
+- **Generation:** S2 minus S440, reported with its interval.
+
+## Lane C: reasoning loops (lane PLAY; pre-registered 2026-11-22 06:20, before any of its trials or trainings)
+
+Advisory 2026-11-22 (`~/project/shared/tmp/lane-advice-1122/advisory.md`), sections 2 and 4, rank 3.
+
+**Common protocol (every trial of the lane).** Dataset `~/project/shared/huggingface/vim-headless-mastery@2aa39242`
+(bench 2aa39242 compiled into its own pinned folder; the vim tool with a fixed scratch path and a diff in every reply,
+knowledge 079), sven-b6b21749 (a reasoning loop is retried once per run with a note, a final loop ends the run as
+`reasoning loop:`), bench 2aa39242 (outcome `reasoning_loop`), brain-bcd67e5ad, budget B (15,114 completion tokens,
+9 turns), per-turn thinking 2,048 unless stated, sampling 0.6/0.95/20 run seed 20261121, `wall_clock_factor` 16, 16
+trials in flight per arm, frozen binaries by sha. **Loop incidence** of a trial: 1 when its reasoning looped at least
+once (the retry note `Your previous reply was stopped because its reasoning repeated ...` in its trajectory, or a run
+ended by `reasoning loop:`), else 0; read per held-out trial.
+
+**C0: a serving grid, no training (a harness change: a sampling setting, reported as such).** Base and E1's fold-a
+students (s1, s2) on fold a's 58 held-out tasks x 4 attempts per cell; per-turn thinking cap {512, 2,048} x presence
+penalty {0, 1.5}. The Qwen3 model card (`models/Qwen/Qwen3-4B/README.md`) says: for endless repetitions set
+`presence_penalty` to 1.5, a value between 0 and 2, "a higher value may occasionally result in language mixing and a
+slight decrease in model performance"; 1.5 is its own number. Brain honours `presence_penalty`; Sven does not yet send
+it, so that half of the grid waits on adding the control to Sven and bench (as a sampling control, recorded per step)
+and is dropped, not substituted, if that cannot be done test-first. Read: loop incidence and pass@1 per cell
+(students' seeds pooled, 464 trials; base 232). Descriptive: no success rule.
+
+**C1: positives at loop states (fold a; 464 trials per arm, the advisory's size for a 0.08 fall at a 0.38 base).**
+- Harvest: E1's fold-a seed-1 student on fold a's 110 training tasks x 24 at B, cap 2,048, presence penalty 0.
+- Records, N each, N = min(120, the loop-recovery passes available after the per-task cap of 2):
+  - LR: verified passes whose trajectory holds the loop retry (the retried sample is the record; the aborted one is not
+    in the trajectory), at most 2 per task, lowest total completion tokens first.
+  - NL: verified passes with no loop event, at most 2 per task, drawn from LR's tasks in LR's counts first, then from
+    other tasks to N, lowest cost first.
+  - SH: verified passes with every turn's reasoning at most 512 tokens, selected as NL.
+- Arms: v1 (E1's fold-a students), v1+LR, v1+NL, v1+SH: E1's fold-a dataset plus the N records, built as E1's
+  (`sft-step --pack --only-actions vim-vim --max-block 16384 --from local:Qwen/Qwen3-4B`, now trainer-checked), v1's
+  recipe, steps = round(0.4 x records), seeds 1 and 2.
+- Exam: fold a's 58 held-out tasks x 4 per seed (464 per arm), cap 2,048, presence penalty 0, one slot.
+- **Primary:** loop incidence of v1+LR at least 0.08 below v1+NL, with the task-bootstrap interval of the difference
+  below 0 (seed 20261121, 10,000 resamples over the 58 tasks, seeds pooled). **Any own data helps:** v1+LR and v1+NL
+  each at least 0.08 below v1. **Neither:** positives-only SFT does not remove loops; stop, the next step is pairs,
+  and the retry plus a cap is the fix in use. **Secondary:** v1+LR minus v1 pass@1 at least +0.03 (`compare-arms
+  --families`). SH is reported beside them.
+- Deviation from the advisory: one fold, not three (464 trials per arm already gives the stated power; the three-fold
+  run does not fit the day).
