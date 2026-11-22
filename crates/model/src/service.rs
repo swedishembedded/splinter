@@ -86,7 +86,7 @@ impl TrainJob {
     /// clash fails the job with the reason).
     fn prepare(work: &Path, rank0: IpAddr) -> Result<Self, PolicyError> {
         use std::io::Read;
-        let secret = work.join("train-job.secret");
+        let secret = work.join(TRAIN_JOB_SECRET_FILE);
         let io = |path: &Path| {
             let path = path.to_path_buf();
             move |source| PolicyError::Io { path, source }
@@ -233,6 +233,11 @@ pub const ADAPTERS_DIR: &str = "adapters";
 /// The directory, under a service's state, of the artifact store training
 /// moves data through.
 pub const ARTIFACTS_DIR: &str = "artifacts";
+
+/// The file in a fleet's directory holding the job secret its servers were
+/// started with (`--train-job-secret`), for a client outside this process
+/// that trains one job over them.
+pub const TRAIN_JOB_SECRET_FILE: &str = "train-job.secret";
 
 /// The file in a server's or a fleet's directory holding the key its
 /// endpoints answer to, readable by its owner only.

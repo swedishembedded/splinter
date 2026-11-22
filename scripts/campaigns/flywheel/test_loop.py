@@ -268,7 +268,8 @@ class _FakeFleet:
     key = "k"
     authority = "/fleet/ca.pem"
     record = {"key_file": "/fleet/key", "adapter_dir": "/state/brain-service/adapters",
-              "artifact_store": "/state/brain-service/artifacts"}
+              "artifact_store": "/state/brain-service/artifacts", "train_cards": [4, 4],
+              "train_job_secret": "/fleet/train-job.secret", "train_coordinator": "10.0.0.1:29500"}
 
     def brain_flags(self):
         return loop.Fleet.brain_flags(self)
@@ -285,7 +286,8 @@ def on_a_fleet_profiles_name_its_endpoints_and_commands_use_it():
         assert 'base_url = ["https://10.0.0.1:41000/v1", "https://10.0.0.2:41001/v1"]' in text, text
         flags = _FakeFleet().brain_flags()
         assert flags[:4] == ["--brain-endpoint", _FakeFleet.urls[0], "--brain-endpoint", _FakeFleet.urls[1]]
-        for pair in (["--brain-ca-file", "/fleet/ca.pem"], ["--brain-artifact-store", "/state/brain-service/artifacts"],
+        for pair in (["--brain-train-cards", "4,4"], ["--brain-train-job-secret", "/fleet/train-job.secret"],
+                     ["--brain-train-coordinator", "10.0.0.1:29500"], ["--brain-ca-file", "/fleet/ca.pem"], ["--brain-artifact-store", "/state/brain-service/artifacts"],
                      ["--brain-adapter-dir", "/state/brain-service/adapters"], ["--brain-key-file", "/fleet/key"]):
             at = flags.index(pair[0])
             assert flags[at:at + 2] == pair, flags

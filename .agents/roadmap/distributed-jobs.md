@@ -293,7 +293,20 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       runs (one card otherwise, said). `doctor` says which mode applies.
       Tests: `served_train/job_servers.rs` against scripted servers (fields
       per server, rank offsets, secret digest, a failure on one server, a
-      cancel), the fleet's flags and span, the device flags.
+      cancel), the fleet's flags and span, the device flags. `splinter
+      serve` publishes the span (`train_cards`, the job secret, the
+      coordinator) and the flywheel loop passes it on with
+      `--brain-train-*` (before that its training through a fleet took one
+      card). Measured 2026-11-22 on n442 (brain 1fc6074a2, Qwen3-4B, a
+      9-record dataset from the flywheel's tiny campaign, 4 steps, rank 8,
+      bf16 base): one run as one job over two servers on the node (gpu0-1
+      holding ranks 0-1, gpu2 rank 2), brain reducing on the device over
+      NCCL (3 ranks), `splinter train` 82 s wall with exit 0, nothing left
+      running. The loop on a one-node fleet with all four cards is not yet
+      measured: its candidate step found the trained adapter unserved, a
+      brain defect with `--stage-models` (the staged checkpoint and the
+      store's entry are served as two bases, so a served adapter's base is
+      ambiguous), reported to brain with a CPU reproduction.
 
 ## Decisions
 

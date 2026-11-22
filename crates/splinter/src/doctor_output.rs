@@ -52,6 +52,10 @@ impl Report for Serving {
         }
         let _ = writeln!(out, "adapter directory: {}", self.adapter_dir.display());
         let _ = writeln!(out, "artifact store: {}", self.artifact_store.display());
+        if !self.train_cards.is_empty() {
+            let cards: Vec<String> = self.train_cards.iter().map(u32::to_string).collect();
+            let _ = writeln!(out, "training cards per server: {}", cards.join(","));
+        }
         out.push_str("until interrupted (Ctrl-C)\n");
         out
     }

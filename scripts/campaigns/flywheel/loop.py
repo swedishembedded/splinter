@@ -318,6 +318,13 @@ class Fleet:
         flags = [a for url in self.urls for a in ("--brain-endpoint", url)]
         flags += ["--brain-key-file", self.record["key_file"], "--brain-adapter-dir", self.record["adapter_dir"],
                   "--brain-artifact-store", self.record["artifact_store"]]
+        # A training run spreads over the fleet's cards as the fleet set it up: every card of one server, or one job
+        # over every server with the job secret and coordinator the servers were started with.
+        if self.record.get("train_cards"):
+            flags += ["--brain-train-cards", ",".join(str(c) for c in self.record["train_cards"])]
+        if self.record.get("train_job_secret"):
+            flags += ["--brain-train-job-secret", self.record["train_job_secret"],
+                      "--brain-train-coordinator", self.record["train_coordinator"]]
         return flags + (["--brain-ca-file", self.authority] if self.authority else [])
 
 

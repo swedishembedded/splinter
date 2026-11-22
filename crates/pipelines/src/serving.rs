@@ -15,8 +15,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::Serialize;
+use splinter_model::endpoint::TrainSpan;
 use splinter_model::service::{
-    ADAPTERS_DIR, ARTIFACTS_DIR, AUTHORITY_FILE, ENDPOINTS_FILE, KEY_FILE,
+    ADAPTERS_DIR, ARTIFACTS_DIR, AUTHORITY_FILE, ENDPOINTS_FILE, KEY_FILE, TRAIN_JOB_SECRET_FILE,
 };
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::OrchestratorError;
@@ -39,6 +40,15 @@ pub struct Serving {
     /// The artifact store training on them moves data through
     /// (`--brain-artifact-store`).
     pub artifact_store: PathBuf,
+    /// The cards a data-parallel training run takes on each server, in the
+    /// order of `endpoints` (`--brain-train-cards`); empty for one card.
+    pub train_cards: Vec<u32>,
+    /// The job secret the servers were started with, for one training job
+    /// over several (`--brain-train-job-secret`).
+    pub train_job_secret: Option<PathBuf>,
+    /// The address the first server binds as such a job's coordinator
+    /// (`--brain-train-coordinator`).
+    pub train_coordinator: Option<String>,
 }
 
 /// Starts the servers `ctx`'s configuration names (one per usable node of an
@@ -58,7 +68,19 @@ pub fn start(ctx: &Context) -> Result<Serving, OrchestratorError> {
         )
     })?;
     let authority = directory.join(AUTHORITY_FILE);
+    let (train_cards, train_job_secret, train_coordinator) = match endpoints.train_span() {
+        TrainSpan::OneCard => (Vec::new(), None, None),
+        TrainSpan::Cards(cards) => (vec![*cards], None, None),
+        TrainSpan::Servers(job) => (
+            job.cards.clone(),
+            Some(directory.join(TRAIN_JOB_SECRET_FILE)),
+            Some(job.coordinator.clone()),
+        ),
+    };
     Ok(Serving {
+        train_cards,
+        train_job_secret,
+        train_coordinator,
         endpoints: endpoints.urls().to_vec(),
         endpoints_file: directory.join(ENDPOINTS_FILE),
         key_file: directory.join(KEY_FILE),
