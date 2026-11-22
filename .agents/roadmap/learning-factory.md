@@ -1,0 +1,82 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+
+# Learning factory: one recipe from tasks to an evaluated candidate
+
+Scope: the redesign that makes the installed `splinter` binary the one control plane that takes a recipe in a task repository from task loading through rollouts on any agent, verified trials, datasets, brain training and evaluation, with the experience database reduced to an optional index (milestones M0-M9 below).
+
+## Target
+
+```
+splinter validate recipes/vim-mastery.yaml
+splinter plan     recipes/vim-mastery.yaml
+splinter run      recipes/vim-mastery.yaml --out runs/vim-mastery
+splinter inspect  runs/vim-mastery --stage rollouts --viewer harbor
+splinter inspect  runs/vim-mastery --stage dataset
+splinter verify   runs/vim-mastery
+splinter report   runs/vim-mastery
+```
+
+The run can be cancelled, resumed, extended with another rollout pass, train several
+variants and evaluate them without invoking the task repository's CLI, Harbor, brain
+or the experience database by hand. The default dataset path is: Harbor trial ->
+validated `TrialResult` -> immutable trial collection -> projection -> brain training.
+
+Existing interfaces may break where they block this; proven mechanisms are reused,
+duplicate flows are removed after a parity test.
+
+## Findings this plan rests on (checked against the code, 2026-11-22)
+
+- `crates/orchestrator/src/pipeline.rs` is a linear stage list over shared state; it
+  cannot express independent passes, reusable datasets and several candidates.
+- `crates/orchestrator/src/jobs.rs` (idempotent submission, leases, reconciliation)
+  is worth keeping, but it takes a `splinter_store::workspace::Workspace`, which sits
+  on the experience database: the database is not optional today.
+- `crates/pipelines/src/harbor.rs` `harbor_outcome` treats reward exactly 1 as pass,
+  any other number as fail, a missing reward or an exception as abstain. The task
+  repository's `benchlib/score.py` distinguishes model-server, sandbox, verifier and
+  budget failures. Two classifiers for one question; only one may survive (M5).
+- `crates/data/src/curation.rs` defaults to `HistoryCuration::DropStep`: a safety
+  admission and a behavioural curation in one switch (M6 splits them).
+- The task repository's `benchlib/adopt.py` admits Sven jobs only; Splinter's
+  `crates/agent` runs Sven and Claude Code. Agent independence is M4's acceptance test.
+- brain already resumes fine-tuning exactly (`brain/crates/sdk/src/finetune.rs`,
+  resume state) and runs typed training jobs (`brain/crates/trainjob`); Splinter uses
+  them through brain's API, never in process.
+- Licences differ: Splinter is Apache-2.0, the task repository's `benchlib/` is
+  proprietary (decided below).
+
+## Rules that change with this plan
+
+- `AGENTS.md` and `.agents/rules/architecture.md` give sven sole ownership of running
+  agents. Under this plan Splinter schedules executions through an execution backend
+  (Harbor first, through a version-pinned worker process on Harbor's public job API);
+  each agent, Sven included, still runs itself. The ownership table is rewritten in
+  the M4 commit, not before.
+- The experience database loses authority over run state and product reuse (M1).
+
+## Milestones
+
+Built as vertical slices: the first slice is one vim task -> recipe -> Sven through
+Harbor -> native ATIF and trusted score -> success-only SFT -> brain LoRA ->
+development eval; later slices add an independent agent, a second pass, checkpoint
+recovery and protected eval.
+
+| # | Work | Acceptance | Status |
+|---|---|---|---|
+| M0 | Versioned contracts: recipe, `TaskCollection`, `ExecutionSpec`, `TrialResult`, `DatasetProduct`, `ModelCandidate`, `EvalResult` (JSON Schema, Rust type, canonical serialisation, golden fixtures) | fixtures validate and round-trip | open |
+| M1 | `ArtifactRepository` and `RunRepository` (SQLite WAL, one controller) with no experience-database import; the database becomes an `ExperienceIndex` | run completion and recovery with the database disabled | open |
+| M2 | Persistent product DAG; a stage's identity digests its schema, resolved parameters, upstream product digests, implementation digest and seed; crash-safe publication | unchanged inputs are skipped, changed inputs recompute only downstream | open |
+| M3 | Task loader for Harbor task directories and collections, environment/knowledge/skill staging from pinned artifacts | the installed binary runs task-repository material with no rebuild | open |
+| M4 | Harbor worker package, argv-only agent invocation, `connections.yaml` model routing | Sven and one other agent run one collection through the same trial contract; `harbor view` opens the trials | open |
+| M5 | One outcome classifier (classification separate from score), logical slot vs physical attempt, `unsolved_by` passes frozen at pass start | no valid graded result lost; a retry never repeats a completed slot | open |
+| M6 | Dataset from trial collections: `native-sft` first, `portable-sft` second, admission split from curation, `supervision.jsonl` lineage and the exclusion waterfall | a training dataset built with no experience import | open |
+| M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | open |
+| M8 | `splinter eval`: development and protected plans, the existing examination, verdict and signing logic behind its own authority | base and candidates evaluated under the same conditions | open |
+| M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | open |
+
+## Decisions
+
+- 2026-11-22: code moved from the task repository (classifier, staging, packing,
+  examination) is relicensed to Apache-2.0 by its copyright holder and lives in
+  Splinter; the moved files carry Splinter's header.
