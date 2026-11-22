@@ -21,7 +21,8 @@
 //! prompt is its untrained messages, the trained part its supervised ones; a
 //! line that is not a JSON object with `messages` (a chat record), `chosen`
 //! and `rejected` (a pair) or `subject` (a timeline) is refused by line. What a script can make it do: refuse the
-//! first creations for want of room (HTTP 429), break the event stream after
+//! first creations for want of room (HTTP 429), hold at most a number of
+//! jobs per caller until a `DELETE` forgets an ended one (as brain does), break the event stream after
 //! some events so the client has to resume it, fail, or never finish until it
 //! is cancelled. It records what it was asked.
 
@@ -65,6 +66,10 @@ pub struct JobScript {
     /// The `parallel` object a training report carries; `None` leaves it out,
     /// as a brain that predates it does.
     pub parallel: Option<Value>,
+    /// The jobs one caller may hold, running or finished and not yet
+    /// forgotten by a `DELETE`, as brain bounds them per caller; a creation
+    /// past it is refused (HTTP 429). `None` holds any number.
+    pub max_held: Option<usize>,
 }
 
 impl JobScript {
@@ -81,6 +86,7 @@ impl JobScript {
             models: None,
             refuse_records_containing: None,
             parallel: None,
+            max_held: None,
         }
     }
 }
@@ -101,6 +107,12 @@ pub struct Jobs {
     report: Mutex<Value>,
     cancelled: AtomicBool,
     deleted: AtomicBool,
+    /// Jobs created and not yet forgotten.
+    held: AtomicUsize,
+    /// Jobs forgotten by a `DELETE` after they ended.
+    forgotten: AtomicUsize,
+    /// The job created last has sent its `done` event.
+    finished: AtomicBool,
     /// The runs created under a `resume_key`: their identity (every param
     /// but the key and `checkpoint_every`) and their report.
     runs: Mutex<std::collections::BTreeMap<String, (String, Value)>>,
@@ -138,6 +150,16 @@ impl Jobs {
     /// How many creations were refused for want of room.
     pub fn refusals(&self) -> usize {
         self.refused.load(Ordering::SeqCst)
+    }
+
+    /// How many ended jobs a `DELETE` forgot.
+    pub fn forgotten(&self) -> usize {
+        self.forgotten.load(Ordering::SeqCst)
+    }
+
+    /// How many jobs the service still holds for the caller.
+    pub fn held(&self) -> usize {
+        self.held.load(Ordering::SeqCst)
     }
 
     /// How many adapter runs actually trained: a run resubmitted under a
@@ -190,13 +212,25 @@ pub(crate) fn route(
             &json!({"outputs": outputs, "blobs": {}}).to_string(),
         );
     } else if request_line.starts_with(&format!("DELETE /v1/jobs/{JOB_ID}")) {
-        jobs.cancelled.store(true, Ordering::SeqCst);
-        jobs.deleted.store(true, Ordering::SeqCst);
+        // As brain: a running job is cancelled (and still held); an ended one
+        // is forgotten, which frees its place.
+        let status = if jobs.finished.load(Ordering::SeqCst) {
+            if jobs.held.load(Ordering::SeqCst) > 0 {
+                jobs.held.fetch_sub(1, Ordering::SeqCst);
+                jobs.forgotten.fetch_add(1, Ordering::SeqCst);
+            }
+            "deleted"
+        } else {
+            jobs.cancelled.store(true, Ordering::SeqCst);
+            jobs.deleted.store(true, Ordering::SeqCst);
+            jobs.finished.store(true, Ordering::SeqCst);
+            "cancelled"
+        };
         let _ = respond(
             stream,
             "200 OK",
             "application/json",
-            &json!({"id": JOB_ID, "status": "cancelled"}).to_string(),
+            &json!({"id": JOB_ID, "status": status}).to_string(),
         );
     } else {
         return false;
@@ -240,6 +274,17 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
         return;
     }
     let checking = action == "check_dataset";
+    if script
+        .max_held
+        .is_some_and(|max| jobs.held.load(Ordering::SeqCst) >= max)
+    {
+        error(
+            stream,
+            "429 Too Many Requests",
+            "too many jobs: fetch or cancel some before starting another",
+        );
+        return;
+    }
     if !checking && jobs.refused.load(Ordering::SeqCst) < script.refuse_first {
         jobs.refused.fetch_add(1, Ordering::SeqCst);
         error(
@@ -278,6 +323,8 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
         jobs.created.lock().unwrap().push(params.clone());
     }
     jobs.checking.store(checking, Ordering::SeqCst);
+    jobs.held.fetch_add(1, Ordering::SeqCst);
+    jobs.finished.store(false, Ordering::SeqCst);
     jobs.actions.lock().unwrap().push(action.clone());
     *jobs.events.lock().unwrap() = None;
     jobs.cancelled.store(false, Ordering::SeqCst);
@@ -566,6 +613,7 @@ fn events(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, last_event_id
         let frames = jobs.events.lock().unwrap().clone().unwrap_or_default();
         let last = frames.last().map_or(0, |(id, _, _)| *id) + 1;
         let done = json!({"status": "succeeded"});
+        jobs.finished.store(true, Ordering::SeqCst);
         let _ = respond(
             stream,
             "200 OK",
@@ -616,6 +664,7 @@ fn events(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, last_event_id
     };
     if last > after {
         sse.push_str(&format!("id: {last}\nevent: done\ndata: {done}\n\n"));
+        jobs.finished.store(true, Ordering::SeqCst);
     }
     let _ = respond(stream, "200 OK", "text/event-stream", &sse);
 }

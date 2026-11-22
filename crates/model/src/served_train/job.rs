@@ -42,6 +42,11 @@ const POLL: Duration = Duration::from_millis(250);
 /// want of room.
 pub const REFUSED_WAIT: Duration = Duration::from_secs(30);
 
+/// How many times in a row every endpoint may refuse a run for want of room
+/// (each refusal followed by the refused wait: an hour at the default) before
+/// the run fails as the endpoints'. A run is never waited for without bound.
+pub const REFUSED_ROUNDS: u32 = 120;
+
 /// How many times in a row a broken event stream is reopened before the job
 /// is given up on.
 pub const RECONNECTS: u32 = 20;
@@ -304,13 +309,15 @@ fn drive(
         let (url, id) = api
             .create(urls, refused_wait, first, action, params)
             .await?;
-        match api.follow(&url, &id, frames).await {
+        let outcome = match api.follow(&url, &id, frames).await {
             Ok(()) => api.result(&url, &id).await,
             Err(JobError::Cancelled(_)) if cancel.is_some_and(Cancel::cancelled) => {
                 Err(JobError::Cancelled(Some(api.cancel(&url, &id).await)))
             }
             Err(other) => Err(other),
-        }
+        };
+        api.forget(&url, &id).await;
+        outcome
     })
 }
 
@@ -344,8 +351,37 @@ impl Api<'_> {
         }
     }
 
+    /// Forgets an ended job on its endpoint (`DELETE` of a finished job), so
+    /// it no longer counts against the jobs brain holds for this caller; a
+    /// job left held stays counted until brain's result time to live runs out,
+    /// and enough of them make brain refuse every new job. A failure to forget
+    /// is reported and not an error of the run, whose result is already read.
+    pub(super) async fn forget(&self, url: &str, id: &str) {
+        let forgotten = self
+            .client
+            .delete(format!("{url}/jobs/{id}"))
+            .bearer_auth(self.key)
+            .timeout(SHORT_CALL)
+            .send()
+            .await;
+        match forgotten {
+            Ok(response)
+                if response.status().is_success()
+                    || response.status() == reqwest::StatusCode::NOT_FOUND => {}
+            Ok(response) => eprintln!(
+                "brain: {url} did not forget ended job {id} (HTTP {}); it holds it until its result expires",
+                response.status().as_u16()
+            ),
+            Err(e) => eprintln!(
+                "brain: {url} did not forget ended job {id} ({e}); it holds it until its result expires"
+            ),
+        }
+    }
+
     /// Creates the job on the first endpoint that places it; returns that
-    /// endpoint and the job's id.
+    /// endpoint and the job's id. Every endpoint refusing it for want of room
+    /// is waited out `refused_wait` at a time, reported each time, and for at
+    /// most [`REFUSED_ROUNDS`] rounds; then the run fails as the endpoints'.
     async fn create(
         &self,
         urls: &[String],
@@ -359,8 +395,10 @@ impl Api<'_> {
             "action": action,
             "params": params,
         });
+        let mut rounds = 0u32;
         loop {
             let mut unreachable = Vec::new();
+            let mut refusal = None;
             for offset in 0..urls.len() {
                 let url = &urls[(first + offset) % urls.len()];
                 // brain answers once the run is placed or refused, which can
@@ -400,13 +438,29 @@ impl Api<'_> {
                         message_of(&text)
                     )));
                 }
+                refusal = Some((url.clone(), message_of(&text)));
             }
             if unreachable.len() == urls.len() {
                 let (url, reason) = unreachable.swap_remove(0);
                 return Err(JobError::Transport(url, reason));
             }
             // Every endpoint that answered said it had no room: wait for
-            // serving to go quiet.
+            // serving to go quiet, but not for ever.
+            let (url, why) = refusal.unwrap_or_default();
+            rounds += 1;
+            if rounds >= REFUSED_ROUNDS {
+                return Err(JobError::Transport(
+                    url,
+                    format!(
+                        "no endpoint placed the job in {rounds} tries {}s apart; the last refusal (HTTP 429): {why}",
+                        refused_wait.as_secs_f64()
+                    ),
+                ));
+            }
+            eprintln!(
+                "brain: {url} has no room for the job (HTTP 429: {why}); asking again in {}s ({rounds} of {REFUSED_ROUNDS})",
+                refused_wait.as_secs_f64()
+            );
             self.unless_cancelled(tokio::time::sleep(refused_wait))
                 .await?;
         }

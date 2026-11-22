@@ -263,8 +263,11 @@ dataset travels through the API and the directory may be on a filesystem several
 requested by the id brain's store gives it, as for inference. Every dataset is read first by the service's
 own trainer (`check_dataset`), which names a record it refuses by line and sizes the training row to the
 longest example, before a run is asked for. A run the service has no room for (every card that could
-hold it is serving a request) is asked again, of every endpoint, until it is placed or the run is
-cancelled; a request the service refuses outright is reported with its reason. Supervised, policy-gradient
+hold it is serving a request, or the service holds as many jobs for this caller as it allows) is asked
+again, of every endpoint, every 30 seconds, with a line on stderr each time, until it is placed or the run
+is cancelled, for at most 120 tries (an hour); then the run fails as the endpoint's. A request the
+service refuses outright is reported with its reason. Every job is forgotten on the service once it has
+ended and its result is read, so a long series of runs never fills the service's per-caller job limit. Supervised, policy-gradient
 and preference (DPO) runs, full-parameter runs and adapter merges are all jobs of the service; a checkpoint
 a full-parameter run or a merge makes is installed in the server's model store as `local/<name>`. Without
 endpoints, Splinter starts a server of its own (`--brain-bin`) and trains through it the same way: nothing

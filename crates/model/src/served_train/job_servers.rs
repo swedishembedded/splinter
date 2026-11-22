@@ -130,6 +130,7 @@ pub(super) fn drive(
         }
         if let Some(error) = failure {
             let stopped = cancel_all(&api, &placed).await;
+            forget_all(&api, &placed).await;
             return Err(with_statement(error, &stopped));
         }
         // Only rank 0's server's frames are the run's; the others' are dropped.
@@ -160,6 +161,7 @@ pub(super) fn drive(
                         .map(|(_, job)| job.clone())
                         .collect();
                     let stopped = cancel_all(api, &running).await;
+                    forget_all(api, &placed).await;
                     let (url, _) = &placed[at];
                     let error = match error {
                         JobError::Failed(why) => {
@@ -172,8 +174,15 @@ pub(super) fn drive(
             }
         }
         let (url, id) = &placed[0];
-        api.result(url, id).await
+        let report = api.result(url, id).await;
+        forget_all(api, &placed).await;
+        report
     })
+}
+
+/// Forgets every ended job of `jobs` on its server.
+async fn forget_all(api: &Api<'_>, jobs: &[(String, String)]) {
+    futures::future::join_all(jobs.iter().map(|(url, id)| api.forget(url, id))).await;
 }
 
 /// Asks every server of `jobs` to stop its run; what each answered.
