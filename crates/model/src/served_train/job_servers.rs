@@ -31,6 +31,17 @@ const HANDSHAKE_MS: u64 = 600_000;
 /// How long one collective may take.
 const OP_MS: u64 = 600_000;
 
+/// The job's name in the plan every server is given: a resumable run's is its
+/// `resume_key`, so the same run sent again is the same request on every server
+/// (brain resumes a run only under the request it began with, and keeps each
+/// server's ranks' state in that server's store); any other run's is `fresh`.
+fn job_name(params: &Value, fresh: String) -> String {
+    params
+        .get("resume_key")
+        .and_then(Value::as_str)
+        .map_or(fresh, str::to_string)
+}
+
 /// The request each server is sent: `params` with its `cards` and its part
 /// of the job, ranks numbered over the servers in order.
 pub(super) fn server_params(params: &Value, job: &ServersJob, name: &str) -> Vec<Value> {
@@ -93,13 +104,7 @@ pub(super) fn drive(
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos())
     );
-    let mut params = params.clone();
-    if params.get("resume_key").is_some_and(|key| !key.is_null()) {
-        // brain refuses to resume a job across servers; it runs from its start.
-        eprintln!("brain: a job over several servers does not resume: running it from its start");
-        params.as_object_mut().map(|p| p.remove("resume_key"));
-    }
-    let bodies = server_params(&params, job, &name);
+    let bodies = server_params(params, job, &job_name(params, name));
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -299,11 +304,15 @@ mod tests {
             assert_eq!(created.len(), 1, "one run per server");
             assert_eq!(created[0]["cards"], cards);
             assert_eq!(created[0]["seed"], 7);
-            assert!(
-                created[0].get("resume_key").is_none(),
-                "a job over servers does not resume"
+            assert_eq!(
+                created[0]["resume_key"], "r",
+                "every server keeps its ranks' state under the run's key"
             );
             let part: Value = serde_json::from_str(created[0]["job"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                part["plan"]["job"], "r",
+                "a resumable job is named by its key, so the same run sent again is the same request"
+            );
             assert_eq!(part["first_rank"], first);
             assert_eq!(part["secret_sha256"], "cd".repeat(32));
             assert_eq!(part["plan"]["world_size"], 3);

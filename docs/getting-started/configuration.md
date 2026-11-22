@@ -285,7 +285,9 @@ card and says so):
   is started with a fresh owner-only job secret (`--train-job-secret`), the first also with the job's
   coordinator on its address (`--train-job-coordinator`); the same `train` request goes to every
   server with its `cards` and its ranks of one plan, the result comes from rank 0's server, and a
-  failure or a cancel on any server stops the others. A job over several servers does not resume.
+  failure or a cancel on any server stops the others. A resumable run (one with a `resume_key`) names
+  its job after its key and sends every server the key, so sent again after a failure the job resumes
+  on every server from the last state every rank saved.
 - Servers you started yourself are used the same way with `--brain-train-cards N[,N...]` (the cards of
   each `--brain-endpoint`, in order), and for several, `--brain-train-job-secret FILE` and
   `--brain-train-coordinator HOST:PORT` as they were started:
