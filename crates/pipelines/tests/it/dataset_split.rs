@@ -19,6 +19,11 @@
 //!   at the same `--max-block`, including a record whose JSON text fits a
 //!   bound its rendered request does not. Without one, the build says it fell
 //!   back to the floor.
+//! * A build that names the base it is for has every record read by that
+//!   base's trainer (brain's own check, through the service): a record the
+//!   trainer refuses is left out under its own reason, never as over the
+//!   block, so training never meets it; with no service to ask, such a build
+//!   is refused.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -156,10 +161,19 @@ fn measure(_ctx: &Context) -> impl Fn(&Record) -> usize {
 /// A context whose brain is a scripted service: it counts a record's
 /// characters as its tokens, as the stand-in for the trainer's own count.
 fn served_context(test: &str) -> (Scratch, Context, ScriptedEndpoint, BrainEndpoints) {
+    served_context_with(test, |script| script)
+}
+
+/// [`served_context`] whose training service behaves as `script` makes it.
+fn served_context_with(
+    test: &str,
+    script: impl FnOnce(JobScript) -> JobScript,
+) -> (Scratch, Context, ScriptedEndpoint, BrainEndpoints) {
     let scratch = Scratch::new(test);
     let store = scratch.0.join("artifacts");
     std::fs::create_dir_all(&store).unwrap();
-    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(store.clone()));
+    let service =
+        ScriptedEndpoint::start(vec![]).with_training(script(JobScript::over(store.clone())));
     let brain = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
         .unwrap()
         .with_artifact_store(ArtifactStore::open(&store).unwrap());
@@ -329,4 +343,64 @@ fn a_stored_dataset_is_read_by_the_trainer_in_the_mode_a_run_reads_it_every_reco
     assert!(checked.supervised_tokens.total > 0);
     assert!(checked.supervised_tokens.total < checked.tokens.total);
     assert_eq!(checked.examples_without_supervision, 0);
+}
+
+/// The base a build names, a checkpoint in the test's model store.
+fn named_base(scratch: &Scratch) -> ModelRef {
+    ModelRef::Local {
+        checkpoint: scratch.0.join("models/Org/Trained").display().to_string(),
+        adapter: None,
+        context_tokens: None,
+    }
+}
+
+#[test]
+fn a_record_the_trainer_refuses_is_left_out_at_build_under_its_own_reason() {
+    let (scratch, ctx, _service, _brain) =
+        served_context_with("dataset-refused", |script| JobScript {
+            refuse_records_containing: Some("b.py".into()),
+            ..script
+        });
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+    // No bound asked: naming the base is enough for its trainer to read
+    // every record.
+    let named = BuildRequest {
+        base: Some(named_base(&scratch)),
+        ..request(set, None, false)
+    };
+    let (built, _) = project_with(&ctx, &named, None).unwrap();
+    assert!(
+        built.records.is_empty(),
+        "the refused record is not written"
+    );
+    assert_eq!(built.count(Exclusion::TrainerRefused), 1);
+    assert_eq!(
+        built.count(Exclusion::OverBlock),
+        0,
+        "it is not over any block"
+    );
+    let Some(BlockMeasure::Trainer {
+        first_refusal: Some(reason),
+        ..
+    }) = &built.block_measure
+    else {
+        panic!("the trainer read it: {:?}", built.block_measure);
+    };
+    assert!(reason.contains("scripted trainer refuses"), "{reason}");
+}
+
+#[test]
+fn a_build_that_names_its_base_is_refused_without_a_trainer_to_check_it() {
+    let (scratch, ctx) =
+        scratch_context("dataset-unchecked", Scripted::new(|_| String::new()), false);
+    let experience = attempt(&ctx);
+    let set = set_of(&ctx, &experience);
+    let named = BuildRequest {
+        base: Some(named_base(&scratch)),
+        ..request(set, Some(1_000_000), false)
+    };
+    let refused = project_with(&ctx, &named, None).unwrap_err().to_string();
+    assert!(refused.contains("trainer"), "{refused}");
+    std::mem::forget(scratch);
 }

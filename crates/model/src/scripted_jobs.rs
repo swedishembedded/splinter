@@ -59,6 +59,9 @@ pub struct JobScript {
     /// The model store a checkpoint job installs into, as `local/<name>`;
     /// `None` installs nothing (a server whose store is not this machine's).
     pub models: Option<PathBuf>,
+    /// `check_dataset` refuses every chat record whose line holds this text,
+    /// as brain refuses a record its chat template or contract does not take.
+    pub refuse_records_containing: Option<String>,
 }
 
 impl JobScript {
@@ -73,6 +76,7 @@ impl JobScript {
             hang: false,
             steps: 3,
             models: None,
+            refuse_records_containing: None,
         }
     }
 }
@@ -417,6 +421,15 @@ fn check(script: &JobScript, params: &Value) -> Value {
         records += 1;
         let line_no = index + 1;
         let record: Value = serde_json::from_str(line).unwrap_or_default();
+        if kind == "chat"
+            && script
+                .refuse_records_containing
+                .as_deref()
+                .is_some_and(|marker| line.contains(marker))
+        {
+            invalid.push(json!({"line": line_no, "error": "the scripted trainer refuses this record", "rule": "scripted", "field": null}));
+            continue;
+        }
         let measured = match kind {
             "chat" => record["messages"].as_array().map(|messages| {
                 let trained: usize = messages

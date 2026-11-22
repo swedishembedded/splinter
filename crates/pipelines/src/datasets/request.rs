@@ -99,9 +99,14 @@ pub struct BuildRequest {
     /// manifest records it either way.
     pub split_seed: Option<u64>,
     /// The model the training that reads the dataset starts from (`train
-    /// --from`): the checkpoint whose tokenizer, chat template and vision
-    /// configuration count the records of a `max_block` bound. `None` is the
-    /// policy, which is also `train`'s default.
+    /// --from`): its trainer reads every record (brain's check, through the
+    /// service), a record it refuses is left out
+    /// ([`splinter_data::Exclusion::TrainerRefused`]), and its tokenizer,
+    /// chat template and vision configuration count the records of a
+    /// `max_block` bound; named, the build is refused when no brain service
+    /// can be asked. `None` is the policy, which is also `train`'s default,
+    /// and is checked only under a `max_block` bound, where the service can
+    /// be asked.
     #[serde(serialize_with = "as_text")]
     pub base: Option<ModelRef>,
 }

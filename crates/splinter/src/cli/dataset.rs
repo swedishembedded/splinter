@@ -62,11 +62,14 @@ pub struct BuildArgs {
     #[arg(long, value_name = "TOKENS", value_parser = positive_count)]
     pub max_block: Option<usize>,
     /// The model the training that reads the dataset starts from, as
-    /// `train --from` names it: the checkpoint whose tokenizer, chat template
-    /// and vision configuration count the records of `--max-block`. Without
-    /// it, the policy; give it when training another base, or the records are
-    /// counted for the wrong model.
-    #[arg(long, value_parser = model_ref, value_name = "REF", requires = "max_block")]
+    /// `train --from` names it: its trainer reads every record (brain's own
+    /// check), a record it refuses is left out (`trainer_refused`), and its
+    /// tokenizer, chat template and vision configuration count the records of
+    /// `--max-block`. The build needs a brain service then (`--brain-endpoint`
+    /// or a brain binary) and is refused without one. Without it, the policy,
+    /// checked only under `--max-block`; give it when training another base,
+    /// or the records are checked for the wrong model.
+    #[arg(long, value_parser = model_ref, value_name = "REF")]
     pub from: Option<ModelRef>,
     /// Split a record longer than `--max-block` into consecutive windows
     /// that each fit, keeping every supervised action, instead of leaving

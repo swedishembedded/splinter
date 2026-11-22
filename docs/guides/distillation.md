@@ -61,9 +61,11 @@ splinter --brain-bin "$BRAIN" --device cpu --backend cpu dataset build --view sf
 `sft-step --pack` makes one record per passing trajectory. Every assistant turn (its reasoning, its tool calls and
 its answer) is supervised, and the system prompt, the instruction and the tool results are context. Failed trials,
 repeated actions and records longer than `--max-block` are left out and counted. `--from` names the base the
-records are counted for. With a brain to ask (`--brain-bin`, or `--brain-endpoint`), the tokens are counted the way
-the trainer counts them. Without one, the build counts by a floor, says so, and can keep a record that the trainer
-later refuses. Counting needs no card.
+records are for: that base's trainer reads every record (brain's own check, through `--brain-bin` or
+`--brain-endpoint`), counts its tokens the way training will, and a record it refuses (its chat template or its
+record contract) is left out and counted as `trainer_refused`, so training never meets it. With `--from` and no brain
+to ask, the build is refused. Without `--from`, a build with no brain counts by a floor, says so, and can keep a
+record that the trainer later refuses. Checking needs no card.
 
 `--repository-history` sets what happens to the teacher's reads of git history (see the pitfalls below). The
 default, `drop-step`, keeps such a read as context and does not supervise it. `truncate` ends the demonstration

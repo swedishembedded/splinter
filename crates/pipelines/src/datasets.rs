@@ -456,18 +456,19 @@ fn project_without(
             .settled_system_prompt()
             .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
     }
-    if let Some(max_block) = request.max_block {
+    if request.max_block.is_some() || request.base.is_some() {
         let base = crate::train::trained_base(
             ctx,
             request.base.as_ref().unwrap_or(&ModelRef::policy_default()),
         )?;
-        projection = crate::block::within_policy_block(
+        projection = crate::block::trainer_checked(
             ctx,
             &base,
             projection,
-            max_block,
+            request.max_block,
             request.split_over_block,
-        );
+            request.base.is_some(),
+        )?;
     }
     if let Some(passages) = passages {
         projection = with_passages(

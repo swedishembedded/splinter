@@ -125,6 +125,10 @@ pub enum Exclusion {
     NotConserved,
     /// A record longer than the training block it was projected for.
     OverBlock,
+    /// A record the trainer of the base the dataset is built for refuses
+    /// (brain's own check: its chat template, its record contract), so a run
+    /// on the dataset never meets it.
+    TrainerRefused,
     /// A window of a record split to fit the training block that holds no
     /// supervised turn (the exploration around the decisive actions of an
     /// `SftStep::only_actions` view): training on it would learn nothing.

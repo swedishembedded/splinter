@@ -322,8 +322,8 @@ pub enum BlockMeasure {
         /// from.
         #[serde(default)]
         base: std::path::PathBuf,
-        /// The first reason a record could not be measured, if any could not:
-        /// the trainer would refuse it too, so it was left out.
+        /// The first reason the trainer refused a record, if it refused any:
+        /// every such record was left out ([`Exclusion::TrainerRefused`]).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first_refusal: Option<String>,
     },
