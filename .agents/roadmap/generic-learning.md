@@ -659,7 +659,7 @@ runs ended `reasoning_loop`. 31 of the remaining 58 exhaustions followed a loop 
 tokens. Future budgeted exams should use sven b6b21749 or later and bench f798e7da or later. Exhaustion shares measured
 before that (E0-E3, E9, E10) include loop charges, so the autopsy's 53-57% loop share applies to them.
 
-## Lane A (lane EXP): the strict teacher-free dose curve (pre-registered 2026-11-22 06:20, before the harvest)
+## Lane A (lane EXP): the strict teacher-free dose curve (pre-registered 2026-11-22 06:03 (commit a35cb2e2c), before the harvest started at 06:05)
 
 **Question.** Does the base 4B's gain from its own verified passes grow with the record count, and does it reach
 +0.05? This is the second review's rank 1 (`lane-advice-1122/advisory.md`). No teacher data enter any arm.
@@ -879,3 +879,64 @@ about +0.05 to +0.06.
   - The two-seed replication contrast detects about +0.06 to +0.07.
   - With these SEs, +0.04 can be confirmed only if the true effect is larger. A result under the thresholds reads as
     inconclusive, not falsified, unless its interval excludes +0.04.
+
+**Lane A stopped at 09:10 at the user's request; no verdict.** Nothing was read; no measurement was complete.
+- **Harvest, complete (a throughput job).** 5,376 trials of the base on the 168 train tasks x 32 at B, all on
+  vim-headless-mastery@2aa39242, with no upstream errors: 4,767 graded and 609 budget_exhausted, 0 reasoning_loop.
+  1,525 counted passes, 1,389 of them distinct, on 135 tasks (E1's base x 8 had passes on 96). Packed jobs and an index
+  for other lanes are in `lane-exp/harvest-x32/`.
+- **Datasets, built.** S110 109/110/108 records (folds a/b/c), S220 217/220/218, S440 860/708/876. Every distinct pass
+  up to 16 per task gave 700-900 records, not the 300-400 the review expected.
+- **Trainings, complete.** All 27 S110/S220/S440 adapters (3 folds x 3 seeds), with splinter-f9c821510, which ran 27
+  trainings and more on six servers with no hang.
+- **Not complete:**
+  - The S2 harvest: folds a and c complete (x8), fold b half; no S2 dataset or training.
+  - The exam: the first rounds of folds a, b and c had started on n445 at 08:5x-09:08 and were stopped before any
+    round ended. Fold b's first launch had already been stopped at 09:05 because one adapter was missing; it was
+    relaunched with all 13 arms.
+- The trained adapters stay in `lane-exp/state` and the datasets in its store, ready to examine under E1's protocol
+  as registered.
+
+**E6b stopped at 09:12 (2026-11-22, the user's request through the coordinator): not read.** No E6b exam trial ran and
+no E6b verdict is entered.
+- Adapters completed (in the lane E6 archive): seed-2 v1-a/b/c, and S220-a/b/c at seed 1.
+- S220+Tn a/b and S220+Sn a/b were stopped at about step 100 of about 1,400 and left no adapter.
+- What would be needed to read E6b: about 3.5 card-hours per S220+Tn or S220+Sn adapter, and about 1.1 per seed-2
+  v1+T adapter (one job per card).
+- New-tool data built and kept: trn/shn/s220 for folds a, b and c, from lane EXP's x32 harvest. Ratio and token counts
+  are in the second cut above.
+
+**Lane C results (stopped at 09:17 on 2026-11-22 at the user's request; pre-registered at 06:05, commit f47166527).**
+
+**C0, complete (descriptive, no success rule).** Fold a's 58 held-out tasks x 4 per cell, every trial graded (no
+zero-turn trial, no upstream error, no infrastructure outcome). Students = E1's fold-a s1 and s2 pooled (464 trials),
+base 232. Presence penalty 1.5 sent as a Sven `driver_options` body field (brain applies it; penalties are not echoed;
+the profile records it): a harness change, not a model change.
+
+| model | cap | presence penalty | loop incidence | pass@1 | budget exhausted |
+|---|---:|---:|---:|---:|---:|
+| students | 2,048 | 0 | **0.356** | 0.336 | 49.8% |
+| students | 512 | 0 | 0.002 | 0.345 | 53.2% |
+| students | 2,048 | 1.5 | 0.045 | 0.338 | 55.2% |
+| students | 512 | 1.5 | 0.000 | 0.321 | 50.2% |
+| base | 2,048 | 0 | 0.004 | 0.284 | 15.9% |
+| base | 512 | 0 | 0.000 | 0.259 | 13.8% |
+| base | 2,048 | 1.5 | 0.000 | 0.267 | 15.1% |
+| base | 512 | 1.5 | 0.000 | 0.254 | 13.8% |
+
+- The students loop in 36% of trials at cap 2,048 (the advisory's 0.38). A per-turn cap of 512 or a presence penalty of
+  1.5 (the Qwen3 model card's own value for endless repetitions) removes nearly all of it, and the pass rate does not
+  move (0.32-0.35 in every student cell) while half the trials still exhaust B. **Loops are not what holds the pass
+  rate down at B**: removed at serving time, the trials they took still run out of budget.
+- Run-ending loops (`reasoning_loop`, after Sven's one retry): 3.0% of student trials at 2,048 / 0, none elsewhere.
+
+**C1, not read.** Harvest complete (E1's fold-a s1 on fold a's 110 training tasks x 24: 2,640 trials, 1,401 passed, 616
+with a loop, 44 ended by one). Only 51 loop-recovery passes on 35 tasks exist, so N = 45 per arm (pre-registered
+min(120, LR)), not 120; built records: LR 38 (6 reasoning in text, 1 the trainer refuses), NL 45, SH 44. Trained: v1+NL
+s1 and s2, v1+SH s1 and s2, v1+LR s1. **Stopped at 09:17, not read:** v1+LR seed 2's training and the whole held-out
+exam. The C0 result above predicts little for its primary read: the loop states it targets are removed by serving
+settings anyway. Card-hours: about 8.5 (C0 4.5 on n424 gpu0 and n445 gpu0, harvest 2.2 on n445 gpu0, training 1.8).
+Data: `~/project/shared/archive/lane-play-2026-11-22.tar.zst` (`c/logs/*.loops.jsonl`, `c/data/c1-selection.json`).
+- Found on the way: a build for a named base fell back to the character floor when the endpoint could not run the
+  trainer's check (no artifact store), so v1+LR kept a record the trainer refused at training; fixed (splinter
+  46e7e0103, test-first).
