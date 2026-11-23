@@ -24,9 +24,9 @@
 //!
 //! **Trial ingestion** reads the directories Harbor leaves for each trial
 //! (`result.json` or `results.json`, `agent/trajectory.json` in ATIF) into
-//! experiences of the imported tasks. The verdict is Harbor's: the verifier
-//! passed it when its `reward` is exactly 1, failed it otherwise, and a trial
-//! with no reward or an exception has no verdict at all. A trial without an
+//! experiences of the imported tasks. The verdict is the factory's one
+//! outcome classifier's: a counted trial passes at full credit and fails
+//! otherwise, and a trial its infrastructure decided has no verdict at all. A trial without an
 //! ATIF trajectory is refused, never reconstructed. Do not `verify` an
 //! ingested set: its attempts carry no patch to grade.
 
@@ -38,6 +38,7 @@ use serde_json::Value;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Provenance};
+use splinter_core::factory::trial::{grade, GradingPolicy, TrialEvidence};
 use splinter_knowledge::tasks::workspace::{discover, Discovered, DrillOrigin, HarborTask, Oracle};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
@@ -386,21 +387,38 @@ fn text<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
         .and_then(Value::as_str)
 }
 
-/// The verdict Harbor's verifier gave a trial: `reward` exactly 1 passes, any
-/// other reward fails (partial credit is not success), and a missing
-/// verifier result or an exception is no verdict.
-fn harbor_outcome(result: &Value) -> (Outcome, Value) {
-    let rewards = result.pointer("/verifier_result/rewards").cloned();
-    let excepted = result.get("exception_info").is_some_and(|e| !e.is_null());
-    let outcome = match (&rewards, excepted) {
-        (Some(Value::Object(map)), false) => match map.get("reward").and_then(Value::as_f64) {
-            Some(reward) if (reward - 1.0).abs() < f64::EPSILON => Outcome::Pass,
-            Some(_) => Outcome::Fail,
-            None => Outcome::Abstain,
-        },
-        _ => Outcome::Abstain,
+/// The verdict of a trial, by the factory's one outcome classifier
+/// ([`splinter_core::factory::trial::grade`]): a counted trial passes at full
+/// credit with no veto and fails otherwise; a trial the infrastructure
+/// decided (a sandbox, model, verifier or agent failure, an excluded
+/// timeout) has no verdict. Returns the verdict and the grade as evidence.
+fn harbor_outcome(result: &Value, verification: Option<Value>) -> (Outcome, Value) {
+    let evidence = TrialEvidence {
+        result: result.clone(),
+        verification,
+        ..TrialEvidence::default()
     };
-    (outcome, rewards.unwrap_or(Value::Null))
+    let graded = grade(&evidence, &GradingPolicy::default());
+    let outcome = match (graded.counted, graded.passed) {
+        (true, Some(true)) => Outcome::Pass,
+        (true, _) => Outcome::Fail,
+        (false, _) => Outcome::Abstain,
+    };
+    let rewards = result
+        .pointer("/verifier_result/rewards")
+        .cloned()
+        .unwrap_or(Value::Null);
+    (
+        outcome,
+        serde_json::json!({ "rewards": rewards, "grade": graded }),
+    )
+}
+
+/// The verifier's own verification record beside a trial, when it wrote a
+/// readable one.
+fn read_verification(trial: &Path) -> Option<Value> {
+    let text = std::fs::read_to_string(trial.join("verifier").join("verification.json")).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 fn read_result(trial: &Path) -> Result<Value, String> {
@@ -501,7 +519,7 @@ pub fn ingest_harbor_trials(
             }
         };
         let id = store.put(&experience)?;
-        let (outcome, rewards) = harbor_outcome(&result);
+        let (outcome, graded) = harbor_outcome(&result, read_verification(trial));
         *verdicts
             .entry(format!("{outcome:?}").to_lowercase())
             .or_default() += 1;
@@ -515,7 +533,8 @@ pub fn ingest_harbor_trials(
                 outcome,
                 strength: Strength::Executable,
                 evidence: serde_json::json!({
-                    "rewards": rewards,
+                    "rewards": graded["rewards"],
+                    "grade": graded["grade"],
                     "trial": text(&result, &["trial_name"]),
                     "task_checksum": text(&result, &["task_checksum"]),
                     "exception": result.get("exception_info").filter(|e| !e.is_null()),
