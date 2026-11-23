@@ -684,3 +684,43 @@ pub(crate) fn same_message(a: &WireMessage, b: &WireMessage) -> bool {
             .zip(&b.tool_calls)
             .all(|(x, y)| x.function == y.function)
 }
+
+/// The `portable-sft` record of `trajectory` alone, for an agent whose model
+/// calls were not recorded: the conversation rebuilt from its steps (the
+/// harness prompt it records, its first user turn as the instruction, every
+/// later turn as it was), every action supervised except one copied from
+/// another trajectory, under the tools the trajectory declares.
+///
+/// # Errors
+/// The trajectory has no user turn, or cannot be a conversation
+/// ([`Unprojectable`] says why).
+pub fn portable_record(trajectory: &Trajectory) -> Result<crate::NativeRecord, Unprojectable> {
+    let instruction = trajectory
+        .steps
+        .iter()
+        .find(|s| s.source == StepOrigin::User)
+        .and_then(|s| text_of(&s.message))
+        .ok_or(Unprojectable::NoAction)?;
+    let conversation = try_conversation(trajectory, &instruction, Setting::Workspace, false)?;
+    let supervised: Vec<&Action> = conversation.actions.iter().filter(|a| !a.copied).collect();
+    let copied = conversation.actions.len() - supervised.len();
+    let record = conversation
+        .packed_record(&supervised)
+        .ok_or(Unprojectable::NoAction)?;
+    let tools = supervised
+        .iter()
+        .flat_map(|a| {
+            conversation.messages[a.index]
+                .tool_calls
+                .iter()
+                .map(|c| c.function.name.clone())
+        })
+        .collect();
+    Ok(crate::NativeRecord {
+        record,
+        actions: supervised.len(),
+        copied,
+        scrubbed: conversation.scrubbed,
+        tools,
+    })
+}

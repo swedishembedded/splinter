@@ -496,3 +496,17 @@ fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_
         "the unattended success and both played sessions"
     );
 }
+
+#[test]
+fn a_portable_dataset_is_built_from_the_trajectories_alone() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned()
+        + "dataset: { name: sft, sources: [local], projection: portable-sft, target: \"brain:Qwen/Qwen3-4B\", seed: 13 }\n";
+    let resolved = resolved(&repo, &recipe);
+    let backend = FakeBackend::with(Outcome::Pass);
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    assert_eq!(dataset.projection, "portable-sft");
+    assert_eq!(dataset.waterfall.last().map(|w| w.remaining), Some(4));
+}

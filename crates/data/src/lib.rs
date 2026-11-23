@@ -129,6 +129,7 @@ pub use requests::{native_record, NativeRecord};
 pub use sampled::{ProxyReason, SampledTurn, SampledTurns, TokenReport};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};
+pub use trajectory::portable_record;
 pub use trajectory::{projection_refusal, session_dialogue};
 pub use unprojectable::Unprojectable;
 pub use views::signals;

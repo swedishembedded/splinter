@@ -106,3 +106,29 @@ fn a_trial_whose_runtime_files_each_requests_tokens_as_a_step_of_its_own_project
     };
     assert_eq!(messages.iter().filter(|m| m.train).count(), 3);
 }
+
+#[test]
+fn portable_sft_rebuilds_a_conversation_from_the_trajectory_alone() {
+    // An agent that leaves no request log (Claude Code) has only its ATIF
+    // trajectory: the conversation is rebuilt from it, every action
+    // supervised, its instruction the trajectory's own first user turn.
+    let trajectory: atif::Trajectory =
+        serde_json::from_slice(&fixture("agent/trajectory.json")).unwrap();
+    let portable = splinter_data::portable_record(&trajectory).expect("the trial projects");
+    let RecordBody::Chat { messages, .. } = &portable.record else {
+        panic!("a chat record")
+    };
+    let agent_steps = trajectory
+        .steps
+        .iter()
+        .filter(|s| s.source == atif::StepOrigin::Agent)
+        .count();
+    assert_eq!(portable.actions, agent_steps);
+    assert_eq!(messages.iter().filter(|m| m.train).count(), agent_steps);
+    let first_user = messages.iter().find(|m| m.role == "user").unwrap();
+    assert!(
+        first_user.content.starts_with("# "),
+        "{}",
+        first_user.content
+    );
+}

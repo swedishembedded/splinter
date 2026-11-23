@@ -14,7 +14,9 @@
 //! excluded as `not_a_success:<status>`; a security violation never
 //! becomes a demonstration whatever its score.
 //!
-//! **Projection** (`native-sft`): an admitted trial's own recorded model
+//! **Projection** (`native-sft`, or `portable-sft` for an agent whose model
+//! calls were not recorded, rebuilt from its ATIF trajectory by
+//! [`splinter_data::portable_record`]): an admitted trial's own recorded model
 //! calls become one record ([`splinter_data::native_record`]): the
 //! conversation exactly as the agent's model was sent it, its system prompt
 //! and tools included, every action of the agent supervised. A trial whose
@@ -42,7 +44,9 @@ use splinter_core::factory::execution::FileRef;
 use splinter_core::factory::identity::{StageIdentity, StageKind};
 use splinter_core::factory::product::{DatasetProduct, TrialResult, WaterfallStep, DATASET_SCHEMA};
 use splinter_data::request_log::read_request_log;
-use splinter_data::{native_record, Objective, Record, RecordBody, RecordMetadata};
+use splinter_data::{
+    native_record, portable_record, Objective, Record, RecordBody, RecordMetadata,
+};
 use splinter_store::factory::products::Staging;
 
 use super::rollout::trials_of;
@@ -53,7 +57,7 @@ use crate::recipe::DatasetSection;
 /// The dataset product's own description.
 pub const DATASET_FILE: &str = "dataset.json";
 /// The projections the stage implements.
-pub const PROJECTIONS: &[&str] = &["native-sft"];
+pub const PROJECTIONS: &[&str] = &["native-sft", "portable-sft"];
 /// The admission rules the stage implements.
 pub const ADMISSIONS: &[&str] = &["verified-success"];
 /// The agent's request log in a trial directory.
@@ -165,32 +169,36 @@ pub(crate) fn identity(
 }
 
 /// The record of one admitted trial, or why it has none.
+/// The record of one admitted trial under `projection`, or why it has none.
 fn project(
     view: &Path,
     trial: &TrialResult,
+    projection: &str,
 ) -> Result<(Record, usize, Vec<String>), (String, String)> {
     let dir = view.join(&trial.native_dir);
-    let read = |name: &str| {
-        std::fs::read(dir.join(name))
-            .map_err(|e| ("no_native_calls".to_owned(), format!("{name}: {e}")))
-    };
-    let log = read(CALL_LOG)?;
-    let trace = read(TRAJECTORY).map_err(|(_, d)| ("no_trajectory".to_owned(), d))?;
+    let trace = std::fs::read(dir.join(TRAJECTORY))
+        .map_err(|e| ("no_trajectory".to_owned(), format!("{TRAJECTORY}: {e}")))?;
     let trajectory: atif::Trajectory =
         serde_json::from_slice(&trace).map_err(|e| ("invalid_trace".to_owned(), e.to_string()))?;
-    let logged = read_request_log(&log).map_err(|e| ("calls_unreadable".to_owned(), e))?;
-    // The policy's calls are those made for the role of the agent's own
-    // loop: its first request's. Another role's (an advisor, a delegated
-    // model) are never the policy's actions.
-    let role = logged.first().and_then(|r| r.role.clone());
-    let policy: Vec<_> = logged
-        .iter()
-        .filter(|r| r.role == role)
-        .filter_map(|r| r.call.clone())
-        .collect();
-    let native = native_record(&trajectory, &policy)
-        .map_err(|e| ("unprojectable".to_owned(), e.to_string()))?;
-    let mut metadata = RecordMetadata::of("native-sft", Objective::Sft);
+    let projected = if projection == "portable-sft" {
+        portable_record(&trajectory)
+    } else {
+        let log = std::fs::read(dir.join(CALL_LOG))
+            .map_err(|e| ("no_native_calls".to_owned(), format!("{CALL_LOG}: {e}")))?;
+        let logged = read_request_log(&log).map_err(|e| ("calls_unreadable".to_owned(), e))?;
+        // The policy's calls are those made for the role of the agent's own
+        // loop: its first request's. Another role's (an advisor, a delegated
+        // model) are never the policy's actions.
+        let role = logged.first().and_then(|r| r.role.clone());
+        let policy: Vec<_> = logged
+            .iter()
+            .filter(|r| r.role == role)
+            .filter_map(|r| r.call.clone())
+            .collect();
+        native_record(&trajectory, &policy)
+    };
+    let native = projected.map_err(|e| ("unprojectable".to_owned(), e.to_string()))?;
+    let mut metadata = RecordMetadata::of(projection, Objective::Sft);
     metadata.group = Some(trial.task.clone());
     Ok((
         Record {
@@ -275,7 +283,7 @@ pub(crate) fn produce(
                 continue;
             }
             successes += 1;
-            match project(&view, &trial) {
+            match project(&view, &trial, &dataset.projection) {
                 Ok((record, actions, tools)) => {
                     projected.push((source.clone(), trial, record, actions, tools))
                 }

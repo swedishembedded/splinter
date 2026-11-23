@@ -92,7 +92,9 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   and tools - with every action supervised. Nothing is ranked, capped or
   rewritten; a trial excluded is listed in `excluded.jsonl` with its exact reason,
   and `report.md` shows the waterfall from raw trials to records. Validation
-  holds out whole tasks (or task families).
+  holds out whole tasks (or task families). `projection: portable-sft` rebuilds
+  each conversation from the trial's ATIF trajectory instead, for an agent whose
+  model calls are not recorded (Claude Code).
 - **Training.** Each variant is one brain job, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   variant's parameters trains a new candidate and reuses the dataset and rollouts.
