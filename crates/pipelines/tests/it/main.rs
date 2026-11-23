@@ -11,6 +11,7 @@
 mod common;
 mod decision_fixtures;
 mod factory_index;
+mod load_dataset_hub;
 
 mod acquire;
 mod acquire_rounds;

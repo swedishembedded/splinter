@@ -40,10 +40,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde_json::{json, Value};
+use serde_json::json;
 use splinter_core::digest::Digest;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
+use splinter_data::load::{read_records, ChatRecord, Record};
 use splinter_store::factory::products::Staging;
 
 use super::dataset::{dataset_of, file_ref, Accepted, Excluded, DATASET_FILE};
@@ -76,82 +77,35 @@ const OVER_TASK_CAP: &str = "over_task_cap";
 const PROMPT_MISMATCH: &str = "prompt_mismatch";
 const TOOLS_MISMATCH: &str = "tools_mismatch";
 
-fn spaced(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// A record line parsed: its task, the context it was made under and the
+/// A record line, read: its task, the context it was made under and the
 /// calls it makes.
-fn read_line(text: &str, ignore: &[String]) -> Result<Line, String> {
-    let record: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    let messages = record
-        .get("messages")
-        .and_then(Value::as_array)
-        .ok_or("is not a chat record (no `messages`)")?;
-    let task = record
-        .pointer("/metadata/task")
-        .and_then(Value::as_str)
-        .ok_or("names no task (`metadata.task`)")?
-        .to_owned();
-    let prompt = messages
-        .first()
-        .filter(|m| m.get("role").and_then(Value::as_str) == Some("system"))
-        .and_then(|m| m.get("content").and_then(Value::as_str))
-        .ok_or("does not open with a system message")?
-        .to_owned();
-    let tools = splinter_core::digest::canonical_json(record.get("tools").unwrap_or(&Value::Null))
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .map_err(|e| e.to_string())?;
-    let mut calls = Vec::new();
-    for message in messages {
-        for call in message
-            .get("tool_calls")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let name = call
-                .pointer("/function/name")
-                .and_then(Value::as_str)
-                .ok_or("has a tool call with no name")?;
-            let raw = call
-                .pointer("/function/arguments")
-                .and_then(Value::as_str)
-                .unwrap_or("{}");
-            let mut arguments: Value = serde_json::from_str(raw).unwrap_or(Value::Null);
-            if let Some(object) = arguments.as_object_mut() {
-                object.retain(|key, _| !ignore.contains(key));
-            }
-            let canonical = splinter_core::digest::canonical_json(&arguments)
-                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-                .map_err(|e| e.to_string())?;
-            calls.push((name.to_owned(), spaced(&canonical)));
-        }
-    }
-    let supervised = messages
-        .iter()
-        .filter(|m| m.get("train").and_then(Value::as_bool) == Some(true))
-        .count();
+fn line_of(record: &ChatRecord, ignore: &[String]) -> Result<Line, String> {
+    let supervised = record.supervised().len();
     if supervised == 0 {
         return Err("supervises no message (`train: true`)".into());
     }
     Ok(Line {
-        text: text.to_owned(),
-        task,
-        prompt,
-        tools,
-        calls,
+        text: record.line().to_owned(),
+        task: record
+            .task()
+            .ok_or("names no task (`metadata.task`)")?
+            .to_owned(),
+        prompt: record
+            .system_prompt()
+            .ok_or("does not open with a system message")?
+            .to_owned(),
+        tools: record.tools_canonical()?,
+        calls: record.calls(ignore)?,
         supervised,
     })
 }
 
 fn read_lines(path: &Path, ignore: &[String]) -> Result<Vec<Line>, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    text.lines()
-        .enumerate()
-        .filter(|(_, l)| !l.is_empty())
-        .map(|(i, l)| {
-            read_line(l, ignore).map_err(|e| format!("{} line {}: {e}", path.display(), i + 1))
+    read_records::<ChatRecord>(path)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(number, record)| {
+            line_of(&record, ignore).map_err(|e| format!("{} line {number}: {e}", path.display()))
         })
         .collect()
 }
@@ -567,7 +521,7 @@ mod tests {
     fn lines(records: &[String], ignore: &[String]) -> Vec<Line> {
         records
             .iter()
-            .map(|r| read_line(r, ignore).unwrap())
+            .map(|r| line_of(&ChatRecord::parse(r).unwrap(), ignore).unwrap())
             .collect()
     }
 
@@ -593,7 +547,8 @@ mod tests {
     }
 
     fn weigh(admission: &mut Admission, record: &str) -> Fate {
-        admission.weigh(&read_line(record, &["intent".to_string()]).unwrap())
+        admission
+            .weigh(&line_of(&ChatRecord::parse(record).unwrap(), &["intent".to_string()]).unwrap())
     }
 
     #[test]
@@ -680,7 +635,7 @@ mod tests {
             ];
             let mut chosen: Vec<Line> = order
                 .iter()
-                .map(|&i| read_line(&pool[i], &ignore).unwrap())
+                .map(|&i| line_of(&ChatRecord::parse(&pool[i]).unwrap(), &ignore).unwrap())
                 .collect();
             weighing_order(&mut chosen);
             let mut admission = base();

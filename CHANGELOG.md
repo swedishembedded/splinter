@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (one dataset loading interface)
+- `splinter_data::load`: `load_dataset(reference, config, options)` gives a `DatasetDict` of typed `Dataset`s (random access, `select`, `shuffle`) from a directory of split files, a dataset product or a Hub repository (`owner/name`, `hf:owner/name@rev`, resolved to a commit, cached, verified against the Hub's sizes and hashes); `DataLoader`, `BatchSampler`, `RandomSampler` and `SequentialSampler` batch them in an order fixed by seed and epoch. `dataset.import` and `dataset.extend` read their records through `ChatRecord`, where each had its own reader. `splinter-data` now depends on `splinter-hub`.
+
 ### Added (`dataset.extend`: novelty-gated admission)
 - `dataset.extend` adds new verified records to an existing dataset only as new solutions of their task: the base byte for byte, then the candidates whose tool-call sequence (arguments in `ignore_call_arguments` left out) the task does not have yet, under the base's system prompt and tool schema, up to `per_task` records a task. A task's side never moves (a held-out task keeps its new records in validation; a task new to the base is held out whole by a hash of `holdout_seed`), candidates are weighed in task and content order so the result does not depend on production order, and `lineage.json` records the parents and every left-out reason.
 

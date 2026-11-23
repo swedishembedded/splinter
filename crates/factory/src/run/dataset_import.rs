@@ -30,9 +30,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use serde_json::{json, Value};
+use serde_json::json;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
+use splinter_data::load::{read_records, ChatRecord, Record};
 use splinter_store::factory::products::Staging;
 
 use super::dataset::{file_ref, Accepted, Excluded, DATASET_FILE};
@@ -128,42 +129,23 @@ struct Line {
 
 /// The lines of `path`, each a supervised chat record, or why not.
 fn read_lines(path: &Path, thinking: bool) -> Result<Vec<Line>, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut lines = Vec::new();
-    for (index, text) in text.lines().enumerate().filter(|(_, l)| !l.is_empty()) {
-        let at = |why: String| format!("{} line {}: {why}", path.display(), index + 1);
-        let record: Value = serde_json::from_str(text).map_err(|e| at(e.to_string()))?;
-        let messages = record
-            .get("messages")
-            .and_then(Value::as_array)
-            .ok_or_else(|| at("is not a chat record (no `messages`)".into()))?;
-        let supervised: Vec<usize> = messages
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| m.get("train").and_then(Value::as_bool) == Some(true))
-            .map(|(i, _)| i)
-            .collect();
+    for (number, record) in read_records::<ChatRecord>(path).map_err(|e| e.to_string())? {
+        let at = |why: &str| format!("{} line {number}: {why}", path.display());
+        let supervised = record.supervised();
         if supervised.is_empty() {
-            return Err(at("supervises no message (`train: true`)".into()));
+            return Err(at("supervises no message (`train: true`)"));
         }
-        if !thinking
-            && messages
-                .iter()
-                .any(|m| m.get("reasoning_content").is_some())
-        {
+        if !thinking && record.has_reasoning() {
             return Err(at(
-                "keeps a turn's reasoning in a dataset for no-think mode (`thinking: false`)"
-                    .into(),
+                "keeps a turn's reasoning in a dataset for no-think mode (`thinking: false`)",
             ));
         }
-        let metadata = record.get("metadata");
-        let group = ["group", "task"]
-            .iter()
-            .find_map(|key| metadata?.get(key)?.as_str())
-            .map_or_else(|| format!("line {}", index + 1), str::to_owned);
         lines.push(Line {
-            text: text.to_owned(),
-            group,
+            text: record.line().to_owned(),
+            group: record
+                .group()
+                .map_or_else(|| format!("line {number}"), str::to_owned),
             supervised,
         });
     }

@@ -5089,6 +5089,7 @@ dependencies = [
  "serde_json",
  "splinter-core",
  "splinter-eval",
+ "splinter-hub",
  "splinter-store",
  "tempfile",
  "thiserror 2.0.21",

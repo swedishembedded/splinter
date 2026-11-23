@@ -79,6 +79,7 @@ mod exclusion;
 pub mod frozen;
 pub mod holdout;
 pub mod images;
+pub mod load;
 mod markers;
 pub mod overlap;
 pub mod partition;

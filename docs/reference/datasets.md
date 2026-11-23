@@ -259,6 +259,37 @@ objective (KTO).
 A pair recorded as a preference (a `preferred_over` relation between two experiences) is still
 made from the two final answers, before the derived pairs.
 
+## Loading a dataset
+
+One interface reads every dataset a run uses, as the Hugging Face `datasets` library does
+(`splinter_data::load`):
+
+```rust
+let dict = load_dataset::<ChatRecord>("swedishembedded/vim-headless-mastery-sft", None, &options)?;
+let train = dict.get("train").unwrap();
+let loader = DataLoader::new(train, BatchSampler::new(RandomSampler::new(17), 32, false));
+for batch in loader.epoch(0) { /* a Vec<&ChatRecord> */ }
+```
+
+`load_dataset(reference, config, options)` gives a `DatasetDict`: the splits of the dataset by name, each a
+`Dataset` of typed records with random access (`len`, `get`, `iter`, `select`, `shuffle`). The reference is
+
+- a directory holding `SPLIT.jsonl` files at its root or under `data/` (a configuration is a subdirectory of the
+  same places);
+- a dataset product a factory run wrote (a directory with `dataset.json`);
+- a Hub repository, `owner/name` or `hf:owner/name@revision`, resolved to a commit, downloaded into the cache
+  the options name and checked against the sizes and hashes the Hub lists. Every split says the commit it was read
+  at, also when a tag or branch was asked for, so a run never trains on a moving name.
+
+`eval`, `val` and `dev` name the `validation` split. The record type is the caller's (`Record`: one JSON line in,
+the same line back); `ChatRecord` is the supervised chat record of the trainers, and `dataset.import` and
+`dataset.extend` read their records through it. `DataLoader`, `BatchSampler`, `RandomSampler` and
+`SequentialSampler` give batches in an order that is a function of the seed and the epoch only, so two processes
+that name one seed walk a dataset the same way. A seed is always named.
+
+Brain reads token streams for its trainers (`TokenDataset`); this loader reads the records before they are
+tokenized and is the one place splinter reads a dataset.
+
 ## Benchmark trials
 
 An experience of a benchmark trial (`experiences ingest-bench`, see
