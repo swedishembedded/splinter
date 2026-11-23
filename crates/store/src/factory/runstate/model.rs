@@ -132,34 +132,8 @@ pub struct StageRecord {
     pub updated_at: u64,
 }
 
-/// The identity of a logical rollout slot.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct SlotKey {
-    /// The rollout pass.
-    pub pass: String,
-    /// The task.
-    pub task: String,
-    /// Which of the pass's repeats of that task.
-    pub index: u32,
-}
-
-impl SlotKey {
-    /// The slot `index` of `task` in `pass`.
-    #[must_use]
-    pub fn new(pass: impl Into<String>, task: impl Into<String>, index: u32) -> Self {
-        Self {
-            pass: pass.into(),
-            task: task.into(),
-            index,
-        }
-    }
-}
-
-impl fmt::Display for SlotKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{}/{}", self.pass, self.task, self.index)
-    }
-}
+/// The identity of a logical rollout slot: the factory contract's own.
+pub use splinter_core::factory::execution::SlotKey;
 
 /// A logical slot as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]

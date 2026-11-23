@@ -40,10 +40,21 @@ pub struct SlotKey {
 }
 
 impl SlotKey {
-    /// `pass/task/slot`, the slot's readable name.
+    /// Slot `slot` of `task` in `pass`.
     #[must_use]
-    pub fn label(&self) -> String {
-        format!("{}/{}/{}", self.pass, self.task, self.slot)
+    pub fn new(pass: impl Into<String>, task: impl Into<String>, slot: u32) -> Self {
+        Self {
+            pass: pass.into(),
+            task: task.into(),
+            slot,
+        }
+    }
+}
+
+/// `pass/task/slot`, the slot's readable name.
+impl std::fmt::Display for SlotKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}/{}", self.pass, self.task, self.slot)
     }
 }
 

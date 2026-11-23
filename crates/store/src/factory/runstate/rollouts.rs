@@ -38,7 +38,11 @@ type RawSlot = (String, String, u32, String, Option<String>, u64);
 fn decode_slot(raw: RawSlot) -> Result<SlotRecord, RunStateError> {
     let (pass, task, index, state, trial, updated_at) = raw;
     Ok(SlotRecord {
-        key: SlotKey { pass, task, index },
+        key: SlotKey {
+            pass,
+            task,
+            slot: index,
+        },
         state: SlotState::parse(&state)?,
         trial: trial.map(parse_digest).transpose()?,
         updated_at,
@@ -50,7 +54,7 @@ const SLOT_COLUMNS: &str = "pass, task, idx, state, trial, updated_at";
 fn fetch_slot(conn: &Connection, key: &SlotKey) -> Result<Option<SlotRecord>, RunStateError> {
     optional(conn.query_row(
         &format!("SELECT {SLOT_COLUMNS} FROM slots WHERE pass = ?1 AND task = ?2 AND idx = ?3"),
-        params![key.pass, key.task, key.index],
+        params![key.pass, key.task, key.slot],
         slot_row,
     ))?
     .map(decode_slot)
@@ -90,7 +94,11 @@ fn decode_attempt(raw: RawAttempt) -> Result<AttemptRecord, RunStateError> {
     let (id, pass, task, index, backend, state, started_at, finished_at, result) = raw;
     Ok(AttemptRecord {
         id: AttemptId(id),
-        slot: SlotKey { pass, task, index },
+        slot: SlotKey {
+            pass,
+            task,
+            slot: index,
+        },
         backend,
         state: AttemptState::parse(&state)?,
         started_at,
@@ -183,12 +191,12 @@ impl RunState {
         tx.execute(
             "UPDATE slots SET state = 'running', updated_at = ?4
              WHERE pass = ?1 AND task = ?2 AND idx = ?3",
-            params![key.pass, key.task, key.index, now],
+            params![key.pass, key.task, key.slot, now],
         )?;
         tx.execute(
             "INSERT INTO attempts (pass, task, idx, backend, state, started_at)
              VALUES (?1, ?2, ?3, ?4, 'launched', ?5)",
-            params![key.pass, key.task, key.index, backend, now],
+            params![key.pass, key.task, key.slot, backend, now],
         )?;
         let id = AttemptId(
             u64::try_from(tx.last_insert_rowid())
@@ -249,7 +257,7 @@ impl RunState {
             tx.execute(
                 "UPDATE slots SET state = 'pending', updated_at = ?4
                  WHERE pass = ?1 AND task = ?2 AND idx = ?3 AND state = 'running'",
-                params![key.pass, key.task, key.index, now],
+                params![key.pass, key.task, key.slot, now],
             )?;
         }
         let stored = fetch_attempt(&tx, attempt)?.ok_or(RunStateError::UnknownAttempt(attempt))?;
@@ -302,7 +310,7 @@ impl RunState {
         tx.execute(
             "UPDATE slots SET state = 'finished', trial = ?4, updated_at = ?5
              WHERE pass = ?1 AND task = ?2 AND idx = ?3",
-            params![key.pass, key.task, key.index, trial.as_str(), now],
+            params![key.pass, key.task, key.slot, trial.as_str(), now],
         )?;
         let stored =
             fetch_slot(&tx, key)?.ok_or_else(|| RunStateError::UnknownSlot(key.clone()))?;
@@ -341,7 +349,7 @@ impl RunState {
         tx.execute(
             "UPDATE slots SET state = 'abandoned', updated_at = ?4
              WHERE pass = ?1 AND task = ?2 AND idx = ?3",
-            params![key.pass, key.task, key.index, now],
+            params![key.pass, key.task, key.slot, now],
         )?;
         let stored =
             fetch_slot(&tx, key)?.ok_or_else(|| RunStateError::UnknownSlot(key.clone()))?;
