@@ -93,7 +93,14 @@ pub fn native_record(
     trajectory: &atif::Trajectory,
     calls: &[ModelCall],
 ) -> Result<NativeRecord, Unprojectable> {
-    let conversation = build(trajectory, calls)?;
+    // A step that says and calls nothing answers no request (a runtime may
+    // file a reply's reasoning or a request's token account as a step of its
+    // own): the calls pair with the steps that said or called something.
+    let steps = agent_steps(trajectory)
+        .into_iter()
+        .filter(|s| !s.silent)
+        .collect();
+    let conversation = build_from(trajectory, calls, steps)?;
     let supervised: Vec<&crate::trajectory::Action> =
         conversation.actions.iter().filter(|a| !a.copied).collect();
     let copied = conversation.actions.len() - supervised.len();
@@ -122,10 +129,17 @@ fn build(
     trajectory: &atif::Trajectory,
     calls: &[ModelCall],
 ) -> Result<Conversation, Unprojectable> {
+    build_from(trajectory, calls, agent_steps(trajectory))
+}
+
+fn build_from(
+    trajectory: &atif::Trajectory,
+    calls: &[ModelCall],
+    steps: Vec<crate::trajectory::AgentStep>,
+) -> Result<Conversation, Unprojectable> {
     if is_incomplete(trajectory) {
         return Err(Unprojectable::Incomplete);
     }
-    let steps = agent_steps(trajectory);
     let Some(last) = calls.len().checked_sub(1) else {
         return Err(Unprojectable::RequestsDiverge { step: 0 });
     };
@@ -253,14 +267,26 @@ fn scope_calls(
     Ok(())
 }
 
-/// Whether two assistant turns say the same: the text, the reasoning and the
-/// calls (with their ids, as the model and its history name them).
-fn same_turn(a: &WireMessage, b: &WireMessage) -> bool {
+/// A turn's reasoning, when it has any.
+fn reasoning(message: &WireMessage) -> Option<&str> {
+    message
+        .reasoning_content
+        .as_deref()
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+}
+
+/// Whether `history`, a turn as a later request repeats it, is `answer`: the
+/// text, the calls (with their ids, as the model and its history name them)
+/// and the reasoning when the history carries it. A runtime that does not
+/// send a turn's reasoning back (as a reasoning model's API asks) repeats
+/// the turn without it, and it is still the same turn.
+fn same_turn(history: &WireMessage, answer: &WireMessage) -> bool {
+    let (a, b) = (history, answer);
     let arguments = |text: &str| serde_json::from_str::<Value>(text).ok();
     a.role == b.role
         && a.content.trim() == b.content.trim()
-        && a.reasoning_content.as_deref().map(str::trim)
-            == b.reasoning_content.as_deref().map(str::trim)
+        && (reasoning(a).is_none() || reasoning(a) == reasoning(b))
         && a.tool_calls.len() == b.tool_calls.len()
         && a.tool_calls.iter().zip(&b.tool_calls).all(|(x, y)| {
             x.id == y.id

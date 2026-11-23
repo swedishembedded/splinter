@@ -118,6 +118,10 @@ pub(crate) struct AgentStep {
     /// Whether every call of the step repeats a call of an earlier step whose
     /// result was the same (see [`Action::repeated`]).
     pub(crate) repeated: bool,
+    /// Whether the step says nothing and calls nothing (it may hold
+    /// reasoning or a request's token account): no action, and, as a model
+    /// answer that said nothing makes no step, no request's answer either.
+    pub(crate) silent: bool,
 }
 
 /// The agent steps of `trajectory`, in order.
@@ -135,6 +139,8 @@ pub(crate) fn agent_steps(trajectory: &Trajectory) -> Vec<AgentStep> {
                 step: step.step_id,
                 copied: step.is_excluded_from_sft(),
                 repeated,
+                silent: step.message.as_text().is_some_and(|t| t.trim().is_empty())
+                    && step.tool_calls.as_ref().is_none_or(Vec::is_empty),
             }
         })
         .collect()
