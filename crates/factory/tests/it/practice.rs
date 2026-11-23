@@ -145,3 +145,77 @@ fn a_revision_is_named_by_its_commit() {
             .unwrap_or_default();
     assert!(refused.contains("by its commit"), "{refused}");
 }
+
+/// Scenario C: a repository to agent trajectories, and those to an SFT and a
+/// preference dataset. Its own tests make its tasks, the agent attempts the
+/// training ones (some pass, some fail), and the one set of attempts gives
+/// both datasets.
+#[test]
+fn scenario_c_a_repository_becomes_sft_and_preference_datasets() {
+    let (repo, commit) = repository();
+    // seed: the held-out families and the datasets' splits are the seeds' draws.
+    let recipe = format!(
+        "schema: splinter.recipe/v2
+name: practised
+models:
+  student: \"brain:Qwen/Qwen3-4B\"
+stages:
+  - id: practised
+    uses: task.mutate
+    with: {{ repository: project, revision: {commit}, max_tasks: 12, eval_percent: 50, seed: 3 }}
+  - {{ id: train, uses: tasks.pin, inputs: {{ collection: $stages.practised.tasks }}, with: {{ split: train }} }}
+  - id: attempts
+    uses: attempt.collect
+    inputs: {{ tasks: $stages.train.tasks }}
+    with: {{ agent: sven, model: student, environment: environments/vim.yaml, attempts: 2, seed: 4 }}
+  - id: sft
+    uses: dataset.project
+    inputs: {{ attempts: [$stages.attempts.attempts] }}
+    with: {{ target: student, seed: 5 }}
+  - id: preferred
+    uses: dataset.project
+    inputs: {{ attempts: [$stages.attempts.attempts] }}
+    with: {{ objective: preference, target: student, seed: 5 }}
+"
+    );
+    // Each task is passed once and failed once.
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let resolved = resolved(&repo, &recipe);
+    // The task ids are the generator's; script the outcomes once they exist.
+    let pinned = {
+        let staged = tempfile::tempdir().unwrap();
+        let head = recipe[..recipe.find("  - id: attempts").unwrap()].to_owned();
+        run(
+            &crate::factory_run::resolved(&repo, &head),
+            staged.path(),
+            &backend,
+            &FakeTrainer::default(),
+        )
+        .unwrap();
+        tasks_of(&staged.path().join("train")).unwrap()
+    };
+    for task in &pinned.tasks {
+        backend.script(&task.id, &[Outcome::Pass, Outcome::Fail]);
+    }
+    run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let lines = |stage: &str| {
+        std::fs::read_to_string(dir.path().join(stage).join("train.jsonl"))
+            .unwrap()
+            .lines()
+            .count()
+    };
+    assert_eq!(
+        lines("sft"),
+        pinned.tasks.len(),
+        "each task's passed attempt"
+    );
+    assert_eq!(
+        lines("preferred"),
+        pinned.tasks.len(),
+        "each task's pass over its fail"
+    );
+}

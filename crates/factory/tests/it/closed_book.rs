@@ -389,3 +389,60 @@ fn passed_answers_give_an_sft_dataset_of_the_question_and_the_answer() {
         .unwrap()
         .contains("mornings slip away")));
 }
+
+/// Scenario A: a document to a trained SFT candidate. Tasks generated from
+/// the letter and admitted by code, answered in process and graded by their
+/// kind's verifiers, the passed answers an SFT dataset, a candidate trained
+/// on it by the trainer's SFT job. No experience database takes part: the
+/// factory reads its corpus from the run's own products.
+#[test]
+fn scenario_a_a_document_becomes_a_trained_sft_candidate() {
+    // seed: a dataset and a training stage state their seeds; nothing here draws.
+    let recipe = ADVISED.to_owned()
+        + "  - id: sft
+    uses: dataset.project
+    inputs: { answers: [$stages.answered.answers] }
+    with: { target: student, seed: 13 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 8 }, seed: 1 }
+";
+    let recipe = recipe.replace(
+        "student: \"hosted:org/student\"",
+        "student: \"brain:org/student\"",
+    );
+    let repo = Repo::new();
+    repo.write("letters/letter.md", LETTER);
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": "I am nineteen and have finished my first year at college, but I find my mornings slip away in idleness; what would you advise me to do about my habits?",
+        "reference": ADVICE,
+        "evidence": [{ "section": 2, "quote": ADVICE }],
+    }]});
+    let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let classroom = Classroom {
+        teacher: Arc::new(Answering(Mutex::new(proposal.to_string()))),
+        student: Arc::new(Answering(Mutex::new(format!(
+            "As I wrote to you: \"{ADVICE}\""
+        )))),
+    };
+    let trainer = crate::fakes::FakeTrainer::default();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: Some(&classroom),
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert_eq!(*trainer.objectives.lock().unwrap(), ["sft"]);
+    assert!(dir.path().join("lora").is_dir());
+    assert!(
+        backend.executed().is_empty(),
+        "nothing ran outside the process"
+    );
+}

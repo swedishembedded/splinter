@@ -120,3 +120,64 @@ fn an_environment_a_base_model_always_solves_is_kept_out_of_training() {
     let why = outcome.unwrap_err();
     assert!(why.contains("base-band"), "{why}");
 }
+
+/// Scenario B: a document to executable RLVR tasks. The objective document
+/// is compiled into environments whose instances are Harbor tasks with
+/// their own verifiers, the base model attempts the training instances, and
+/// those it solves only sometimes are the collection an online trainer
+/// rolls out again.
+#[test]
+fn scenario_b_a_document_becomes_executable_rlvr_tasks() {
+    let repo = Repo::new();
+    repo.write(
+        "objectives/python.md",
+        "Predict the output of Python snippets\n",
+    );
+    // seed: the recipe states every seed; the fake backend's outcomes are scripted.
+    let built = "schema: splinter.recipe/v2
+name: rlvr
+models:
+  base: \"brain:Qwen/Qwen3-4B\"
+stages:
+  - id: built
+    uses: environment.build
+    with: { objective: objectives/python.md, environments: 1, instances: 2, seed: 7 }
+  - { id: train, uses: tasks.pin, inputs: { collection: $stages.built.environments }, with: { split: train } }
+";
+    let backend = FakeBackend::with(Outcome::Fail);
+    let first = tempfile::tempdir().unwrap();
+    run(&repo, built, &backend, first.path()).unwrap();
+    let tasks = tasks_of(&first.path().join("train")).unwrap();
+    assert_eq!(tasks.tasks.len(), 2);
+    // One instance solved sometimes, the other always.
+    backend.script(&tasks.tasks[0].id, &[Outcome::Pass, Outcome::Fail]);
+    backend.script(&tasks.tasks[1].id, &[Outcome::Pass, Outcome::Pass]);
+    let rlvr = built.to_owned()
+        + "  - id: base
+    uses: attempt.collect
+    inputs: { tasks: $stages.train.tasks }
+    with: { agent: sven, model: base, environment: environments/vim.yaml, attempts: 2, seed: 11 }
+  - id: rlvr
+    uses: dataset.rlvr
+    inputs: { tasks: $stages.train.tasks, attempts: [$stages.base.attempts] }
+  - { id: online, uses: tasks.pin, inputs: { collection: $stages.rlvr.tasks }, with: { split: train } }
+";
+    let second = tempfile::tempdir().unwrap();
+    splinter_factory::run::fork(first.path(), second.path()).unwrap();
+    run(&repo, &rlvr, &backend, second.path()).unwrap();
+    let online = tasks_of(&second.path().join("online")).unwrap();
+    assert_eq!(
+        online
+            .tasks
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+        [tasks.tasks[0].id.as_str()]
+    );
+    assert!(second
+        .path()
+        .join("online")
+        .join(&tasks.tasks[0].id)
+        .join("task.toml")
+        .is_file());
+}

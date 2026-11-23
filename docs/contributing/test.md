@@ -18,6 +18,17 @@ make test/e2e                      # lists the end-to-end targets
 - `make test/e2e/brain-sven` has brain serve Qwen3-0.6B and sven complete a tool-using task with it, judged on a
   number only a file holds. It runs on the CPU backend and exits 3, never 0, when a binary or the model is missing, so a
   skipped run is never read as a pass. Name the binaries with `BRAIN_BIN`, `SVEN_BIN` and the store with `MODELS_DIR`.
+- The learning factory's end-to-end scenarios run in `cargo test -p splinter-factory --test it`, against scripted
+  models, a fake execution backend and a scripted trainer, with no experience database:
+
+  | Scenario | Test |
+  |---|---|
+  | A: a document to a trained SFT candidate | `closed_book::scenario_a_a_document_becomes_a_trained_sft_candidate` |
+  | B: a document to executable RLVR tasks | `qualify::scenario_b_a_document_becomes_executable_rlvr_tasks` |
+  | C: a repository to agent trajectories, SFT and preference | `practice::scenario_c_a_repository_becomes_sft_and_preference_datasets` |
+  | D: the full training loop with the release gate | `promotion::a_candidate_is_promoted_only_when_it_improves_transfers_and_retains` |
+  | E: an interrupted, resumed and incrementally changed corpus | `foreach::a_crashed_fan_out_resumes_without_repeating_a_finished_item`, `foreach::one_changed_item_recomputes_only_itself` |
+
 - A whole learning-factory run (attempts through the Harbor worker, training and evaluation on a served model) is a
   [run workspace](../guides/workspace.md)'s: `run.sh RECIPE DEVICE` runs a recipe against its own brain server, and
   `scripts/run-metrics.py RUN_DIR` reads what its evaluation arms did.
