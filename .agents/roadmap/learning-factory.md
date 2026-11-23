@@ -64,16 +64,16 @@ recovery and protected eval.
 
 | # | Work | Acceptance | Status |
 |---|---|---|---|
-| M0 | Versioned contracts: recipe, `TaskCollection`, `ExecutionSpec`, `TrialResult`, `DatasetProduct`, `ModelCandidate`, `EvalResult` (JSON Schema, Rust type, canonical serialisation, golden fixtures) | fixtures validate and round-trip | open |
-| M1 | `ArtifactRepository` and `RunRepository` (SQLite WAL, one controller) with no experience-database import; the database becomes an `ExperienceIndex` | run completion and recovery with the database disabled | open |
-| M2 | Persistent product DAG; a stage's identity digests its schema, resolved parameters, upstream product digests, implementation digest and seed; crash-safe publication | unchanged inputs are skipped, changed inputs recompute only downstream | open |
-| M3 | Task loader for Harbor task directories and collections, environment/knowledge/skill staging from pinned artifacts | the installed binary runs task-repository material with no rebuild | open |
-| M4 | Harbor worker package, argv-only agent invocation, `connections.yaml` model routing | Sven and one other agent run one collection through the same trial contract; `harbor view` opens the trials | open |
-| M5 | One outcome classifier (classification separate from score), logical slot vs physical attempt, `unsolved_by` passes frozen at pass start | no valid graded result lost; a retry never repeats a completed slot | open |
-| M6 | Dataset from trial collections: `native-sft` first, `portable-sft` second, admission split from curation, `supervision.jsonl` lineage and the exclusion waterfall | a training dataset built with no experience import | open |
-| M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | open |
-| M8 | `splinter eval`: development and protected plans, the existing examination, verdict and signing logic behind its own authority | base and candidates evaluated under the same conditions | open |
-| M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | open |
+| M0 | Versioned contracts: recipe, `TaskCollection`, `ExecutionSpec`, `TrialResult`, `DatasetProduct`, `ModelCandidate`, `EvalResult` (JSON Schema, Rust type, canonical serialisation, golden fixtures) | fixtures validate and round-trip | done: `splinter-core::factory` contracts, generated schemas (`make schemas/generate`), golden fixtures |
+| M1 | `ArtifactRepository` and `RunRepository` (SQLite WAL, one controller) with no experience-database import; the database becomes an `ExperienceIndex` | run completion and recovery with the database disabled | done: `splinter-store::factory` (SQLite run state with fenced leases, release and take-over; CAS product store with import); no experience-database import |
+| M2 | Persistent product DAG; a stage's identity digests its schema, resolved parameters, upstream product digests, implementation digest and seed; crash-safe publication | unchanged inputs are skipped, changed inputs recompute only downstream | done: `splinter-factory` plan, stage identities, one commit path, fork, verify, status |
+| M3 | Task loader for Harbor task directories and collections, environment/knowledge/skill staging from pinned artifacts | the installed binary runs task-repository material with no rebuild | done: collections over Harbor task directories (`generate:` and `splinter generate`), environments, pinned task and file copies; the task repository holds the vim course |
+| M4 | Harbor worker package, argv-only agent invocation, `connections.yaml` model routing | Sven and one other agent run one collection through the same trial contract; `harbor view` opens the trials | done: `workers/harbor` (run, reconcile, play; sven, claude-code, oracle, nop; userns, proot, docker); live: oracle and Sven on a hosted model under proot. Not run here: userns, docker, a real Claude Code |
+| M5 | One outcome classifier (classification separate from score), logical slot vs physical attempt, `unsolved_by` passes frozen at pass start | no valid graded result lost; a retry never repeats a completed slot | done: the one classifier (the task repository's 30 golden records), slots and attempts, retries, lost attempts, frozen `unsolved_by`, crash reconcile |
+| M6 | Dataset from trial collections: `native-sft` first, `portable-sft` second, admission split from curation, `supervision.jsonl` lineage and the exclusion waterfall | a training dataset built with no experience import | native-sft done (a live Sven 5.9 trial is a fixture); portable-sft open |
+| M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | done: `Trainer` seam, `BrainTrainer` against a scripted brain service (resume key, served adapter, refused parameters). Not run here: a real brain |
+| M8 | `splinter eval`: development and protected plans, the existing examination, verdict and signing logic behind its own authority | base and candidates evaluated under the same conditions | development plans done (shared baseline, paired sign test, alpha split among candidates); protected plans: Splinter side done (authority command, Ed25519 check), the task repository's `evaluate` command open |
+| M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | partial: see Open |
 
 ## Decisions
 
@@ -107,3 +107,28 @@ recovery and protected eval.
 | Recipe loading, connections, planning, controller, stages | `splinter-factory` (application tier) |
 | Harbor worker | `workers/harbor/` (Python, Harbor's public job API, pinned Harbor) |
 | CLI | `splinter validate/plan/run/status/inspect/cancel/resume/verify/eval/fork/index/export/report/play` |
+
+## Open
+
+- **Retirement (M9).** The task repository's run, stage, adopt, task play and task
+  replay commands are retired. Its `gateway serve`, `export`, `unpack`,
+  `task practice` and `task session` stay: Splinter's practice, campaign and hinted
+  repair drivers (`crates/pipelines/src/bench/practice`, `bench/repair`,
+  `campaign/`) still run them as subprocesses, and those flows (multi-generation
+  campaigns, hinted repair, the request-based views beyond native-sft) have no
+  factory equivalent yet, so under the parity rule they are not deleted. Next:
+  re-express campaigns as forks of recipe runs and hinted repair as a pass mode,
+  then delete the drivers and the commands they need.
+- **`splinter index RUN`** (the experience database as an optional index over a
+  run's trials) is not implemented: the Harbor task import it reuses needs a
+  sandbox this container cannot start, so it could not be tested here.
+- **portable-sft** (normalised conversations under a declared tool protocol) is
+  refused by name until implemented.
+- **Protected evaluation authority**: the task repository needs an
+  `evaluate --plan ID --candidate FILE --out FILE` command signing a
+  `splinter.eval/1` result the way it signs verdicts.
+- **Sven trajectories** (5.9.2): a reply's reasoning and a request's token account
+  are filed as agent steps of their own after the reply's tool-call step; native-sft
+  reads both shapes, and the cause in sven's step assembly is not yet found.
+- **Live end-to-end with a real model and brain** (the decision of 2026-11-22): a
+  full `recipes/vim-mastery.yaml` run on a GPU host.
