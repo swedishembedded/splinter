@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+//! The factory's integration tests, linked as one binary.
+
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
+mod repo;
+mod resolve;

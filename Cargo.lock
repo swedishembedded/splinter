@@ -5125,6 +5125,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-factory"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "splinter-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
 name = "splinter-goal-selection"
 version = "0.2.0"
 dependencies = [
