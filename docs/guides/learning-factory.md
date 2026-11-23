@@ -494,14 +494,16 @@ compiles its collection evaluates on the same compiled tasks:
   each conversation from the trial's ATIF trajectory instead, for an agent whose
   model calls are not recorded (Claude Code).
 
-  `objective: preference` and `objective: policy-gradient` project the same
+  `objective: preference`, `objective: feedback` and `objective:
+  policy-gradient` project the same
   attempts by splinter-data's own views, the ones that read the experience
   database, over the trials as experiences (each trial's grade its executable
   verdict, its recorded model calls its conversation). A preference record is
   a verified pass over a verified fail of one task by one policy, from where
   their conversations part: the shared prompt is never trained on
   (`preference: { pairs_per_task: N }` bounds a task's pairs, drawn by the
-  seed). A policy-gradient record is an action of a graded attempt carrying
+  seed). A feedback record (KTO) is one verified attempt's continuation,
+  desirable when it passed. A policy-gradient record is an action of a graded attempt carrying
   the attempt's reward and its group; a group whose attempts all earned the
   same is left out. Hinted, continued and harnessed attempts are refused: they
   would teach what the target is never shown. `model.train` trains SFT

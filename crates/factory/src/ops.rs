@@ -222,7 +222,7 @@ pub struct ValidationSplit {
 }
 
 /// The objectives `dataset.project` projects attempts for.
-pub const OBJECTIVES: &[&str] = &["sft", "preference", "policy-gradient"];
+pub const OBJECTIVES: &[&str] = &["sft", "preference", "feedback", "policy-gradient"];
 
 /// How a preference dataset pairs attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -238,7 +238,7 @@ pub struct PreferenceOptions {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectParams {
-    /// The objective (`sft`, `preference`, `policy-gradient`).
+    /// The objective (`sft`, `preference`, `feedback`, `policy-gradient`).
     #[serde(default = "sft")]
     pub objective: String,
     /// The admission rule of an SFT dataset.

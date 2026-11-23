@@ -8,7 +8,8 @@
 // info@swedishembedded.com.
 
 //! Typed dataset projections: one set of attempts gives an SFT dataset (the
-//! verified successes), a preference dataset (a pass and a fail of one task,
+//! verified successes), a feedback dataset (each verified attempt, desirable
+//! when it passed), a preference dataset (a pass and a fail of one task,
 //! from where they part) and a policy-gradient dataset (every graded attempt
 //! with its reward and its group), each by splinter-data's own view, and the
 //! attempts are made once.
@@ -41,6 +42,10 @@ stages:
     uses: dataset.project
     inputs: { attempts: [$stages.local.attempts] }
     with: { objective: preference, target: student, seed: 13 }
+  - id: judged
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { objective: feedback, target: student, seed: 13 }
   - id: rewarded
     uses: dataset.project
     inputs: { attempts: [$stages.local.attempts] }
@@ -99,6 +104,16 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
         assert!(rejected.contains("I could not finish."), "{rejected}");
         assert!(!pair["prompt"].to_string().contains("could not finish"));
     }
+
+    // Each verified attempt, desirable when it passed.
+    let judged = lines(&dir.path().join("judged/train.jsonl"));
+    assert_eq!(objective("judged"), "feedback");
+    let mut desirable: Vec<bool> = judged
+        .iter()
+        .map(|r| r["desirable"].as_bool().unwrap())
+        .collect();
+    desirable.sort();
+    assert_eq!(desirable, [false, false, true, true], "{judged:#?}");
 
     // Every action of every graded attempt, with the attempt's reward and
     // its group: four attempts, two per task, half of them passed.

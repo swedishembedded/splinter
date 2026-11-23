@@ -16,6 +16,9 @@
 //!   prompt never trained on, each continuation to its last action a
 //!   candidate (`generic-preference-v1`). `preference.pairs_per_task`
 //!   bounds the pairs of one task, drawn by the stage's seed.
+//! * `feedback` ([`Feedback`]): each verified attempt's continuation of its
+//!   prompt, desirable when it passed and undesirable when it failed, for
+//!   KTO (`generic-feedback-v1`); no counterpart is needed.
 //! * `policy-gradient` ([`PolicyGradient`]): every action of every graded
 //!   attempt, each record carrying its attempt's reward and the group of
 //!   attempts at the same task it is compared with (`generic-messages-v2`
@@ -33,7 +36,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::json;
 use splinter_core::annotation::Strength;
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
-use splinter_data::{Objective, PolicyGradient, Preference, Record, RecordBody, View};
+use splinter_data::{Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, View};
 use splinter_store::factory::products::Staging;
 
 use super::super::corpus::corpus_of;
@@ -54,6 +57,7 @@ fn view_of(dataset: &Dataset) -> Result<(Box<dyn View>, Objective), String> {
             }
             Ok((Box::new(view), Objective::Preference))
         }
+        "feedback" => Ok((Box::new(Feedback::new(strength)), Objective::Feedback)),
         "policy-gradient" => Ok((
             Box::new(PolicyGradient::new(strength)),
             Objective::PolicyGradient,
@@ -77,6 +81,9 @@ fn without_reasoning(record: &mut Record) -> u64 {
             .chain(chosen.iter_mut())
             .chain(rejected.iter_mut())
             .collect(),
+        RecordBody::Feedback {
+            prompt, completion, ..
+        } => prompt.iter_mut().chain(completion.iter_mut()).collect(),
         _ => Vec::new(),
     };
     let mut removed = 0;
@@ -94,6 +101,9 @@ fn supervised(record: &Record) -> usize {
         RecordBody::Chat { messages, .. } => messages.iter().filter(|m| m.train).count(),
         RecordBody::Preference { chosen, .. } => {
             chosen.iter().filter(|m| m.role == "assistant").count()
+        }
+        RecordBody::Feedback { completion, .. } => {
+            completion.iter().filter(|m| m.role == "assistant").count()
         }
         _ => 0,
     }
