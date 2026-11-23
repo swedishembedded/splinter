@@ -41,6 +41,9 @@ from harbor.models.task.config import NetworkMode, TaskConfig as TaskToml
 from harbor.models.trial.config import AgentConfig, EnvironmentConfig, TaskConfig, TrialConfig
 
 from splinter_harbor_worker.agents.base import TOOLS_DIR
+from splinter_harbor_worker.agents.claude_code import ClaudeCodeAgent
+from splinter_harbor_worker.agents.codex import CodexAgent
+from splinter_harbor_worker.agents.sven import SvenAgent
 from splinter_harbor_worker.errors import UsageError
 from splinter_harbor_worker.fscopy import copy_tree
 from splinter_harbor_worker.guidance import HUMAN_GUIDED_KWARG
@@ -59,8 +62,9 @@ AGENT_CLASSES = {
     "claude-code": "splinter_harbor_worker.agents.claude_code:ClaudeCodeAgent",
     "codex": "splinter_harbor_worker.agents.codex:CodexAgent",
 }
-AGENT_BINARIES = {"sven": ("sven", SVEN_BIN_ENV), "claude-code": ("claude", CLAUDE_BIN_ENV),
-                  "codex": ("codex", CODEX_BIN_ENV)}
+# The executable each staged agent runs, as its adapter names it, and the variable that may point at it.
+AGENT_BINARIES = {"sven": (SvenAgent.BINARY, SVEN_BIN_ENV), "claude-code": (ClaudeCodeAgent.BINARY, CLAUDE_BIN_ENV),
+                  "codex": (CodexAgent.BINARY, CODEX_BIN_ENV)}
 _IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
 

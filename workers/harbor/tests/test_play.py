@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 from conftest import make_spec, make_task, write_specs
 
+from splinter_harbor_worker.agents.claude_code import ClaudeCodeAgent
 from splinter_harbor_worker.cli import main
 
 TASK = "train/001-play"
@@ -226,7 +227,7 @@ def test_an_agent_that_cannot_be_played_is_refused_with_exit_code_2(tmp_path, ag
 
 def test_a_claude_code_session_is_played_but_cannot_be_continued(tmp_path, monkeypatch, local_images, validator) -> None:
     make_task(tmp_path, TASK)
-    monkeypatch.setenv("SPLINTER_CLAUDE_BIN", str(install_agent(tmp_path, "claude", FAKE_CLAUDE)))
+    monkeypatch.setenv("SPLINTER_CLAUDE_BIN", str(install_agent(tmp_path, ClaudeCodeAgent.BINARY, FAKE_CLAUDE)))
     spec = make_spec(TASK, agent="claude-code")
     code, shown = play_on_terminal(play_argv(tmp_path, spec, tmp_path / "out"))
     assert code == 0, shown

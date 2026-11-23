@@ -8,7 +8,10 @@
 # procure our services by sending an email to info@swedishembedded.com.
 
 # Claude Code starts only through its runner (crates/agent/src/runner/claude_code.rs,
-# whose launch rules confine it and let only a local brain server answer it), and
+# whose launch rules confine it and let only a local brain server answer it) or the
+# execution worker's adapter (workers/harbor/.../agents/claude_code.py: it runs in the
+# trial's sandbox, and the one key it hands Claude Code is the trial's gateway token;
+# the gateway holds the upstream credential and the worker refuses a literal one), and
 # nothing hands it an account. A tracked file fails this gate when it
 #
 #   1. starts Claude Code another way: a claude command line, "claude" as a
@@ -27,6 +30,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 RUNNER=crates/agent/src/runner/claude_code.rs
+ADAPTER=workers/harbor/splinter_harbor_worker/agents/claude_code.py
 SELF=scripts/gates/check-claude-code.sh
 
 INVOCATION='(^|[[:space:];|&(`"'"'"'=])claude[[:space:]]+(-p\b|-c\b|--print|--bare|--dangerously|--permission-mode|--output-format|--model|--resume|--continue|--version|--settings|update\b|install\b|mcp\b|config\b)|"claude"[[:space:]]*[],)]|\b(npx|bunx)\b.*@anthropic-ai/claude-code|\b(npm|pnpm|yarn|bun)\b.*[[:space:]](-g|--global)\b.*@anthropic-ai/claude-code|\.local/bin/claude\b|(~|\$\{?HOME\}?|/[[:alpha:]]+/[^/[:space:]]+)/\.claude(\.json|/|\b)'
@@ -80,10 +84,10 @@ report() {
 }
 for f in "${files[@]}"; do
     [ -f "$f" ] || continue
-    case "$f" in "$RUNNER"|"$SELF") continue ;; esac
+    case "$f" in "$RUNNER"|"$ADAPTER"|"$SELF") continue ;; esac
     grep -Iq . "$f" 2>/dev/null || continue
     while IFS= read -r hit; do
-        report "$f:$hit: starts Claude Code outside $RUNNER"
+        report "$f:$hit: starts Claude Code outside $RUNNER and $ADAPTER"
     done < <(grep -nE "$INVOCATION" "$f" | cut -d: -f1)
     case "$f" in */tests/*|tests/*|*/tests) ;; *)
         while IFS= read -r hit; do

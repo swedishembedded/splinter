@@ -110,7 +110,7 @@
           }
         },
         "name": {
-          "description": "The agent adapter (`sven`, `claude-code`, `codex`, `oracle`, `nop`).",
+          "description": "The agent adapter, by the name the execution worker knows it by.",
           "type": "string"
         },
         "system_prompt": {
