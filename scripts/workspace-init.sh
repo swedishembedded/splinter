@@ -34,6 +34,7 @@ usage: workspace-init.sh --dir DIR [options]
   --splinter-rev REV
   --bench-rev REV
   --records REPO       Hugging Face dataset of SFT records (default: swedishembedded/vim-headless-mastery-sft)
+  --records-rev REV    its tag, branch or commit (default: main, resolved to the commit it names and recorded)
   --build-env FILE     shell file sourced before any build (toolchain, CUDA paths)
   --jobs N             cargo build jobs (default: 32)
 EOF
@@ -41,7 +42,7 @@ EOF
 }
 
 dir="" cache="${WORKSPACE_CACHE:-$HOME/.cache/splinter-workspace}" models="" code="$HOME/code" jobs=32
-records="swedishembedded/vim-headless-mastery-sft" build_env=""
+records="swedishembedded/vim-headless-mastery-sft" records_rev="main" build_env=""
 declare -A rev=()
 [ -d "$HOME/project/shared/models" ] && models="$HOME/project/shared/models"
 while [ $# -gt 0 ]; do
@@ -55,6 +56,7 @@ while [ $# -gt 0 ]; do
     --splinter-rev) rev[splinter]=$2; shift 2 ;;
     --bench-rev) rev[bench]=$2; shift 2 ;;
     --records) records=$2; shift 2 ;;
+    --records-rev) records_rev=$2; shift 2 ;;
     --build-env) build_env=$2; shift 2 ;;
     --jobs) jobs=$2; shift 2 ;;
     *) usage ;;
@@ -140,11 +142,21 @@ if [ ! -d "$tasks" ]; then
   git -C "$code/bench" archive "$bench_full" | tar -x -C "$tasks.tmp"
   mv "$tasks.tmp" "$tasks"
 fi
-recs="$cache/records/$(printf '%s' "$records" | tr / _)"
+# The records at one commit: a moving name is resolved first, so the cache and workspace.json name what was used.
+records_commit=$(hf datasets info "$records" --revision "$records_rev" 2>/dev/null \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])') || die "cannot resolve $records@$records_rev"
+recs="$cache/records/$(printf '%s' "$records" | tr / _)@${records_commit:0:12}"
 if [ ! -f "$recs/data/train.jsonl" ]; then
-  say "downloading $records"
-  hf download "$records" --repo-type dataset --local-dir "$recs.tmp" >/dev/null || die "download of $records failed"
+  say "downloading $records@${records_commit:0:12}"
+  hf download "$records" --repo-type dataset --revision "$records_commit" --local-dir "$recs.tmp" >/dev/null \
+    || die "download of $records failed"
   rm -rf "$recs"; mv "$recs.tmp" "$recs"
+fi
+# A dataset that ships its own gate (tools/check_dataset.py with the served system prompt) must pass it.
+if [ -f "$recs/tools/check_dataset.py" ]; then
+  say "checking the records"
+  python3 -I "$recs/tools/check_dataset.py" "$recs/data" --system-prompt "$recs/tools/system-prompt.txt" >"$dir/tmp/check-records.log" 2>&1 \
+    || { tail -n 20 "$dir/tmp/check-records.log" >&2; die "the records violate their own invariants"; }
 fi
 mkdir -p "$tasks/data/vim-sft"
 cp "$recs/data/train.jsonl" "$tasks/data/vim-sft/train.jsonl"
@@ -223,6 +235,6 @@ $dir/bin/splinter run "\$recipe" --out $dir/runs/\$name --state $dir/state/\$nam
 EOF
 chmod 700 "$dir/run.sh"
 
-printf '{"brain":"%s","sven":"%s","splinter":"%s","bench":"%s","records":"%s"}\n' \
-  "$brain_full" "$sven_full" "$splinter_full" "$bench_full" "$records" >"$dir/workspace.json"
+printf '{"brain":"%s","sven":"%s","splinter":"%s","bench":"%s","records":"%s","records_commit":"%s"}\n' \
+  "$brain_full" "$sven_full" "$splinter_full" "$bench_full" "$records" "$records_commit" >"$dir/workspace.json"
 say "ready: $dir  (run: $dir/run.sh recipes/<recipe>.yaml gpuN)"
