@@ -54,6 +54,7 @@ It names no other project: describe an orchestrator or host generically.
 | `crates/orchestrator` | configuration (the only reader of the environment), model roles, the stage engine and the release store |
 | `crates/agent`, `crates/model` | the adapters: the only code that runs sven, and the only code that reaches brain (through its API) |
 | `crates/core`, `crates/store`, `crates/expdb` | the vocabulary, durable state, and the experience database under it |
+| `crates/factory`, `workers/harbor`, `schemas/factory` | the learning factory: recipes into a graph of reusable stages under one durable controller; the execution worker it schedules attempts on (Harbor's job API); its contracts' JSON Schemas |
 | `samples/` | one controlled learning sample per directory, a standalone program on the SDK whose README states what it measures |
 | `tasks/` | the frozen repository task families shared by samples (`tasks/README.md`, `tasks/catalog.toml`) |
 | `examples/first-run` | the inputs of the first-run walk-through |

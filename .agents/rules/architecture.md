@@ -16,9 +16,17 @@ is the gate's own specification. What each crate owns is stated in its
 |---|---|---|
 | **sven** | Running agents: tools, sessions, delegation, permissions, the authoritative trajectory of what an agent did | What to learn, training, release decisions |
 | **brain** | Model computation: inference, training algorithms, evaluation arithmetic, checkpoints, adapters, serving | Which experiences qualify, campaign scheduling, release authority |
-| **Splinter** | The learning campaign: intent, task acquisition, evidence admission, dataset curation, run scheduling, lineage, release decisions | Re-implementations of anything sven or brain provide |
+| **Splinter** | The learning campaign: intent, task acquisition, evidence admission, dataset curation, run scheduling (the learning factory schedules agent attempts on an execution worker and grades them with its one classifier), lineage, release decisions | Re-implementations of anything sven or brain provide; an agent's own behaviour (each agent, Sven included, runs itself in the worker's sandbox) |
 
 Neither sven nor brain depends on Splinter.
+
+**The learning factory** (`splinter-factory`) is the one production control
+plane for recipes: it plans a recipe into stages, schedules attempts on an
+execution worker (`workers/harbor`, Harbor's public job API behind the
+`ExecutionBackend` seam), grades every attempt with the one classifier in
+`splinter-core::factory::trial`, and trains and serves candidates through the
+`Trainer` seam (`BrainTrainer`: brain's job API). The worker never grades; the
+experience database is an optional index, never the factory's run state.
 
 **sven** is consumed through its public SDK, `sven-sdk`, by `splinter-agent`
 (which runs agents and typed calls) and `splinter-model` (which hands sven
