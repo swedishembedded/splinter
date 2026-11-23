@@ -112,9 +112,12 @@ impl EvalPlan {
             (Some(_), Some(_)) => {
                 problems.push("a plan names tasks or an authority, not both".into())
             }
-            (None, None) => problems
-                .push("a plan names a collection (development) or an authority (protected)".into()),
-            (Some(_), None) if plan.environment.is_none() => {
+            // A development plan without a collection is given its tasks by
+            // the evaluation stage (`tasks`).
+            (None, None) if plan.environment.is_none() => problems.push(
+                "a plan names an environment (development) or an authority (protected)".into(),
+            ),
+            (_, None) if plan.environment.is_none() => {
                 problems.push("a development plan names the environment its arms run in".into());
             }
             _ => {}

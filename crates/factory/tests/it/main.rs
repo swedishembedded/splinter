@@ -9,6 +9,7 @@ mod agent_op;
 mod brain_trainer;
 mod dataset_extend;
 mod dataset_import;
+mod eval_given;
 mod external;
 mod factory_run;
 mod fakes;

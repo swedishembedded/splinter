@@ -486,7 +486,13 @@ pub fn registry() -> Registry {
         .with(Builtin::<EvaluationParams> {
             name: names::EVALUATION,
             summary: "evaluate a candidate against a baseline under an evaluation plan",
-            inputs: vec![port("candidate", ArtifactKind::Model)],
+            inputs: vec![
+                port("candidate", ArtifactKind::Model),
+                Port {
+                    optional: true,
+                    ..port("tasks", ArtifactKind::Tasks)
+                },
+            ],
             output: port("evaluation", ArtifactKind::Evaluation),
             reproducibility: Reproducibility::Nondeterministic,
             isolation: Isolation::Any,

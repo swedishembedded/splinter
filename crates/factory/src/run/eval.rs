@@ -74,6 +74,9 @@ pub(crate) struct Evaluation {
     comparisons: Option<u32>,
     /// The `model.train` stage whose candidate it evaluates.
     pub(crate) candidate: String,
+    /// The `tasks.pin` stage its tasks are from, when the plan names no
+    /// collection of its own.
+    tasks_from: Option<String>,
 }
 
 fn section<'r>(
@@ -111,6 +114,7 @@ fn section<'r>(
             baseline,
             comparisons: params.comparisons,
             candidate,
+            tasks_from: stage.source("tasks").map(str::to_owned),
         },
         plan,
     ))
@@ -167,13 +171,27 @@ fn tasks<'r>(
     section: &Evaluation,
     plan: &EvalPlan,
 ) -> Result<Vec<&'r TaskRef>, RunError> {
-    let loaded = factory
-        .resolved
-        .eval_plans
-        .get(&section.plan)
-        .and_then(|(_, loaded)| loaded.as_ref())
-        .ok_or_else(|| stage_error("eval", "a development plan names a collection"))?;
-    Ok(loaded.split(plan.split.as_deref()))
+    Ok(collection(factory, section)?.split(plan.split.as_deref()))
+}
+
+/// The collection a development evaluation draws its tasks from: the
+/// pinned tasks it is given, else its plan's own collection.
+fn collection<'r>(
+    factory: &'r Factory<'_>,
+    section: &Evaluation,
+) -> Result<&'r crate::collection::LoadedCollection, RunError> {
+    match &section.tasks_from {
+        Some(pin) => factory
+            .collections
+            .get(pin)
+            .ok_or_else(|| stage_error(pin, "pins no tasks")),
+        None => factory
+            .resolved
+            .eval_plans
+            .get(&section.plan)
+            .and_then(|(_, loaded)| loaded.as_ref())
+            .ok_or_else(|| stage_error("eval", "a development plan names a collection")),
+    }
 }
 
 /// The settings every arm of the evaluation runs under.
@@ -238,12 +256,7 @@ fn pinned_tasks(
     section: &Evaluation,
     plan: &EvalPlan,
 ) -> Result<std::path::PathBuf, RunError> {
-    let loaded = factory
-        .resolved
-        .eval_plans
-        .get(&section.plan)
-        .and_then(|(_, loaded)| loaded.as_ref())
-        .ok_or_else(|| stage_error("eval", "a development plan names a collection"))?;
+    let loaded = collection(factory, section)?;
     let selected = tasks(factory, section, plan)?;
     let identity = super::identity_of(
         EVAL_TASKS,

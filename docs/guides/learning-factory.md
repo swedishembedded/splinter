@@ -104,7 +104,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `dataset.project` | `attempts` (one or more) | `dataset` |
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `model.train` | `dataset` | `model` |
-| `evaluation` | `candidate` (a model) | `evaluation` |
+| `evaluation` | `candidate` (a model), `tasks` (optional) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
 | `agent` | `input` (files, one or more) | `output` |
 | `harness` | `input` (files, any number) | `output` |
@@ -318,6 +318,20 @@ holding a `task.toml`, of the pin's split) are read when the pin runs:
   - { id: compile, uses: course.compile, inputs: { course: $inputs.course } }
   - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.compile.tasks },
       with: { split: train } }
+```
+
+An evaluation draws its tasks from its plan's collection, or, when the plan
+names none, from a pin the stage is given: a development plan then states its
+`split` and environment, and the stage binds `tasks` to the pin, so a run that
+compiles its collection evaluates on the same compiled tasks:
+
+```yaml
+  - { id: held, uses: tasks.pin, inputs: { collection: $stages.compile.tasks },
+      with: { split: eval } }
+  - id: eval-r16
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model, tasks: $stages.held.tasks }
+    with: { plan: eval/vim-dev.yaml, agent: sven, baseline: student }
 ```
 
 ## What each stage guarantees

@@ -322,45 +322,6 @@ pub fn resolve_with(
     })
 }
 
-/// Why an attempt stage cannot continue failed attempts: only sven
-/// continues a conversation, unhinted (the instruction is the conversation's
-/// first turn) and unplayed, as its own agent and not a harness.
-fn fork_refusals(params: &AttemptParams) -> Vec<&'static str> {
-    let mut out = Vec::new();
-    if params.agent != "sven" {
-        out.push("continues failed attempts, which only the sven agent does");
-    }
-    if params.hint.is_some() {
-        out.push("continues failed attempts, whose instruction is already given: it takes no hint");
-    }
-    if params.harness.is_some() {
-        out.push("continues failed attempts as the agent's own conversation, never a harness's");
-    }
-    if params.interactive {
-        out.push("continues failed attempts, which is never interactive");
-    }
-    out
-}
-
-/// Why an attempt stage cannot run its harness: only sven runs one, told
-/// its model; a harness is never played and carries its own instructions.
-fn harness_refusals(params: &AttemptParams) -> Vec<&'static str> {
-    let mut out = Vec::new();
-    if params.agent != "sven" {
-        out.push("runs a harness, which only the sven agent runs");
-    }
-    if params.model.is_none() {
-        out.push("runs a harness, which is told its model: name a model role");
-    }
-    if params.interactive {
-        out.push("runs a harness, which is never interactive");
-    }
-    if params.system_prompt.is_some() {
-        out.push("runs a harness, which carries its own instructions: it takes no system_prompt");
-    }
-    out
-}
-
 /// The recipe inputs a computed stage reads (bound to a port or fanned out
 /// over), each pinned in the lock by the digest of what the run copies.
 fn pin_inputs(stage: &PlannedStage, compiled: &CompiledPlan, reader: &mut Reader<'_>) {
@@ -507,12 +468,12 @@ fn check(
                 _ => {}
             }
             if forks.is_some() {
-                for refusal in fork_refusals(&params) {
+                for refusal in crate::stage_checks::fork_refusals(&params) {
                     problem(reader, refusal);
                 }
             }
             if let Some(harness) = &params.harness {
-                for refusal in harness_refusals(&params) {
+                for refusal in crate::stage_checks::harness_refusals(&params) {
                     problem(reader, refusal);
                 }
                 if let Some(text) = reader.read(harness) {
@@ -648,12 +609,29 @@ fn check(
             for file in params.files.iter().chain(params.system_prompt.iter()) {
                 reader.read(file);
             }
-            if found.eval_plans.contains_key(&params.plan) {
+            if let Some((plan, _)) = found.eval_plans.get(&params.plan) {
+                let why = crate::stage_checks::task_source_problem(
+                    plan,
+                    &params.plan,
+                    stage.source("tasks").is_some(),
+                );
+                if let Some(why) = why {
+                    problem(reader, &why);
+                }
                 return;
             }
             let Some(text) = reader.read(&params.plan) else {
                 return;
             };
+            if let Ok(plan) = EvalPlan::parse(&text) {
+                if let Some(why) = crate::stage_checks::task_source_problem(
+                    &plan,
+                    &params.plan,
+                    stage.source("tasks").is_some(),
+                ) {
+                    problem(reader, &why);
+                }
+            }
             match EvalPlan::parse(&text) {
                 Ok(plan) => {
                     if let Some(env) = &plan.environment {
