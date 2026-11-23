@@ -1302,8 +1302,8 @@
     "verifier_result": null,
     "exception_info": {
      "exception_type": "RuntimeError",
-     "exception_message": "the sandbox has no runnable sven; is the Sven build mounted at /opt/sven?",
-     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \"agents/sven.py\", line 101, in install\nRuntimeError: the sandbox has no runnable sven; is the Sven build mounted at /opt/sven?\n",
+     "exception_message": "the sandbox has no runnable sven; is the Sven build mounted at <sven-build>?",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \"agents/sven.py\", line 101, in install\nRuntimeError: the sandbox has no runnable sven; is the Sven build mounted at <sven-build>?\n",
      "occurred_at": "2026-11-17T14:34:25.000000Z"
     }
    },
