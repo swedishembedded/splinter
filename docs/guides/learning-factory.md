@@ -144,6 +144,30 @@ wrong kind, a credential written as a literal.
   instruction carries the task's reference solution (`solution/solve.sh`), in
   the task's own sandbox and graded by its own verifier (below).
 
+## Harness stages
+
+An attempt stage may run a sven harness in place of the agent's own
+conversation: `harness:` names a harness file of the task repository, and each
+attempt runs it (`sven harness run`) on the task's workspace, given the task's
+instruction as its `task` input. The task's own verifier decides, as for any
+attempt, so a harness and the plain agent are measured on the same tasks:
+
+```yaml
+  - id: planned
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, harness: harnesses/plan-then-edit.yaml,
+            environment: environments/vim/environment.yaml, attempts: 4, seed: 6 }
+```
+
+The harness is pinned like any file the agent is handed: a changed harness is
+a changed stage, and a fork reuses everything else. `splinter validate`
+refuses a harness that does not compile or declares no `task` input, one run by
+an agent other than sven, without a model role, interactively or beside a
+`system_prompt` (a harness carries its own instructions). A harness run records
+its trajectory but not its model requests, so a dataset over a harness stage
+uses `projection: portable-sft`.
+
 ## Structured extraction: `agent` and `foreach`
 
 An `agent` stage asks a model for one value of a JSON Schema: the model is

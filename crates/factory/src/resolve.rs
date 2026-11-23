@@ -317,6 +317,25 @@ pub fn resolve_with(
     })
 }
 
+/// Why an attempt stage cannot run its harness: only sven runs one, told
+/// its model; a harness is never played and carries its own instructions.
+fn harness_refusals(params: &AttemptParams) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if params.agent != "sven" {
+        out.push("runs a harness, which only the sven agent runs");
+    }
+    if params.model.is_none() {
+        out.push("runs a harness, which is told its model: name a model role");
+    }
+    if params.interactive {
+        out.push("runs a harness, which is never interactive");
+    }
+    if params.system_prompt.is_some() {
+        out.push("runs a harness, which carries its own instructions: it takes no system_prompt");
+    }
+    out
+}
+
 /// The recipe inputs a computed stage reads (bound to a port or fanned out
 /// over), each pinned in the lock by the digest of what the run copies.
 fn pin_inputs(stage: &PlannedStage, compiled: &CompiledPlan, reader: &mut Reader<'_>) {
@@ -449,6 +468,16 @@ fn check(
                     "a hinted pass is never interactive; a person guiding the agent is the hint",
                 );
             }
+            if let Some(harness) = &params.harness {
+                for refusal in harness_refusals(&params) {
+                    problem(reader, refusal);
+                }
+                if let Some(text) = reader.read(harness) {
+                    if let Err(why) = splinter_agent::attempt_harness::check(&text) {
+                        problem(reader, &format!("{harness}: {why}"));
+                    }
+                }
+            }
             if !params.tasks.is_empty() && !stage.sources("unsolved_by").is_empty() {
                 problem(reader, "gives both task ids and unsolved_by");
             }
@@ -505,6 +534,22 @@ fn check(
             }
             if params.validation.as_ref().is_some_and(|v| v.percent >= 100) {
                 problem(reader, "holds out every record for validation");
+            }
+            if params.projection == "native-sft" {
+                for source in stage.sources("attempts") {
+                    let harnessed = compiled
+                        .stages
+                        .iter()
+                        .find(|s| s.id == source && s.operation == names::ATTEMPTS)
+                        .and_then(|s| ops::params::<AttemptParams>(&s.params).ok())
+                        .is_some_and(|p| p.harness.is_some());
+                    if harnessed {
+                        problem(
+                            reader,
+                            &format!("{source} runs a harness, which records no model requests to project natively; use projection: portable-sft"),
+                        );
+                    }
+                }
             }
             if compiled
                 .models

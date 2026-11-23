@@ -113,6 +113,10 @@ pub struct AttemptParams {
     /// A hinted pass ([`crate::hint`]).
     #[serde(default)]
     pub hint: Option<Hint>,
+    /// A sven harness every attempt runs in place of the agent's own
+    /// conversation, given the task's instruction as its `task` input.
+    #[serde(default)]
+    pub harness: Option<String>,
 }
 
 /// `attempt.import`: the trials of Harbor jobs run elsewhere, as attempts

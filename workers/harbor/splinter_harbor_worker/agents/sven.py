@@ -15,9 +15,11 @@ token as its API key file, and the spec's own arguments. Its trace (ATIF ``traje
 
 from __future__ import annotations
 
+import json
+
 import yaml
 
-from splinter_harbor_worker.agents.base import TOKEN_FILE, SplinterAgent, sandbox_args
+from splinter_harbor_worker.agents.base import FILES_DIR, TOKEN_FILE, SplinterAgent, sandbox_args
 
 TRACE = "/logs/agent/trajectory.json"
 # Every model request as sent, so a fault can be replayed (`sven replay`).
@@ -52,12 +54,30 @@ class SvenAgent(SplinterAgent):
 
     def argv(self, instruction: str, run_timeout_sec: int) -> list[str]:
         settings = self._settings
+        if settings.get("harness"):
+            return self.harness_argv(instruction, run_timeout_sec)
         parts = [*self._command.split(), "--headless", "--output-format", "compact",
                  "--run-timeout", str(run_timeout_sec), "--output-trace", TRACE, "--record-requests", REQUEST_LOG]
         if settings.get("system_prompt"):
             parts += ["--append-system-prompt", settings["system_prompt"]]
         parts += sandbox_args(settings.get("args", []), settings.get("files", []))
         parts.append(instruction)
+        return parts
+
+    def harness_argv(self, instruction: str, run_timeout_sec: int) -> list[str]:
+        """``sven harness run``: the spec's harness in place of the conversation, given the instruction as its ``task``
+        input, on the trial's workspace, its model reached through the gateway with the trial's token file (the
+        harness reads no sven configuration), suspended by its own timeout before the task's. Its ATIF trajectory
+        lands where the conversation's would; it records no model requests of its own."""
+        settings = self._settings
+        parts = [*self._command.split(), "harness", "run", f"{FILES_DIR}/{settings['harness']}",
+                 "--input", json.dumps({"task": instruction}), "--workspace", ".", "--approvals", "auto",
+                 "--timeout", str(run_timeout_sec), "--trajectory", TRACE]
+        if settings.get("gateway_url"):
+            parts += ["--model", f"{settings['protocol']}/{settings['model']}",
+                      "--model-endpoint", f"{settings['gateway_url'].rstrip('/')}/v1", "--api-key-file", TOKEN_FILE]
+        parts += sandbox_args(settings.get("args", []), settings.get("files", []))
+        parts.append("--json")
         return parts
 
     def interactive_argv(self, instruction: str | None, run_timeout_sec: int, continuing: bool) -> list[str]:

@@ -109,6 +109,17 @@
             "$ref": "#/$defs/FileRef"
           }
         },
+        "harness": {
+          "description": "A sven harness the agent runs in place of its own conversation,\ngiven the task's instruction as its `task` input (sven only).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "name": {
           "description": "The agent adapter, by the name the execution worker knows it by.",
           "type": "string"

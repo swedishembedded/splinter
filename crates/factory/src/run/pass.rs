@@ -66,6 +66,8 @@ pub struct RolloutPass {
     pub interactive: bool,
     /// A hinted pass.
     pub hint: Option<Hint>,
+    /// The harness every attempt runs, when not the agent's conversation.
+    pub harness: Option<String>,
 }
 
 /// The pass an `attempt.collect` stage runs.
@@ -106,6 +108,7 @@ pub(crate) fn pass(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Rollou
         seed: params.seed,
         interactive: params.interactive,
         hint: params.hint,
+        harness: params.harness,
     })
 }
 

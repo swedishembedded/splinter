@@ -156,7 +156,7 @@ def make_task(root: Path, task_id: str, *, agent_timeout: int = 60) -> Path:
 
 def make_spec(task_id: str, *, agent: str = "oracle", slot: int = 0, attempt: int = 0, pass_: str = "local",
               provider: str = "proot", network: str = "open", args: list[str] | None = None, env: dict | None = None, files: list[dict] | None = None,
-              system_prompt: dict | None = None, **fields) -> dict:
+              system_prompt: dict | None = None, agent_harness: dict | None = None, **fields) -> dict:
     """An ExecutionSpec of the contract's shape (an optional ``model``, ``agent`` args and so on come as ``fields``)."""
     spec = {
         "schema": "splinter.execution/1",
@@ -166,7 +166,8 @@ def make_spec(task_id: str, *, agent: str = "oracle", slot: int = 0, attempt: in
         "task_dir": f"tasks/{task_id}",
         "agent": {"name": agent, **({"args": args} if args else {}), **({"env": env} if env else {}),
                   **({"files": files} if files else {}),
-                  **({"system_prompt": system_prompt} if system_prompt else {})},
+                  **({"system_prompt": system_prompt} if system_prompt else {}),
+                  **({"harness": agent_harness} if agent_harness else {})},
         "sandbox": {"provider": provider, "network": network},
         "seed": 7,  # seed: the specification carries one; the worker only forwards it
         "timeout_policy": "graded",

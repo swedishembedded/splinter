@@ -99,6 +99,10 @@ pub struct AgentInvocation {
     /// A system prompt file appended to the agent's own, when given.
     #[serde(default)]
     pub system_prompt: Option<FileRef>,
+    /// A sven harness the agent runs in place of its own conversation,
+    /// given the task's instruction as its `task` input (sven only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<FileRef>,
 }
 
 /// The wire protocol of a model connection.

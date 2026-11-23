@@ -117,6 +117,7 @@ class AgentInvocation(_Strict):
     files: list[FileRef] = []
     env: dict[str, EnvValue] = {}
     system_prompt: FileRef | None = None
+    harness: FileRef | None = None  # a sven harness run in place of the agent's conversation
 
 
 # The agent's own headers the gateway passes on to an Anthropic upstream; a connection may drop any of them.
@@ -227,6 +228,10 @@ class ExecutionSpec(_Strict):
                 return f"model connection {self.model.connection!r} has no url; the gateway needs an endpoint"
             if check_environment and self.model.token_env is not None and not environ.get(self.model.token_env):
                 return f"model token variable {self.model.token_env} is not set in the worker's environment"
+        if self.agent.harness is not None and self.agent.name != "sven":
+            return f"agent {self.agent.name} cannot run harness {self.agent.harness.path}: only sven runs a harness"
+        if self.agent.harness is not None and self.model is None:
+            return "a harness is told its model, and the specification names none"
         if self.agent.name in ("oracle", "nop") and (self.agent.args or self.agent.files):
             return f"agent {self.agent.name} takes no arguments or files"
         return None

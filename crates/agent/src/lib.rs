@@ -67,6 +67,7 @@
 
 #![warn(missing_docs)]
 
+pub mod attempt_harness;
 pub mod blocking;
 mod budget;
 pub mod chat;

@@ -13,6 +13,7 @@ mod foreach;
 mod generations;
 mod golden;
 mod graph;
+mod harness_pass;
 mod hinted;
 mod import;
 mod native;

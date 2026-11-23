@@ -157,6 +157,43 @@ def test_arguments_files_prompt_and_environment_reach_the_agent_as_the_spec_says
     assert all("value-from-the-worker-environment" not in p.read_text() for p in written)
 
 
+# A stand-in for the sven executable run as a harness: says its version, writes what it was started with and the
+# harness file it was handed, and solves the task, as a harness run that completed would.
+FAKE_SVEN = r"""#!/bin/bash
+if [ "$1" = "--version" ]; then echo "sven 0.0.0"; exit 0; fi
+printf '%s\n' "$@" > /logs/agent/argv.txt
+cat "$3" > /logs/agent/harness.txt
+echo expected > /app/answer.txt
+"""
+
+
+def test_a_harness_runs_in_place_of_the_agents_conversation_given_the_task(tmp_path, monkeypatch, local_images,
+                                                                            stub_model):
+    binary = tmp_path / "bin" / "sven"
+    binary.parent.mkdir()
+    binary.write_text(FAKE_SVEN)
+    binary.chmod(0o755)
+    harness = "api_version: '2'\nname: attempt\n"
+    ref = {"path": "harnesses/a.yaml", "digest": "sha256:" + hashlib.sha256(harness.encode()).hexdigest()}
+    spec = make_spec(TASK, agent="sven", model=model(stub_model, protocol="openai"), agent_harness=ref)
+    code, out = run_one(tmp_path, spec, monkeypatch, local_images,
+                        env={"SPLINTER_SVEN_BIN": str(binary), "STUB_TOKEN": SECRET},
+                        files={"harnesses/a.yaml": harness})
+    assert code == 0
+    trial = out / load_report(out)["native_dir"]
+    argv = (trial / "agent" / "argv.txt").read_text().splitlines()
+    assert argv[:3] == ["harness", "run", "/splinter/files/harnesses/a.yaml"]
+    assert (trial / "agent" / "harness.txt").read_text() == harness
+    options = dict(zip(argv[3::2], argv[4::2]))
+    assert json.loads(options["--input"]) == {"task": (tmp_path / "tasks" / TASK / "instruction.md").read_text()}
+    assert options["--model"] == "openai/stub-model"
+    assert options["--model-endpoint"].endswith("/v1")
+    assert options["--approvals"] == "auto"
+    assert options["--trajectory"] == "/logs/agent/trajectory.json"
+    assert options["--api-key-file"] == "/tmp/splinter-agent-home/gateway-token"
+    assert SECRET not in "\n".join(argv)
+
+
 # A stand-in for the codex executable: reads the provider its configuration names (CODEX_HOME/config.toml) and posts
 # one Responses request to it with the key the provider's env_key names, then exits 0.
 FAKE_CODEX = r"""#!/bin/bash

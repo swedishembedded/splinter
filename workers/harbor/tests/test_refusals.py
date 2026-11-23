@@ -135,3 +135,13 @@ def test_a_header_the_gateway_does_not_forward_cannot_be_dropped(tmp_path, capsy
              "drop_headers": ["authorization"]}
     message = refuse(tmp_path, make_spec(TASK, agent="claude-code", model=model), capsys, monkeypatch)
     assert "authorization" in message and "anthropic-beta" in message
+
+
+HARNESS = {"path": "harnesses/a.yaml", "digest": "sha256:" + "0" * 64}
+
+
+def test_a_harness_is_run_by_sven_alone_and_told_its_model(tmp_path, capsys, monkeypatch) -> None:
+    spec = make_spec(TASK, agent="claude-code", model=MODEL, agent_harness=HARNESS)
+    assert "only sven runs a harness" in refuse(tmp_path, spec, capsys, monkeypatch)
+    spec = make_spec(TASK, agent="sven", agent_harness=HARNESS)
+    assert "a harness is told its model" in refuse(tmp_path / "b", spec, capsys, monkeypatch)

@@ -228,6 +228,12 @@ impl Arm<'_> {
             .as_deref()
             .map(|f| file_ref(repository, f))
             .transpose()?;
+        let harness = self
+            .pass
+            .harness
+            .as_deref()
+            .map(|f| file_ref(repository, f))
+            .transpose()?;
         let env = self
             .pass
             .environment_variables
@@ -247,6 +253,7 @@ impl Arm<'_> {
             files,
             env,
             system_prompt,
+            harness,
         })
     }
 
@@ -679,6 +686,7 @@ pub(crate) fn pin_files(factory: &Factory<'_>, run: &Running<'_, '_>) -> Result<
         .files
         .iter()
         .chain(run.agent.system_prompt.iter())
+        .chain(run.agent.harness.iter())
         .map(|f| (f.path.clone(), f.digest.clone()));
     for (relative, digest) in wanted {
         let to = files.join(&relative);

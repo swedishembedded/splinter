@@ -171,6 +171,7 @@ fn arm_pass(section: &Evaluation, plan: &EvalPlan, name: &str) -> Result<Rollout
         seed: plan.seed,
         interactive: false,
         hint: None,
+        harness: None,
     })
 }
 
