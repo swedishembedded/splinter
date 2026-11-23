@@ -47,6 +47,7 @@ from splinter_harbor_worker.agents.sven import SvenAgent
 from splinter_harbor_worker.errors import UsageError
 from splinter_harbor_worker.fscopy import copy_tree
 from splinter_harbor_worker.guidance import HUMAN_GUIDED_KWARG
+from splinter_harbor_worker.sandbox.choice import STRENGTH, choose
 from splinter_harbor_worker.spec import ExecutionSpec
 
 JOB_NAME = "job"
@@ -57,6 +58,7 @@ GATEWAY_HOST_ENV = "SPLINTER_GATEWAY_HOST"
 DEFAULT_GATEWAY_HOST = "127.0.0.1"
 USERNS_ENVIRONMENT = "splinter_harbor_worker.sandbox.userns:UserNamespaceEnvironment"
 PROOT_ENVIRONMENT = "splinter_harbor_worker.sandbox.proot:ProotEnvironment"
+CONFINED_ENVIRONMENT = "splinter_harbor_worker.sandbox.confined:ConfinedEnvironment"
 AGENT_CLASSES = {
     "sven": "splinter_harbor_worker.agents.sven:SvenAgent",
     "claude-code": "splinter_harbor_worker.agents.claude_code:ClaudeCodeAgent",
@@ -107,20 +109,14 @@ def gateway_host() -> str:
 def network_refusal(spec: ExecutionSpec, host: str) -> str | None:
     """Why this provider cannot enforce the network the specification asks for, or ``None``."""
     provider, network, routed = spec.sandbox.provider, spec.sandbox.network, spec.model is not None
-    if provider == "proot" and network != "open":
-        return (f"network {network!r} cannot be enforced by the proot provider (the sandbox shares the host's "
-                "network); use userns or docker, or network 'open'")
     if network == "none" and routed:
         return "network 'none' leaves the agent no way to reach its model; the specification binds a model"
     if network == "model-gateway-only" and not routed and spec.agent.name in AGENT_CLASSES:
         return (f"network 'model-gateway-only' needs a model binding to route; agent {spec.agent.name!r} "
                 "has none, so it could reach nothing")
     if routed and network == "model-gateway-only":
-        if provider == "userns" and not _IPV4.match(host):
-            return f"the userns provider admits IPv4 addresses only; the gateway host {host!r} is not one"
-        if provider == "docker" and GATEWAY_HOST_ENV not in os.environ:
-            return (f"a docker sandbox cannot reach the worker's loopback; set {GATEWAY_HOST_ENV} to an address "
-                    "of this host the containers can reach")
+        if provider in ("userns", "confined") and not _IPV4.match(host):
+            return f"the {provider} provider admits IPv4 addresses only; the gateway host {host!r} is not one"
     return None
 
 
@@ -172,6 +168,20 @@ class Preflight:
     gateway_host: str
 
 
+def resolve_sandboxes(specs: list[ExecutionSpec], allowed: tuple[str, ...] = STRENGTH) -> list[ExecutionSpec]:
+    """``specs`` with each sandbox's provider the one it runs on here (``choice.choose``): ``auto`` becomes the
+    strongest available provider of ``allowed`` that honours it; a named one is checked. Refuses what no provider here
+    can run."""
+    resolved = []
+    for spec in specs:
+        try:
+            provider = choose(spec.sandbox, allowed=allowed)
+        except UsageError as exc:
+            raise UsageError(f"{spec.slot.label()}#{spec.attempt}: {exc}") from None
+        resolved.append(spec.model_copy(update={"sandbox": spec.sandbox.model_copy(update={"provider": provider})}))
+    return resolved
+
+
 def preflight(specs: list[ExecutionSpec], tasks_root: Path, files_root: Path) -> Preflight:
     """Refuse every specification the worker cannot honour, before Harbor starts and before anything is staged."""
     host = gateway_host()
@@ -183,9 +193,6 @@ def preflight(specs: list[ExecutionSpec], tasks_root: Path, files_root: Path) ->
             raise UsageError(f"{where}: task directory {spec.task_dir!r} holds no task.toml below {tasks_root}")
         if reason := network_refusal(spec, host):
             raise UsageError(f"{where}: {reason}")
-        if spec.sandbox.provider == "proot" and any(m.read_only for m in spec.sandbox.mounts):
-            raise UsageError(f"{where}: the proot provider cannot make read-only mounts; "
-                             "ask for writable mounts or use userns or docker")
         for mount in spec.sandbox.mounts:
             if not _inside(files_root, mount.source, "mount source", where).exists():
                 raise UsageError(f"{where}: mount source {mount.source!r} does not exist below {files_root}")
@@ -320,6 +327,8 @@ def _environment_config(spec: ExecutionSpec, files_root: Path, out: Path, image_
         config["import_path"] = USERNS_ENVIRONMENT
     elif provider == "proot":
         config["import_path"] = PROOT_ENVIRONMENT
+    elif provider == "confined":
+        config["import_path"] = CONFINED_ENVIRONMENT
     else:
         # Harbor's own Docker environment enforces the resource figures; the namespace and proot providers do not.
         config["override_cpus"] = spec.sandbox.cpus

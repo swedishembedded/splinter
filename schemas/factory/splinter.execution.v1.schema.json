@@ -192,6 +192,26 @@
         "digest"
       ]
     },
+    "Isolation": {
+      "description": "The least isolation a sandbox must give.",
+      "oneOf": [
+        {
+          "description": "Any provider.",
+          "type": "string",
+          "const": "any"
+        },
+        {
+          "description": "Filesystem writes and the network confined by the kernel (`confined`,\nor stronger).",
+          "type": "string",
+          "const": "confined"
+        },
+        {
+          "description": "Process and filesystem isolation (`docker`, `userns`).",
+          "type": "string",
+          "const": "strong"
+        }
+      ]
+    },
     "ModelBinding": {
       "description": "The model an agent is pointed at.",
       "type": "object",
@@ -345,6 +365,10 @@
           ],
           "default": null
         },
+        "isolation": {
+          "description": "The least isolation the provider must give; left out when any.",
+          "$ref": "#/$defs/Isolation"
+        },
         "memory_mib": {
           "description": "Memory in MiB.",
           "type": [
@@ -369,7 +393,7 @@
           "default": "model-gateway-only"
         },
         "provider": {
-          "description": "The execution backend's sandbox provider (`docker`, `userns`,\n`proot`).",
+          "description": "The execution backend's sandbox provider: `auto` (the strongest the\nmachine has that honours the rest), `docker`, `userns`, `confined` or\n`proot`.",
           "type": "string"
         },
         "timeout_seconds": {

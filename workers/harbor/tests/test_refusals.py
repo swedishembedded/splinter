@@ -71,7 +71,7 @@ def test_an_unknown_field_is_a_contract_mismatch_and_is_refused(tmp_path, capsys
 def test_a_network_the_provider_cannot_enforce_is_refused_not_weakened(tmp_path, capsys, monkeypatch) -> None:
     spec = make_spec(TASK, agent="nop", network="none")  # proot shares the host's network
     message = refuse(tmp_path, spec, capsys, monkeypatch)
-    assert "cannot be enforced by the proot provider" in message
+    assert "proot: it cannot enforce network 'none'" in message
 
 
 def test_the_default_gateway_only_network_on_proot_is_refused(tmp_path, capsys, monkeypatch) -> None:
@@ -87,7 +87,7 @@ def test_a_read_only_mount_on_proot_is_refused(tmp_path, capsys, monkeypatch) ->
 
 
 def test_a_model_over_the_network_none_is_refused(tmp_path, capsys, monkeypatch) -> None:
-    spec = make_spec(TASK, agent="sven", provider="userns", network="none", model=MODEL)
+    spec = make_spec(TASK, agent="sven", provider="auto", network="none", model=MODEL)
     assert "no way to reach its model" in refuse(tmp_path, spec, capsys, monkeypatch)
 
 

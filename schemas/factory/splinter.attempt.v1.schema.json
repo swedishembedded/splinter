@@ -42,6 +42,17 @@
         "type": "string"
       }
     },
+    "sandbox": {
+      "description": "The sandbox it ran in; `None` from a worker that does not say.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SandboxRecord"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "schema": {
       "description": "Always [`ATTEMPT_SCHEMA`].",
       "type": "string"
@@ -139,6 +150,27 @@
           "minimum": 0
         }
       }
+    },
+    "SandboxRecord": {
+      "description": "The sandbox an attempt ran in, as its worker chose it.",
+      "type": "object",
+      "properties": {
+        "guarantees": {
+          "description": "What it enforced (`process-isolation`, `filesystem-isolation`,\n`filesystem-writes`, `network-policy`, `read-only-mounts`,\n`resource-limits`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "description": "The provider.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "guarantees"
+      ]
     },
     "SlotKey": {
       "description": "A requested trial: one slot of one task in one pass. It stays the same\nwhichever physical attempt fills it.",

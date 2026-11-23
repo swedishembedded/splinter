@@ -26,6 +26,7 @@ pub mod eval;
 pub mod play;
 pub mod release;
 pub mod rollout;
+mod rollout_report;
 pub mod tasks;
 pub mod training;
 

@@ -95,6 +95,10 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
     // A reward-0 trial is kept as a graded failure and never retried.
     let local = trials_of(&dir.path().join("rollouts/local")).unwrap();
     assert_eq!(local.len(), 4);
+    // Each trial says which sandbox it ran in.
+    assert!(local
+        .iter()
+        .all(|t| t.sandbox.as_ref().is_some_and(|s| s.provider == "proot")));
     let failed: Vec<&TrialResult> = local
         .iter()
         .filter(|t| t.task == "train/002-second")

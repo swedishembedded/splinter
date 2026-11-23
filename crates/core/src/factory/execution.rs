@@ -170,11 +170,34 @@ pub struct Mount {
     pub read_only: bool,
 }
 
+/// The least isolation a sandbox must give.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Isolation {
+    /// Any provider.
+    #[default]
+    Any,
+    /// Filesystem writes and the network confined by the kernel (`confined`,
+    /// or stronger).
+    Confined,
+    /// Process and filesystem isolation (`docker`, `userns`).
+    Strong,
+}
+
+impl Isolation {
+    /// Whether it is the default, which a spec leaves out.
+    #[must_use]
+    pub fn is_any(&self) -> bool {
+        *self == Self::Any
+    }
+}
+
 /// The sandbox the agent runs in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SandboxSpec {
-    /// The execution backend's sandbox provider (`docker`, `userns`,
-    /// `proot`).
+    /// The execution backend's sandbox provider: `auto` (the strongest the
+    /// machine has that honours the rest), `docker`, `userns`, `confined` or
+    /// `proot`.
     pub provider: String,
     /// The image, pinned by digest, when the provider takes one.
     #[serde(default)]
@@ -194,6 +217,20 @@ pub struct SandboxSpec {
     /// Extra directories.
     #[serde(default)]
     pub mounts: Vec<Mount>,
+    /// The least isolation the provider must give; left out when any.
+    #[serde(default, skip_serializing_if = "Isolation::is_any")]
+    pub isolation: Isolation,
+}
+
+/// The sandbox an attempt ran in, as its worker chose it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SandboxRecord {
+    /// The provider.
+    pub provider: String,
+    /// What it enforced (`process-isolation`, `filesystem-isolation`,
+    /// `filesystem-writes`, `network-policy`, `read-only-mounts`,
+    /// `resource-limits`).
+    pub guarantees: Vec<String>,
 }
 
 /// One attempt at one slot.

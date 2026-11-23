@@ -57,6 +57,7 @@ use splinter_core::factory::trial::{grade, GradingPolicy};
 use splinter_store::factory::products::Staging;
 use splinter_store::factory::runstate::{AttemptRecord, AttemptState, SlotState};
 
+use super::rollout_report::report;
 use super::{io, read_lines, stage_error, write_lines, Factory, RunError};
 use crate::backend::Batch;
 use crate::champion::{Champion, CHAMPION};
@@ -193,6 +194,7 @@ impl Arm<'_> {
             timeout_seconds: environment.timeout_seconds(),
             network: environment.network.mode,
             mounts,
+            isolation: environment.isolation,
         };
         Ok((spec, digest_of(environment)))
     }
@@ -453,6 +455,7 @@ impl Running<'_, '_> {
             finished_at: report.finished_at.clone(),
             usage: report.usage.clone(),
             guided: guided(report),
+            sandbox: report.sandbox.clone(),
         })
     }
 }
@@ -745,42 +748,4 @@ fn publish_into(
         report(&run.arm.name, &trials, &entries),
     )
     .map_err(io(staging.path()))
-}
-
-/// The pass's report for a person.
-pub(crate) fn report(name: &str, trials: &[TrialResult], attempts: &[AttemptEntry]) -> String {
-    let mut by_status: BTreeMap<String, usize> = BTreeMap::new();
-    for trial in trials {
-        let status = serde_json::to_value(trial.grade.status)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_owned));
-        *by_status.entry(status.unwrap_or_default()).or_default() += 1;
-    }
-    let solved: BTreeSet<&str> = trials
-        .iter()
-        .filter(|t| t.verified_success())
-        .map(|t| t.task.as_str())
-        .collect();
-    let tasks: BTreeSet<&str> = trials.iter().map(|t| t.task.as_str()).collect();
-    let passed = trials.iter().filter(|t| t.verified_success()).count();
-    let counted = trials.iter().filter(|t| t.grade.counted).count();
-    let mut out = format!(
-        "# Rollout {name}\n\n| | |\n|---|---|\n| trials | {} |\n| physical attempts | {} |\n| counted | {counted} |\n\
-         | verified successes | {passed} |\n| tasks solved | {} of {} |\n\n## Trials by status\n\n| status | trials |\n|---|---|\n",
-        trials.len(),
-        attempts.len(),
-        solved.len(),
-        tasks.len()
-    );
-    for (status, n) in by_status {
-        out.push_str(&format!("| {status} | {n} |\n"));
-    }
-    let unsolved: Vec<String> = tasks
-        .difference(&solved)
-        .map(|t| format!("- {t}"))
-        .collect();
-    if !unsolved.is_empty() {
-        out.push_str(&format!("\n## Unsolved tasks\n\n{}\n", unsolved.join("\n")));
-    }
-    out
 }

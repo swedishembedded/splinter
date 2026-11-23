@@ -57,4 +57,7 @@ pub struct AttemptReport {
     /// What it consumed.
     #[serde(default)]
     pub usage: TrialUsage,
+    /// The sandbox it ran in; `None` from a worker that does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<super::execution::SandboxRecord>,
 }

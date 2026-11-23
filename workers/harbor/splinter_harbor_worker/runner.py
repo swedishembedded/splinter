@@ -33,6 +33,7 @@ from splinter_harbor_worker.events import EventLog
 from splinter_harbor_worker.evidence import build_report, finished_trial
 from splinter_harbor_worker.gateway import REQUEST_LOG, GatewayServer, ModelGateway, Upstream
 from splinter_harbor_worker.plan import (
+    resolve_sandboxes,
     JOB_NAME, GatewayAddress, Guided, job_config, preflight, report_path, stage_task, stage_tools,
     staged_task_dir, trial_config, trial_name, unenforced_limits,
 )
@@ -67,7 +68,8 @@ def write_report(out: Path, spec: ExecutionSpec, events: EventLog | None = None)
     trial = trial_dir(out, spec)
     if not finished_trial(trial):
         return False
-    attempt = build_report(out, trial, spec.slot.as_json(), spec.attempt, staged_task_dir(out, spec))
+    attempt = build_report(out, trial, spec.slot.as_json(), spec.attempt, staged_task_dir(out, spec),
+                           sandbox=spec.sandbox.provider)
     path = report_path(out, spec)
     path.parent.mkdir(parents=True, exist_ok=True)
     partial = path.with_name(f".{path.name}.partial")
@@ -119,11 +121,12 @@ def _register_models(gateway: ModelGateway, specs: list[ExecutionSpec], out: Pat
         gateway.register(trial_name(spec), upstream, trial_dir(out, spec) / "gateway" / REQUEST_LOG)
 
 
-def _copy_specs(out: Path, specs_path: Path) -> None:
-    """Keep the specifications beside the results, so ``reconcile`` needs nothing else; a directory that already holds
-    another run's is refused rather than mixed."""
+def _copy_specs(out: Path, specs: list[ExecutionSpec]) -> None:
+    """Keep the specifications beside the results, each with the sandbox it runs on here, so ``reconcile`` needs
+    nothing else and reports the provider that ran; a directory that already holds another run's is refused rather
+    than mixed."""
     target = out / SPECS_COPY
-    text = specs_path.read_text()
+    text = "".join(spec.model_dump_json(by_alias=True) + "\n" for spec in specs)
     if target.is_file() and target.read_text() != text:
         raise UsageError(f"{out} already holds the results of different specifications; use a new --out")
     out.mkdir(parents=True, exist_ok=True)
@@ -146,8 +149,9 @@ def run(specs_path: Path, tasks_root: Path, out: Path, *, concurrency: int = DEF
             raise UsageError(f"--tasks {tasks_root} is not a directory")
         if concurrency < 1:
             raise UsageError("--concurrency must be at least 1")
+        specs = resolve_sandboxes(specs)
         checked = preflight(specs, tasks_root, files_root)
-        _copy_specs(out, specs_path)
+        _copy_specs(out, specs)
         return asyncio.run(run_job(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events))
     except WorkerError as exc:
         events.emit("error", detail=str(exc))

@@ -35,7 +35,7 @@ from splinter_harbor_worker import runtime
 from splinter_harbor_worker.errors import UsageError, WorkerError
 from splinter_harbor_worker.events import EventLog
 from splinter_harbor_worker.guidance import HUMAN_GUIDED_KWARG
-from splinter_harbor_worker.plan import Guided, preflight, trial_name
+from splinter_harbor_worker.plan import Guided, preflight, resolve_sandboxes, trial_name
 from splinter_harbor_worker.runner import SPECS_COPY, default_image_cache, report_path_relative, run_job
 from splinter_harbor_worker.seat import TerminalSeat
 from splinter_harbor_worker.spec import ExecutionSpec, load_specs, parse_specs
@@ -43,7 +43,7 @@ from splinter_harbor_worker.spec import ExecutionSpec, load_specs, parse_specs
 # Agents with an interface a person can drive, and the sandboxes that give them a terminal.
 INTERACTIVE_AGENTS = ("sven", "claude-code")
 CONTINUABLE_AGENTS = ("sven",)  # the agents that leave a trajectory to load
-TERMINAL_PROVIDERS = ("userns", "proot")
+TERMINAL_PROVIDERS = ("userns", "confined", "proot")
 CONTINUED_DIR = "staged/continued"
 
 
@@ -139,6 +139,8 @@ def play(spec_path: Path, tasks_root: Path, out: Path, *, files_root: Path | Non
             raise UsageError("play needs a terminal: standard input and output must be a TTY, because a person types "
                              "into the agent")
         raw, spec = _read_spec(spec_path)
+        (spec,) = resolve_sandboxes([spec], allowed=TERMINAL_PROVIDERS)
+        raw["sandbox"]["provider"] = spec.sandbox.provider
         _refuse_unplayable(spec)
         tasks_root = tasks_root.resolve()
         files_root = (files_root or tasks_root).resolve()

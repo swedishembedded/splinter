@@ -206,3 +206,53 @@ def test_codex_speaks_the_responses_protocol_through_the_gateway(tmp_path, monke
     config = (agent / "config.toml").read_text()
     assert 'wire_api = "responses"' in config and 'model = "stub-model"' in config
     assert (agent / "agents.md").read_text() == "Be brief.\n"
+
+
+# The stand-in claude, which also tries the model server directly, past the gateway: the confinement must stop it.
+FAKE_CLAUDE_BYPASS = FAKE_CLAUDE.replace(
+    "echo expected > /app/answer.txt",
+    "direct=${DIRECT#http://}; direct=${direct%%/*}\n"
+    "if (exec 4<>/dev/tcp/${direct%%:*}/${direct##*:}) 2>/dev/null; then echo reached > /logs/agent/direct.txt;"
+    " else echo refused > /logs/agent/direct.txt; fi\n"
+    "echo expected > /app/answer.txt",
+)
+
+
+def test_a_confined_agent_reaches_its_model_only_through_the_gateway(tmp_path, monkeypatch, local_images, stub_model,
+                                                                     validator, confine):
+    path = tmp_path / "bin" / "claude"
+    path.parent.mkdir()
+    path.write_text(FAKE_CLAUDE_BYPASS)
+    path.chmod(0o755)
+    spec = make_spec(TASK, agent="claude-code", provider="confined", network="model-gateway-only",
+                     model=model(stub_model), env={"DIRECT": {"literal": stub_model.base_url}})
+    code, out = run_one(tmp_path, spec, monkeypatch, local_images,
+                        env={"SPLINTER_CLAUDE_BIN": str(path), "STUB_TOKEN": SECRET})
+    assert code == 0
+    report = load_report(out)
+    validator.validate(report)
+    assert report["sandbox"] == {"provider": "confined",
+                                 "guarantees": ["filesystem-writes", "network-policy", "read-only-mounts"]}
+    assert [r["status"] for r in report["evidence"]["requests"]] == [200], "the gateway is reachable"
+    assert report["evidence"]["result"]["verifier_result"]["rewards"] == {"reward": 1.0}
+    agent = out / report["native_dir"] / "agent"
+    assert (agent / "direct.txt").read_text().strip() == "refused", "the model server is not, past the gateway"
+
+
+def test_auto_runs_a_trial_on_the_strongest_sandbox_a_daemonless_host_has_and_records_it(
+        tmp_path, monkeypatch, local_images, validator, confine):
+    from splinter_harbor_worker.sandbox import choice
+    from splinter_harbor_worker.spec import SandboxSpec
+
+    # The toy image is in the local image cache, not in a Docker daemon: this is a host without one.
+    available = {**choice.probe(), "docker": "no reachable Docker daemon"}
+    monkeypatch.setattr(choice, "probe", lambda: available)
+    spec = make_spec(TASK, provider="auto", network="none")
+    expected = choice.choose(SandboxSpec(provider="auto", network="none"))
+    assert expected in ("userns", "confined"), expected
+    code, out = run_one(tmp_path, spec, monkeypatch, local_images)
+    assert code == 0
+    report = load_report(out)
+    validator.validate(report)
+    assert report["sandbox"] == {"provider": expected, "guarantees": list(choice.GUARANTEES[expected])}
+    assert report["evidence"]["result"]["verifier_result"]["rewards"] == {"reward": 1.0}

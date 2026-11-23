@@ -133,7 +133,7 @@ fn an_environment_that_demands_strong_isolation_refuses_proot() {
     assert!(
         problems
             .iter()
-            .any(|p| p.contains("proot is not a security boundary")),
+            .any(|p| p.contains("proot is weaker than the strong isolation")),
         "{problems:?}"
     );
 }
@@ -240,4 +240,34 @@ fn a_connection_drops_only_headers_the_gateway_forwards() {
         refused.contains("authorization") && refused.contains("anthropic-beta"),
         "{refused}"
     );
+}
+
+#[test]
+fn an_environment_states_requirements_and_the_worker_picks_the_sandbox() {
+    use splinter_core::factory::execution::Isolation;
+    use splinter_factory::environment::Environment;
+    // No provider: the strongest the machine has that honours the rest.
+    let auto = Environment::parse(
+        "schema: splinter.environment/v1\nisolation: confined\nnetwork: { mode: model-gateway-only }\n\
+         mounts: [{ source: kb, target: /kb, read_only: true }]\n",
+    )
+    .unwrap();
+    assert_eq!(
+        (auto.sandbox.provider.as_str(), auto.isolation),
+        ("auto", Isolation::Confined)
+    );
+    let refused = |text: &str| Environment::parse(text).unwrap_err().0.join("\n");
+    assert!(refused(
+        "schema: splinter.environment/v1\nisolation: strong\nsandbox: { provider: confined }\n"
+    )
+    .contains("confined is weaker than the strong isolation"));
+    assert!(refused(
+        "schema: splinter.environment/v1\nisolation: confined\nsandbox: { provider: proot }\nnetwork: { mode: open }\n"
+    )
+    .contains("proot is weaker than the confined isolation"));
+    assert!(refused(
+        "schema: splinter.environment/v1\nsandbox: { provider: proot }\nnetwork: { mode: open }\n\
+         mounts: [{ source: kb, target: /kb, read_only: true }]\n"
+    )
+    .contains("read-only"));
 }

@@ -28,7 +28,8 @@ from splinter_harbor_worker.errors import UsageError
 
 EXECUTION_SCHEMA = "splinter.execution/1"
 AGENTS = ("sven", "claude-code", "codex", "oracle", "nop")
-PROVIDERS = ("docker", "userns", "proot")
+# `auto`: the strongest the machine has that honours the specification (sandbox/choice.py).
+PROVIDERS = ("auto", "docker", "userns", "confined", "proot")
 PROTOCOLS = ("openai", "anthropic")
 # A literal under a name like these is a secret written into a specification that is stored and shown.
 _CREDENTIAL_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
@@ -168,6 +169,9 @@ class SandboxSpec(_Strict):
     timeout_seconds: int | None = None
     network: Literal["model-gateway-only", "none", "open"] = "model-gateway-only"
     mounts: list[Mount] = []
+    # The least a provider must give: strong (process and filesystem isolation), confined (filesystem writes and
+    # network confined by the kernel) or any.
+    isolation: Literal["strong", "confined", "any"] = "any"
 
 
 class RunBudget(_Strict):

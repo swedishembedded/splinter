@@ -68,10 +68,16 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
 
 - **Collections** name a directory of Harbor tasks, and optionally the command
   that compiles them (`generate:`, which `splinter generate` runs).
-- **Environments** name the sandbox (`docker`, `userns`, or `proot`, which is
-  compatibility for containers without user namespaces and no security boundary:
-  an environment asking for `isolation: strong` refuses it), resources, read-only
-  mounts and the network.
+- **Environments** say what the sandbox must enforce - resources, read-only
+  mounts, the network and the least `isolation` (`strong`, `confined` or `any`) -
+  and leave the sandbox to the machine: with no `provider` (`auto`) the worker
+  picks the strongest it has that enforces all of it: `docker`, then `userns`,
+  then `confined` (proot under Landlock and seccomp through `splinter-confine`:
+  writes and the network confined, the host still readable and its processes
+  visible), then plain `proot` (open network only). The same recipe runs on a
+  full machine and in a hardened container; each trial records the sandbox it
+  ran in and what it enforced, the run report lists them per pass, and an
+  environment no sandbox here can honour is refused, never run weaker.
 - **Rollout passes** name an agent and its own argv (`args`, passed as given,
   never through a shell), the files those arguments refer to, an appended system
   prompt, environment variables (`env:NAME` passes this machine's variable), a

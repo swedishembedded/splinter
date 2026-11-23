@@ -30,8 +30,9 @@ use splinter_core::factory::product::TrialResult;
 use splinter_store::factory::products::Staging;
 
 use super::rollout::{
-    arm, pin_files, report, Arm, AttemptEntry, Running, ATTEMPTS_FILE, SELECTED_FILE, TRIALS_FILE,
+    arm, pin_files, Arm, AttemptEntry, Running, ATTEMPTS_FILE, SELECTED_FILE, TRIALS_FILE,
 };
+use super::rollout_report::report;
 use super::{io, stage_error, write_lines, Factory, RunError};
 use crate::backend::{read_reports, Batch};
 use crate::plan::{stage_key, PlannedStage};

@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use serde_json::json;
 use splinter_core::factory::attempt::{AttemptReport, ATTEMPT_SCHEMA};
-use splinter_core::factory::execution::ExecutionSpec;
+use splinter_core::factory::execution::{ExecutionSpec, SandboxRecord};
 use splinter_core::factory::product::TrialUsage;
 use splinter_core::factory::trial::{ModelRequest, TrialEvidence};
 use splinter_factory::backend::{read_reports, BackendError, Batch, ExecutionBackend};
@@ -197,6 +197,15 @@ fn attempt_as(
         started_at: None,
         finished_at: None,
         usage: TrialUsage::default(),
+        // As the worker does: `auto` resolved to a provider, and what it enforced.
+        sandbox: Some(SandboxRecord {
+            provider: if spec.sandbox.provider == "auto" {
+                "docker".into()
+            } else {
+                spec.sandbox.provider.clone()
+            },
+            guarantees: vec!["network-policy".into()],
+        }),
     };
     let path = out
         .join("attempts")

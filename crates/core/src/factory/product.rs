@@ -100,6 +100,9 @@ pub struct TrialResult {
     /// are the agent's under a person's guidance.
     #[serde(default)]
     pub guided: bool,
+    /// The sandbox it ran in, as its worker reported it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<super::execution::SandboxRecord>,
 }
 
 impl TrialResult {

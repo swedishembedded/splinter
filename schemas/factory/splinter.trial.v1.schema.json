@@ -51,6 +51,17 @@
       "description": "The backend's own trial directory, relative to the rollout product.",
       "type": "string"
     },
+    "sandbox": {
+      "description": "The sandbox it ran in, as its worker reported it.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SandboxRecord"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "schema": {
       "description": "Always [`TRIAL_SCHEMA`].",
       "type": "string"
@@ -246,6 +257,27 @@
         "counted",
         "metrics",
         "vetoes"
+      ]
+    },
+    "SandboxRecord": {
+      "description": "The sandbox an attempt ran in, as its worker chose it.",
+      "type": "object",
+      "properties": {
+        "guarantees": {
+          "description": "What it enforced (`process-isolation`, `filesystem-isolation`,\n`filesystem-writes`, `network-policy`, `read-only-mounts`,\n`resource-limits`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "description": "The provider.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "guarantees"
       ]
     },
     "SlotKey": {

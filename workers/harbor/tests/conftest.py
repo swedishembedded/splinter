@@ -189,5 +189,27 @@ def stub_model() -> Iterator[StubModel]:
 
 @pytest.fixture(autouse=True)
 def _no_ambient_worker_environment(monkeypatch) -> None:
-    for name in ("SPLINTER_SVEN_BIN", "SPLINTER_CLAUDE_BIN", "SPLINTER_GATEWAY_HOST"):
+    for name in ("SPLINTER_SVEN_BIN", "SPLINTER_CLAUDE_BIN", "SPLINTER_CODEX_BIN", "SPLINTER_GATEWAY_HOST",
+                 "SPLINTER_CONFINE_BIN"):
         monkeypatch.delenv(name, raising=False)
+
+
+def confine_binary() -> Path:
+    """This checkout's ``splinter-confine`` (``make build/crate/splinter-sandbox``); a test that needs it fails, never
+    skips, when it is not built."""
+    root = Path(__file__).resolve().parents[3]
+    for profile in ("release", "debug"):
+        if (found := root / "target" / profile / "splinter-confine").is_file():
+            return found
+    raise AssertionError("build splinter-confine first: make build/crate/splinter-sandbox")
+
+
+@pytest.fixture
+def confine(monkeypatch) -> Path:
+    binary = confine_binary()
+    monkeypatch.setenv("SPLINTER_CONFINE_BIN", str(binary))
+    from splinter_harbor_worker.sandbox.confined import kernel_confines
+    from splinter_harbor_worker.sandbox.choice import probe
+    kernel_confines.cache_clear()
+    probe.cache_clear()
+    return binary

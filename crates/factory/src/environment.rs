@@ -11,29 +11,54 @@
 //! ```yaml
 //! schema: splinter.environment/v1
 //! sandbox:
-//!   provider: proot
 //!   resources: { cpus: 2, memory_gb: 4, timeout: 10m }
 //! mounts:
 //!   - { source: knowledge/vim, target: /knowledge/vim, read_only: true }
 //! network: { mode: model-gateway-only }
+//! isolation: confined
 //! ```
 //!
-//! `proot` translates paths; it is a compatibility sandbox for hosts without
-//! user namespaces or containers, never a security boundary: an environment
-//! that asks for `isolation: strong` refuses it, and one on it must state
-//! that its network is open, since proot cannot restrict it.
+//! An environment states what the sandbox must enforce, not which sandbox:
+//! its provider is `auto` unless it names one, and the execution worker
+//! picks the strongest the machine has that enforces the network, the mounts
+//! and the `isolation` it demands (`strong`: `docker` or `userns`;
+//! `confined`: also `confined`, proot under kernel confinement; `any`: also
+//! plain `proot`, a compatibility sandbox with an open network and no
+//! read-only mounts). Each trial records the sandbox it ran in. A named
+//! provider weaker than the isolation demanded, or plain proot asked for what
+//! it cannot enforce, is refused here.
 
 use serde::{Deserialize, Serialize};
-use splinter_core::factory::execution::NetworkMode;
+use splinter_core::factory::execution::{Isolation, NetworkMode};
 
 use crate::recipe::RecipeError;
 
 /// The schema every environment file names.
 pub const ENVIRONMENT_SCHEMA: &str = "splinter.environment/v1";
 
-/// The sandbox providers the execution worker offers, and whether each is a
-/// security boundary.
-pub const PROVIDERS: &[(&str, bool)] = &[("docker", true), ("userns", true), ("proot", false)];
+/// The sandbox providers the execution worker offers, and the strongest
+/// isolation each gives (`auto`: chosen by the worker to meet the demand).
+pub const PROVIDERS: &[(&str, Isolation)] = &[
+    ("auto", Isolation::Strong),
+    ("docker", Isolation::Strong),
+    ("userns", Isolation::Strong),
+    ("confined", Isolation::Confined),
+    ("proot", Isolation::Any),
+];
+
+fn auto() -> String {
+    "auto".into()
+}
+
+impl Default for Sandbox {
+    fn default() -> Self {
+        Self {
+            provider: auto(),
+            image: None,
+            resources: Resources::default(),
+        }
+    }
+}
 
 /// Resources of the sandbox.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,7 +80,8 @@ pub struct Resources {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Sandbox {
-    /// The provider.
+    /// The provider; `auto` unless named.
+    #[serde(default = "auto")]
     pub provider: String,
     /// The image, pinned by digest, when the provider takes one.
     #[serde(default)]
@@ -92,24 +118,14 @@ pub struct Network {
     pub mode: NetworkMode,
 }
 
-/// The isolation an environment demands.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Isolation {
-    /// Any provider.
-    #[default]
-    Any,
-    /// Only a provider that is a security boundary.
-    Strong,
-}
-
 /// An environment file.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Environment {
     /// Always [`ENVIRONMENT_SCHEMA`].
     pub schema: String,
-    /// The sandbox.
+    /// The sandbox; `auto` with no resources unless given.
+    #[serde(default)]
     pub sandbox: Sandbox,
     /// Extra directories.
     #[serde(default)]
@@ -120,6 +136,22 @@ pub struct Environment {
     /// The isolation it demands.
     #[serde(default)]
     pub isolation: Isolation,
+}
+
+fn rank(isolation: Isolation) -> u8 {
+    match isolation {
+        Isolation::Any => 0,
+        Isolation::Confined => 1,
+        Isolation::Strong => 2,
+    }
+}
+
+fn level(isolation: Isolation) -> &'static str {
+    match isolation {
+        Isolation::Any => "any",
+        Isolation::Confined => "confined",
+        Isolation::Strong => "strong",
+    }
 }
 
 impl Environment {
@@ -146,11 +178,15 @@ impl Environment {
                 env.sandbox.provider,
                 PROVIDERS.iter().map(|(n, _)| *n).collect::<Vec<_>>()
             )),
-            Some((name, false)) if env.isolation == Isolation::Strong => problems.push(format!(
-                "the environment demands strong isolation and {name} is not a security boundary"
+            Some((name, gives)) if rank(*gives) < rank(env.isolation) => problems.push(format!(
+                "{name} is weaker than the {} isolation the environment demands",
+                level(env.isolation)
             )),
             Some(("proot", _)) if env.network.mode != NetworkMode::Open => problems.push(
                 "proot cannot restrict the network; an environment on proot must say `network: { mode: open }`".into(),
+            ),
+            Some(("proot", _)) if env.mounts.iter().any(|m| m.read_only) => problems.push(
+                "proot cannot make read-only mounts; leave the provider to `auto` or name a stronger one".into(),
             ),
             Some(_) => {}
         }

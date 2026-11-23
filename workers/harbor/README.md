@@ -87,9 +87,15 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
   rewrites the model, sends `accept-encoding: identity` and logs each request (Chat Completions, Responses or Anthropic Messages) to `<trial>/gateway/requests.jsonl`
   (`evidence.requests`). Error text is stripped of control characters. Without `model` the agent uses its own provider
   configuration (from `args` and `files`).
-* **Sandboxes.** `docker` is Harbor's own. `userns` and `proot` run the task's own image (`docker_image` or
-  `environment/Dockerfile`) from the image cache; `proot` works where user namespaces and docker do not
-  (`PROOT_NO_SECCOMP=1`, with a translation self-check before every trial).
+* **Sandboxes.** `auto` (the strongest provider this machine has that enforces the specification's network, mounts
+  and `isolation`, probed once per job: a reachable Docker daemon, user namespaces, Landlock, proot), or a named one,
+  checked the same way. `docker` is Harbor's own. `userns`, `confined` and `proot` run the task's own image
+  (`docker_image` or `environment/Dockerfile`) from the image cache; `confined` is proot wrapped in `splinter-confine`
+  (`SPLINTER_CONFINE_BIN`, else on `PATH`): writes only to the sandbox's tree and writable binds, read-only binds
+  read-only, the network as asked (a gateway allowance is TCP to its port only; no UDP); `proot` alone works where
+  nothing else does, with an open network (`PROOT_NO_SECCOMP=1`, a translation self-check before every trial). The
+  resolved provider is written into the kept `specs.jsonl`, and every report carries `sandbox` (provider and the
+  guarantees it enforced).
 * **Network.** `open`, `none` and `model-gateway-only` become the staged `task.toml`'s network mode and, for the
   gateway, Harbor's agent-phase allowlist (and the gateway port on `userns`). `proot` can enforce only `open`; a
   combination a provider cannot enforce is refused. `docker` needs `SPLINTER_GATEWAY_HOST`, an address of this host the

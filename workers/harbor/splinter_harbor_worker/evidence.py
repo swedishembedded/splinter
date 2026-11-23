@@ -22,6 +22,7 @@ from pathlib import Path
 
 from splinter_harbor_worker.audit import audit_trajectory, reference_packages
 from splinter_harbor_worker.gateway import REQUEST_LOG
+from splinter_harbor_worker.sandbox.choice import GUARANTEES
 
 ATTEMPT_SCHEMA = "splinter.attempt/1"
 GATEWAY_DIR = "gateway"
@@ -154,7 +155,8 @@ def finished_trial(trial: Path) -> bool:
         return False
 
 
-def build_report(out: Path, trial: Path, slot: dict, attempt: int, task_dir: Path | None = None) -> Attempt:
+def build_report(out: Path, trial: Path, slot: dict, attempt: int, task_dir: Path | None = None,
+                 sandbox: str | None = None) -> Attempt:
     """The ``splinter.attempt/1`` report of the finished trial directory ``trial`` (below ``out``)."""
     warnings: list[str] = []
     result = json.loads((trial / "result.json").read_text())
@@ -192,5 +194,7 @@ def build_report(out: Path, trial: Path, slot: dict, attempt: int, task_dir: Pat
         "started_at": result.get("started_at"),
         "finished_at": result.get("finished_at"),
         "usage": _usage(requests, result),
+        # The provider the trial ran on and what it enforced (sandbox/choice.py).
+        "sandbox": None if sandbox is None else {"provider": sandbox, "guarantees": list(GUARANTEES[sandbox])},
     }
     return Attempt(report, warnings)
