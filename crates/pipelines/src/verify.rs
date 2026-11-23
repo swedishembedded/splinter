@@ -36,15 +36,12 @@ use splinter_eval::verifiers::calibration::{
 };
 use splinter_eval::verifiers::consistency::AgreementVerifier;
 use splinter_eval::verifiers::executable::ExecutableVerifier;
-use splinter_eval::verifiers::form::{FinalNumberVerifier, LineCountVerifier};
-use splinter_eval::verifiers::formal::{ExactMatchVerifier, StatedReferenceVerifier};
 use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
 use splinter_eval::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
 use splinter_eval::verifiers::normalise::Normalisation;
 use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
-use splinter_eval::verifiers::speech::SpeechVerifier;
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_knowledge::claims::answer::ClaimTermsVerifier;
+use splinter_knowledge::tasks::verifiers::plain_verifier;
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_model::Sampling;
@@ -53,19 +50,6 @@ use splinter_store::experiences::SetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
-
-/// The producer of the formal verifier's verdicts on generated tasks.
-pub const FORMAL_PRODUCER: &str = "splinter-lab/exact-match:lenient";
-
-/// The formal verifier's version: bumped with its normalisation.
-pub const FORMAL_VERSION: &str = "1";
-
-/// The producer of the stated-reference verifier's verdicts.
-pub const STATED_PRODUCER: &str = "splinter-lab/reference-stated:lenient";
-
-/// The stated-reference verifier's version: bumped with its normalisation
-/// or its bound on the answer's length.
-pub const STATED_VERSION: &str = "1";
 
 /// The producer of the quotation verifier's verdicts.
 pub const QUOTATION_PRODUCER: &str = "splinter-lab/quotation";
@@ -90,22 +74,6 @@ pub const GROUNDING_VERSION: &str = "1";
 /// the check cannot tell a form of address or a common name from a person,
 /// and one stray name is not the invented specifics it exists to refuse.
 pub const GROUNDING_MAX_NAMES: usize = 1;
-
-/// Who the speech verdicts name as their producer.
-pub const SPEECH_PRODUCER: &str = "splinter-lab/speech";
-
-/// The version of the speech check; a changed check carries a new one.
-pub const SPEECH_VERSION: &str = "1";
-
-/// The producer of the final-number verifier's verdicts.
-pub const FINAL_NUMBER_PRODUCER: &str = "splinter-lab/final-number";
-/// Its version.
-pub const FINAL_NUMBER_VERSION: &str = "1";
-
-/// The producer of the line-count verifier's verdicts.
-pub const LINE_COUNT_PRODUCER: &str = "splinter-lab/line-count";
-/// Its version.
-pub const LINE_COUNT_VERSION: &str = "1";
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -467,22 +435,18 @@ pub(crate) fn verifiers_for(
     };
     let mut verifiers: Vec<Box<dyn Verifier>> = Vec::new();
     for verifier in &spec.verifiers {
+        if let Some(plain) = plain_verifier(*verifier) {
+            verifiers.push(plain);
+            continue;
+        }
         match verifier {
-            VerifierKind::Formal => verifiers.push(Box::new(ExactMatchVerifier::new(
-                Producer {
-                    name: FORMAL_PRODUCER.into(),
-                    version: FORMAL_VERSION.into(),
-                },
-                Normalisation::LENIENT,
-            ))),
-            VerifierKind::Stated => verifiers.push(Box::new(StatedReferenceVerifier::new(
-                Producer {
-                    name: STATED_PRODUCER.into(),
-                    version: STATED_VERSION.into(),
-                },
-                Normalisation::LENIENT,
-            ))),
-            VerifierKind::Terms => verifiers.push(Box::new(ClaimTermsVerifier::new())),
+            // Made above, the same wherever an answer is graded.
+            VerifierKind::Formal
+            | VerifierKind::Stated
+            | VerifierKind::Terms
+            | VerifierKind::Speech
+            | VerifierKind::FinalNumber
+            | VerifierKind::LineCount => {}
             VerifierKind::Executable => {
                 verifiers.push(Box::new(ExecutableVerifier::new(runtimes())));
             }
@@ -508,25 +472,11 @@ pub(crate) fn verifiers_for(
                 },
             ))),
             VerifierKind::Grounding => verifiers.push(Box::new(grounding_verifier(ctx))),
-            VerifierKind::Speech => verifiers.push(Box::new(SpeechVerifier::new(Producer {
-                name: SPEECH_PRODUCER.into(),
-                version: SPEECH_VERSION.into(),
-            }))),
             VerifierKind::Judged => {
                 if let Some(judge) = judge {
                     verifiers.push(judge.verifier(ctx)?);
                 }
             }
-            VerifierKind::FinalNumber => {
-                verifiers.push(Box::new(FinalNumberVerifier::new(Producer {
-                    name: FINAL_NUMBER_PRODUCER.into(),
-                    version: FINAL_NUMBER_VERSION.into(),
-                })));
-            }
-            VerifierKind::LineCount => verifiers.push(Box::new(LineCountVerifier::new(Producer {
-                name: LINE_COUNT_PRODUCER.into(),
-                version: LINE_COUNT_VERSION.into(),
-            }))),
         }
     }
     Ok(Strongest::new(verifiers))

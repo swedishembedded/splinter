@@ -60,6 +60,7 @@ pub mod workspace;
 
 pub mod dedup;
 pub mod variants;
+pub mod verifiers;
 
 mod admit;
 pub mod propose;
