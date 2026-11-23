@@ -234,7 +234,12 @@ impl<'a> Factory<'a> {
             Err(e) => return Err(io(&lock_path)(e)),
         }
         let state = RunState::open(run)?;
-        let fence = state.acquire(owner, LEASE_SECONDS, unix_now())?;
+        let fence = match state.acquire(owner, LEASE_SECONDS, unix_now()) {
+            Err(RunStateError::LeaseHeld { owner: holder, .. }) if exited_here(owner, &holder) => {
+                state.take_over(owner, &holder, LEASE_SECONDS, unix_now())?
+            }
+            other => other?,
+        };
         let products = ProductStore::new(run, Box::new(SystemClock));
         products.recover()?;
         Ok(Self {
@@ -441,6 +446,26 @@ impl<'a> Factory<'a> {
             format!("{own}; {extra}")
         }
     }
+}
+
+impl Drop for Factory<'_> {
+    /// The lease is given up when the controller ends, so the next one
+    /// (a resume) need not wait for it to lapse.
+    fn drop(&mut self) {
+        let _ = self.state.release(&self.fence, unix_now());
+    }
+}
+
+/// Whether the lease holder `holder` is a process of this host (owners are
+/// `<host>:<pid>`) that no longer runs: a crashed controller, whose lease
+/// another controller of the same host may take over at once.
+fn exited_here(owner: &str, holder: &str) -> bool {
+    let (Some((host, _)), Some((holder_host, pid))) =
+        (owner.rsplit_once(':'), holder.rsplit_once(':'))
+    else {
+        return false;
+    };
+    host == holder_host && pid.parse::<u32>().is_ok() && !Path::new("/proc").join(pid).exists()
 }
 
 /// Write `value` as pretty JSON to `path`.

@@ -495,3 +495,20 @@ pub fn plain_name(name: &str) -> bool {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
+
+/// `text`, a recipe, with its evaluation plan replaced by `plan`: how a
+/// run's candidates are evaluated under another plan without retraining
+/// them (the changed recipe is run as a fork of the run).
+///
+/// # Errors
+/// The text is not a recipe with an `eval` section.
+pub fn with_eval_plan(text: &str, plan: &str) -> Result<String, RecipeError> {
+    let mut recipe: serde_yaml::Value =
+        serde_yaml::from_str(text).map_err(|e| RecipeError(vec![e.to_string()]))?;
+    let section = recipe
+        .get_mut("eval")
+        .filter(|s| s.is_mapping())
+        .ok_or_else(|| RecipeError(vec!["the recipe evaluates nothing".into()]))?;
+    section["plan"] = serde_yaml::Value::String(plan.to_owned());
+    serde_yaml::to_string(&recipe).map_err(|e| RecipeError(vec![e.to_string()]))
+}

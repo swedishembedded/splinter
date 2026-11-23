@@ -24,7 +24,7 @@
     {
       "step_id": 1,
       "source": "user",
-      "message": "# Replace one character\n\n**New idea:** `r{char}`: replace the character under the cursor.\n\n**Task:** Correct `cot` to `cat`.\n\n**Starter — `main.txt`**\n\n```text\ncot\n```\n\n**Expected — `main.txt`**\n\n```text\ncat\n```\n"
+      "message": "# Replace one character\n\n**New idea:** `r{char}`: replace the character under the cursor.\n\n**Task:** Correct `cot` to `cat`.\n\n**Starter - `main.txt`**\n\n```text\ncot\n```\n\n**Expected - `main.txt`**\n\n```text\ncat\n```\n"
     },
     {
       "step_id": 2,
@@ -916,7 +916,7 @@
       "step_id": 8,
       "source": "agent",
       "model_name": "deepseek/deepseek-v4.1-flash",
-      "message": "Done.\n\n**What changed:** `main.txt` now reads `cat` (was `cot`).\n\n**How:** Used `r{char}` — moved the cursor onto the `o` with `l`, then `ra` to replace that single character with `a`. (My first attempt ran `ra` while the cursor was still on `c`, which is why I reset the line and re-ran it correctly.)\n\n**Verified:** Printed the buffer — content is exactly `cat`.",
+      "message": "Done.\n\n**What changed:** `main.txt` now reads `cat` (was `cot`).\n\n**How:** Used `r{char}` - moved the cursor onto the `o` with `l`, then `ra` to replace that single character with `a`. (My first attempt ran `ra` while the cursor was still on `c`, which is why I reset the line and re-ran it correctly.)\n\n**Verified:** Printed the buffer - content is exactly `cat`.",
       "metrics": {
         "prompt_tokens": 2207,
         "completion_tokens": 101,

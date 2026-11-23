@@ -364,6 +364,29 @@ fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
 }
 
 #[test]
+fn a_finished_controller_gives_up_its_lease_and_a_dead_ones_is_taken_over() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("dataset:").next().unwrap();
+    let resolved = resolved(&repo, recipe);
+    let backend = FakeBackend::with(Outcome::Pass);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+    };
+    drop(Factory::open(&resolved, dir.path(), services, "host:1").unwrap());
+    // Released on drop: another controller takes it at once. This one is
+    // never dropped, as a killed process leaves its lease, and its pid names
+    // no process.
+    std::mem::forget(Factory::open(&resolved, dir.path(), services, "host:4294967").unwrap());
+    // A controller of another host waits for the lease to lapse...
+    assert!(Factory::open(&resolved, dir.path(), services, "elsewhere:1").is_err());
+    // ...one of the same host sees its process is gone and takes over.
+    assert!(Factory::open(&resolved, dir.path(), services, "host:2").is_ok());
+}
+
+#[test]
 fn a_tampered_product_fails_verification() {
     let repo = Repo::new();
     let resolved = resolved(&repo, RECIPE.split("dataset:").next().unwrap());
