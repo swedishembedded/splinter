@@ -203,6 +203,9 @@ pub struct Services<'a> {
     /// Reaches models in process; needed when a computed stage names a
     /// model role.
     pub models: Option<&'a dyn crate::execute::Models>,
+    /// Reads the controller's environment variables, for external
+    /// operators their machine grants variables.
+    pub variables: Option<&'a crate::execute::Variables>,
 }
 
 /// One stage as the run recorded it.

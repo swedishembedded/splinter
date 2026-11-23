@@ -17,7 +17,9 @@ use splinter_sdk::factory::backend::HarborWorker;
 use splinter_sdk::factory::resolution::Resolved;
 use splinter_sdk::factory::run::{self, Factory, RunError, RunManifest, Services, REPORT_FILE};
 use splinter_sdk::factory::training::BrainTrainer;
-use splinter_sdk::factory::{resolve_recipe, resolve_run, trainer, worker, HostModels};
+use splinter_sdk::factory::{
+    host_variable, resolve_recipe, resolve_run, trainer, worker, HostModels,
+};
 use splinter_sdk::{Config, Error};
 
 use crate::cli::{
@@ -194,6 +196,7 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
         backend: &backend,
         trainer: brain.as_ref().map(|b| b as _),
         models: Some(&HostModels),
+        variables: Some(&host_variable),
     };
     let mut factory =
         Factory::open(resolved, dir, services, &owner(config)).map_err(|e| match e {
@@ -458,6 +461,7 @@ pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error>
         backend: &backend,
         trainer: brain.as_ref().map(|b| b as _),
         models: Some(&HostModels),
+        variables: Some(&host_variable),
     };
     let trial = {
         let mut factory =

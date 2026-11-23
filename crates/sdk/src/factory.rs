@@ -19,7 +19,8 @@ use splinter_core::factory::execution::{ModelBinding, Protocol};
 use splinter_factory::backend::HarborWorker;
 use splinter_factory::connections::Connections;
 use splinter_factory::execute::Models;
-use splinter_factory::resolve::{resolve, Resolved};
+use splinter_factory::grants::Grants;
+use splinter_factory::resolve::{resolve_in, Resolved};
 use splinter_factory::training::BrainTrainer;
 use splinter_model::selection::{ModelSelection, RemoteModel};
 use splinter_orchestrator::config::credential;
@@ -106,6 +107,24 @@ pub fn connections_of(config: &Config, repository: &Path) -> Result<Connections,
     )?)
 }
 
+/// What this machine grants the task repository's operators.
+///
+/// # Errors
+/// The grants file exists and is invalid.
+pub fn grants_of(config: &Config) -> Result<Grants, SetupError> {
+    Grants::load(&config.factory.operators).map_err(|message| SetupError::Read {
+        path: config.factory.operators.display().to_string(),
+        message,
+    })
+}
+
+/// A variable of this process's environment, for an operator its machine
+/// grants it to (read where the configuration reads the environment).
+#[must_use]
+pub fn host_variable(name: &str) -> Option<String> {
+    credential(name)
+}
+
 /// The recipe at `recipe` (relative to the working directory, the task
 /// repository), resolved with this machine's connections.
 ///
@@ -117,10 +136,11 @@ pub fn resolve_recipe(config: &Config, recipe: &Path) -> Result<Resolved, SetupE
         path: path.display().to_string(),
         message: e.to_string(),
     })?;
-    Ok(resolve(
+    Ok(resolve_in(
         &config.working_dir,
         &text,
         connections_of(config, &config.working_dir)?,
+        &grants_of(config)?,
     )?)
 }
 
@@ -131,10 +151,11 @@ pub fn resolve_recipe(config: &Config, recipe: &Path) -> Result<Resolved, SetupE
 /// The run's record, or what it names, cannot be read.
 pub fn resolve_run(config: &Config, run: &Path) -> Result<Resolved, SetupError> {
     let (repository, text) = splinter_factory::run::started_with(run)?;
-    Ok(resolve(
+    Ok(resolve_in(
         &repository,
         &text,
         connections_of(config, &repository)?,
+        &grants_of(config)?,
     )?)
 }
 
@@ -150,10 +171,11 @@ pub fn resolve_run_under_plan(
 ) -> Result<Resolved, SetupError> {
     let (repository, text) = splinter_factory::run::started_with(run)?;
     let text = splinter_factory::recipe::with_eval_plan(&text, &plan.to_string_lossy())?;
-    Ok(resolve(
+    Ok(resolve_in(
         &repository,
         &text,
         connections_of(config, &repository)?,
+        &grants_of(config)?,
     )?)
 }
 

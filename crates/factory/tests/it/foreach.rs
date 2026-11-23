@@ -205,6 +205,7 @@ fn run(resolved: &Resolved, dir: &Path) -> Result<(), RunError> {
         backend: &backend,
         trainer: None,
         models: None,
+        variables: None,
     };
     let mut factory = Factory::open(resolved, dir, services, "test")?;
     let ran = factory.run().map(|_| ());

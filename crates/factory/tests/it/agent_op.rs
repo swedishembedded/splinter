@@ -109,6 +109,7 @@ fn run(resolved: &Resolved, dir: &Path, models: &Fake) -> Result<(), RunError> {
         backend: &backend,
         trainer: None,
         models: Some(models),
+        variables: None,
     };
     let mut factory = Factory::open(resolved, dir, services, "test")?;
     let ran = factory.run().map(|_| ());
@@ -197,6 +198,7 @@ fn a_run_without_models_is_refused_before_any_item_runs() {
         backend: &backend,
         trainer: None,
         models: None,
+        variables: None,
     };
     let dir = tempfile::tempdir().unwrap();
     let error = Factory::open(&resolved, dir.path(), services, "test")

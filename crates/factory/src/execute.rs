@@ -34,9 +34,16 @@ pub struct Call<'a> {
     pub files: &'a BTreeMap<String, String>,
     /// The model each role the parameters name is bound to.
     pub models: &'a BTreeMap<String, Model>,
+    /// The controller's environment variables, by name, as the host reads
+    /// them: what an external operator's grant passes through.
+    pub variables: Option<&'a Variables>,
     /// Where the product is written: an empty directory.
     pub out: PathBuf,
 }
+
+/// How the host reads a variable of the controller's environment (only the
+/// host reads its environment).
+pub type Variables = dyn Fn(&str) -> Option<String> + Send + Sync;
 
 /// How the run reaches a model in process: a binding (a connection's
 /// endpoint and model, a champion served) made a model to call. The host

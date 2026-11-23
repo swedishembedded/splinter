@@ -79,6 +79,7 @@ pub(super) fn stage(
                     params: &stage.params,
                     files: &ctx.files,
                     models: ctx.models()?,
+                    variables: ctx.factory.services.variables,
                     out: staging.path().to_path_buf(),
                 };
                 match ctx.executor.execute(&call) {
@@ -418,6 +419,7 @@ fn run_items(
                             params: &stage.params,
                             files: &ctx.files,
                             models,
+                            variables: factory.services.variables,
                             out: out.clone(),
                         };
                         let done = done.clone();

@@ -41,6 +41,7 @@ pub mod eval_plan;
 pub mod execute;
 pub mod external_op;
 pub mod failures_op;
+pub mod grants;
 pub mod graph;
 pub mod harness_op;
 pub mod hint;

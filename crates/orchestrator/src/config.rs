@@ -399,6 +399,10 @@ pub struct FactorySettings {
     /// (`$XDG_CONFIG_HOME/splinter/connections.yaml`, else
     /// `~/.config/splinter/connections.yaml`).
     pub connections: PathBuf,
+    /// What this machine grants the task repository's operators
+    /// (`$XDG_CONFIG_HOME/splinter/operators.yaml`, else
+    /// `~/.config/splinter/operators.yaml`).
+    pub operators: PathBuf,
     /// The execution worker (`$SPLINTER_HARBOR_WORKER`, else the first
     /// `splinter-harbor-worker` on `PATH`).
     pub harbor_worker: Option<PathBuf>,
@@ -439,6 +443,7 @@ impl Config {
             var("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from);
         let factory = FactorySettings {
             connections: config_home.join("splinter/connections.yaml"),
+            operators: config_home.join("splinter/operators.yaml"),
             harbor_worker: var("SPLINTER_HARBOR_WORKER")
                 .map(PathBuf::from)
                 .or_else(|| {

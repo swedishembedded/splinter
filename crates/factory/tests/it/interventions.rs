@@ -118,6 +118,7 @@ fn run(resolved: &Resolved, dir: &Path, backend: &FakeBackend) -> Result<(), Run
         backend,
         trainer: Some(&trainer),
         models: Some(&Teachers),
+        variables: None,
     };
     let mut factory = Factory::open(resolved, dir, services, "test")?;
     let ran = factory.run().map(|_| ());
@@ -365,6 +366,7 @@ fn a_fork_correction_continues_each_failed_attempt_from_its_located_step() {
         backend: &backend,
         trainer: Some(&trainer),
         models: Some(&Locators),
+        variables: None,
     };
     let resolved = resolve(&repo.root, FORKED, connections()).unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

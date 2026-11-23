@@ -85,6 +85,7 @@ fn run(repo: &Repo, dir: &Path) {
         backend: &backend,
         trainer: None,
         models: None,
+        variables: None,
     };
     Factory::open(&resolved, dir, services, "test")
         .unwrap()
@@ -213,6 +214,7 @@ stages:
         backend: &backend,
         trainer: None,
         models: None,
+        variables: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -225,4 +227,76 @@ stages:
         .map(|s| s.task.id.clone())
         .collect();
     assert_eq!(attempted, ["train/001-alpha", "train/002-beta"]);
+}
+
+const SECRETIVE: &str = "schema: splinter.operator/v1
+name: text.sign
+revision: 1
+summary: a text file signed with the machine's key
+inputs: [{ name: text, kind: files, many: false, optional: false }]
+output: { name: signed, kind: files, many: false, optional: false }
+parameters: { type: object, additionalProperties: false }
+reproducibility: deterministic
+command: [./bin/sign.sh]
+code: [bin/sign.sh]
+env: [SIGNING_KEY]
+";
+
+const SIGN: &str = "#!/bin/sh\nprintf '%s' \"$SIGNING_KEY\" > signed.txt\n";
+
+const SIGNED: &str = "schema: splinter.recipe/v2
+name: signed
+inputs:
+  notes: { kind: files, path: notes }
+stages:
+  - { id: signed, uses: text.sign, inputs: { text: $inputs.notes } }
+";
+
+#[test]
+fn an_operator_gets_only_the_variables_its_machine_grants() {
+    use splinter_factory::grants::Grants;
+    use splinter_factory::resolve::resolve_in;
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = Repo::new();
+    repo.write("notes/a.txt", "alpha");
+    repo.write("operators/sign.yaml", SECRETIVE);
+    repo.write("bin/sign.sh", SIGN);
+    std::fs::set_permissions(
+        repo.root.join("bin/sign.sh"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    let refused = resolve_in(&repo.root, SIGNED, connections(), &Grants::default())
+        .unwrap_err()
+        .0
+        .join("\n");
+    assert!(
+        refused.contains("variable SIGNING_KEY") && refused.contains("does not grant"),
+        "{refused}"
+    );
+
+    let grants = Grants::parse(
+        "schema: splinter.operator-grants/v1\ngrants:\n  text.sign: { env: [SIGNING_KEY] }\n",
+    )
+    .unwrap();
+    let resolved = resolve_in(&repo.root, SIGNED, connections(), &grants).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let host = |name: &str| (name == "SIGNING_KEY").then(|| "machine-key".to_owned());
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: Some(&host),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("signed/signed.txt")).unwrap(),
+        "machine-key"
+    );
 }

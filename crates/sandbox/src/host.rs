@@ -221,6 +221,20 @@ impl ProcessSandbox {
         !self.host_proc && (self.require_private_proc || crate::namespace::available())
     }
 
+    /// Gives every command the variables of `granted`, which the machine's
+    /// owner named for it one by one: a credential included, unlike a
+    /// variable passed through the allowlist, which a secret-looking name
+    /// keeps out.
+    #[must_use]
+    pub fn granted_env(mut self, granted: BTreeMap<String, String>) -> Self {
+        self.env.extend(
+            granted
+                .into_iter()
+                .filter(|(name, _)| !PER_CALL_VARIABLES.contains(&name.as_str())),
+        );
+        self
+    }
+
     /// Lets every command read `paths` (and what is below them), never
     /// write them: the inputs and the code of a program the caller runs.
     #[must_use]

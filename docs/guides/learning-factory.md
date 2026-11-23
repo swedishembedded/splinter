@@ -310,6 +310,25 @@ last line of output), anything else when it failed. Its parameters are checked
 against `parameters` before anything runs, and `code` is pinned: a changed
 program is a changed input, which a run refuses and a fork recomputes.
 
+An operator file is the same on every machine; what a machine lets an operator
+have beyond its inputs and the repository is the machine's to say, in
+`~/.config/splinter/operators.yaml`. An operator that declares `network: true`
+or needs variables (`env: [NAME]`) is refused before anything runs unless its
+grant says so; a grant may also let it read paths outside the repository:
+
+```yaml
+schema: splinter.operator-grants/v1
+grants:
+  exam.sealed:
+    read: [/srv/bench/sealed, /srv/models]
+    network: true
+    env: [BENCH_BRAIN_KEY]
+```
+
+Granted variables are passed from the controller's environment by name (a
+grant never holds a value), credentials included, and the grant is part of the
+operator's pinned identity.
+
 A collection an operator compiles is pinned like a collection file: bind the
 pin's `collection` to the operator's output, and its tasks (every directory
 holding a `task.toml`, of the pin's split) are read when the pin runs:

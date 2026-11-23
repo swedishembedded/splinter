@@ -204,8 +204,26 @@ pub fn resolve(
     recipe_text: &str,
     connections: Connections,
 ) -> Result<Resolved, RecipeError> {
-    let registry =
-        crate::external_op::with_operators(ops::registry(), repository).map_err(RecipeError)?;
+    resolve_in(
+        repository,
+        recipe_text,
+        connections,
+        &crate::grants::Grants::default(),
+    )
+}
+
+/// [`resolve`] with what this machine grants the repository's operators.
+///
+/// # Errors
+/// As [`resolve`], and an operator that needs what it is not granted.
+pub fn resolve_in(
+    repository: &Path,
+    recipe_text: &str,
+    connections: Connections,
+    grants: &crate::grants::Grants,
+) -> Result<Resolved, RecipeError> {
+    let registry = crate::external_op::with_operators(ops::registry(), repository, grants)
+        .map_err(RecipeError)?;
     resolve_with(repository, recipe_text, connections, registry)
 }
 

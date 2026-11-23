@@ -34,6 +34,7 @@ use splinter_core::factory::operation::{
 use splinter_sandbox::{CommandCall, Limits, ProcessSandbox, Sandbox};
 
 use crate::execute::{Call, Execute, Outcome};
+use crate::grants::{Grant, Grants};
 use crate::registry::{OperationSpec, Registry};
 use crate::tree::code_digest;
 
@@ -76,9 +77,13 @@ pub struct OperatorFile {
     pub command: Vec<String>,
     /// The repository paths it is made of, pinned.
     pub code: Vec<String>,
-    /// Whether it reaches the network.
+    /// Whether it reaches the network (a machine grants it).
     #[serde(default)]
     pub network: bool,
+    /// The variables of the controller's environment it is given, by name
+    /// (a machine grants each).
+    #[serde(default)]
+    pub env: Vec<String>,
     /// The longest one run may take, in seconds.
     #[serde(default = "hour")]
     pub timeout_seconds: u64,
@@ -88,6 +93,8 @@ pub struct OperatorFile {
 pub struct External {
     file: OperatorFile,
     repository: PathBuf,
+    /// What this machine grants it.
+    grant: Grant,
     /// The digest of the operator file and its code.
     code: Digest,
     validator: jsonschema::Validator,
@@ -100,7 +107,7 @@ impl External {
     /// # Errors
     /// It cannot be read, is not an operator file, or names code that is
     /// not there.
-    pub fn load(repository: &Path, relative: &str) -> Result<Self, String> {
+    pub fn load(repository: &Path, relative: &str, grants: &Grants) -> Result<Self, String> {
         let path = repository.join(relative);
         let text = std::fs::read_to_string(&path).map_err(|e| format!("{relative}: {e}"))?;
         let file: OperatorFile =
@@ -125,10 +132,28 @@ impl External {
                 .map_err(|e| format!("{relative}: code {code}: {e}"))?;
             pinned.push((code.clone(), digest));
         }
+        let grant = grants.of(&file.name);
+        let mut ungranted: Vec<String> = file
+            .env
+            .iter()
+            .filter(|v| !grant.env.contains(v))
+            .map(|v| format!("variable {v}"))
+            .collect();
+        if file.network && !grant.network {
+            ungranted.push("the network".into());
+        }
+        if !ungranted.is_empty() {
+            return Err(format!(
+                "{relative}: {} needs {}, which this machine does not grant it (~/.config/splinter/operators.yaml)",
+                file.name,
+                ungranted.join(", ")
+            ));
+        }
         let external = Self {
-            code: digest_of(&pinned),
+            code: digest_of(&(pinned, &grant)),
             file,
             repository: repository.to_path_buf(),
+            grant,
             validator,
         };
         let problems = external.descriptor().problems();
@@ -164,7 +189,11 @@ impl External {
 ///
 /// # Errors
 /// Every operator file that cannot be loaded, each with why.
-pub fn with_operators(registry: Registry, repository: &Path) -> Result<Registry, Vec<String>> {
+pub fn with_operators(
+    registry: Registry,
+    repository: &Path,
+    grants: &Grants,
+) -> Result<Registry, Vec<String>> {
     let dir = repository.join(OPERATORS_DIR);
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Ok(registry);
@@ -177,7 +206,7 @@ pub fn with_operators(registry: Registry, repository: &Path) -> Result<Registry,
     names.sort();
     let (mut registry, mut problems) = (registry, Vec::new());
     for name in names {
-        match External::load(repository, &format!("{OPERATORS_DIR}/{name}")) {
+        match External::load(repository, &format!("{OPERATORS_DIR}/{name}"), grants) {
             Ok(external) if registry.get(external.name()).is_some() => problems.push(format!(
                 "{OPERATORS_DIR}/{name}: {} is an operation already",
                 external.name()
@@ -258,13 +287,22 @@ impl Execute for External {
             .flatten()
             .cloned()
             .chain([request_dir, self.repository.clone()])
+            .chain(self.grant.read.iter().cloned())
             .collect();
+        let variables: BTreeMap<String, String> = self
+            .file
+            .env
+            .iter()
+            .filter_map(|name| Some((name.clone(), (call.variables?)(name)?)))
+            .collect();
+
         let limits = Limits {
             wall_time_ms: self.file.timeout_seconds.saturating_mul(1000),
             cpu_seconds: self.file.timeout_seconds,
             ..Limits::default()
         };
         let sandbox = ProcessSandbox::new(work.path().join("calls"), BTreeMap::new(), &[], limits)
+            .granted_env(variables)
             .read_only(readable)
             .allow_network(self.file.network);
         let mut argv = vec![self.program()];
