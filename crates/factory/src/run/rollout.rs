@@ -38,7 +38,7 @@
 //! (each batch's native output; `batches/<n>/harbor` opens in Harbor's
 //! viewer) and `report.md`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -109,6 +109,8 @@ pub(crate) struct Arm<'r> {
     pub model: Option<ModelBinding>,
     /// The champion the model is, served when the arm runs.
     pub champion: Option<Champion>,
+    /// The briefs a briefed pass shows (a collection product's view).
+    pub briefs: Option<PathBuf>,
 }
 
 /// The binding a stage's identity sees for `model`, and the champion it is:
@@ -288,24 +290,7 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
         .ok_or_else(|| stage_error(&stage.key, format!("{pin} pins no tasks")))?
         .collection
         .tasks;
-    let selected: Vec<&TaskRef> = if pass.tasks.ids.is_empty() {
-        let mut solved = BTreeSet::new();
-        for upstream in &pass.tasks.unsolved_by {
-            factory.product(upstream)?;
-            for trial in trials_of(&factory.view(upstream))? {
-                if trial.verified_success() {
-                    solved.insert(trial.task);
-                }
-            }
-        }
-        tasks.iter().filter(|t| !solved.contains(&t.id)).collect()
-    } else {
-        let wanted: BTreeSet<&str> = pass.tasks.ids.iter().map(String::as_str).collect();
-        tasks
-            .iter()
-            .filter(|t| wanted.contains(t.id.as_str()))
-            .collect()
-    };
+    let selected = super::pass::select(factory, &pass.tasks, tasks)?;
     let (model, champion) = match &pass.model {
         Some(m) => {
             let (binding, champion) = binding_of(factory, &stage.key, m)?;
@@ -321,6 +306,7 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
         task_root: factory.view(pin),
         model,
         champion,
+        briefs: stage.source("briefs").map(|s| factory.view(s)),
     })
 }
 
@@ -334,8 +320,16 @@ pub(crate) fn identity(
     }
     let pin = pin(stage)?;
     let mut inputs = vec![(pin.to_owned(), factory.product(pin)?.1.digest())];
-    for upstream in &arm.pass.tasks.unsolved_by {
-        inputs.push((upstream.clone(), factory.product(upstream)?.1.digest()));
+    for upstream in arm
+        .pass
+        .tasks
+        .unsolved_by
+        .iter()
+        .chain(&arm.pass.tasks.solved_by)
+        .map(String::as_str)
+        .chain(stage.source("briefs"))
+    {
+        inputs.push((upstream.to_owned(), factory.product(upstream)?.1.digest()));
     }
     Ok(super::identity_of(
         &stage.versioned_operation(),
@@ -599,8 +593,14 @@ pub(crate) fn run_arm(
     let hinted = run.work.join("hinted");
     let task_root = match arm.pass.hint {
         Some(hint) => {
-            crate::hint::stage(&arm.task_root, &arm.tasks, hint, &hinted)
-                .map_err(|e| stage_error(&arm.key, e))?;
+            crate::hint::stage(
+                &arm.task_root,
+                &arm.tasks,
+                hint,
+                arm.briefs.as_deref(),
+                &hinted,
+            )
+            .map_err(|e| stage_error(&arm.key, e))?;
             &hinted
         }
         None => &arm.task_root,

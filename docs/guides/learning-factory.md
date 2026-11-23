@@ -352,6 +352,49 @@ a record that still shows the hint (`hint_not_removed`) or never held it
 `hinted`. A hinted stage is never interactive, and every task it runs needs a
 reference solution.
 
+## Corrections
+
+Every repair of what the student could not solve is an attempt stage over the
+tasks earlier stages left unsolved, differing only in what the actor is shown.
+A retry is a stage with another seed or model. A hinted pass (above) shows the
+reference solution. A briefed pass (`hint: brief`) shows each task a brief that
+an earlier stage wrote for it - knowledge passages, a plan of subgoals, notes
+on the mistake - and learns what it then solves under the task's own
+instruction, excluding a trial that repeats its brief, as a hinted trial that
+quotes its solution is excluded:
+
+```yaml
+  - id: failures
+    uses: attempts.failures
+    inputs: { tasks: $stages.tasks.tasks, attempts: [$stages.local.attempts] }
+  - id: briefs
+    uses: agent
+    foreach: $stages.failures.failures
+    inputs: { input: $item }
+    with: { instruction: prompts/plan-subgoals.md, output_schema: schemas/brief.json,
+            model: teacher }
+  - id: corrected
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts],
+              briefs: $stages.briefs.output }
+    with: { agent: sven, model: student, hint: brief,
+            environment: environments/vim/environment.yaml, attempts: 2, seed: 7 }
+```
+
+`attempts.failures` collects every task some given stage attempted and none
+solved, each with its instruction and its last failed attempt condensed for a
+reader (`attempt.md`); its items are named by task id with `/` written `--`. The
+brief of a task is the `brief` text of that item's `output.json`, which an
+`agent` stage asked for an object `{ "brief": ... }` writes. The teacher's
+instruction decides what kind of correction it is: passages from reference
+material (knowledge-backed), a numbered plan of checkable subgoals
+(decomposition), or what went wrong.
+
+A solution hint is trusted only where the solution works: an attempt stage
+with `agent: oracle` runs each task's reference solution against its own
+verifier, and a hinted stage given `solved_by: [$stages.oracle.attempts]` runs
+only the tasks the oracle solved.
+
 ## Generations
 
 A campaign of generations is a chain of forked runs, each held to the champion

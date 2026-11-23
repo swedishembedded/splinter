@@ -272,13 +272,11 @@ fn pinned_view(factory: &Factory<'_>, source: &str) -> std::path::PathBuf {
 }
 
 /// The hint the stage `source` showed, if it is a hinted pass.
-fn hint_of(factory: &Factory<'_>, source: &str) -> Option<Hint> {
-    factory
-        .resolved
-        .plan
-        .stage(source)
-        .and_then(|s| s.params::<AttemptParams>().ok())
-        .and_then(|p| p.hint)
+/// The hint the attempt stage `source` showed, and the view of its briefs.
+fn hint_of(factory: &Factory<'_>, source: &str) -> Option<(Hint, Option<std::path::PathBuf>)> {
+    let stage = factory.resolved.plan.stage(source)?;
+    let hint = stage.params::<AttemptParams>().ok()?.hint?;
+    Some((hint, stage.source("briefs").map(|b| factory.view(b))))
 }
 
 pub(crate) fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunError> {
@@ -354,15 +352,17 @@ pub(crate) fn produce(
             }
             successes += 1;
             let learned = project(&view, &trial, &dataset.projection).and_then(|mut found| {
-                if let Some(hint) = hint_of(factory, source) {
+                if let Some((hint, briefs)) = hint_of(factory, source) {
                     // Learned under the task's own instruction, from the
                     // tasks the run pinned.
-                    let (instruction, solution) = crate::hint::material(
+                    let (instruction, shown) = crate::hint::material(
                         &pinned_view(factory, source).join(&trial.task),
+                        &trial.task,
                         hint,
+                        briefs.as_deref(),
                     )
                     .map_err(|e| ("hint_not_found".to_owned(), e))?;
-                    crate::hint::unhint(&mut found.0.body, &instruction, &solution)?;
+                    crate::hint::unhint(&mut found.0.body, &instruction, hint, &shown)?;
                 }
                 Ok(found)
             });

@@ -399,6 +399,7 @@ pub(crate) fn produce(
         task_root: task_root.clone(),
         model: Some(base_binding),
         champion,
+        briefs: None,
     };
     let (base_trials, base_product) = arm_trials(
         factory,
@@ -435,6 +436,7 @@ pub(crate) fn produce(
         task_root,
         model: Some(binding),
         champion: None,
+        briefs: None,
     };
     let inputs = vec![
         ("tasks".into(), tasks_digest),

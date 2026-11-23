@@ -17,6 +17,7 @@ mod graph;
 mod harness_pass;
 mod hinted;
 mod import;
+mod interventions;
 mod native;
 mod repo;
 mod resolve;

@@ -54,6 +54,12 @@ pub(crate) fn work(
             } else {
                 format!("the tasks unsolved by {}", unsolved.join(", "))
             };
+            let proven = stage.sources("solved_by");
+            let selected = if proven.is_empty() {
+                selected
+            } else {
+                format!("{selected} that {} solved", proven.join(", "))
+            };
             let on = p
                 .model
                 .as_deref()

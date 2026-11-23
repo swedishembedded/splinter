@@ -5,11 +5,13 @@
 //! parameters with its model role resolved and the stages whose solved
 //! tasks it leaves out, or an evaluation's arm.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+use splinter_core::factory::task::TaskRef;
 use splinter_core::factory::trial::{RunBudget, TimeoutPolicy};
 
+use super::rollout::trials_of;
 use super::{stage_error, Factory, RunError};
 use crate::ops::{AttemptParams, Hint};
 use crate::plan::PlannedStage;
@@ -22,6 +24,10 @@ pub struct TaskSelector {
     /// frozen when the pass starts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unsolved_by: Vec<String>,
+    /// Only the tasks with a verified success in one of these stages (an
+    /// `oracle` stage: the tasks whose reference solution passes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub solved_by: Vec<String>,
     /// Only these task ids.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
@@ -93,6 +99,11 @@ pub(crate) fn pass(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Rollou
         environment_variables: params.environment_variables,
         environment: params.environment,
         tasks: TaskSelector {
+            solved_by: stage
+                .sources("solved_by")
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
             unsolved_by: stage
                 .sources("unsolved_by")
                 .into_iter()
@@ -117,4 +128,41 @@ pub(crate) fn pin(stage: &PlannedStage) -> Result<&str, RunError> {
     stage
         .source("tasks")
         .ok_or_else(|| stage_error(&stage.key, "its tasks come from no stage"))
+}
+
+/// The tasks of `tasks` that `selector` selects, in order: the named ones,
+/// or those no `unsolved_by` stage solved, and of those only the ones a
+/// `solved_by` stage solved.
+pub(crate) fn select<'t>(
+    factory: &Factory<'_>,
+    selector: &TaskSelector,
+    tasks: &'t [TaskRef],
+) -> Result<Vec<&'t TaskRef>, RunError> {
+    let solved_in = |stages: &[String]| -> Result<BTreeSet<String>, RunError> {
+        let mut solved = BTreeSet::new();
+        for upstream in stages {
+            factory.product(upstream)?;
+            for trial in trials_of(&factory.view(upstream))? {
+                if trial.verified_success() {
+                    solved.insert(trial.task);
+                }
+            }
+        }
+        Ok(solved)
+    };
+    let mut selected: Vec<&TaskRef> = if selector.ids.is_empty() {
+        let solved = solved_in(&selector.unsolved_by)?;
+        tasks.iter().filter(|t| !solved.contains(&t.id)).collect()
+    } else {
+        let wanted: BTreeSet<&str> = selector.ids.iter().map(String::as_str).collect();
+        tasks
+            .iter()
+            .filter(|t| wanted.contains(t.id.as_str()))
+            .collect()
+    };
+    if !selector.solved_by.is_empty() {
+        let proven = solved_in(&selector.solved_by)?;
+        selected.retain(|t| proven.contains(&t.id));
+    }
+    Ok(selected)
 }

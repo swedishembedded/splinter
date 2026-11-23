@@ -11,7 +11,7 @@
 //! | operation | inputs | output |
 //! |---|---|---|
 //! | `tasks.pin` | `collection` (files) | `tasks` |
-//! | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional, many) | `attempts` |
+//! | `attempt.collect` | `tasks`, `unsolved_by`, `solved_by` (attempts, optional, many), `briefs` (optional) | `attempts` |
 //! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
 //! | `dataset.import` | `records` (files) | `dataset` |
 //! | `dataset.project` | `attempts` (many) | `dataset` |
@@ -19,6 +19,7 @@
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
 //! | `agent` | `input` (files, many) | `output` ([`crate::agent_op`]) |
+//! | `attempts.failures` | `tasks`, `attempts` (many) | `failures` ([`crate::failures_op`]) |
 //!
 //! Each operation's parameters are one struct that refuses unknown fields;
 //! the descriptor's parameter schema is generated from that struct, so the
@@ -54,6 +55,9 @@ pub struct PinParams {
 pub enum Hint {
     /// The task's reference solution (`solution/solve.sh`).
     Solution,
+    /// The task's brief in the stage's `briefs` input: knowledge, a plan of
+    /// subgoals, a teacher's notes ([`crate::hint`]).
+    Brief,
 }
 
 fn one() -> u32 {
@@ -346,6 +350,7 @@ impl<P: JsonSchema + DeserializeOwned + Send + Sync> OperationSpec for Builtin<P
 pub fn registry() -> Registry {
     Registry::default()
         .with(crate::agent_op::Agent)
+        .with(crate::failures_op::Failures)
         .with(Builtin::<PinParams> {
             name: names::PIN,
             summary: "pin a collection's tasks (one split) into the run",
@@ -364,6 +369,15 @@ pub fn registry() -> Registry {
                     many: true,
                     optional: true,
                     ..port("unsolved_by", ArtifactKind::Attempts)
+                },
+                Port {
+                    many: true,
+                    optional: true,
+                    ..port("solved_by", ArtifactKind::Attempts)
+                },
+                Port {
+                    optional: true,
+                    ..port("briefs", ArtifactKind::Files)
                 },
             ],
             output: port("attempts", ArtifactKind::Attempts),

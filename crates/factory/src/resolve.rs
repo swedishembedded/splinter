@@ -34,8 +34,8 @@ use crate::environment::Environment;
 use crate::eval_plan::EvalPlan;
 use crate::graph::{self, CompiledPlan};
 use crate::ops::{
-    self, names, AttemptParams, EvaluationParams, ImportDatasetParams, ImportParams, PinParams,
-    ProjectParams, PromotionParams, TrainParams,
+    self, names, AttemptParams, EvaluationParams, Hint, ImportDatasetParams, ImportParams,
+    PinParams, ProjectParams, PromotionParams, TrainParams,
 };
 use crate::plan::{Plan, PlannedStage};
 use crate::recipe::{ModelRef, RecipeError};
@@ -467,6 +467,17 @@ fn check(
                     reader,
                     "a hinted pass is never interactive; a person guiding the agent is the hint",
                 );
+            }
+            match (params.hint, stage.source("briefs").is_some()) {
+                (Some(Hint::Brief), false) => problem(
+                    reader,
+                    "hint: brief shows each task its brief, and the stage is given none: bind `briefs`",
+                ),
+                (Some(Hint::Solution) | None, true) => problem(
+                    reader,
+                    "is given briefs, which only a pass with hint: brief shows",
+                ),
+                _ => {}
             }
             if let Some(harness) = &params.harness {
                 for refusal in harness_refusals(&params) {
