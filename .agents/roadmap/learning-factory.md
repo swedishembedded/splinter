@@ -125,8 +125,10 @@ recovery and protected eval.
 - **Protected evaluation authority**: the task repository needs an
   `evaluate --plan ID --candidate FILE --out FILE` command signing a
   `splinter.eval/1` result the way it signs verdicts.
-- **Sven trajectories** (5.9.2): a reply's reasoning and a request's token account
-  are filed as agent steps of their own after the reply's tool-call step; native-sft
-  reads both shapes, and the cause in sven's step assembly is not yet found.
+- **Sven trajectories.** Sven 5.9.2 files a reply's reasoning as an agent step of
+  its own after the reply's tool-call step; fixed in sven (a reply's reasoning now
+  completes when its first tool call begins), and native-sft reads both shapes.
+  Still open in sven: `Agent::trajectory` (the SDK's export) carries no reply's
+  reasoning at all.
 - **Live end-to-end with a real model and brain** (the decision of 2026-11-22): a
   full `recipes/vim-mastery.yaml` run on a GPU host.
