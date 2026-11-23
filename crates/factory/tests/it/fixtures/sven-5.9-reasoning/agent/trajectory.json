@@ -1,0 +1,388 @@
+{
+  "schema_version": "ATIF-v1.7",
+  "session_id": "trajectory",
+  "agent": {
+    "name": "sven",
+    "version": "5.9.2",
+    "model_name": "openai/deepseek/deepseek-v4.1-flash"
+  },
+  "final_metrics": {
+    "extra": {
+      "sven_outcome_unknown_reason": "no_verifier"
+    }
+  },
+  "extra": {
+    "sven": {
+      "created_at": "2026-11-23T01:59:51.751121877Z",
+      "mode": "agent",
+      "status": "active",
+      "title": "CI Run",
+      "updated_at": "2026-11-23T01:59:51.751121989Z"
+    }
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "source": "user",
+      "message": "# Append at the end\n\n**New idea:** `A`: append at the end of the line.\n\n**Task:** Append ` world` to the starter line.\n\n**Starter - `main.txt`**\n\n```text\nHello\n[no final newline]\n```\n\n**Expected - `main.txt`**\n\n```text\nHello world\n```\n"
+    },
+    {
+      "step_id": 2,
+      "source": "agent",
+      "message": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "chatcmpl-tool-a594c16291a6a462",
+          "function_name": "vim-vim",
+          "arguments": {
+            "commands": [
+              "args main.txt",
+              "normal! A world",
+              "wqall"
+            ],
+            "intent": "Append ' world' at end of line in main.txt"
+          }
+        }
+      ],
+      "extra": {
+        "sven": {
+          "gate": {
+            "decisions": [
+              {
+                "call_id": "chatcmpl-tool-a594c16291a6a462",
+                "capability": "NetworkAccess",
+                "decided_by": "policy",
+                "decision": "approved",
+                "decision_id": "ada270ec-c3c9-4cf3-b6d2-86b3ed344e7c",
+                "policy": "allowed",
+                "violations": [
+                  {
+                    "message": "Additional properties are not allowed ('intent' was unexpected)",
+                    "path": "",
+                    "rule": "additionalProperties"
+                  }
+                ]
+              }
+            ],
+            "schema": "sven.gate.v1"
+          },
+          "timing": {
+            "calls": [
+              {
+                "call_id": "chatcmpl-tool-a594c16291a6a462",
+                "duration_ms": 20.393176
+              }
+            ],
+            "schema": "sven.timing.v1"
+          }
+        }
+      }
+    },
+    {
+      "step_id": 3,
+      "source": "agent",
+      "model_name": "deepseek/deepseek-v4.1-flash",
+      "message": "",
+      "reasoning_content": "The task: append \" world\" to the starter line. The file has no final newline. Use `A` to append at end of line.\n\nLet me do it with vim.",
+      "observation": {
+        "results": [
+          {
+            "source_call_id": "chatcmpl-tool-a594c16291a6a462",
+            "content": "exit status: 0\nmessages:\n\"main.txt\" [noeol] 1L, 5B\n\"main.txt\" 1L, 12B written\nchanges:\n--- a/main.txt\n+++ b/main.txt\n@@ -1 +1 @@\n-Hello\n\\ No newline at end of file\n+Hello world"
+          }
+        ]
+      },
+      "metrics": {
+        "prompt_tokens": 966,
+        "completion_tokens": 122,
+        "cached_tokens": 384,
+        "cost_usd": 0.00028,
+        "extra": {
+          "sven": {
+            "decoding": {
+              "first_response_timeout": 480
+            }
+          },
+          "sven_ledger": [
+            {
+              "assistant": 0,
+              "context_blocks": [
+                {
+                  "name": "system/identity",
+                  "sha256": "178976b85c3023c6ffb8b7dcc77235f6c3e046f55a6503d7bb35ea2249473c0b"
+                },
+                {
+                  "name": "system/mode",
+                  "sha256": "238b2d6460522e20c0a28886378dae6caf17027d6fd5399f8dc1faf39509f791"
+                },
+                {
+                  "name": "system/project",
+                  "sha256": "dae1a9a336ca79dd5468384a4e7662ec126865dd3eb762bfb16880cb9e5d456b"
+                },
+                {
+                  "name": "system/guidelines.working_method",
+                  "sha256": "84b332a000917c7aec5e403f139e0a7da5719f8c20e46e7618a92095f44aeb63"
+                },
+                {
+                  "name": "system/guidelines.tools",
+                  "sha256": "6501d506a46e0ee6434a0707781dc3685c8b98bdf88c664d33c16a47ce3cdc41"
+                },
+                {
+                  "name": "tools",
+                  "sha256": "4d5772ef06a75d0007af5b456c8e3b15ba0d9ba4afc216a6971bf3b4bbf8f235"
+                }
+              ],
+              "estimated_total": 728,
+              "estimator": "bytes_div_4",
+              "first_token_ms": 224,
+              "media": 0,
+              "reported": {
+                "cache_read": 384,
+                "cache_write": 0,
+                "input": 582,
+                "output": 122
+              },
+              "residual": 238,
+              "system_runtime": {
+                "Project Context": 58
+              },
+              "system_stable": 382,
+              "tool_activity": {
+                "calls": 0,
+                "duplicate_calls": 0
+              },
+              "tool_schemas": {
+                "vim-vim": 211
+              },
+              "user": 77,
+              "wall_ms": 1501
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step_id": 4,
+      "source": "agent",
+      "message": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "chatcmpl-tool-a7ba0bc37650c5ae",
+          "function_name": "vim-vim",
+          "arguments": {
+            "commands": [
+              "args main.txt",
+              "normal! yG",
+              "call writefile([getline(1)], '/dev/stdout')",
+              "qall!"
+            ],
+            "intent": "Print file contents to verify"
+          }
+        }
+      ],
+      "extra": {
+        "sven": {
+          "gate": {
+            "decisions": [
+              {
+                "call_id": "chatcmpl-tool-a7ba0bc37650c5ae",
+                "capability": "NetworkAccess",
+                "decided_by": "policy",
+                "decision": "approved",
+                "decision_id": "4c39337e-bd5f-41d3-b594-a5ce338c7031",
+                "policy": "allowed",
+                "violations": [
+                  {
+                    "message": "Additional properties are not allowed ('intent' was unexpected)",
+                    "path": "",
+                    "rule": "additionalProperties"
+                  }
+                ]
+              }
+            ],
+            "schema": "sven.gate.v1"
+          },
+          "timing": {
+            "calls": [
+              {
+                "call_id": "chatcmpl-tool-a7ba0bc37650c5ae",
+                "duration_ms": 22.399749
+              }
+            ],
+            "schema": "sven.timing.v1"
+          }
+        }
+      }
+    },
+    {
+      "step_id": 5,
+      "source": "agent",
+      "model_name": "deepseek/deepseek-v4.1-flash",
+      "message": "",
+      "reasoning_content": "Verify file content.",
+      "observation": {
+        "results": [
+          {
+            "source_call_id": "chatcmpl-tool-a7ba0bc37650c5ae",
+            "content": "exit status: 0\noutput:\nHello world\nmessages:\n\"main.txt\" 1L, 12B\nchanges: no file changed"
+          }
+        ]
+      },
+      "metrics": {
+        "prompt_tokens": 1155,
+        "completion_tokens": 96,
+        "cached_tokens": 896,
+        "cost_usd": 0.000167,
+        "extra": {
+          "sven": {
+            "decoding": {
+              "first_response_timeout": 480
+            }
+          },
+          "sven_ledger": [
+            {
+              "assistant": 0,
+              "context_blocks": [
+                {
+                  "name": "system/identity",
+                  "sha256": "178976b85c3023c6ffb8b7dcc77235f6c3e046f55a6503d7bb35ea2249473c0b"
+                },
+                {
+                  "name": "system/mode",
+                  "sha256": "238b2d6460522e20c0a28886378dae6caf17027d6fd5399f8dc1faf39509f791"
+                },
+                {
+                  "name": "system/project",
+                  "sha256": "dae1a9a336ca79dd5468384a4e7662ec126865dd3eb762bfb16880cb9e5d456b"
+                },
+                {
+                  "name": "system/guidelines.working_method",
+                  "sha256": "84b332a000917c7aec5e403f139e0a7da5719f8c20e46e7618a92095f44aeb63"
+                },
+                {
+                  "name": "system/guidelines.tools",
+                  "sha256": "6501d506a46e0ee6434a0707781dc3685c8b98bdf88c664d33c16a47ce3cdc41"
+                },
+                {
+                  "name": "tools",
+                  "sha256": "4d5772ef06a75d0007af5b456c8e3b15ba0d9ba4afc216a6971bf3b4bbf8f235"
+                }
+              ],
+              "estimated_total": 820,
+              "estimator": "bytes_div_4",
+              "first_token_ms": 143,
+              "media": 0,
+              "reported": {
+                "cache_read": 896,
+                "cache_write": 0,
+                "input": 259,
+                "output": 96
+              },
+              "residual": 335,
+              "system_runtime": {
+                "Project Context": 58
+              },
+              "system_stable": 382,
+              "tool_activity": {
+                "calls": 1,
+                "duplicate_calls": 0
+              },
+              "tool_call_arguments": {
+                "vim-vim": 30
+              },
+              "tool_results": {
+                "vim-vim": 62
+              },
+              "tool_schemas": {
+                "vim-vim": 211
+              },
+              "user": 77,
+              "wall_ms": 1003
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step_id": 6,
+      "source": "agent",
+      "model_name": "deepseek/deepseek-v4.1-flash",
+      "message": "Done.\n\n**What changed:** In `/workspace/repo/main.txt`, `A world` was applied - `A` enters Insert mode at the end of the current line and the text ` world` was typed, producing `Hello world` (12 bytes, still no final newline).\n\n**Verification:** Re-read the file after saving; contents print exactly `Hello world`, matching the expected output.",
+      "reasoning_content": "Verified. Report.",
+      "metrics": {
+        "prompt_tokens": 1310,
+        "completion_tokens": 88,
+        "cached_tokens": 1152,
+        "cost_usd": 0.000133,
+        "extra": {
+          "sven": {
+            "decoding": {
+              "first_response_timeout": 480
+            }
+          },
+          "sven_ledger": [
+            {
+              "assistant": 0,
+              "context_blocks": [
+                {
+                  "name": "system/identity",
+                  "sha256": "178976b85c3023c6ffb8b7dcc77235f6c3e046f55a6503d7bb35ea2249473c0b"
+                },
+                {
+                  "name": "system/mode",
+                  "sha256": "238b2d6460522e20c0a28886378dae6caf17027d6fd5399f8dc1faf39509f791"
+                },
+                {
+                  "name": "system/project",
+                  "sha256": "dae1a9a336ca79dd5468384a4e7662ec126865dd3eb762bfb16880cb9e5d456b"
+                },
+                {
+                  "name": "system/guidelines.working_method",
+                  "sha256": "84b332a000917c7aec5e403f139e0a7da5719f8c20e46e7618a92095f44aeb63"
+                },
+                {
+                  "name": "system/guidelines.tools",
+                  "sha256": "6501d506a46e0ee6434a0707781dc3685c8b98bdf88c664d33c16a47ce3cdc41"
+                },
+                {
+                  "name": "tools",
+                  "sha256": "4d5772ef06a75d0007af5b456c8e3b15ba0d9ba4afc216a6971bf3b4bbf8f235"
+                }
+              ],
+              "estimated_total": 897,
+              "estimator": "bytes_div_4",
+              "first_token_ms": 74,
+              "media": 0,
+              "reported": {
+                "cache_read": 1152,
+                "cache_write": 0,
+                "input": 158,
+                "output": 88
+              },
+              "residual": 413,
+              "system_runtime": {
+                "Project Context": 58
+              },
+              "system_stable": 382,
+              "tool_activity": {
+                "calls": 2,
+                "duplicate_calls": 0
+              },
+              "tool_call_arguments": {
+                "vim-vim": 67
+              },
+              "tool_results": {
+                "vim-vim": 102
+              },
+              "tool_schemas": {
+                "vim-vim": 211
+              },
+              "user": 77,
+              "wall_ms": 916
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

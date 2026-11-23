@@ -61,6 +61,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         validation: &validation,
         // seed: the test checks the seed it was given is the one brain is asked for.
         seed: 7,
+        thinking: false,
         resume_key: "lora-r4-abc",
         out: &out,
     };

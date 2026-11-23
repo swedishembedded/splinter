@@ -639,3 +639,44 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
     .unwrap_err();
     assert!(error.to_string().contains("does not verify"), "{error}");
 }
+
+#[test]
+fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_trainer_is_told() {
+    // The live Sven 5.9 trial: its replies carry the model's reasoning.
+    let repo = Repo::new();
+    let recipe = RECIPE.split("eval:").next().unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved(&repo, recipe), dir.path(), &backend, &trainer).unwrap();
+    let train = std::fs::read_to_string(dir.path().join("datasets/sft/train.jsonl")).unwrap();
+    assert!(
+        !train.contains("reasoning_content"),
+        "thinking: false keeps no reasoning"
+    );
+    let report = std::fs::read_to_string(dir.path().join("datasets/sft/report.md")).unwrap();
+    assert!(report.contains("reasoning removed"), "{report}");
+    assert!(
+        trainer.thinking.lock().unwrap().iter().all(|t| !t),
+        "the trainer trains for no-think mode"
+    );
+
+    let thinking = recipe.replace(
+        "target: \"brain:Qwen/Qwen3-4B\", seed: 13",
+        "target: \"brain:Qwen/Qwen3-4B\", thinking: true, seed: 13",
+    );
+    let other = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, &thinking),
+        other.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let train = std::fs::read_to_string(other.path().join("datasets/sft/train.jsonl")).unwrap();
+    assert!(
+        train.contains("reasoning_content"),
+        "thinking: true keeps the model's reasoning"
+    );
+    assert!(trainer.thinking.lock().unwrap().iter().any(|t| *t));
+}

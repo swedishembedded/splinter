@@ -47,6 +47,8 @@ pub struct TrainRequest<'a> {
     pub validation: &'a Path,
     /// The seed.
     pub seed: u64,
+    /// Train reasoning (the dataset's `thinking`).
+    pub thinking: bool,
     /// The run's durable identity at the trainer: asked again under it, an
     /// interrupted run continues and a completed one is answered from its
     /// record.
@@ -116,9 +118,6 @@ pub struct LoraParams {
     /// The longest training row in tokens.
     #[serde(default)]
     pub max_block: Option<u32>,
-    /// Train the model to reason before it answers.
-    #[serde(default)]
-    pub thinking: bool,
 }
 
 fn one() -> u32 {
@@ -216,7 +215,7 @@ impl Trainer for BrainTrainer {
             weight_decay: params.weight_decay,
             seed: request.seed,
             max_block: params.max_block,
-            thinking: params.thinking,
+            thinking: request.thinking,
             pack_answers: true,
             on_step: None,
             keep_evaluations: None,

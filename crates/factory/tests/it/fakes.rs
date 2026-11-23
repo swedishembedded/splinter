@@ -35,7 +35,7 @@ pub enum Outcome {
 }
 
 fn fixture() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/fixtures/sven-trial")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/fixtures/sven-5.9-reasoning")
 }
 
 /// A scripted execution backend.
@@ -227,6 +227,8 @@ impl ExecutionBackend for FakeBackend {
 pub struct FakeTrainer {
     /// Every training request's parameters, in order.
     pub trained: Mutex<Vec<serde_json::Value>>,
+    /// Whether each training request trained reasoning.
+    pub thinking: Mutex<Vec<bool>>,
 }
 
 impl Trainer for FakeTrainer {
@@ -244,6 +246,7 @@ impl Trainer for FakeTrainer {
             .lines()
             .count();
         self.trained.lock().unwrap().push(request.params.clone());
+        self.thinking.lock().unwrap().push(request.thinking);
         let adapter = request.out.join("adapter.safetensors");
         std::fs::write(
             &adapter,

@@ -221,6 +221,11 @@ pub struct DatasetSection {
     /// The longest record, in the target's tokens, when bounded.
     #[serde(default)]
     pub max_block: Option<u64>,
+    /// Train the target to reason before it answers. Off (the default), the
+    /// target is trained for no-think mode: the reasoning a teacher's replies
+    /// carry is removed from every turn, and the trainer is told the same.
+    #[serde(default)]
+    pub thinking: bool,
     /// How validation records are held out.
     #[serde(default)]
     pub validation: Option<ValidationSplit>,

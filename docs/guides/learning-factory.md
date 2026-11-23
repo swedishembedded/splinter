@@ -92,7 +92,10 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   and tools - with every action supervised. Nothing is ranked, capped or
   rewritten; a trial excluded is listed in `excluded.jsonl` with its exact reason,
   and `report.md` shows the waterfall from raw trials to records. Validation
-  holds out whole tasks (or task families). `projection: portable-sft` rebuilds
+  holds out whole tasks (or task families). The target is trained for no-think
+  mode unless the dataset says `thinking: true`: the reasoning a teacher's replies
+  carry is then removed from every turn (the report counts them), and the trainer
+  is told the same mode. `projection: portable-sft` rebuilds
   each conversation from the trial's ATIF trajectory instead, for an agent whose
   model calls are not recorded (Claude Code).
 - **Training.** Each variant is one brain job, resumable under a key derived from

@@ -114,6 +114,12 @@ pub(crate) fn produce(
             train: &view.join(&dataset.train.path),
             validation: &view.join(&dataset.validation.path),
             seed: variant.seed,
+            thinking: factory
+                .resolved
+                .recipe
+                .dataset
+                .as_ref()
+                .is_some_and(|d| d.thinking),
             resume_key: &tag,
             out: &out,
         })

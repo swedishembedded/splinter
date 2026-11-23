@@ -156,7 +156,7 @@ pub(crate) fn identity(
     let parameters = json!({
         "objective": dataset.objective, "admission": dataset.admission, "projection": dataset.projection,
         "target": dataset.target, "max_block": dataset.max_block, "validation": dataset.validation,
-        "policy_role": "first-request",
+        "policy_role": "first-request", "thinking": dataset.thinking,
     });
     Ok(super::identity_of(
         StageKind::Dataset,
@@ -292,6 +292,21 @@ pub(crate) fn produce(
         }
     }
     let eligible = projected.len() as u64;
+    // A target trained for no-think mode is never shown a turn's reasoning:
+    // its prompt opens no thinking block, and a supervised turn holding one
+    // would teach it to emit reasoning it is never asked for.
+    let mut reasoning_removed = 0u64;
+    if !dataset.thinking {
+        for (_, _, record, _, _) in &mut projected {
+            if let RecordBody::Chat { messages, .. } = &mut record.body {
+                for message in messages.iter_mut() {
+                    if message.reasoning_content.take().is_some() {
+                        reasoning_removed += 1;
+                    }
+                }
+            }
+        }
+    }
     if let (Some(limit), Some(trainer)) = (dataset.max_block, factory.services.trainer) {
         let lines: Vec<String> = projected
             .iter()
@@ -483,6 +498,8 @@ pub(crate) fn produce(
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let report = Report {
+        thinking: dataset.thinking,
+        reasoning_removed,
         name: &dataset.name,
         waterfall: &waterfall,
         exclusions: &exclusions,
@@ -499,6 +516,8 @@ pub(crate) fn produce(
 
 /// What the dataset's report shows.
 struct Report<'a> {
+    thinking: bool,
+    reasoning_removed: u64,
     name: &'a str,
     waterfall: &'a [WaterfallStep],
     exclusions: &'a BTreeMap<String, u64>,
@@ -536,6 +555,14 @@ impl Report<'_> {
             self.per_task.len(),
             self.tasks
         ));
+        out.push_str(&if self.thinking {
+            "\nReasoning is kept (thinking: true): the target is trained to reason before it answers.\n".to_owned()
+        } else {
+            format!(
+                "\nThe target is trained for no-think mode (thinking: false): reasoning removed from {} turns.\n",
+                self.reasoning_removed
+            )
+        });
         out.push_str(&format!(
             "\n## Exclusions\n\n{}",
             table(self.exclusions, "reason")
