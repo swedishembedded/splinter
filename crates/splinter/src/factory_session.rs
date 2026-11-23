@@ -15,9 +15,7 @@ use std::process::Command as Process;
 use serde::Serialize;
 use splinter_sdk::factory::backend::HarborWorker;
 use splinter_sdk::factory::resolution::Resolved;
-use splinter_sdk::factory::run::{
-    self, Factory, RunError, RunManifest, Services, LOCK_FILE, REPORT_FILE,
-};
+use splinter_sdk::factory::run::{self, Factory, RunError, RunManifest, Services, REPORT_FILE};
 use splinter_sdk::factory::training::BrainTrainer;
 use splinter_sdk::factory::{resolve_recipe, resolve_run, trainer, worker};
 use splinter_sdk::{Config, Error};
@@ -53,8 +51,12 @@ pub fn route(
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),
         Command::Play(args) => play(config, json, &args),
+        // A run directory, or something that names a path: never an
+        // experience set's id.
         Command::Verify(VerifyArgs { experience_set, .. })
-            if is_run(Path::new(&experience_set)) =>
+            if is_run(Path::new(&experience_set))
+                || experience_set.contains('/')
+                || Path::new(&experience_set).exists() =>
         {
             verify(json, Path::new(&experience_set))
         }
@@ -74,7 +76,7 @@ pub fn route(
 /// Whether `path` is a factory run directory.
 #[must_use]
 pub fn is_run(path: &Path) -> bool {
-    path.join(LOCK_FILE).is_file()
+    run::is_run(path)
 }
 
 /// The controller's name on its lease: this host and process.
@@ -311,6 +313,7 @@ pub fn verify(json: bool, dir: &Path) -> Result<Exit, Error> {
 
 /// `report RUN`.
 pub fn report(dir: &Path) -> Result<Exit, Error> {
+    run::require_run(dir).map_err(refused)?;
     let path = dir.join(REPORT_FILE);
     let text = std::fs::read_to_string(&path).map_err(|e| {
         refused(format!(
@@ -324,8 +327,9 @@ pub fn report(dir: &Path) -> Result<Exit, Error> {
 
 /// `inspect`.
 pub fn inspect(config: &Config, args: &InspectArgs) -> Result<Exit, Error> {
-    let stages: Vec<run::StageStatus> = run::status(&args.run)
-        .map_err(refused)?
+    let all = run::status(&args.run).map_err(refused)?;
+    let keys: Vec<String> = all.iter().map(|s| s.key.clone()).collect();
+    let stages: Vec<run::StageStatus> = all
         .into_iter()
         .filter(|s| {
             args.stage
@@ -333,6 +337,13 @@ pub fn inspect(config: &Config, args: &InspectArgs) -> Result<Exit, Error> {
                 .is_none_or(|prefix| s.key.starts_with(prefix.as_str()))
         })
         .collect();
+    if let (Some(prefix), true) = (&args.stage, stages.is_empty()) {
+        return Err(refused(format!(
+            "no stage of {} begins with {prefix:?}; its stages: {}",
+            args.run.display(),
+            keys.join(", ")
+        )));
+    }
     if let Some(viewer) = &args.viewer {
         if viewer != "harbor" {
             return Err(refused(format!("viewer {viewer} is not one of: harbor")));
@@ -396,12 +407,7 @@ fn harbor_view(config: &Config, dir: &Path, stages: &[run::StageStatus]) -> Resu
 /// `export`: the run's products, views, state and record as one
 /// `tar.zst`; the unfinished work and staging areas are left out.
 pub fn export(args: &ExportArgs) -> Result<Exit, Error> {
-    if !is_run(&args.run) {
-        return Err(refused(format!(
-            "{} is not a factory run",
-            args.run.display()
-        )));
-    }
+    run::require_run(&args.run).map_err(refused)?;
     let status = Process::new("tar")
         .arg("--zstd")
         .arg("-cf")

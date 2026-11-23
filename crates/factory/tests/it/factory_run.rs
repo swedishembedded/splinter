@@ -722,3 +722,38 @@ fn a_fork_of_a_run_that_holds_two_products_of_a_stage_shows_the_one_it_reuses() 
     );
     assert!(verify(third.path()).unwrap().is_empty());
 }
+
+#[test]
+fn a_directory_that_is_not_a_run_is_refused_and_left_untouched() {
+    use splinter_factory::run::{request_cancel, started_with};
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("runs/none");
+    let empty = dir.path().join("empty");
+    std::fs::create_dir(&empty).unwrap();
+    for target in [&missing, &empty] {
+        let errors = [
+            status(target).unwrap_err().to_string(),
+            verify(target).unwrap_err().to_string(),
+            started_with(target).unwrap_err().to_string(),
+            request_cancel(target).unwrap_err().to_string(),
+            fork(target, &dir.path().join("fork"))
+                .unwrap_err()
+                .to_string(),
+        ];
+        for error in errors {
+            assert!(
+                error.contains("not a factory run") || error.contains("does not exist"),
+                "{error}"
+            );
+        }
+    }
+    assert!(
+        !missing.exists(),
+        "nothing was created for a run that is not there"
+    );
+    assert_eq!(
+        std::fs::read_dir(&empty).unwrap().count(),
+        0,
+        "nor inside a directory that is not a run"
+    );
+}

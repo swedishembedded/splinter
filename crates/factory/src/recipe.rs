@@ -371,15 +371,25 @@ impl Recipe {
     /// # Errors
     /// Not YAML, the wrong shape, an unknown key, or the wrong schema.
     pub fn parse(text: &str) -> Result<Self, RecipeError> {
-        let recipe: Self =
-            serde_yaml::from_str(text).map_err(|e| RecipeError(vec![e.to_string()]))?;
-        if recipe.schema != RECIPE_SCHEMA {
-            return Err(RecipeError(vec![format!(
-                "schema is {:?}; this Splinter reads {RECIPE_SCHEMA}",
-                recipe.schema
-            )]));
+        // The schema first: a collection or an evaluation plan given as a
+        // recipe is named as what it is, not refused field by field.
+        let schema = serde_yaml::from_str::<serde_yaml::Value>(text)
+            .ok()
+            .and_then(|v| v.get("schema").and_then(|s| s.as_str()).map(str::to_owned));
+        match schema.as_deref() {
+            Some(RECIPE_SCHEMA) => {}
+            Some(other) => {
+                return Err(RecipeError(vec![format!(
+                    "this is a {other} file, not a recipe ({RECIPE_SCHEMA})"
+                )]))
+            }
+            None => {
+                return Err(RecipeError(vec![format!(
+                    "no `schema:`; a recipe begins with `schema: {RECIPE_SCHEMA}`"
+                )]))
+            }
         }
-        Ok(recipe)
+        serde_yaml::from_str(text).map_err(|e| RecipeError(vec![e.to_string()]))
     }
 
     /// Check the references between sections: unique names, passes that

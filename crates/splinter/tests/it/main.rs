@@ -8,6 +8,7 @@
 //! others run beside it.
 
 mod absorb_json;
+mod factory_cli;
 mod first_run;
 mod harbor_episodes_cli;
 mod jobs_cli;

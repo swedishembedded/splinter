@@ -45,6 +45,9 @@ fn a_factory_runs_trials_are_indexed_as_graded_experiences_once() {
         .unwrap()
         .with_clock(Box::new(FixedClock::new("2026-11-23T09:00:00.000Z")));
     let run = scratch.0.join("run");
+    // A run directory holds its lock, as `splinter run` writes it.
+    std::fs::create_dir_all(&run).unwrap();
+    std::fs::write(run.join(splinter_factory::run::LOCK_FILE), "{}\n").unwrap();
     let products = ProductStore::new(&run, Box::new(SystemClock));
     let staging = products.begin_staging().unwrap();
     let trajectory = std::fs::read(

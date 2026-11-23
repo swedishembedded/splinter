@@ -17,8 +17,9 @@ use super::model_ref;
 /// `verify`.
 #[derive(Debug, Args)]
 pub struct VerifyArgs {
-    /// The experience set, by id or unique prefix.
-    #[arg(value_name = "EXPERIENCE-SET")]
+    /// A factory run directory, or an experience set by id or unique
+    /// prefix.
+    #[arg(value_name = "RUN|EXPERIENCE-SET")]
     pub experience_set: String,
     /// A calibrated judge for the kinds a judge grades.
     #[arg(long, value_parser = model_ref, value_name = "REF")]

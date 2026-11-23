@@ -70,6 +70,7 @@ pub struct RunOrigin {
 /// # Errors
 /// The run's recipe or origin cannot be read.
 pub fn started_with(run: &Path) -> Result<(PathBuf, String), RunError> {
+    require_run(run)?;
     let origin: RunOrigin = read_json(&run.join(ORIGIN_FILE))?;
     let recipe = run.join(RECIPE_FILE);
     let text = std::fs::read_to_string(&recipe).map_err(io(&recipe))?;
@@ -82,6 +83,7 @@ pub fn started_with(run: &Path) -> Result<(PathBuf, String), RunError> {
 /// # Errors
 /// The request cannot be written.
 pub fn request_cancel(run: &Path) -> Result<(), RunError> {
+    require_run(run)?;
     let path = run.join(CANCEL_FILE);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(io(parent))?;
@@ -121,6 +123,9 @@ pub enum RunError {
     /// The run was cancelled; what is committed stays.
     #[error("the run was cancelled; resume it to continue")]
     Cancelled,
+    /// The directory is not a factory run.
+    #[error("{}", not_a_run_message(.0))]
+    NotARun(PathBuf),
     /// A file of the run cannot be written or read.
     #[error("{path}: {message}")]
     Io {
@@ -129,6 +134,38 @@ pub enum RunError {
         /// What failed.
         message: String,
     },
+}
+
+fn not_a_run_message(dir: &Path) -> String {
+    if dir.exists() {
+        format!(
+            "{} is not a factory run: it holds no {LOCK_FILE} (a run is the directory `splinter run --out` wrote)",
+            dir.display()
+        )
+    } else {
+        format!(
+            "{} does not exist: give the directory `splinter run --out` wrote",
+            dir.display()
+        )
+    }
+}
+
+/// Whether `dir` is a factory run directory.
+#[must_use]
+pub fn is_run(dir: &Path) -> bool {
+    dir.join(LOCK_FILE).is_file()
+}
+
+/// `Ok` when `dir` is a factory run; never creates anything in it.
+///
+/// # Errors
+/// [`RunError::NotARun`].
+pub fn require_run(dir: &Path) -> Result<(), RunError> {
+    if is_run(dir) {
+        Ok(())
+    } else {
+        Err(RunError::NotARun(dir.to_path_buf()))
+    }
 }
 
 pub(crate) fn io(path: &Path) -> impl Fn(std::io::Error) -> RunError + '_ {
@@ -558,6 +595,7 @@ pub(crate) fn identity_of(
 /// # Errors
 /// A product cannot be imported.
 pub fn fork(source: &Path, run: &Path) -> Result<usize, RunError> {
+    require_run(source)?;
     std::fs::create_dir_all(run).map_err(io(run))?;
     let from = ProductStore::new(source, Box::new(SystemClock));
     let into = ProductStore::new(run, Box::new(SystemClock));
@@ -575,6 +613,7 @@ pub fn fork(source: &Path, run: &Path) -> Result<usize, RunError> {
 /// # Errors
 /// The products cannot be listed.
 pub fn verify(run: &Path) -> Result<Vec<String>, RunError> {
+    require_run(run)?;
     let store = ProductStore::new(run, Box::new(SystemClock));
     let mut problems = Vec::new();
     for manifest in store.list()? {
@@ -619,6 +658,7 @@ pub struct StageStatus {
 /// # Errors
 /// The run state cannot be read.
 pub fn status(run: &Path) -> Result<Vec<StageStatus>, RunError> {
+    require_run(run)?;
     let state = RunState::open(run)?;
     let mut out = Vec::new();
     for record in state.list()? {

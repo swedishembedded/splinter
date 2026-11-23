@@ -319,6 +319,25 @@ fn a_task_repository_ships_its_connections_and_this_machine_overrides_them() {
 }
 
 #[test]
+fn a_file_that_is_not_a_recipe_is_named_as_what_it_is() {
+    let repo = Repo::new();
+    let plan = std::fs::read_to_string(repo.root.join("eval/dev.yaml")).unwrap();
+    let refused = resolve(&repo.root, &plan, connections())
+        .unwrap_err()
+        .0
+        .join("\n");
+    assert!(
+        refused.contains("splinter.evalplan/v1 file, not a recipe"),
+        "{refused}"
+    );
+    let bare = resolve(&repo.root, "name: x\n", connections())
+        .unwrap_err()
+        .0
+        .join("\n");
+    assert!(bare.contains("no `schema:`"), "{bare}");
+}
+
+#[test]
 fn a_connection_no_model_uses_changes_no_lock() {
     use splinter_factory::connections::Connections;
     let repo = Repo::new();

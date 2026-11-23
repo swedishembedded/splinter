@@ -148,7 +148,7 @@ Every command takes these.
 - [splinter solve](#splinter-solve) - Solve every task of a task set, each in the environment it records
 - [splinter harness](#splinter-harness) - Improve a sven harness
   - [splinter harness optimise](#splinter-harness-optimise) - Search a space of variants of a baseline harness for one that verifiably beats it
-- [splinter verify](#splinter-verify) - Append verdicts to an experience set (re-grades without re-running)
+- [splinter verify](#splinter-verify) - Check a factory run
 - [splinter critique](#splinter-critique) - Critique the failed experiences of a set and retry them with it
 - [splinter judge](#splinter-judge) - Measure a judge against labelled experiences
   - [splinter judge calibrate](#splinter-judge-calibrate) - Measure a judge on labelled experiences and keep the calibration `verify --judge` gates its verdicts by
@@ -178,7 +178,7 @@ Every command takes these.
 - [splinter release](#splinter-release) - Run the release gate on a candidate and release it if every check passes
   - [splinter release list](#splinter-release-list) - List the releases and the aliases pointing at them
 - [splinter rollback](#splinter-rollback) - Point an alias back at the release its current one was trained from
-- [splinter eval](#splinter-eval) - Grade a candidate or a model closed-book on a suite
+- [splinter eval](#splinter-eval) - Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`)
   - [splinter eval matrix](#splinter-eval-matrix) - The continual-learning results matrix of a lineage
 - [splinter exam](#splinter-exam) - Put a candidate and the policy it continues to its held-out tasks and have a calibrated judge compare them
 - [splinter select](#splinter-select) - Choose the step of a run kept with its evaluations by what each writes on the dev suite
@@ -259,7 +259,7 @@ Subcommands:
 - [`tasks`](#splinter-tasks) - Generate and inspect task sets
 - [`solve`](#splinter-solve) - Solve every task of a task set, each in the environment it records
 - [`harness`](#splinter-harness) - Improve a sven harness
-- [`verify`](#splinter-verify) - Append verdicts to an experience set (re-grades without re-running)
+- [`verify`](#splinter-verify) - Check a factory run
 - [`critique`](#splinter-critique) - Critique the failed experiences of a set and retry them with it
 - [`judge`](#splinter-judge) - Measure a judge against labelled experiences
 - [`experiences`](#splinter-experiences) - Inspect experience sets and experiences
@@ -269,7 +269,7 @@ Subcommands:
 - [`rehearse`](#splinter-rehearse) - Build a rehearsal dataset
 - [`release`](#splinter-release) - Run the release gate on a candidate and release it if every check passes
 - [`rollback`](#splinter-rollback) - Point an alias back at the release its current one was trained from
-- [`eval`](#splinter-eval) - Grade a candidate or a model closed-book on a suite
+- [`eval`](#splinter-eval) - Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`)
 - [`exam`](#splinter-exam) - Put a candidate and the policy it continues to its held-out tasks and have a calibrated judge compare them
 - [`select`](#splinter-select) - Choose the step of a run kept with its evaluations by what each writes on the dev suite
 - [`exam-report`](#splinter-exam-report) - Analyses done after an exam from what its report kept
@@ -1485,15 +1485,15 @@ Options:
 
 ### splinter verify
 
-Append verdicts to an experience set (re-grades without re-running)
+Check a factory run: every product against its blobs and its view; or append verdicts to an experience set (re-grades without re-running)
 
 ```text
-splinter verify [OPTIONS] <EXPERIENCE-SET>
+splinter verify [OPTIONS] <RUN|EXPERIENCE-SET>
 ```
 
 Arguments:
 
-- `<EXPERIENCE-SET>` (required): The experience set, by id or unique prefix.
+- `<RUN|EXPERIENCE-SET>` (required): A factory run directory, or an experience set by id or unique prefix.
 
 Options:
 
@@ -2034,7 +2034,7 @@ Arguments:
 
 ### splinter eval
 
-Grade a candidate or a model closed-book on a suite; or freeze and show the anchor suite
+Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`); grade a candidate or a model closed-book on a suite; or freeze and show the anchor suite
 
 ```text
 splinter eval [OPTIONS] [REF]
@@ -2043,7 +2043,7 @@ splinter eval [OPTIONS] [REF]
 
 Arguments:
 
-- `<REF>`: A candidate id (or prefix) or a model reference; none shows the anchor suite.
+- `<REF>`: A factory run directory (with `--plan` and `--out`), a candidate id (or prefix) or a model reference; none shows the anchor suite.
 
 Options:
 

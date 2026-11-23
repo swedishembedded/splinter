@@ -109,6 +109,7 @@ fn experience(view: &Path, trial: &TrialResult) -> Result<Experience, String> {
 /// # Errors
 /// The run's products cannot be read, or the store refuses a write.
 pub fn index_run(ctx: &Context, run: &Path) -> Result<Vec<IndexedPass>, OrchestratorError> {
+    splinter_factory::run::require_run(run).map_err(refused)?;
     let products = ProductStore::new(run, Box::new(SystemClock));
     let store = ctx.experiences();
     let mut out = Vec::new();

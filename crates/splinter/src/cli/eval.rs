@@ -64,8 +64,8 @@ pub enum ReleaseCommand {
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct EvalArgs {
-    /// A candidate id (or prefix) or a model reference; none shows the
-    /// anchor suite.
+    /// A factory run directory (with `--plan` and `--out`), a candidate id
+    /// (or prefix) or a model reference; none shows the anchor suite.
     #[arg(value_name = "REF")]
     pub model: Option<String>,
     /// held-out, retention, anchor, or an anchor-format file of tasks.

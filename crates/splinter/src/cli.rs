@@ -172,7 +172,9 @@ pub enum Command {
     /// improvement with no regression.
     #[command(subcommand)]
     Harness(HarnessCommand),
-    /// Append verdicts to an experience set (re-grades without re-running).
+    /// Check a factory run: every product against its blobs and its view;
+    /// or append verdicts to an experience set (re-grades without
+    /// re-running).
     Verify(VerifyArgs),
     /// Critique the failed experiences of a set and retry them with it.
     Critique(CritiqueArgs),
@@ -204,8 +206,9 @@ pub enum Command {
         /// The alias, e.g. default.
         alias: String,
     },
-    /// Grade a candidate or a model closed-book on a suite; or freeze and
-    /// show the anchor suite.
+    /// Evaluate a factory run's candidates under another plan into a new run
+    /// (`RUN --plan PLAN --out DIR`); grade a candidate or a model
+    /// closed-book on a suite; or freeze and show the anchor suite.
     Eval(EvalArgs),
     /// Put a candidate and the policy it continues to its held-out tasks and
     /// have a calibrated judge compare them; or, with --exam-set, to a frozen
