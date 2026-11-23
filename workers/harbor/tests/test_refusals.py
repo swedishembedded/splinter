@@ -145,3 +145,9 @@ def test_a_harness_is_run_by_sven_alone_and_told_its_model(tmp_path, capsys, mon
     assert "only sven runs a harness" in refuse(tmp_path, spec, capsys, monkeypatch)
     spec = make_spec(TASK, agent="sven", agent_harness=HARNESS)
     assert "a harness is told its model" in refuse(tmp_path / "b", spec, capsys, monkeypatch)
+
+
+def test_a_conversation_is_continued_by_sven_alone(tmp_path, capsys, monkeypatch) -> None:
+    spec = make_spec(TASK, agent="claude-code", model=MODEL,
+                     agent_continuation={"trace": HARNESS, "prompt": ""})
+    assert "only sven continues one" in refuse(tmp_path, spec, capsys, monkeypatch)

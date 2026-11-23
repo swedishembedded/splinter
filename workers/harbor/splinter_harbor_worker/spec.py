@@ -110,6 +110,11 @@ class EnvValue(_Strict):
             raise ValueError("an environment value is exactly one of literal and from_env")
 
 
+class Continuation(_Strict):
+    trace: FileRef  # an earlier attempt's conversation, cut at a kept step
+    prompt: str = ""  # the user turn the continuation adds; empty: none
+
+
 class AgentInvocation(_Strict):
     name: str
     version: str | None = None
@@ -118,6 +123,7 @@ class AgentInvocation(_Strict):
     env: dict[str, EnvValue] = {}
     system_prompt: FileRef | None = None
     harness: FileRef | None = None  # a sven harness run in place of the agent's conversation
+    continuation: Continuation | None = None  # a conversation continued (a fork correction)
 
 
 # The agent's own headers the gateway passes on to an Anthropic upstream; a connection may drop any of them.
@@ -230,6 +236,10 @@ class ExecutionSpec(_Strict):
                 return f"model token variable {self.model.token_env} is not set in the worker's environment"
         if self.agent.harness is not None and self.agent.name != "sven":
             return f"agent {self.agent.name} cannot run harness {self.agent.harness.path}: only sven runs a harness"
+        if self.agent.continuation is not None and self.agent.name != "sven":
+            return f"agent {self.agent.name} cannot continue a conversation: only sven continues one"
+        if self.agent.continuation is not None and self.agent.harness is not None:
+            return "a continued conversation is the agent's own, never a harness's"
         if self.agent.harness is not None and self.model is None:
             return "a harness is told its model, and the specification names none"
         if self.agent.name in ("oracle", "nop") and (self.agent.args or self.agent.files):

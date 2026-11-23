@@ -390,6 +390,31 @@ instruction decides what kind of correction it is: passages from reference
 material (knowledge-backed), a numbered plan of checkable subgoals
 (decomposition), or what went wrong.
 
+A fork correction continues each failed attempt instead of starting the task
+afresh. A teacher stage over `attempts.failures` names, per task, the last step
+to keep (`keep_through`, a step id of `attempt.md`) and a sentence of
+`guidance`; the attempt stage given `continue_from` runs, for each task that
+stage attempted and never solved, its last failed attempt cut after that step:
+the kept steps' tool calls run again in the fresh sandbox, so the workspace is
+as they left it, and the model goes on after the guidance. What it then solves
+is learned as one conversation, without the guidance turn, and a continuation
+that repeats its guidance is excluded (`guidance_repeated`):
+
+```yaml
+  - id: located
+    uses: agent
+    foreach: $stages.failures.failures
+    inputs: { input: $item }
+    with: { instruction: prompts/locate.md, output_schema: schemas/fork-point.json,
+            model: teacher }
+  - id: forked
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, continue_from: $stages.local.attempts,
+              briefs: $stages.located.output }
+    with: { agent: sven, model: teacher, environment: environments/vim/environment.yaml,
+            attempts: 1, seed: 8 }
+```
+
 A solution hint is trusted only where the solution works: an attempt stage
 with `agent: oracle` runs each task's reference solution against its own
 verifier, and a hinted stage given `solved_by: [$stages.oracle.attempts]` runs

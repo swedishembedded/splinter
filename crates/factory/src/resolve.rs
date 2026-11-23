@@ -317,6 +317,26 @@ pub fn resolve_with(
     })
 }
 
+/// Why an attempt stage cannot continue failed attempts: only sven
+/// continues a conversation, unhinted (the instruction is the conversation's
+/// first turn) and unplayed, as its own agent and not a harness.
+fn fork_refusals(params: &AttemptParams) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if params.agent != "sven" {
+        out.push("continues failed attempts, which only the sven agent does");
+    }
+    if params.hint.is_some() {
+        out.push("continues failed attempts, whose instruction is already given: it takes no hint");
+    }
+    if params.harness.is_some() {
+        out.push("continues failed attempts as the agent's own conversation, never a harness's");
+    }
+    if params.interactive {
+        out.push("continues failed attempts, which is never interactive");
+    }
+    out
+}
+
 /// Why an attempt stage cannot run its harness: only sven runs one, told
 /// its model; a harness is never played and carries its own instructions.
 fn harness_refusals(params: &AttemptParams) -> Vec<&'static str> {
@@ -468,16 +488,26 @@ fn check(
                     "a hinted pass is never interactive; a person guiding the agent is the hint",
                 );
             }
-            match (params.hint, stage.source("briefs").is_some()) {
-                (Some(Hint::Brief), false) => problem(
+            let forks = stage.source("continue_from");
+            match (params.hint, stage.source("briefs").is_some(), forks.is_some()) {
+                (Some(Hint::Brief), false, _) => problem(
                     reader,
                     "hint: brief shows each task its brief, and the stage is given none: bind `briefs`",
                 ),
-                (Some(Hint::Solution) | None, true) => problem(
+                (Some(Hint::Solution) | None, true, false) => problem(
                     reader,
-                    "is given briefs, which only a pass with hint: brief shows",
+                    "is given briefs, which only a pass with hint: brief shows or a fork correction reads",
+                ),
+                (None, false, true) => problem(
+                    reader,
+                    "continues failed attempts from the fork points of briefs, and is given none: bind `briefs`",
                 ),
                 _ => {}
+            }
+            if forks.is_some() {
+                for refusal in fork_refusals(&params) {
+                    problem(reader, refusal);
+                }
             }
             if let Some(harness) = &params.harness {
                 for refusal in harness_refusals(&params) {

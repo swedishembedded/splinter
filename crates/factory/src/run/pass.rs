@@ -28,6 +28,10 @@ pub struct TaskSelector {
     /// `oracle` stage: the tasks whose reference solution passes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub solved_by: Vec<String>,
+    /// Only the tasks this stage attempted and never solved: the failed
+    /// attempts a fork correction continues.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuing: Option<String>,
     /// Only these task ids.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
@@ -99,6 +103,7 @@ pub(crate) fn pass(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Rollou
         environment_variables: params.environment_variables,
         environment: params.environment,
         tasks: TaskSelector {
+            continuing: stage.source("continue_from").map(str::to_owned),
             solved_by: stage
                 .sources("solved_by")
                 .into_iter()
@@ -131,8 +136,9 @@ pub(crate) fn pin(stage: &PlannedStage) -> Result<&str, RunError> {
 }
 
 /// The tasks of `tasks` that `selector` selects, in order: the named ones,
-/// or those no `unsolved_by` stage solved, and of those only the ones a
-/// `solved_by` stage solved.
+/// or those no `unsolved_by` stage solved; of those only the ones a
+/// `solved_by` stage solved, and, continuing a stage, only the ones it
+/// attempted and never solved.
 pub(crate) fn select<'t>(
     factory: &Factory<'_>,
     selector: &TaskSelector,
@@ -163,6 +169,22 @@ pub(crate) fn select<'t>(
     if !selector.solved_by.is_empty() {
         let proven = solved_in(&selector.solved_by)?;
         selected.retain(|t| proven.contains(&t.id));
+    }
+    if let Some(from) = &selector.continuing {
+        factory.product(from)?;
+        let trials = trials_of(&factory.view(from))?;
+        let solved: BTreeSet<&str> = trials
+            .iter()
+            .filter(|t| t.verified_success())
+            .map(|t| t.task.as_str())
+            .collect();
+        let failed: BTreeSet<&str> = trials
+            .iter()
+            .filter(|t| !t.verified_success() && t.trace.is_some())
+            .map(|t| t.task.as_str())
+            .filter(|t| !solved.contains(t))
+            .collect();
+        selected.retain(|t| failed.contains(t.id.as_str()));
     }
     Ok(selected)
 }

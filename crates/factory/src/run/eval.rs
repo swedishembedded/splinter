@@ -214,7 +214,7 @@ pub(crate) fn identity(
     let parameters = json!({
         "plan": plan_digest(factory, &section)?, "agent": section.agent, "args": section.args,
         "files": pinned_files(factory, &section)?, "budget": section.budget,
-        "baseline": super::rollout::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
+        "baseline": super::models::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
     });
     let backend = if plan.protected() {
         String::new()
@@ -376,7 +376,7 @@ pub(crate) fn produce(
         .digest();
     let selected = tasks(factory, &section, plan)?;
     let (base_binding, champion) =
-        super::rollout::binding_of(factory, &stage.key, &section.baseline)?;
+        super::models::binding_of(factory, &stage.key, &section.baseline)?;
     let comparisons = comparisons(&section, plan);
     // Named by what it is, so evaluations of one baseline under one plan
     // share it (one identity, run once), whichever candidates they judge.
@@ -400,6 +400,7 @@ pub(crate) fn produce(
         model: Some(base_binding),
         champion,
         briefs: None,
+        continue_from: None,
     };
     let (base_trials, base_product) = arm_trials(
         factory,
@@ -437,6 +438,7 @@ pub(crate) fn produce(
         model: Some(binding),
         champion: None,
         briefs: None,
+        continue_from: None,
     };
     let inputs = vec![
         ("tasks".into(), tasks_digest),

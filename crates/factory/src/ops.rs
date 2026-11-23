@@ -379,6 +379,10 @@ pub fn registry() -> Registry {
                     optional: true,
                     ..port("briefs", ArtifactKind::Files)
                 },
+                Port {
+                    optional: true,
+                    ..port("continue_from", ArtifactKind::Attempts)
+                },
             ],
             output: port("attempts", ArtifactKind::Attempts),
             reproducibility: Reproducibility::Nondeterministic,

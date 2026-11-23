@@ -12,8 +12,9 @@
 //! A task is a failure when some given stage attempted it and none solved
 //! it. Each failure is an item named by its task ([`brief_item`]) holding
 //! the task's `instruction.md` and `attempt.md`, the last failed attempt's
-//! conversation condensed to what a reader needs: every turn's words, each
-//! tool call and what it returned, each cut to a bound. An `agent` stage
+//! conversation condensed to what a reader needs: every turn's words under
+//! its step id (what a fork point names), each tool call and what it
+//! returned, each cut to a bound. An `agent` stage
 //! over the collection writes a brief per task (knowledge passages, a plan
 //! of subgoals, notes on the mistake) that an attempt stage with
 //! `hint: brief` shows the student ([`crate::hint`]).
@@ -174,7 +175,11 @@ fn condensed(view: &Path, trial: &TrialResult, bound: usize) -> String {
             .and_then(|v| v.as_str().map(str::to_owned))
             .unwrap_or_else(|| "step".into());
         if let Some(text) = step.message.as_text().filter(|t| !t.trim().is_empty()) {
-            out.push_str(&format!("## {source}\n\n{}\n\n", cut(text, 2000)));
+            out.push_str(&format!(
+                "## step {} ({source})\n\n{}\n\n",
+                step.step_id,
+                cut(text, 2000)
+            ));
         }
         for call in step.tool_calls.iter().flatten() {
             out.push_str(&format!(

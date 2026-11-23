@@ -88,7 +88,7 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
 
 ## What a specification is mapped to
 
-* **Paths.** `task_dir` is relative to `TASK_ROOT`; agent `files`, the `system_prompt`, the `harness` and mount `source`s are relative to
+* **Paths.** `task_dir` is relative to `TASK_ROOT`; agent `files`, the `system_prompt`, the `harness`, a continuation's `trace` and mount `source`s are relative to
   `FILES_ROOT` (default `TASK_ROOT`). A path that leaves its root is refused; a `sha256:` digest is verified.
 * **Agents.** `sven`, `claude-code` and `codex` (the executable named by `SPLINTER_SVEN_BIN` / `SPLINTER_CLAUDE_BIN` /
   `SPLINTER_CODEX_BIN`, else on `PATH`, staged read-only at `/splinter/bin`), `oracle` and `nop` (Harbor's own). Codex
@@ -97,7 +97,9 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
   `AGENTS.md`. With `agent.harness` (sven only, and only with a `model`), Sven runs `sven harness run` on that file
   instead of its conversation: the task's instruction is the harness's `task` input, the workspace is the trial's, the
   model is reached through the gateway with the trial's token file, and the ATIF trajectory lands where the
-  conversation's would (no request log is recorded). `agent.args` are an argv, never a
+  conversation's would (no request log is recorded). With `agent.continuation` (sven only), Sven loads the pinned
+  conversation (`--load-trace`), runs its tool calls again in the trial's sandbox (`--rerun-toolcalls`) and goes on
+  after the continuation's prompt instead of the task's instruction: a fork correction. `agent.args` are an argv, never a
   shell line; an argument equal to a listed file's path (or `--option=path`) names its uploaded copy under
   `/splinter/files`. `agent.env` is the only environment the agent gets besides its isolated HOME: `from_env` values are
   read from the worker's environment when the trial starts and never written to a file. A literal under a credential-like

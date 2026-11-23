@@ -272,6 +272,13 @@ fn pinned_view(factory: &Factory<'_>, source: &str) -> std::path::PathBuf {
 }
 
 /// The hint the stage `source` showed, if it is a hinted pass.
+/// The briefs a fork correction `source` took its fork points from.
+fn fork_of(factory: &Factory<'_>, source: &str) -> Option<std::path::PathBuf> {
+    let stage = factory.resolved.plan.stage(source)?;
+    stage.source("continue_from")?;
+    stage.source("briefs").map(|b| factory.view(b))
+}
+
 /// The hint the attempt stage `source` showed, and the view of its briefs.
 fn hint_of(factory: &Factory<'_>, source: &str) -> Option<(Hint, Option<std::path::PathBuf>)> {
     let stage = factory.resolved.plan.stage(source)?;
@@ -363,6 +370,12 @@ pub(crate) fn produce(
                     )
                     .map_err(|e| ("hint_not_found".to_owned(), e))?;
                     crate::hint::unhint(&mut found.0.body, &instruction, hint, &shown)?;
+                }
+                if let Some(briefs) = fork_of(factory, source) {
+                    // A continuation is learned without the turn it added.
+                    let point = super::fork::fork_point(&briefs, &trial.task)
+                        .map_err(|e| ("continuation_not_found".to_owned(), e))?;
+                    super::fork::uncontinue(&mut found.0.body, &point.guidance)?;
                 }
                 Ok(found)
             });

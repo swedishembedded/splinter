@@ -39,7 +39,7 @@ use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::items::{Item, ItemIndex, Rejection, ITEMS_FILE};
 use splinter_store::factory::products::{ProductManifest, Staging};
 
-use super::rollout::{binding_of, serve};
+use super::models::{binding_of, serve};
 use super::{io, stage_error, write_json, Begun, Factory, RunError};
 use crate::champion::Champion;
 use crate::execute::{Call, Execute, Outcome};

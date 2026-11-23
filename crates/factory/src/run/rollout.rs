@@ -47,8 +47,8 @@ use splinter_core::clock::unix_now;
 use splinter_core::digest::{digest_of, Digest};
 use splinter_core::factory::attempt::AttemptReport;
 use splinter_core::factory::execution::{
-    AgentInvocation, EnvValue, ExecutionSpec, FileRef, ModelBinding, Mount, SandboxSpec, SlotKey,
-    EXECUTION_SCHEMA,
+    AgentInvocation, Continuation, EnvValue, ExecutionSpec, FileRef, ModelBinding, Mount,
+    SandboxSpec, SlotKey, EXECUTION_SCHEMA,
 };
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{AgentIdentity, TrialResult, TRIAL_SCHEMA};
@@ -57,13 +57,13 @@ use splinter_core::factory::trial::{grade, GradingPolicy};
 use splinter_store::factory::products::Staging;
 use splinter_store::factory::runstate::{AttemptRecord, AttemptState, SlotState};
 
+use super::models::{binding_of, serve};
 use super::pass::{pass, pin, RolloutPass};
 use super::rollout_report::report;
 use super::{io, read_lines, stage_error, write_lines, Factory, RunError};
 use crate::backend::Batch;
-use crate::champion::{Champion, CHAMPION};
+use crate::champion::Champion;
 use crate::plan::PlannedStage;
-use crate::recipe::ModelRef;
 use crate::tree::{link_tree, tree_digest};
 
 /// The trials of a rollout product.
@@ -111,32 +111,8 @@ pub(crate) struct Arm<'r> {
     pub champion: Option<Champion>,
     /// The briefs a briefed pass shows (a collection product's view).
     pub briefs: Option<PathBuf>,
-}
-
-/// The binding a stage's identity sees for `model`, and the champion it is:
-/// a connection's model as named; a champion as its base's connection and
-/// its digest, since the id it is served under is the server's to choose.
-pub(crate) fn binding_of(
-    factory: &Factory<'_>,
-    key: &str,
-    model: &ModelRef,
-) -> Result<(ModelBinding, Option<Champion>), RunError> {
-    let Some(champion) = factory.resolved.champions.get(&model.to_string()) else {
-        let binding = factory
-            .resolved
-            .connections
-            .bind(model)
-            .map_err(|e| stage_error(key, e))?;
-        return Ok((binding, None));
-    };
-    let mut binding = factory
-        .resolved
-        .connections
-        .bind(&champion.record.base)
-        .map_err(|e| stage_error(key, e))?;
-    // By content, not by where its run is: the same champion is the same input.
-    binding.model = format!("{CHAMPION}@{}", champion.digest.hex());
-    Ok((binding, Some(champion.clone())))
+    /// The stage whose failed attempts a fork correction continues.
+    pub continue_from: Option<String>,
 }
 
 /// The binding an arm's agent is given: a champion served from its base and
@@ -146,30 +122,6 @@ fn served(factory: &Factory<'_>, arm: &Arm<'_>) -> Result<Option<ModelBinding>, 
         .as_ref()
         .map(|binding| serve(factory, &arm.key, binding, arm.champion.as_ref()))
         .transpose()
-}
-
-/// `binding` as a model is reached: itself, or the champion it is, served
-/// from its base and adapter through the trainer.
-pub(crate) fn serve(
-    factory: &Factory<'_>,
-    key: &str,
-    binding: &ModelBinding,
-    champion: Option<&Champion>,
-) -> Result<ModelBinding, RunError> {
-    let Some(champion) = champion else {
-        return Ok(binding.clone());
-    };
-    let trainer = factory
-        .services
-        .trainer
-        .ok_or_else(|| stage_error(key, "a champion is served through the trainer"))?;
-    let id = trainer
-        .serve(&champion.record.base, champion.adapter.as_deref())
-        .map_err(|e| stage_error(key, e))?;
-    Ok(ModelBinding {
-        model: id,
-        ..binding.clone()
-    })
 }
 
 /// A file pinned by its SHA-256, which the worker checks before it runs.
@@ -256,6 +208,7 @@ impl Arm<'_> {
             env,
             system_prompt,
             harness,
+            continuation: None,
         })
     }
 
@@ -307,6 +260,7 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
         model,
         champion,
         briefs: stage.source("briefs").map(|s| factory.view(s)),
+        continue_from: stage.source("continue_from").map(str::to_owned),
     })
 }
 
@@ -328,6 +282,7 @@ pub(crate) fn identity(
         .chain(&arm.pass.tasks.solved_by)
         .map(String::as_str)
         .chain(stage.source("briefs"))
+        .chain(stage.source("continue_from"))
     {
         inputs.push((upstream.to_owned(), factory.product(upstream)?.1.digest()));
     }
@@ -368,6 +323,8 @@ pub(crate) struct Running<'a, 'r> {
     /// The model the agent is given (a champion, served).
     model: Option<ModelBinding>,
     agent: AgentInvocation,
+    /// Each task's continued conversation, in a fork correction.
+    continuations: BTreeMap<String, Continuation>,
     sandbox: SandboxSpec,
     policy: GradingPolicy,
 }
@@ -381,8 +338,25 @@ impl<'a, 'r> Running<'a, 'r> {
         work: PathBuf,
     ) -> Result<Self, RunError> {
         let (sandbox, _) = arm.sandbox(factory)?;
+        let continuations = match (&arm.continue_from, &arm.briefs) {
+            (Some(from), Some(briefs)) => super::fork::continuations(
+                &arm.key,
+                &factory.view(from),
+                briefs,
+                &arm.tasks,
+                &work.join("files"),
+            )?,
+            (Some(_), None) => {
+                return Err(stage_error(
+                    &arm.key,
+                    "a fork correction reads its fork points from briefs",
+                ))
+            }
+            (None, _) => BTreeMap::new(),
+        };
         Ok(Self {
             arm,
+            continuations,
             work,
             tasks: arm.tasks.iter().map(|t| (t.id.clone(), *t)).collect(),
             model: served(factory, arm)?,
@@ -405,7 +379,10 @@ impl Running<'_, '_> {
             attempt,
             task: task.clone(),
             task_dir: task.id.clone(),
-            agent: self.agent.clone(),
+            agent: AgentInvocation {
+                continuation: self.continuations.get(&slot.task).cloned(),
+                ..self.agent.clone()
+            },
             model: self.model.clone(),
             sandbox: self.sandbox.clone(),
             seed: digest_of(&(self.arm.pass.seed, &slot.task, slot.slot, attempt)).leading_u64(),

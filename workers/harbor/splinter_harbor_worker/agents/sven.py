@@ -61,6 +61,13 @@ class SvenAgent(SplinterAgent):
         if settings.get("system_prompt"):
             parts += ["--append-system-prompt", settings["system_prompt"]]
         parts += sandbox_args(settings.get("args", []), settings.get("files", []))
+        if settings.get("fork_trace"):
+            # A fork: the earlier conversation's tool calls run again in this sandbox, then the model goes on from
+            # it, after the guidance turn when there is one (with none, sven adds an empty user turn itself).
+            parts += ["--load-trace", f"{FILES_DIR}/{settings['fork_trace']}", "--rerun-toolcalls"]
+            if settings.get("fork_prompt"):
+                parts.append(settings["fork_prompt"])
+            return parts
         parts.append(instruction)
         return parts
 

@@ -93,6 +93,17 @@
             "type": "string"
           }
         },
+        "continuation": {
+          "description": "A conversation the agent continues instead of starting the task\nafresh (sven only): a fork correction.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Continuation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "env": {
           "description": "The environment variables the agent is given; nothing else of the\nworker's environment reaches it.",
           "type": "object",
@@ -147,6 +158,25 @@
       },
       "required": [
         "name"
+      ]
+    },
+    "Continuation": {
+      "description": "An earlier attempt's conversation, cut at a kept step, that an attempt\ncontinues: its tool calls are run again in the fresh sandbox, so the\nworkspace is as the conversation left it, before the model goes on.",
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "description": "The user turn the continuation adds (guidance), or none: empty.",
+          "type": "string",
+          "default": ""
+        },
+        "trace": {
+          "description": "The kept conversation (an ATIF trajectory), pinned by digest.",
+          "$ref": "#/$defs/FileRef"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "trace"
       ]
     },
     "Digest": {

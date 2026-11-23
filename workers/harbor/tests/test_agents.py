@@ -194,6 +194,40 @@ def test_a_harness_runs_in_place_of_the_agents_conversation_given_the_task(tmp_p
     assert SECRET not in "\n".join(argv)
 
 
+# A stand-in for sven continuing a conversation: says its version, writes what it was started with and the
+# conversation it was handed, and solves the task.
+FAKE_SVEN_FORK = r"""#!/bin/bash
+if [ "$1" = "--version" ]; then echo "sven 0.0.0"; exit 0; fi
+printf '%s\n' "$@" > /logs/agent/argv.txt
+while [ $# -gt 0 ]; do [ "$1" = "--load-trace" ] && cat "$2" > /logs/agent/continued.json; shift; done
+echo expected > /app/answer.txt
+"""
+
+
+def test_a_continued_conversation_is_loaded_its_calls_rerun_and_the_guidance_is_the_prompt(
+        tmp_path, monkeypatch, local_images, stub_model):
+    binary = tmp_path / "bin" / "sven"
+    binary.parent.mkdir()
+    binary.write_text(FAKE_SVEN_FORK)
+    binary.chmod(0o755)
+    kept = '{"schema_version": "ATIF-v1.4", "steps": []}'
+    trace = {"path": "forks/t.json", "digest": "sha256:" + hashlib.sha256(kept.encode()).hexdigest()}
+    spec = make_spec(TASK, agent="sven", model=model(stub_model, protocol="openai"),
+                     agent_continuation={"trace": trace, "prompt": "Check the file before you finish."})
+    code, out = run_one(tmp_path, spec, monkeypatch, local_images,
+                        env={"SPLINTER_SVEN_BIN": str(binary), "STUB_TOKEN": SECRET},
+                        files={"forks/t.json": kept})
+    assert code == 0
+    trial = out / load_report(out)["native_dir"]
+    argv = (trial / "agent" / "argv.txt").read_text().splitlines()
+    at = argv.index("--load-trace")
+    assert argv[at + 1] == "/splinter/files/forks/t.json" and argv[at + 2] == "--rerun-toolcalls"
+    assert argv[-1] == "Check the file before you finish."
+    instruction = (tmp_path / "tasks" / TASK / "instruction.md").read_text()
+    assert instruction.strip() not in "\n".join(argv), "a continuation is not given the task afresh"
+    assert (trial / "agent" / "continued.json").read_text() == kept
+
+
 # A stand-in for the codex executable: reads the provider its configuration names (CODEX_HOME/config.toml) and posts
 # one Responses request to it with the key the provider's env_key names, then exits 0.
 FAKE_CODEX = r"""#!/bin/bash

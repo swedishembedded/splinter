@@ -202,6 +202,8 @@ def preflight(specs: list[ExecutionSpec], tasks_root: Path, files_root: Path) ->
             _check_file(files_root, spec.agent.system_prompt, "system prompt", where)
         if spec.agent.harness is not None:
             _check_file(files_root, spec.agent.harness, "harness", where)
+        if spec.agent.continuation is not None:
+            _check_file(files_root, spec.agent.continuation.trace, "continued conversation", where)
         if spec.agent.name in AGENT_BINARIES and spec.agent.name not in binaries:
             binaries[spec.agent.name] = agent_binary(spec.agent.name)
         if spec.agent.name == "sven" and spec.agent.version is not None:
@@ -291,8 +293,11 @@ def _agent_config(spec: ExecutionSpec, files_root: Path, gateway: GatewayAddress
     settings = {
         "args": list(spec.agent.args),
         "env": {name: value.model_dump(exclude_none=True) for name, value in spec.agent.env.items()},
-        "files": [ref.path for ref in spec.agent.files] + ([spec.agent.harness.path] if spec.agent.harness else []),
+        "files": [ref.path for ref in spec.agent.files] + ([spec.agent.harness.path] if spec.agent.harness else [])
+        + ([spec.agent.continuation.trace.path] if spec.agent.continuation else []),
         "harness": spec.agent.harness.path if spec.agent.harness else None,
+        "fork_trace": spec.agent.continuation.trace.path if spec.agent.continuation else None,
+        "fork_prompt": spec.agent.continuation.prompt if spec.agent.continuation else None,
         "files_root": str(files_root),
         "system_prompt": prompt,
         "seed": spec.seed,

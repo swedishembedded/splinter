@@ -103,6 +103,23 @@ pub struct AgentInvocation {
     /// given the task's instruction as its `task` input (sven only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness: Option<FileRef>,
+    /// A conversation the agent continues instead of starting the task
+    /// afresh (sven only): a fork correction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation: Option<Continuation>,
+}
+
+/// An earlier attempt's conversation, cut at a kept step, that an attempt
+/// continues: its tool calls are run again in the fresh sandbox, so the
+/// workspace is as the conversation left it, before the model goes on.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Continuation {
+    /// The kept conversation (an ATIF trajectory), pinned by digest.
+    pub trace: FileRef,
+    /// The user turn the continuation adds (guidance), or none: empty.
+    #[serde(default)]
+    pub prompt: String,
 }
 
 /// The wire protocol of a model connection.

@@ -160,6 +160,10 @@ fn a_briefed_correction_learns_the_task_without_its_brief_and_never_a_trial_that
     let attempt =
         std::fs::read_to_string(dir.path().join("failures/train--001-first/attempt.md")).unwrap();
     assert!(attempt.starts_with("# The failed attempt"), "{attempt}");
+    assert!(
+        attempt.contains("## step 1 (user)"),
+        "steps are named by id: {attempt}"
+    );
     assert_eq!(
         std::fs::read_to_string(dir.path().join("failures/train--001-first/instruction.md"))
             .unwrap(),
@@ -274,4 +278,146 @@ stages:
         .map(|s| s.task.id.clone())
         .collect();
     assert_eq!(hinted, ["train/001-first", "train/001-first"]);
+}
+
+/// A teacher that locates where each failed attempt went wrong: after its
+/// first step, with a word of guidance.
+struct Locator;
+
+#[async_trait::async_trait]
+impl ModelProvider for Locator {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "locator-1"
+    }
+    async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let reply = serde_json::json!({
+            "keep_through": 1,
+            "guidance": "Check the file before you finish the job"
+        })
+        .to_string();
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(reply)),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+struct Locators;
+
+impl Models for Locators {
+    fn model(&self, _: &ModelBinding) -> Result<Model, String> {
+        Ok(Model::new(Arc::new(Locator), "scripted/locator-1"))
+    }
+}
+
+// seed: a recipe must state every seed; the fake backend's outcomes are scripted, so none draws.
+const FORKED: &str = "schema: splinter.recipe/v2
+name: forked
+inputs:
+  course: { kind: files, path: collections/vim.yaml }
+models:
+  student: \"brain:Qwen/Qwen3-4B\"
+  teacher: \"hosted:deepseek/deepseek-v4.1-flash\"
+stages:
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: train } }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/vim.yaml, attempts: 1, seed: 11,
+            tasks: [train/001-first] }
+  - id: failures
+    uses: attempts.failures
+    inputs: { tasks: $stages.tasks.tasks, attempts: [$stages.local.attempts] }
+  - id: located
+    uses: agent
+    foreach: $stages.failures.failures
+    inputs: { input: $item }
+    with: { instruction: prompts/locate.md, output_schema: schemas/fork.json, model: teacher }
+  - id: fork
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, continue_from: $stages.local.attempts,
+              briefs: $stages.located.output }
+    with: { agent: sven, model: teacher, environment: environments/vim.yaml, attempts: 1, seed: 12 }
+";
+
+#[test]
+fn a_fork_correction_continues_each_failed_attempt_from_its_located_step() {
+    let repo = repo();
+    repo.write(
+        "prompts/locate.md",
+        "Name the last step before the attempt went wrong.",
+    );
+    repo.write(
+        "schemas/fork.json",
+        r#"{"type": "object", "properties": {"keep_through": {"type": "integer"},
+            "guidance": {"type": "string"}}, "required": ["keep_through"]}"#,
+    );
+    let backend = FakeBackend::with(Outcome::Fail);
+    for task in ["train/001-first", "train/002-second"] {
+        backend.script(task, &[Outcome::Fail, Outcome::Pass]);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let trainer = FakeTrainer::default();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: Some(&Locators),
+    };
+    let resolved = resolve(&repo.root, FORKED, connections()).unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let forked: Vec<_> = backend
+        .executed()
+        .into_iter()
+        .filter(|s| s.slot.pass == "fork")
+        .collect();
+    assert_eq!(
+        forked.len(),
+        1,
+        "only the task the student attempted and failed"
+    );
+    for spec in &forked {
+        let continuation = spec.agent.continuation.as_ref().expect("a continuation");
+        assert_eq!(
+            continuation.trace.path,
+            format!("forks/{}.json", spec.task.id.replace('/', "--"))
+        );
+        assert_eq!(
+            continuation.prompt,
+            "Check the file before you finish the job"
+        );
+    }
+    assert!(backend
+        .executed()
+        .iter()
+        .filter(|s| s.slot.pass == "local")
+        .all(|s| s.agent.continuation.is_none()));
+}
+
+#[test]
+fn a_fork_correction_is_refused_where_it_cannot_continue() {
+    let repo = repo();
+    repo.write("prompts/locate.md", "Locate.");
+    repo.write("schemas/fork.json", r#"{"type": "object"}"#);
+    let refused = |recipe: String| {
+        resolve(&repo.root, &recipe, connections())
+            .unwrap_err()
+            .0
+            .join("\n")
+    };
+    let hinted = refused(FORKED.replace(
+        "model: teacher, environment",
+        "model: teacher, hint: solution, environment",
+    ));
+    assert!(hinted.contains("takes no hint"), "{hinted}");
+    let pointless = refused(FORKED.replace(
+        "continue_from: $stages.local.attempts,\n              briefs: $stages.located.output }",
+        "continue_from: $stages.local.attempts }",
+    ));
+    assert!(pointless.contains("fork points"), "{pointless}");
 }
