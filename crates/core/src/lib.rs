@@ -18,6 +18,8 @@
 //!   order.
 //! * [`source`] - what Splinter learns from: documents, repositories and
 //!   command runs, their parts addressed by content.
+//! * [`factory`] - the learning factory's contracts: trials, executions,
+//!   products and the identities that make a stage reusable.
 //! * [`experience`] - the task a solver is given, and the immutable,
 //!   content-addressed record of an attempt at it.
 //! * [`extra`] - the namespaced records a trajectory's producer filed in
@@ -90,6 +92,7 @@ pub mod digest;
 pub mod evidence;
 pub mod experience;
 pub mod extra;
+pub mod factory;
 pub mod family;
 pub mod harness;
 pub mod job;

@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutionSpec",
+  "description": "One attempt at one slot.",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "description": "How to start the agent.",
+      "$ref": "#/$defs/AgentInvocation"
+    },
+    "attempt": {
+      "description": "The physical attempt's number for the slot, from 0.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "budget": {
+      "description": "The run's per-trial budget.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunBudget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "model": {
+      "description": "The model, unless the agent brings its own.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelBinding"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "sandbox": {
+      "description": "The sandbox.",
+      "$ref": "#/$defs/SandboxSpec"
+    },
+    "schema": {
+      "description": "Always [`EXECUTION_SCHEMA`].",
+      "type": "string"
+    },
+    "seed": {
+      "description": "The attempt's seed.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "slot": {
+      "description": "The logical slot this attempt fills.",
+      "$ref": "#/$defs/SlotKey"
+    },
+    "task": {
+      "description": "The task.",
+      "$ref": "#/$defs/TaskRef"
+    },
+    "task_dir": {
+      "description": "The task's directory, relative to the run's pinned task tree.",
+      "type": "string"
+    },
+    "timeout_policy": {
+      "description": "The task's timeout policy.",
+      "$ref": "#/$defs/TimeoutPolicy",
+      "default": "graded"
+    }
+  },
+  "required": [
+    "schema",
+    "slot",
+    "attempt",
+    "task",
+    "task_dir",
+    "agent",
+    "sandbox",
+    "seed"
+  ],
+  "$defs": {
+    "AgentInvocation": {
+      "description": "How an agent is started: its name and its own argv, which Splinter does\nnot interpret.",
+      "type": "object",
+      "properties": {
+        "args": {
+          "description": "Arguments passed to the agent as they are, never through a shell.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "description": "The environment variables the agent is given; nothing else of the\nworker's environment reaches it.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/EnvValue"
+          },
+          "default": {}
+        },
+        "files": {
+          "description": "Configuration files the arguments refer to, pinned by digest.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FileRef"
+          }
+        },
+        "name": {
+          "description": "The agent adapter (`sven`, `claude-code`, `oracle`, `nop`).",
+          "type": "string"
+        },
+        "system_prompt": {
+          "description": "A system prompt file appended to the agent's own, when given.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "version": {
+          "description": "The pinned agent version, when the recipe pins one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "EnvValue": {
+      "description": "One environment variable an agent is given.",
+      "oneOf": [
+        {
+          "description": "A literal, non-secret value.",
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "literal"
+          ]
+        },
+        {
+          "description": "The value of this variable in the worker's own environment.",
+          "type": "object",
+          "properties": {
+            "from_env": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "from_env"
+          ]
+        }
+      ]
+    },
+    "FileRef": {
+      "description": "A file pinned by content.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Its content digest.",
+          "$ref": "#/$defs/Digest"
+        },
+        "path": {
+          "description": "Where it is, relative to the root its owner names.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "digest"
+      ]
+    },
+    "ModelBinding": {
+      "description": "The model an agent is pointed at.",
+      "type": "object",
+      "properties": {
+        "connection": {
+          "description": "The connection's name (`brain`, `hosted`).",
+          "type": "string"
+        },
+        "model": {
+          "description": "The model id the endpoint serves.",
+          "type": "string"
+        },
+        "protocol": {
+          "description": "The wire protocol.",
+          "$ref": "#/$defs/Protocol"
+        },
+        "token_env": {
+          "description": "The worker environment variable holding the credential.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "url": {
+          "description": "The endpoint, when the connection has one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "connection",
+        "model",
+        "protocol"
+      ]
+    },
+    "Mount": {
+      "description": "A directory made visible inside the sandbox.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "The digest of the content.",
+          "$ref": "#/$defs/Digest"
+        },
+        "read_only": {
+          "description": "Mounted read-only.",
+          "type": "boolean"
+        },
+        "source": {
+          "description": "The pinned content: a product view directory, relative to the run.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Where it appears in the sandbox (absolute).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "digest",
+        "target",
+        "read_only"
+      ]
+    },
+    "NetworkMode": {
+      "description": "What the agent's sandbox may reach on the network.",
+      "oneOf": [
+        {
+          "description": "Only the model gateway.",
+          "type": "string",
+          "const": "model-gateway-only"
+        },
+        {
+          "description": "Nothing.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "The open network.",
+          "type": "string",
+          "const": "open"
+        }
+      ]
+    },
+    "Protocol": {
+      "description": "The wire protocol of a model connection.",
+      "oneOf": [
+        {
+          "description": "OpenAI-compatible chat completions.",
+          "type": "string",
+          "const": "openai"
+        },
+        {
+          "description": "Anthropic messages.",
+          "type": "string",
+          "const": "anthropic"
+        }
+      ]
+    },
+    "RunBudget": {
+      "description": "The bounds a budgeted run gives each trial.",
+      "type": "object",
+      "properties": {
+        "completion_tokens": {
+          "description": "Completion tokens a trial may spend.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "turns": {
+          "description": "Agent turns a trial may take.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "completion_tokens",
+        "turns"
+      ]
+    },
+    "SandboxSpec": {
+      "description": "The sandbox the agent runs in.",
+      "type": "object",
+      "properties": {
+        "cpus": {
+          "description": "CPUs.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "image": {
+          "description": "The image, pinned by digest, when the provider takes one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "memory_mib": {
+          "description": "Memory in MiB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "mounts": {
+          "description": "Extra directories.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Mount"
+          }
+        },
+        "network": {
+          "description": "What the sandbox may reach.",
+          "$ref": "#/$defs/NetworkMode",
+          "default": "model-gateway-only"
+        },
+        "provider": {
+          "description": "The execution backend's sandbox provider (`docker`, `userns`,\n`proot`).",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "description": "The agent's wall-clock limit in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "provider"
+      ]
+    },
+    "SlotKey": {
+      "description": "A requested trial: one slot of one task in one pass. It stays the same\nwhichever physical attempt fills it.",
+      "type": "object",
+      "properties": {
+        "pass": {
+          "description": "The rollout pass.",
+          "type": "string"
+        },
+        "slot": {
+          "description": "The slot's index among the task's attempts in the pass, from 0.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "task": {
+          "description": "The task's id in the collection.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pass",
+        "task",
+        "slot"
+      ]
+    },
+    "TaskRef": {
+      "description": "One task of a collection.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "The digest of the task directory's content.",
+          "$ref": "#/$defs/Digest"
+        },
+        "family": {
+          "description": "The task family, for grouping and splits.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "The task's identifier in its collection: its directory relative to\nthe collection root (`train/015-delete-a-word`).",
+          "type": "string"
+        },
+        "name": {
+          "description": "The task's own name (Harbor's `task.toml` name).",
+          "type": "string"
+        },
+        "split": {
+          "description": "The split it belongs to (`train`, `eval`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "digest"
+      ]
+    },
+    "TimeoutPolicy": {
+      "description": "Whether a trial a time limit ended is graded on what the agent left, or\nexcluded from pass rates.",
+      "oneOf": [
+        {
+          "description": "Graded as it stands.",
+          "type": "string",
+          "const": "graded"
+        },
+        {
+          "description": "Left out of the denominators.",
+          "type": "string",
+          "const": "excluded"
+        }
+      ]
+    }
+  }
+}

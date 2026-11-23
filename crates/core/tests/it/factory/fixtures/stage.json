@@ -1,0 +1,18 @@
+{
+ "schema": "splinter.stage/1",
+ "kind": "rollout",
+ "name": "local",
+ "parameters": {
+  "agent": "sven",
+  "attempts": 4,
+  "model": "brain:Qwen/Qwen3-4B"
+ },
+ "inputs": [
+  [
+   "tasks",
+   "blake3:1111111111111111111111111111111111111111111111111111111111111111"
+  ]
+ ],
+ "implementation": "splinter 0.2.0; harbor-worker sha256:2222222222222222222222222222222222222222222222222222222222222222",
+ "seed": 17
+}

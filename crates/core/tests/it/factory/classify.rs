@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+//! Every way a Harbor trial ends maps to one status, an infrastructure
+//! failure is never the agent's 0, and a leak is a veto whatever the score.
+//! The cases are the task repository's golden trial records, unchanged.
+
+#![allow(clippy::expect_used)]
+
+use serde_json::Value;
+use splinter_core::factory::trial::{
+    grade, GradingPolicy, ModelRequest, TimeoutPolicy, TrialEvidence, TrialStatus,
+};
+
+fn cases() -> Vec<Value> {
+    serde_json::from_str(include_str!("harbor-trials.json")).expect("the fixture is JSON")
+}
+
+fn evidence(case: &Value) -> (TrialEvidence, GradingPolicy) {
+    let record = &case["record"];
+    let mut evidence: TrialEvidence =
+        serde_json::from_value(record.clone()).expect("a trial record");
+    evidence.requests =
+        serde_json::from_value::<Vec<ModelRequest>>(case["requests"].clone()).expect("requests");
+    let timeout = match record
+        .pointer("/entry/timeout_policy")
+        .and_then(Value::as_str)
+    {
+        Some("excluded") => TimeoutPolicy::Excluded,
+        _ => TimeoutPolicy::Graded,
+    };
+    (
+        evidence,
+        GradingPolicy {
+            timeout,
+            budget: None,
+        },
+    )
+}
+
+#[test]
+fn every_way_a_harbor_trial_ends_has_its_status() {
+    let cases = cases();
+    assert_eq!(cases.len(), 30, "every golden case is checked");
+    for case in &cases {
+        let (evidence, policy) = evidence(case);
+        let graded = grade(&evidence, &policy);
+        let expect = &case["expect"];
+        let name = case["name"].as_str().expect("a name");
+        let status: TrialStatus =
+            serde_json::from_value(expect["status"].clone()).expect("a status");
+        assert_eq!(graded.status, status, "{name}: {}", case["why"]);
+        assert_eq!(
+            Value::Bool(graded.counted),
+            expect["counted"],
+            "{name}: counted"
+        );
+        assert_eq!(
+            serde_json::to_value(graded.passed).expect("json"),
+            expect["pass"],
+            "{name}: pass"
+        );
+        if let Some(score) = expect.get("score") {
+            assert_eq!(graded.score, score.as_f64(), "{name}: score");
+        }
+        if let Some(code) = expect.get("cause").and_then(Value::as_str) {
+            assert_eq!(
+                graded.cause.as_ref().map(|c| c.code.as_str()),
+                Some(code),
+                "{name}: cause"
+            );
+        }
+        if graded.status != TrialStatus::Graded {
+            assert!(
+                graded.cause.as_ref().is_some_and(|c| !c.message.is_empty()),
+                "{name}: a person can read why"
+            );
+        }
+        if !matches!(
+            graded.status,
+            TrialStatus::Graded | TrialStatus::Timeout | TrialStatus::SecurityViolation
+        ) {
+            assert!(
+                graded.score.is_none() && graded.metrics.is_empty(),
+                "{name}: no score on infrastructure"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_timeout_names_the_tasks_policy() {
+    let cases = cases();
+    let policy_of = |name: &str| {
+        let case = cases.iter().find(|c| c["name"] == name).expect("the case");
+        let (evidence, policy) = evidence(case);
+        grade(&evidence, &policy).cause.and_then(|c| c.policy)
+    };
+    assert_eq!(policy_of("sven_step_timeout"), Some(TimeoutPolicy::Graded));
+    assert_eq!(
+        policy_of("timeout_excluded_by_policy"),
+        Some(TimeoutPolicy::Excluded)
+    );
+}
+
+#[test]
+fn a_leak_is_a_hard_veto_whatever_the_score() {
+    let cases = cases();
+    let case = cases
+        .iter()
+        .find(|c| c["name"] == "leak")
+        .expect("the case");
+    let (evidence, policy) = evidence(case);
+    let graded = grade(&evidence, &policy);
+    assert_eq!((graded.score, graded.passed), (Some(1.0), Some(false)));
+    assert_eq!(graded.vetoes, vec!["shell: cat /tests/test.sh".to_owned()]);
+}
+
+#[test]
+fn a_run_budget_is_a_counted_fail_and_a_wall_clock_limit_is_the_infrastructures() {
+    let cases = cases();
+    let passed = cases
+        .iter()
+        .find(|c| c["name"] == "passed")
+        .expect("the case");
+    let (within, _) = evidence(passed);
+    let tight = GradingPolicy {
+        timeout: TimeoutPolicy::Graded,
+        budget: Some(splinter_core::factory::trial::RunBudget {
+            completion_tokens: 10,
+            turns: 100,
+        }),
+    };
+    let over = grade(&within, &tight);
+    assert_eq!(
+        (over.status, over.counted, over.passed),
+        (TrialStatus::BudgetExhausted, true, Some(false))
+    );
+    let timed = cases
+        .iter()
+        .find(|c| c["name"] == "harbor_agent_timeout")
+        .expect("the case");
+    let (timed_out, _) = evidence(timed);
+    let roomy = GradingPolicy {
+        timeout: TimeoutPolicy::Graded,
+        budget: Some(splinter_core::factory::trial::RunBudget {
+            completion_tokens: 1_000_000,
+            turns: 1000,
+        }),
+    };
+    let wall = grade(&timed_out, &roomy);
+    assert_eq!(
+        (wall.status, wall.counted),
+        (TrialStatus::InfraTimeout, false)
+    );
+    assert!(wall.status.is_retryable());
+}

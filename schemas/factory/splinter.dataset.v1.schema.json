@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DatasetProduct",
+  "description": "A training dataset built from trial collections.",
+  "type": "object",
+  "properties": {
+    "accepted": {
+      "description": "Trials admitted, one line each.",
+      "$ref": "#/$defs/FileRef"
+    },
+    "admission": {
+      "description": "The admission rule (`verified-success`).",
+      "type": "string"
+    },
+    "excluded": {
+      "description": "Trials excluded, each with its reason.",
+      "$ref": "#/$defs/FileRef"
+    },
+    "exclusions": {
+      "description": "Exclusions by exact reason.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0
+      }
+    },
+    "name": {
+      "description": "The dataset's name in its recipe.",
+      "type": "string"
+    },
+    "objective": {
+      "description": "The training objective (`sft`).",
+      "type": "string"
+    },
+    "projection": {
+      "description": "The projection (`native-sft`, `portable-sft`).",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Always [`DATASET_SCHEMA`].",
+      "type": "string"
+    },
+    "sources": {
+      "description": "The rollout products it was built from.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Digest"
+      }
+    },
+    "supervision": {
+      "description": "Supervised spans mapped back to their trials and messages.",
+      "$ref": "#/$defs/FileRef"
+    },
+    "target": {
+      "description": "The model the records are rendered for.",
+      "type": "string"
+    },
+    "train": {
+      "description": "The training records.",
+      "$ref": "#/$defs/FileRef"
+    },
+    "validation": {
+      "description": "The validation records.",
+      "$ref": "#/$defs/FileRef"
+    },
+    "waterfall": {
+      "description": "The exclusion waterfall, in order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WaterfallStep"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "objective",
+    "projection",
+    "admission",
+    "target",
+    "sources",
+    "train",
+    "validation",
+    "accepted",
+    "excluded",
+    "supervision",
+    "waterfall",
+    "exclusions"
+  ],
+  "$defs": {
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "FileRef": {
+      "description": "A file pinned by content.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Its content digest.",
+          "$ref": "#/$defs/Digest"
+        },
+        "path": {
+          "description": "Where it is, relative to the root its owner names.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "digest"
+      ]
+    },
+    "WaterfallStep": {
+      "description": "One row of a dataset's exclusion waterfall.",
+      "type": "object",
+      "properties": {
+        "remaining": {
+          "description": "How many remained after it.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "step": {
+          "description": "What the step counts (`raw_trials`, `graded_successes`, ...).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "remaining"
+      ]
+    }
+  }
+}

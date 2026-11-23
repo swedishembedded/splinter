@@ -40,6 +40,20 @@ const HEX_LEN: usize = 64;
 #[serde(try_from = "String", into = "String")]
 pub struct Digest(String);
 
+impl schemars::JsonSchema for Digest {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Digest".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "type": "string",
+            "pattern": "^(blake3|sha256):[0-9a-f]{64}$",
+            "description": "A content address: blake3 or sha256, 64 lowercase hex digits."
+        })
+    }
+}
+
 /// Why a string is not a [`Digest`].
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("{value:?} is not a blake3:<64 lowercase hex> or sha256:<64 lowercase hex> digest")]

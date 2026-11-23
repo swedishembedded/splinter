@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StageIdentity",
+  "description": "Everything a stage's output depends on.",
+  "type": "object",
+  "properties": {
+    "implementation": {
+      "description": "The implementation that computes it: Splinter's version plus any\nworker or trainer digest the stage runs.",
+      "type": "string"
+    },
+    "inputs": {
+      "description": "The digests of the products the stage consumes, by role.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/Digest"
+          }
+        ]
+      }
+    },
+    "kind": {
+      "description": "What the stage does.",
+      "$ref": "#/$defs/StageKind"
+    },
+    "name": {
+      "description": "The stage's name in its recipe (`local`, `sft`, `lora-r16`).",
+      "type": "string"
+    },
+    "parameters": {
+      "description": "The resolved parameters, after defaults and file contents (as their\ndigests) are substituted."
+    },
+    "schema": {
+      "description": "Always [`STAGE_SCHEMA`].",
+      "type": "string"
+    },
+    "seed": {
+      "description": "The explicit seed, when the stage draws randomness.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema",
+    "kind",
+    "name",
+    "parameters",
+    "inputs",
+    "implementation"
+  ],
+  "$defs": {
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "StageKind": {
+      "description": "The kinds of stage a recipe is planned into.",
+      "oneOf": [
+        {
+          "description": "Load and pin the task collection.",
+          "type": "string",
+          "const": "tasks"
+        },
+        {
+          "description": "One rollout pass: agents attempt tasks.",
+          "type": "string",
+          "const": "rollout"
+        },
+        {
+          "description": "Project trials into a training dataset.",
+          "type": "string",
+          "const": "dataset"
+        },
+        {
+          "description": "Train one candidate.",
+          "type": "string",
+          "const": "training"
+        },
+        {
+          "description": "Evaluate candidates against a baseline.",
+          "type": "string",
+          "const": "eval"
+        },
+        {
+          "description": "Promote a candidate.",
+          "type": "string",
+          "const": "release"
+        }
+      ]
+    }
+  }
+}

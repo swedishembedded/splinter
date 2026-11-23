@@ -1,0 +1,32 @@
+{
+ "schema": "splinter.eval/1",
+ "plan": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+ "protected": false,
+ "baseline": {
+  "arm": "baseline",
+  "model": "brain:Qwen/Qwen3-4B",
+  "trials": 400,
+  "counted": 398,
+  "passed": 120,
+  "pass_rate": 0.3015075376884422,
+  "trials_product": "blake3:1111111111111111111111111111111111111111111111111111111111111111"
+ },
+ "candidate": {
+  "arm": "lora-r16",
+  "model": "brain/adapter:lora-r16",
+  "trials": 400,
+  "counted": 400,
+  "passed": 170,
+  "pass_rate": 0.425,
+  "trials_product": "blake3:2222222222222222222222222222222222222222222222222222222222222222"
+ },
+ "decision": "improved",
+ "statistics": {
+  "difference": 0.12,
+  "interval": [
+   0.05,
+   0.19
+  ]
+ },
+ "signature": null
+}

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvalResult",
+  "description": "A candidate's evaluation against a baseline under a frozen plan.",
+  "type": "object",
+  "properties": {
+    "baseline": {
+      "description": "The baseline arm.",
+      "$ref": "#/$defs/ArmResult"
+    },
+    "candidate": {
+      "description": "The candidate arm.",
+      "$ref": "#/$defs/ArmResult"
+    },
+    "decision": {
+      "description": "The decision under the plan's rule.",
+      "$ref": "#/$defs/Decision"
+    },
+    "plan": {
+      "description": "The plan's digest.",
+      "$ref": "#/$defs/Digest"
+    },
+    "protected": {
+      "description": "Whether the plan is protected (sealed tasks, signed verdict).",
+      "type": "boolean"
+    },
+    "schema": {
+      "description": "Always [`EVAL_SCHEMA`].",
+      "type": "string"
+    },
+    "signature": {
+      "description": "The evaluation authority's signature over the result, on a protected\nplan.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "statistics": {
+      "description": "The rule's statistics (difference, interval, p-value), as computed.",
+      "default": null
+    }
+  },
+  "required": [
+    "schema",
+    "plan",
+    "protected",
+    "baseline",
+    "candidate",
+    "decision"
+  ],
+  "$defs": {
+    "ArmResult": {
+      "description": "One evaluated arm.",
+      "type": "object",
+      "properties": {
+        "arm": {
+          "description": "The arm (`baseline` or a candidate's name).",
+          "type": "string"
+        },
+        "counted": {
+          "description": "Trials counted.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "model": {
+          "description": "The model the arm served.",
+          "type": "string"
+        },
+        "pass_rate": {
+          "description": "The pass rate over counted trials; absent when none was counted.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "passed": {
+          "description": "Trials passed.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "trials": {
+          "description": "Trials run.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "trials_product": {
+          "description": "The rollout product holding its trials.",
+          "$ref": "#/$defs/Digest"
+        }
+      },
+      "required": [
+        "arm",
+        "model",
+        "trials",
+        "counted",
+        "passed",
+        "trials_product"
+      ]
+    },
+    "Decision": {
+      "description": "What an evaluation decided.",
+      "oneOf": [
+        {
+          "description": "The candidate is better under the plan's rule.",
+          "type": "string",
+          "const": "improved"
+        },
+        {
+          "description": "It is not.",
+          "type": "string",
+          "const": "not_improved"
+        },
+        {
+          "description": "The evidence does not decide.",
+          "type": "string",
+          "const": "inconclusive"
+        }
+      ]
+    },
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    }
+  }
+}

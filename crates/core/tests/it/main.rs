@@ -7,6 +7,7 @@
 //! process-wide state (the current directory, environment variables): the
 //! others run beside it.
 
+mod factory;
 mod recorded_calls;
 mod rng;
 mod roles;

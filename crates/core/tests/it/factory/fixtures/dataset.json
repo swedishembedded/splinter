@@ -1,0 +1,54 @@
+{
+ "schema": "splinter.dataset/1",
+ "name": "sft",
+ "objective": "sft",
+ "projection": "native-sft",
+ "admission": "verified-success",
+ "target": "brain:Qwen/Qwen3-4B",
+ "sources": [
+  "blake3:6666666666666666666666666666666666666666666666666666666666666666",
+  "blake3:7777777777777777777777777777777777777777777777777777777777777777"
+ ],
+ "train": {
+  "path": "train.jsonl",
+  "digest": "blake3:8888888888888888888888888888888888888888888888888888888888888888"
+ },
+ "validation": {
+  "path": "validation.jsonl",
+  "digest": "blake3:9999999999999999999999999999999999999999999999999999999999999999"
+ },
+ "accepted": {
+  "path": "accepted.jsonl",
+  "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ },
+ "excluded": {
+  "path": "excluded.jsonl",
+  "digest": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+ },
+ "supervision": {
+  "path": "supervision.jsonl",
+  "digest": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+ },
+ "waterfall": [
+  {
+   "step": "raw_trials",
+   "remaining": 672
+  },
+  {
+   "step": "graded_successes",
+   "remaining": 430
+  },
+  {
+   "step": "eligible",
+   "remaining": 424
+  },
+  {
+   "step": "accepted",
+   "remaining": 424
+  }
+ ],
+ "exclusions": {
+  "not_a_success": 242,
+  "trace_invalid": 6
+ }
+}

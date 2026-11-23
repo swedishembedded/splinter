@@ -1,0 +1,25 @@
+{
+ "schema": "splinter.candidate/1",
+ "name": "lora-r16",
+ "kind": "adapter",
+ "base": "brain:Qwen/Qwen3-4B",
+ "artifacts": [
+  {
+   "path": "adapter.safetensors",
+   "digest": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  }
+ ],
+ "dataset": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+ "method": "lora",
+ "params": {
+  "rank": 16,
+  "steps": 500
+ },
+ "trainer": "brain 6.0.0",
+ "seed": 5,
+ "report": {
+  "final_loss": 0.41
+ },
+ "served_as": "brain/adapter:lora-r16",
+ "load_checked": true
+}

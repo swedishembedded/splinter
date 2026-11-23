@@ -1,0 +1,2380 @@
+[
+ {
+  "name": "passed",
+  "why": "full credit",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 1.0,
+      "functional_correctness": 1.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "pass",
+    "reward": 1.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 1.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 1.0000"
+   },
+   "has_submission": true,
+   "turns": 3,
+   "tool_calls": 2
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": true,
+   "score": 1.0
+  }
+ },
+ {
+  "name": "partial_credit",
+  "why": "a partial reward is a graded fail with its metrics",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.5,
+      "functional_correctness": 0.5,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.5,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.5,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.5000"
+   },
+   "has_submission": true
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": false,
+   "score": 0.5
+  }
+ },
+ {
+  "name": "quit_after_one_turn",
+  "why": "a 4B model ended its turn without writing the answer file: a real 0",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "has_submission": false,
+   "turns": 1,
+   "tool_calls": 0
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": false,
+   "score": 0.0
+  }
+ },
+ {
+  "name": "model_server_killed",
+  "why": "the model server was killed: the adapter's request got Connection refused",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "URLError",
+     "exception_message": "<urlopen error [Errno 111] Connection refused>",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\n  File \"agents/sven.py\", line 117, in run\n  File \"agents/sven.py\", line 126, in _deliver_service_log\n  File \"/usr/lib/python3.14/urllib/request.py\", line 1322, in do_open\nURLError: <urlopen error [Errno 111] Connection refused>\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   }
+  ],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "endpoint_unreachable"
+  }
+ },
+ {
+  "name": "model_server_panic",
+  "why": "the server panicked mid-run: the agent's last requests found nothing listening (gateway 502)",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "has_submission": true
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   },
+   {
+    "role": "main",
+    "status": 502,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "error": "unreachable: All connection attempts failed"
+   }
+  ],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "server_error"
+  }
+ },
+ {
+  "name": "model_not_served",
+  "why": "the endpoint does not serve the model the profile names (HTTP 404): the run was misconfigured, never the agent's 0",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "has_submission": true
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 404,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "error": "model not found"
+   }
+  ],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "endpoint_refused"
+  }
+ },
+ {
+  "name": "model_server_error_event",
+  "why": "an error event inside a 200 stream is recorded as 500",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   },
+   {
+    "role": "main",
+    "status": 500,
+    "prompt_tokens": 300,
+    "completion_tokens": 0,
+    "error": "panicked at src/sched.rs:212"
+   }
+  ],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "server_error"
+  }
+ },
+ {
+  "name": "no_model_turn_every_request_failed",
+  "why": "every model request failed on the server side (brain refused a model that does not fit its device budget) and the agent gave up without a model turn, its last request abandoned (499): the verifier graded an untouched workspace, never the model's 0",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "turns": 0,
+   "tool_calls": 0,
+   "has_submission": false
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 500,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "cached_tokens": null,
+    "error": "model does not fit: 97164 MiB exceeds every device's budget"
+   },
+   {
+    "role": "main",
+    "status": 500,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "cached_tokens": null,
+    "error": "model does not fit: 97164 MiB exceeds every device's budget"
+   },
+   {
+    "role": "main",
+    "status": 499,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "cached_tokens": null,
+    "error": "the agent closed the stream before the answer ended"
+   }
+  ],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "no_model_turn"
+  }
+ },
+ {
+  "name": "no_model_turn_by_the_agents_own_log",
+  "why": "no gateway attributed the trial's requests (a plain harbor run), but the agent's own request log records 3 model responses and every one an error: no model turn completed, never the model's 0",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "turns": 0,
+   "tool_calls": 0,
+   "has_submission": false,
+   "model_responses": 3,
+   "model_errors": 3
+  },
+  "requests": [],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "no_model_turn"
+  }
+ },
+ {
+  "name": "a_failed_model_request_the_agent_got_past",
+  "why": "the agent's log records a failed model response and then completed ones: the trial is the agent's",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "turns": 2,
+   "tool_calls": 0,
+   "has_submission": false,
+   "model_responses": 3,
+   "model_errors": 1
+  },
+  "requests": [],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": false,
+   "score": 0.0
+  }
+ },
+ {
+  "name": "server_blip_recovered",
+  "why": "a 502 the agent got past mid-run does not decide the trial",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 1.0,
+      "functional_correctness": 1.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "pass",
+    "reward": 1.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 1.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 1.0000"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 502,
+    "error": "unreachable"
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": true,
+   "score": 1.0
+  }
+ },
+ {
+  "name": "harbor_agent_timeout",
+  "why": "Harbor ended the agent; the verifier graded what it left (the task's policy: graded)",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": {
+     "exception_type": "AgentTimeoutError",
+     "exception_message": "Agent execution timed out after 1800.0 seconds",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nAgentTimeoutError: Agent execution timed out after 1800.0 seconds\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "timeout",
+   "counted": true,
+   "pass": false,
+   "score": 0.0,
+   "cause": "agent_timeout"
+  }
+ },
+ {
+  "name": "sven_step_timeout",
+  "why": "Sven's own step limit ended it; graded as is",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 1.0,
+      "functional_correctness": 1.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "pass",
+    "reward": 1.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 1.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 1.0000"
+   },
+   "agent_timed_out": true
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "timeout",
+   "counted": true,
+   "pass": true,
+   "score": 1.0,
+   "cause": "agent_timeout"
+  }
+ },
+ {
+  "name": "timeout_excluded_by_policy",
+  "why": "the task declares timeouts excluded",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   },
+   "agent_timed_out": true,
+   "entry": {
+    "timeout_policy": "excluded"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "timeout",
+   "counted": false,
+   "pass": null,
+   "score": 0.0,
+   "cause": "agent_timeout"
+  }
+ },
+ {
+  "name": "environment_start_timeout",
+  "why": "the sandbox never came up",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": null,
+    "agent_execution": null,
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "EnvironmentStartTimeoutError",
+     "exception_message": "Environment start timed out after 600.0 seconds",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\nEnvironmentStartTimeoutError: Environment start timed out after 600.0 seconds\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [],
+  "expect": {
+   "status": "environment_error",
+   "counted": false,
+   "pass": null,
+   "cause": "EnvironmentStartTimeoutError"
+  }
+ },
+ {
+  "name": "setup_crash",
+  "why": "an error before the agent started is the sandbox's, not the agent's",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": null,
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "RuntimeError",
+     "exception_message": "the sandbox has no runnable sven; is the Sven build mounted at /opt/sven?",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \"agents/sven.py\", line 101, in install\nRuntimeError: the sandbox has no runnable sven; is the Sven build mounted at /opt/sven?\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [],
+  "expect": {
+   "status": "environment_error",
+   "counted": false,
+   "pass": null,
+   "cause": "setup_failed"
+  }
+ },
+ {
+  "name": "verifier_environment_error",
+  "why": "the verifier could not judge (simulator fault): its own verdict",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "RewardFileNotFoundError",
+     "exception_message": "No reward file found at jobs/x/verifier/reward.txt or jobs/x/verifier/reward.json",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nRewardFileNotFoundError: No reward file found at jobs/x/verifier/reward.txt or jobs/x/verifier/reward.json\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "environment_error",
+    "reward": null,
+    "scoring": "functional",
+    "metrics": {
+     "environment_valid": 0.0
+    },
+    "reason": "simulator crashed"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "environment_error",
+   "counted": false,
+   "pass": null,
+   "cause": "verifier_environment_error"
+  }
+ },
+ {
+  "name": "reward_file_missing",
+  "why": "the verifier wrote no reward",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "RewardFileNotFoundError",
+     "exception_message": "No reward file found at jobs/x/verifier/reward.txt or jobs/x/verifier/reward.json",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nRewardFileNotFoundError: No reward file found at jobs/x/verifier/reward.txt or jobs/x/verifier/reward.json\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "verifier_error",
+   "counted": false,
+   "pass": null,
+   "cause": "RewardFileNotFoundError"
+  }
+ },
+ {
+  "name": "verifier_timeout",
+  "why": "the verifier ran out of time",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "VerifierTimeoutError",
+     "exception_message": "Verifier execution timed out after 300.0 seconds",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nVerifierTimeoutError: Verifier execution timed out after 300.0 seconds\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "verifier_error",
+   "counted": false,
+   "pass": null,
+   "cause": "VerifierTimeoutError"
+  }
+ },
+ {
+  "name": "no_reward_no_exception",
+  "why": "nothing raised but no reward was recorded",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": null
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "verifier_error",
+   "counted": false,
+   "pass": null,
+   "cause": "no_reward"
+  }
+ },
+ {
+  "name": "ambiguous_reward",
+  "why": "several rewards and none named reward",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "accuracy": 1.0,
+      "style": 0.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "verifier_error",
+   "counted": false,
+   "pass": null,
+   "cause": "malformed_reward"
+  }
+ },
+ {
+  "name": "agent_crash",
+  "why": "the agent adapter raised during the run, not a model failure",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "RuntimeError",
+     "exception_message": "a harness task needs a profile whose roles are served by the gateway",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\n  File \"agents/sven.py\", line 211, in _run_agent\nRuntimeError: a harness task needs a profile whose roles are served by the gateway\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "agent_error",
+   "counted": false,
+   "pass": null,
+   "cause": "RuntimeError"
+  }
+ },
+ {
+  "name": "agent_nonzero_exit_graded",
+  "why": "a nonzero agent exit is the agent's business: its work is graded",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": {
+     "exception_type": "NonZeroAgentExitCodeError",
+     "exception_message": "Command failed (exit 1)",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nNonZeroAgentExitCodeError: Command failed (exit 1)\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": false,
+   "score": 0.0
+  }
+ },
+ {
+  "name": "api_internal_error",
+  "why": "the provider answered 5xx",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": {
+     "exception_type": "ApiInternalServerError",
+     "exception_message": "500 Internal Server Error",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nApiInternalServerError: 500 Internal Server Error\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [],
+  "expect": {
+   "status": "model_error",
+   "counted": false,
+   "pass": null,
+   "cause": "ApiInternalServerError"
+  }
+ },
+ {
+  "name": "context_window",
+  "why": "the model's context ran out",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": {
+     "exception_type": "ContextWindowExceededError",
+     "exception_message": "prompt is too long",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nContextWindowExceededError: prompt is too long\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "budget_exhausted",
+   "counted": false,
+   "pass": null,
+   "cause": "ContextWindowExceededError"
+  }
+ },
+ {
+  "name": "windows_unsupported",
+  "why": "the agent cannot take the task's platform",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": null,
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "RuntimeError",
+     "exception_message": "Agent 'sven' does not support Windows containers. Only agents with SUPPORTS_WINDOWS = True can run Windows tasks (currently: oracle, nop).",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 1170, in _setup_agent\nRuntimeError: Agent 'sven' does not support Windows containers. Only agents with SUPPORTS_WINDOWS = True can run Windows tasks (currently: oracle, nop).\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [],
+  "expect": {
+   "status": "unsupported",
+   "counted": false,
+   "pass": null,
+   "cause": "unsupported_capability"
+  }
+ },
+ {
+  "name": "missing_tests",
+  "why": "the task has no tests directory",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "AddTestsDirError",
+     "exception_message": "Failed to add tests directory to environment.",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\n  File \".venv/lib/python3.14/site-packages/harbor/trial/single_step.py\", line 41, in _run\nAddTestsDirError: Failed to add tests directory to environment.\n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "invalid_task",
+   "counted": false,
+   "pass": null,
+   "cause": "AddTestsDirError"
+  }
+ },
+ {
+  "name": "leak",
+  "why": "the agent read the hidden tests: a hard veto whatever the score",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 1.0,
+      "functional_correctness": 1.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "pass",
+    "reward": 1.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 1.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 1.0000"
+   },
+   "leaks": [
+    "shell: cat /tests/test.sh"
+   ]
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "security_violation",
+   "counted": false,
+   "pass": false,
+   "score": 1.0,
+   "cause": "leak"
+  }
+ },
+ {
+  "name": "cancelled",
+  "why": "the run was interrupted",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": null,
+    "agent_result": {
+     "cost_usd": null,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": null,
+    "exception_info": {
+     "exception_type": "CancelledError",
+     "exception_message": "",
+     "exception_traceback": "Traceback (most recent call last):\n  File \".venv/lib/python3.14/site-packages/harbor/trial/trial.py\", line 352, in run\nCancelledError: \n",
+     "occurred_at": "2026-11-17T14:34:25.000000Z"
+    }
+   },
+   "verification": null
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "environment_error",
+   "counted": false,
+   "pass": null,
+   "cause": "cancelled"
+  }
+ },
+ {
+  "name": "cost_reported",
+  "why": "an agent that reports its own cost",
+  "record": {
+   "result": {
+    "trial_name": "calc-read-value-csv__AbC123x",
+    "task_name": "swedishembedded/workspace-tools-read-value-csv-1449820617",
+    "started_at": "2026-11-17T14:34:20.000000Z",
+    "finished_at": "2026-11-17T14:34:29.000000Z",
+    "agent_info": {
+     "name": "sven",
+     "version": "5.5.0",
+     "model_info": {
+      "name": "profile",
+      "provider": "bench"
+     }
+    },
+    "environment_setup": {
+     "started_at": "2026-11-17T14:34:20.000000Z",
+     "finished_at": "2026-11-17T14:34:21.000000Z"
+    },
+    "agent_setup": {
+     "started_at": "2026-11-17T14:34:21.000000Z",
+     "finished_at": "2026-11-17T14:34:22.000000Z"
+    },
+    "agent_execution": {
+     "started_at": "2026-11-17T14:34:22.000000Z",
+     "finished_at": "2026-11-17T14:34:26.000000Z"
+    },
+    "verifier": {
+     "started_at": "2026-11-17T14:34:26.000000Z",
+     "finished_at": "2026-11-17T14:34:29.000000Z"
+    },
+    "agent_result": {
+     "cost_usd": 0.0123,
+     "n_input_tokens": null,
+     "n_output_tokens": null,
+     "n_cache_tokens": null,
+     "metadata": null,
+     "rollout_details": null
+    },
+    "verifier_result": {
+     "rewards": {
+      "reward": 0.0,
+      "functional_correctness": 0.0,
+      "invariants_hold": 1.0,
+      "environment_valid": 1.0
+     }
+    },
+    "exception_info": null
+   },
+   "verification": {
+    "schema": "bench.verification/1",
+    "verdict": "fail",
+    "reward": 0.0,
+    "scoring": "functional",
+    "metrics": {
+     "functional_correctness": 0.0,
+     "invariants_hold": 1.0,
+     "environment_valid": 1.0
+    },
+    "reason": "functional_correctness 0.0000"
+   }
+  },
+  "requests": [
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 210,
+    "completion_tokens": 21,
+    "cached_tokens": 0
+   },
+   {
+    "role": "main",
+    "status": 200,
+    "prompt_tokens": 282,
+    "completion_tokens": 40,
+    "cached_tokens": 200
+   }
+  ],
+  "expect": {
+   "status": "graded",
+   "counted": true,
+   "pass": false,
+   "score": 0.0
+  }
+ }
+]

@@ -1,0 +1,47 @@
+{
+ "schema": "splinter.trial/1",
+ "slot": {
+  "pass": "local",
+  "task": "train/015-delete-a-word",
+  "slot": 2
+ },
+ "attempt": 1,
+ "task": "train/015-delete-a-word",
+ "task_digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "agent": {
+  "name": "sven",
+  "version": "5.9.2",
+  "invocation": "blake3:3333333333333333333333333333333333333333333333333333333333333333"
+ },
+ "model": "brain:Qwen/Qwen3-4B",
+ "grade": {
+  "status": "graded",
+  "cause": null,
+  "counted": true,
+  "score": 1.0,
+  "passed": true,
+  "metrics": {
+   "functional_correctness": 1.0
+  },
+  "vetoes": []
+ },
+ "trace": {
+  "path": "harbor/015__AbC/agent/trajectory.json",
+  "digest": "blake3:4444444444444444444444444444444444444444444444444444444444444444"
+ },
+ "native_dir": "harbor/015__AbC",
+ "native": [
+  {
+   "path": "harbor/015__AbC/result.json",
+   "digest": "blake3:5555555555555555555555555555555555555555555555555555555555555555"
+  }
+ ],
+ "started_at": "2026-11-22T10:00:00Z",
+ "finished_at": "2026-11-22T10:01:30Z",
+ "usage": {
+  "prompt_tokens": 492,
+  "completion_tokens": 61,
+  "cached_tokens": 200,
+  "cost_usd": null
+ }
+}

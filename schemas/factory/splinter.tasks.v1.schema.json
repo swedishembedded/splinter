@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskCollection",
+  "description": "A pinned set of tasks.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "The collection's name.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Always [`TASKS_SCHEMA`].",
+      "type": "string"
+    },
+    "tasks": {
+      "description": "The tasks, sorted by id.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TaskRef"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "tasks"
+  ],
+  "$defs": {
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "TaskRef": {
+      "description": "One task of a collection.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "The digest of the task directory's content.",
+          "$ref": "#/$defs/Digest"
+        },
+        "family": {
+          "description": "The task family, for grouping and splits.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "The task's identifier in its collection: its directory relative to\nthe collection root (`train/015-delete-a-word`).",
+          "type": "string"
+        },
+        "name": {
+          "description": "The task's own name (Harbor's `task.toml` name).",
+          "type": "string"
+        },
+        "split": {
+          "description": "The split it belongs to (`train`, `eval`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "digest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+ "schema": "splinter.tasks/1",
+ "name": "vim-mastery",
+ "tasks": [
+  {
+   "id": "train/015-delete-a-word",
+   "name": "swedishembedded/vim-015-delete-a-word",
+   "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "family": "motions",
+   "split": "train"
+  },
+  {
+   "id": "train/019-move-backward-by-word",
+   "name": "swedishembedded/vim-019",
+   "digest": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "family": null,
+   "split": "train"
+  }
+ ]
+}

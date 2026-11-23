@@ -1,0 +1,69 @@
+{
+ "schema": "splinter.execution/1",
+ "slot": {
+  "pass": "local",
+  "task": "train/015-delete-a-word",
+  "slot": 2
+ },
+ "attempt": 0,
+ "task": {
+  "id": "train/015-delete-a-word",
+  "name": "swedishembedded/vim-015-delete-a-word",
+  "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "family": "motions",
+  "split": "train"
+ },
+ "task_dir": "tasks/train/015-delete-a-word",
+ "agent": {
+  "name": "sven",
+  "version": "5.9.2",
+  "args": [
+   "--config",
+   "agents/sven-coding.yaml"
+  ],
+  "files": [
+   {
+    "path": "agents/sven-coding.yaml",
+    "digest": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   }
+  ],
+  "env": {
+   "ADVISOR_MODEL": {
+    "literal": "hosted:deepseek/deepseek-v4.1-flash"
+   },
+   "SVEN_KEY": {
+    "from_env": "SVEN_KEY"
+   }
+  },
+  "system_prompt": {
+   "path": "prompts/narrate.md",
+   "digest": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  }
+ },
+ "model": {
+  "connection": "brain",
+  "model": "Qwen/Qwen3-4B",
+  "protocol": "openai",
+  "url": "http://127.0.0.1:8990/v1",
+  "token_env": "BRAIN_API_KEY"
+ },
+ "sandbox": {
+  "provider": "proot",
+  "image": null,
+  "cpus": 2,
+  "memory_mib": 4096,
+  "timeout_seconds": 600,
+  "network": "model-gateway-only",
+  "mounts": [
+   {
+    "source": "knowledge/vim",
+    "digest": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "target": "/knowledge/vim",
+    "read_only": true
+   }
+  ]
+ },
+ "seed": 99,
+ "budget": null,
+ "timeout_policy": "graded"
+}

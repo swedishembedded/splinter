@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelCandidate",
+  "description": "A trained model, ready to be served.",
+  "type": "object",
+  "properties": {
+    "artifacts": {
+      "description": "The trained files (adapter or weights), relative to the product.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FileRef"
+      }
+    },
+    "base": {
+      "description": "The base model reference (`brain:Qwen/Qwen3-4B`).",
+      "type": "string"
+    },
+    "dataset": {
+      "description": "The dataset product it was trained on.",
+      "$ref": "#/$defs/Digest"
+    },
+    "kind": {
+      "description": "Its form.",
+      "$ref": "#/$defs/CandidateKind"
+    },
+    "load_checked": {
+      "description": "The serving check passed: the trainer's server loaded the candidate\nand answered.",
+      "type": "boolean"
+    },
+    "method": {
+      "description": "The training method.",
+      "type": "string"
+    },
+    "name": {
+      "description": "The training variant's name.",
+      "type": "string"
+    },
+    "params": {
+      "description": "The parameters as the trainer accepted them."
+    },
+    "report": {
+      "description": "The trainer's report (losses, steps), as it wrote it.",
+      "default": null
+    },
+    "schema": {
+      "description": "Always [`CANDIDATE_SCHEMA`].",
+      "type": "string"
+    },
+    "seed": {
+      "description": "The training seed.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "served_as": {
+      "description": "The model id the candidate is served under once loaded.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "trainer": {
+      "description": "The trainer and its version.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "kind",
+    "base",
+    "artifacts",
+    "dataset",
+    "method",
+    "params",
+    "trainer",
+    "seed",
+    "load_checked"
+  ],
+  "$defs": {
+    "CandidateKind": {
+      "description": "The form a trained model takes.",
+      "oneOf": [
+        {
+          "description": "An adapter over the base.",
+          "type": "string",
+          "const": "adapter"
+        },
+        {
+          "description": "Full weights.",
+          "type": "string",
+          "const": "full"
+        }
+      ]
+    },
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "FileRef": {
+      "description": "A file pinned by content.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Its content digest.",
+          "$ref": "#/$defs/Digest"
+        },
+        "path": {
+          "description": "Where it is, relative to the root its owner names.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "digest"
+      ]
+    }
+  }
+}

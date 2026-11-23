@@ -133,6 +133,13 @@ test/e2e/turn/spec:
 	python3 -I scripts/e2e/test-turn.py
 
 # ---------------------------------------------------------------------------
+## schemas - default: schemas/generate
+schemas: schemas/generate
+
+## schemas/generate - regenerate schemas/factory/*.schema.json, the learning factory contracts' JSON Schemas, from their Rust types (a test fails when the committed files differ)
+schemas/generate:
+	cargo run -q --release -p splinter-core --example factory-schemas -- schemas/factory
+
 ##@ Checks
 ## Every gate over the whole tree: what the hooks check per commit.
 
@@ -540,7 +547,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

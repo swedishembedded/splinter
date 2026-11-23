@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrialResult",
+  "description": "The validated outcome of one physical attempt.",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "description": "Who acted.",
+      "$ref": "#/$defs/AgentIdentity"
+    },
+    "attempt": {
+      "description": "The physical attempt.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "finished_at": {
+      "description": "When it finished (RFC 3339).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "grade": {
+      "description": "The classified, scored outcome.",
+      "$ref": "#/$defs/Grade"
+    },
+    "model": {
+      "description": "The model, `connection:model`, when the recipe bound one.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "native": {
+      "description": "The backend's files the grade was read from.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FileRef"
+      }
+    },
+    "native_dir": {
+      "description": "The backend's own trial directory, relative to the rollout product.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Always [`TRIAL_SCHEMA`].",
+      "type": "string"
+    },
+    "slot": {
+      "description": "The slot it fills.",
+      "$ref": "#/$defs/SlotKey"
+    },
+    "started_at": {
+      "description": "When the attempt started (RFC 3339).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "task": {
+      "description": "The task's id.",
+      "type": "string"
+    },
+    "task_digest": {
+      "description": "The task's content digest.",
+      "$ref": "#/$defs/Digest"
+    },
+    "trace": {
+      "description": "The ATIF trajectory, relative to the rollout product.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "usage": {
+      "description": "What it consumed.",
+      "$ref": "#/$defs/TrialUsage",
+      "default": {
+        "cached_tokens": null,
+        "completion_tokens": null,
+        "cost_usd": null,
+        "prompt_tokens": null
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "slot",
+    "attempt",
+    "task",
+    "task_digest",
+    "agent",
+    "grade",
+    "native_dir"
+  ],
+  "$defs": {
+    "AgentIdentity": {
+      "description": "Who acted in a trial.",
+      "type": "object",
+      "properties": {
+        "invocation": {
+          "description": "The digest of the agent's invocation (argv, files, environment\nnames).",
+          "$ref": "#/$defs/Digest"
+        },
+        "name": {
+          "description": "The agent adapter.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version the agent reported.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "invocation"
+      ]
+    },
+    "Cause": {
+      "description": "Why a trial is not plainly graded: a short machine-readable code and a\nmessage for a person.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Machine-readable code (`agent_timeout`, `server_error`, an exception\ntype, ...).",
+          "type": "string"
+        },
+        "message": {
+          "description": "What happened, for a person.",
+          "type": "string"
+        },
+        "policy": {
+          "description": "The task's timeout policy, on a timeout.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "Digest": {
+      "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
+      "type": "string",
+      "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
+    },
+    "FileRef": {
+      "description": "A file pinned by content.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "Its content digest.",
+          "$ref": "#/$defs/Digest"
+        },
+        "path": {
+          "description": "Where it is, relative to the root its owner names.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "digest"
+      ]
+    },
+    "Grade": {
+      "description": "A classified, scored trial.",
+      "type": "object",
+      "properties": {
+        "cause": {
+          "description": "Why, when it is not plainly graded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cause"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counted": {
+          "description": "In pass rates: graded, a timeout its task grades, or a counted fail.",
+          "type": "boolean"
+        },
+        "metrics": {
+          "description": "The verifier's named partial-credit metrics.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "passed": {
+          "description": "`score >= FULL_CREDIT` with no veto; `None` when not counted (`false`\nunder a veto).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "score": {
+          "description": "The verifier's reward; `None` when it left none or the status makes it\nmeaningless.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "status": {
+          "description": "How the trial ended.",
+          "$ref": "#/$defs/TrialStatus"
+        },
+        "vetoes": {
+          "description": "Hard vetoes that force `passed = false` whatever the score.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "counted",
+        "metrics",
+        "vetoes"
+      ]
+    },
+    "SlotKey": {
+      "description": "A requested trial: one slot of one task in one pass. It stays the same\nwhichever physical attempt fills it.",
+      "type": "object",
+      "properties": {
+        "pass": {
+          "description": "The rollout pass.",
+          "type": "string"
+        },
+        "slot": {
+          "description": "The slot's index among the task's attempts in the pass, from 0.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "task": {
+          "description": "The task's id in the collection.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pass",
+        "task",
+        "slot"
+      ]
+    },
+    "TimeoutPolicy": {
+      "description": "Whether a trial a time limit ended is graded on what the agent left, or\nexcluded from pass rates.",
+      "oneOf": [
+        {
+          "description": "Graded as it stands.",
+          "type": "string",
+          "const": "graded"
+        },
+        {
+          "description": "Left out of the denominators.",
+          "type": "string",
+          "const": "excluded"
+        }
+      ]
+    },
+    "TrialStatus": {
+      "description": "How a trial ended.",
+      "oneOf": [
+        {
+          "description": "The verifier judged the agent's work.",
+          "type": "string",
+          "const": "graded"
+        },
+        {
+          "description": "The task itself is defective (no tests, a verifier that refuses its\nown truth).",
+          "type": "string",
+          "const": "invalid_task"
+        },
+        {
+          "description": "Sandbox, staging, gateway, or a simulator the verifier needs failed.",
+          "type": "string",
+          "const": "environment_error"
+        },
+        {
+          "description": "The model endpoint failed: refused, 5xx, an empty or unusable reply.",
+          "type": "string",
+          "const": "model_error"
+        },
+        {
+          "description": "The agent process crashed for a reason other than its model.",
+          "type": "string",
+          "const": "agent_error"
+        },
+        {
+          "description": "The verifier crashed, timed out, or left no reward.",
+          "type": "string",
+          "const": "verifier_error"
+        },
+        {
+          "description": "A time limit ended the agent; the task's policy says whether it is\ngraded as it is.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "A token, context or usage budget ended the agent; the run's own budget\nis a counted fail.",
+          "type": "string",
+          "const": "budget_exhausted"
+        },
+        {
+          "description": "The model's reasoning looped and ended the run: a counted fail.",
+          "type": "string",
+          "const": "reasoning_loop"
+        },
+        {
+          "description": "A wall-clock limit ended the agent of a budgeted run: the\ninfrastructure's, never graded.",
+          "type": "string",
+          "const": "infra_timeout"
+        },
+        {
+          "description": "A sandbox escape or a hidden-answer leak: a hard veto.",
+          "type": "string",
+          "const": "security_violation"
+        },
+        {
+          "description": "The agent or model cannot take a capability the task needs (coverage,\nnot a 0).",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "The trial's trace could not be read or failed validation; its raw\nevidence is kept and it is quarantined from training. Set by trial\nadmission, never by [`classify`].",
+          "type": "string",
+          "const": "invalid_trace"
+        }
+      ]
+    },
+    "TrialUsage": {
+      "description": "Tokens and cost an attempt's model requests consumed; a value nobody\nmeasured is absent, never 0.",
+      "type": "object",
+      "properties": {
+        "cached_tokens": {
+          "description": "Prompt tokens served from cache.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "completion_tokens": {
+          "description": "Completion tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "cost_usd": {
+          "description": "Cost in US dollars, when the provider reported it.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "prompt_tokens": {
+          "description": "Prompt tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
