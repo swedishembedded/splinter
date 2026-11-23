@@ -185,3 +185,38 @@ fn a_collection_names_the_command_that_generates_its_tasks_and_a_missing_root_sa
     splinter_factory::collection::generate(&repo.root, "collections/vim.yaml").unwrap();
     assert!(resolve(&repo.root, RECIPE, connections()).is_ok());
 }
+
+#[test]
+fn examination_tasks_never_reach_a_dataset_under_any_name() {
+    let repo = Repo::new();
+    // No split: the collection's held-out task would be attempted for training.
+    let unsplit = RECIPE.replace(", split: train }", " }");
+    let problems = resolve(&repo.root, &unsplit, connections())
+        .expect_err("refused")
+        .0;
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.contains("eval/001-held") && p.contains("examination")),
+        "{problems:?}"
+    );
+    // The held-out task copied under a training name is the same task.
+    for file in ["task.toml", "instruction.md", "tests/test.sh"] {
+        let text =
+            std::fs::read_to_string(repo.root.join("tasks/vim/eval/001-held").join(file)).unwrap();
+        repo.write(&format!("tasks/vim/train/003-copy/{file}"), &text);
+    }
+    let problems = resolve(&repo.root, RECIPE, connections())
+        .expect_err("refused")
+        .0;
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.contains("train/003-copy") && p.contains("eval/001-held")),
+        "{problems:?}"
+    );
+    // A recipe with no dataset trains on nothing, so it may attempt them.
+    let no_dataset = unsplit.split("dataset:").next().unwrap().to_owned();
+    std::fs::remove_dir_all(repo.root.join("tasks/vim/train/003-copy")).unwrap();
+    resolve(&repo.root, &no_dataset, connections()).expect("a recipe that trains on nothing");
+}

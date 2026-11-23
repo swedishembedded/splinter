@@ -11,3 +11,4 @@ mod fakes;
 mod native;
 mod repo;
 mod resolve;
+mod reuse;

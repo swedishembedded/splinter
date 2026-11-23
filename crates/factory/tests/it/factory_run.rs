@@ -25,11 +25,11 @@ use crate::repo::{connections, Repo, RECIPE};
 
 const OWNER: &str = "test-controller";
 
-fn resolved(repo: &Repo, recipe: &str) -> Resolved {
+pub(crate) fn resolved(repo: &Repo, recipe: &str) -> Resolved {
     resolve(&repo.root, recipe, connections()).expect("the recipe resolves")
 }
 
-fn run(
+pub(crate) fn run(
     resolved: &Resolved,
     dir: &Path,
     backend: &FakeBackend,
@@ -50,7 +50,7 @@ fn run(
 
 /// Eight attempts on the held-out task, so a candidate that wins every pair
 /// is decided at the plan's level.
-fn decisive(repo: &Repo) {
+pub(crate) fn decisive(repo: &Repo) {
     // seed: the plan must state its seed; the fake backend draws nothing from it.
     repo.write(
         "eval/dev.yaml",

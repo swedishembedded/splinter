@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{digest_of, Digest};
-use splinter_core::factory::task::plain_relative;
+use splinter_core::factory::task::{plain_relative, TaskCollection, TaskRef};
 
 use crate::collection::{self, LoadedCollection};
 use crate::connections::Connections;
@@ -215,6 +215,13 @@ pub fn resolve(
             }
         }
     }
+    if let Some(dataset) = &recipe.dataset {
+        problems.extend(examination_material(
+            &loaded.collection,
+            eval.as_ref(),
+            &dataset.name,
+        ));
+    }
     if !problems.is_empty() {
         return Err(RecipeError(problems));
     }
@@ -237,6 +244,41 @@ pub fn resolve(
         lock,
         plan,
     })
+}
+
+/// The recipe's tasks that a dataset would learn from but that are
+/// examination material: on the `eval` split, or the very task (by content)
+/// the eval plan examines under any name. Trials of them could otherwise
+/// reach training, and a candidate would be examined on what it was taught.
+fn examination_material(
+    training: &TaskCollection,
+    eval: Option<&(EvalPlan, Option<LoadedCollection>)>,
+    dataset: &str,
+) -> Vec<String> {
+    let examined: Vec<&TaskRef> = match eval {
+        Some((plan, Some(loaded))) => loaded
+            .collection
+            .tasks
+            .iter()
+            .filter(|t| plan.split.is_none() || t.split == plan.split)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let mut problems = Vec::new();
+    for task in &training.tasks {
+        if task.split.as_deref() == Some("eval") {
+            problems.push(format!(
+                "{} is examination material (split eval) and cannot reach dataset {dataset}: select the train split",
+                task.id
+            ));
+        } else if let Some(same) = examined.iter().find(|e| e.digest == task.digest) {
+            problems.push(format!(
+                "{} is the same task as {}, which the eval plan examines; it cannot reach dataset {dataset}",
+                task.id, same.id
+            ));
+        }
+    }
+    problems
 }
 
 impl Lock {
