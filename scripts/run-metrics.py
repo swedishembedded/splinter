@@ -7,7 +7,7 @@
 # you can procure our services by sending an email to info@swedishembedded.com.
 """What an evaluation run's arms did, read from its trials.
 
-usage: run-metrics.py RUN_DIR [--json]
+usage: run-metrics.py RUN_DIR [--json] [--by-kind]
 
 For every evaluation arm of the run (a `splinter run` or `fork` output), the counted slots, the passes, the
 slots that never counted, the physical attempts the infrastructure retried, and from the trajectories:
@@ -18,6 +18,9 @@ slots that never counted, the physical attempts the infrastructure retried, and 
   - http_400: model requests the server refused (a request over the context window is one);
   - thinking: replies that carry reasoning (an arm run in no-think mode must have none);
   - emptied_files: results that report a file written empty.
+
+With `--by-kind` the passes are also split by the kind of task, the word its name starts with after the split
+(`train/composite-007-x` is `composite`; a name that starts with a number is `numbered`).
 
 The pass rate over all slots counts a slot that never counted as not passed: the rate over counted slots alone
 drops exactly the trials a failing policy loses.
@@ -43,6 +46,12 @@ def blob(run, product, path):
             full = os.path.join(run, 'blobs', 'sha256', f['digest'].split(':')[1])
             return open(full, errors='replace').read()
     return None
+
+
+def kind_of(task):
+    name = task.split('/', 1)[-1]
+    word = name.split('-', 1)[0]
+    return 'numbered' if word.isdigit() else word
 
 
 def arm_metrics(run, name, product):
@@ -80,7 +89,13 @@ def arm_metrics(run, name, product):
         if stderr in files and 'loop:' in blob(run, product, stderr):
             loops += 1
     passed = sum(1 for t in last.values() if t['grade']['passed'])
+    kinds = collections.defaultdict(lambda: [0, 0])
+    for task in slots:
+        kind = kind_of(task)
+        kinds[kind][1] += 1
+        kinds[kind][0] += bool(last.get(task) and last[task]['grade']['passed'])
     return {
+        'by_kind': {k: {'passed': v[0], 'slots': v[1]} for k, v in sorted(kinds.items())},
         'arm': name, 'slots': len(slots), 'counted': len(last), 'passed': passed,
         'never_counted': len(slots) - len(last),
         'pass_rate_counted': round(passed / len(last), 4) if last else None,
@@ -108,6 +123,8 @@ def main(argv):
               f"(rate {r['pass_rate_all_slots']}, counted-only {r['pass_rate_counted']}) never-counted {r['never_counted']:3d} "
               f"attempts {r['physical_attempts']:3d} infra-timeouts {r['infra_timeouts']:3d} "
               f"repeat-after-error {share} http400 {r['http_400']} loops {r['loop_stops']} reasoning {r['reasoning_replies']}")
+        if '--by-kind' in argv:
+            print('    ' + ', '.join(f"{k} {v['passed']}/{v['slots']}" for k, v in r['by_kind'].items()))
     return 0
 
 
