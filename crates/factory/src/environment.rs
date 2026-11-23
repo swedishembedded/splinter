@@ -19,8 +19,9 @@
 //! ```
 //!
 //! `proot` translates paths; it is a compatibility sandbox for hosts without
-//! user namespaces or containers, never a security boundary, and an
-//! environment that asks for `isolation: strong` refuses it.
+//! user namespaces or containers, never a security boundary: an environment
+//! that asks for `isolation: strong` refuses it, and one on it must state
+//! that its network is open, since proot cannot restrict it.
 
 use serde::{Deserialize, Serialize};
 use splinter_core::factory::execution::NetworkMode;
@@ -44,7 +45,8 @@ pub struct Resources {
     /// Memory in GiB.
     #[serde(default)]
     pub memory_gb: Option<u64>,
-    /// The agent's wall-clock limit (`90s`, `10m`, `2h`).
+    /// The agent's wall-clock limit: a whole number of seconds (`s`),
+    /// minutes (`m`) or hours (`h`).
     #[serde(default)]
     pub timeout: Option<String>,
 }
@@ -147,6 +149,9 @@ impl Environment {
             Some((name, false)) if env.isolation == Isolation::Strong => problems.push(format!(
                 "the environment demands strong isolation and {name} is not a security boundary"
             )),
+            Some(("proot", _)) if env.network.mode != NetworkMode::Open => problems.push(
+                "proot cannot restrict the network; an environment on proot must say `network: { mode: open }`".into(),
+            ),
             Some(_) => {}
         }
         if let Some(timeout) = &env.sandbox.resources.timeout {

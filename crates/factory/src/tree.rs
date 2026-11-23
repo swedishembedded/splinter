@@ -83,3 +83,39 @@ fn walk(root: &Path, dir: &Path, entries: &mut Vec<Entry>) -> Result<(), TreeErr
     }
     Ok(())
 }
+
+/// Copy the tree at `src` to `dst`, hard-linking files where the
+/// filesystem allows and copying them where it does not. A symbolic link to
+/// a file is copied as the file it names (a product holds content, not
+/// links); one to a directory, or one that names nothing, is refused.
+///
+/// # Errors
+/// A file cannot be read, linked or copied.
+pub fn link_tree(src: &Path, dst: &Path) -> Result<(), TreeError> {
+    let fail = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| TreeError { path, source }
+    };
+    std::fs::create_dir_all(dst).map_err(fail(dst))?;
+    for entry in std::fs::read_dir(src).map_err(fail(src))? {
+        let entry = entry.map_err(fail(src))?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        let kind = entry.file_type().map_err(fail(&from))?;
+        if kind.is_symlink() {
+            let target = std::fs::metadata(&from).map_err(fail(&from))?;
+            if !target.is_file() {
+                return Err(TreeError {
+                    path: from,
+                    source: std::io::Error::other("a symbolic link to something other than a file"),
+                });
+            }
+            std::fs::copy(&from, &to).map_err(fail(&to))?;
+        } else if kind.is_dir() {
+            link_tree(&from, &to)?;
+        } else if std::fs::hard_link(&from, &to).is_err() {
+            std::fs::copy(&from, &to).map_err(fail(&to))?;
+        }
+    }
+    Ok(())
+}

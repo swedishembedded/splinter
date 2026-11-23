@@ -178,12 +178,20 @@ pub struct RolloutPass {
     /// The timeout policy of its tasks.
     #[serde(default)]
     pub timeout_policy: TimeoutPolicy,
+    /// Extra physical attempts a slot may take when the infrastructure (a
+    /// sandbox, the model endpoint, the verifier) decided its attempt.
+    #[serde(default = "two")]
+    pub retries: u32,
     /// The pass's seed; attempt seeds are drawn from it.
     pub seed: u64,
 }
 
 fn one() -> u32 {
     1
+}
+
+fn two() -> u32 {
+    2
 }
 
 /// The dataset section.

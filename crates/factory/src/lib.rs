@@ -16,10 +16,14 @@
 //! * [`resolve`] - a recipe with every file it names read, checked and
 //!   pinned in a lock.
 //! * [`plan`] - the graph of stages.
+//! * [`run`] - the controller over one run directory, and every stage.
+//! * [`backend`] and [`training`] - the seams to the execution worker and
+//!   the training engine.
 //! * [`tree`] - the digest of a directory tree.
 
 #![warn(missing_docs)]
 
+pub mod backend;
 pub mod collection;
 pub mod connections;
 pub mod environment;
@@ -27,4 +31,6 @@ pub mod eval_plan;
 pub mod plan;
 pub mod recipe;
 pub mod resolve;
+pub mod run;
+pub mod training;
 pub mod tree;

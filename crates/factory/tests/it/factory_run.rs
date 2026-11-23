@@ -1,0 +1,383 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+//! A whole recipe through the controller, on a scripted execution backend
+//! and a scripted trainer: every stage commits once and is reused after, a
+//! later pass runs only what earlier passes left unsolved, the
+//! infrastructure's failures are retried and never become training
+//! negatives, a crash loses and repeats nothing, a corrupt trace is
+//! quarantined, a changed variant retrains only itself, and the run can be
+//! verified on its own.
+
+use std::path::Path;
+
+use splinter_core::factory::product::{Decision, TrialResult};
+use splinter_core::factory::trial::TrialStatus;
+use splinter_factory::resolve::{resolve, Resolved};
+use splinter_factory::run::dataset::dataset_of;
+use splinter_factory::run::eval::result_of;
+use splinter_factory::run::rollout::trials_of;
+use splinter_factory::run::{fork, status, verify, Factory, RunError, Services};
+use splinter_store::factory::runstate::RunStateError;
+
+use crate::fakes::{FakeBackend, FakeTrainer, Outcome};
+use crate::repo::{connections, Repo, RECIPE};
+
+const OWNER: &str = "test-controller";
+
+fn resolved(repo: &Repo, recipe: &str) -> Resolved {
+    resolve(&repo.root, recipe, connections()).expect("the recipe resolves")
+}
+
+fn run(
+    resolved: &Resolved,
+    dir: &Path,
+    backend: &FakeBackend,
+    trainer: &FakeTrainer,
+) -> Result<Vec<(String, bool)>, RunError> {
+    let services = Services {
+        backend,
+        trainer: Some(trainer),
+    };
+    let mut factory = Factory::open(resolved, dir, services, OWNER)?;
+    Ok(factory
+        .run()?
+        .stages
+        .into_iter()
+        .map(|s| (s.key, s.computed))
+        .collect())
+}
+
+/// Eight attempts on the held-out task, so a candidate that wins every pair
+/// is decided at the plan's level.
+fn decisive(repo: &Repo) {
+    // seed: the plan must state its seed; the fake backend draws nothing from it.
+    repo.write(
+        "eval/dev.yaml",
+        "schema: splinter.evalplan/v1\ncollection: collections/vim.yaml\nsplit: eval\n\
+         environment: environments/vim.yaml\nattempts: 8\nseed: 5\ndecision: { alpha: 0.05 }\n",
+    );
+}
+
+fn tasks_run(backend: &FakeBackend, pass: &str) -> Vec<String> {
+    let mut tasks: Vec<String> = backend
+        .executed()
+        .into_iter()
+        .filter(|s| s.slot.pass == pass)
+        .map(|s| s.task.id)
+        .collect();
+    tasks.dedup();
+    tasks
+}
+
+#[test]
+fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
+    let repo = Repo::new();
+    decisive(&repo);
+    let resolved = resolved(&repo, RECIPE);
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    backend.script("train/001-first", &[Outcome::Pass, Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+
+    let first = run(&resolved, dir.path(), &backend, &trainer).unwrap();
+    assert!(first.iter().all(|(_, computed)| *computed), "{first:?}");
+
+    // The remote pass ran only the task the local pass left unsolved.
+    assert_eq!(
+        tasks_run(&backend, "local"),
+        ["train/001-first", "train/002-second"]
+    );
+    assert_eq!(tasks_run(&backend, "remote"), ["train/002-second"]);
+    // A reward-0 trial is kept as a graded failure and never retried.
+    let local = trials_of(&dir.path().join("rollouts/local")).unwrap();
+    assert_eq!(local.len(), 4);
+    let failed: Vec<&TrialResult> = local
+        .iter()
+        .filter(|t| t.task == "train/002-second")
+        .collect();
+    assert!(failed
+        .iter()
+        .all(|t| t.grade.status == TrialStatus::Graded && t.grade.passed == Some(false)));
+    assert_eq!(
+        backend
+            .executed()
+            .iter()
+            .filter(|s| s.slot.pass == "local")
+            .count(),
+        4
+    );
+
+    // The dataset holds the two verified successes, under Sven's own prompt.
+    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let steps: Vec<(&str, u64)> = dataset
+        .waterfall
+        .iter()
+        .map(|w| (w.step.as_str(), w.remaining))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            ("raw_trials", 6),
+            ("verified_successes", 2),
+            ("projected", 2),
+            ("accepted", 2)
+        ]
+    );
+    assert_eq!(dataset.exclusions.get("not_a_success:graded"), Some(&4));
+    let train = std::fs::read_to_string(dir.path().join("datasets/sft/train.jsonl")).unwrap();
+    assert_eq!(train.lines().count(), 2);
+    assert!(
+        train.contains("You are Sven"),
+        "the agent's own system prompt is kept"
+    );
+
+    // Both variants trained; each candidate beat the baseline on every pair.
+    assert_eq!(trainer.trained.lock().unwrap().len(), 2);
+    for candidate in ["lora-r8", "lora-r16"] {
+        let result = result_of(&dir.path().join(format!("eval/{candidate}"))).unwrap();
+        assert_eq!(
+            result.decision,
+            Decision::Improved,
+            "{:?}",
+            result.statistics
+        );
+        assert_eq!((result.baseline.passed, result.candidate.passed), (0, 8));
+    }
+    // The baseline arm ran once for both candidates.
+    assert_eq!(
+        backend
+            .executed()
+            .iter()
+            .filter(|s| s.slot.pass == "eval-baseline")
+            .count(),
+        8
+    );
+    let release = std::fs::read_to_string(dir.path().join("release/release.json")).unwrap();
+    assert!(
+        release.contains("\"promoted\": null"),
+        "an experiment promotes nothing: {release}"
+    );
+
+    // Run again: nothing is executed, trained or written again.
+    let executed = backend.executed().len();
+    let second = run(&resolved, dir.path(), &backend, &trainer).unwrap();
+    assert!(second.iter().all(|(_, computed)| !*computed), "{second:?}");
+    assert_eq!(backend.executed().len(), executed);
+    assert_eq!(trainer.trained.lock().unwrap().len(), 2);
+    let problems = verify(dir.path()).unwrap();
+    assert!(problems.is_empty(), "{problems:?}");
+    assert!(status(dir.path())
+        .unwrap()
+        .iter()
+        .all(|s| s.state == "completed"));
+}
+
+#[test]
+fn the_infrastructures_failures_are_retried_and_never_become_training_negatives() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned()
+        + "dataset: { name: sft, sources: [local, remote], target: \"brain:Qwen/Qwen3-4B\", seed: 13 }\n";
+    let resolved = resolved(&repo, &recipe);
+    let backend = FakeBackend::with(Outcome::Pass);
+    // Slot 0 of the first task: the model fails on every attempt (three: one and two retries).
+    backend.script(
+        "train/001-first#0",
+        &[
+            Outcome::ModelError,
+            Outcome::ModelError,
+            Outcome::ModelError,
+        ],
+    );
+    // The second task's first attempt is lost by the worker, then passes.
+    backend.script("train/002-second#0", &[Outcome::Lost]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &trainer).unwrap();
+
+    let local = trials_of(&dir.path().join("rollouts/local")).unwrap();
+    let model_errors: Vec<_> = local
+        .iter()
+        .filter(|t| t.grade.status == TrialStatus::ModelError)
+        .collect();
+    assert_eq!(
+        model_errors.len(),
+        1,
+        "the slot is kept as what it was after its retries"
+    );
+    assert_eq!(model_errors[0].attempt, 2);
+    assert!(!model_errors[0].grade.counted);
+    let attempts =
+        std::fs::read_to_string(dir.path().join("rollouts/local/attempts.jsonl")).unwrap();
+    assert_eq!(
+        attempts.lines().count(),
+        6,
+        "every reported attempt is kept, the retried ones too"
+    );
+    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    assert_eq!(
+        dataset.exclusions.get("not_a_success:model_error"),
+        Some(&1)
+    );
+    // The lost attempt was launched again and its slot passed.
+    assert!(local
+        .iter()
+        .filter(|t| t.task == "train/002-second")
+        .all(TrialResult::verified_success));
+}
+
+#[test]
+fn a_controller_killed_mid_rollout_resumes_without_repeating_a_finished_attempt() {
+    let repo = Repo::new();
+    let resolved = resolved(&repo, RECIPE.split("dataset:").next().unwrap());
+    let backend = FakeBackend::with(Outcome::Pass);
+    *backend.crash_after.lock().unwrap() = Some(2);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    let crashed = run(&resolved, dir.path(), &backend, &trainer);
+    assert!(matches!(crashed, Err(RunError::Backend(_))), "{crashed:?}");
+    assert_eq!(backend.executed().len(), 2);
+
+    run(&resolved, dir.path(), &backend, &trainer).unwrap();
+    let local: Vec<_> = backend
+        .executed()
+        .into_iter()
+        .filter(|s| s.slot.pass == "local")
+        .collect();
+    let mut slots: Vec<_> = local
+        .iter()
+        .map(|s| (s.task.id.clone(), s.slot.slot))
+        .collect();
+    slots.sort();
+    slots.dedup();
+    assert_eq!(slots.len(), 4);
+    assert_eq!(
+        local.len(),
+        4,
+        "the two attempts that reported before the kill were reconciled, not run again"
+    );
+    assert_eq!(
+        trials_of(&dir.path().join("rollouts/local")).unwrap().len(),
+        4
+    );
+}
+
+#[test]
+fn a_corrupt_trace_keeps_its_evidence_and_is_quarantined_from_training() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("training:").next().unwrap().to_owned();
+    let resolved = resolved(&repo, &recipe);
+    let backend = FakeBackend::with(Outcome::Pass);
+    backend.script(
+        "train/002-second",
+        &[Outcome::CorruptTrace, Outcome::CorruptTrace],
+    );
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    assert_eq!(dataset.exclusions.get("invalid_trace"), Some(&2));
+    let excluded = std::fs::read_to_string(dir.path().join("datasets/sft/excluded.jsonl")).unwrap();
+    assert!(excluded.contains("train/002-second"));
+    let trial = &trials_of(&dir.path().join("rollouts/local")).unwrap()[2];
+    assert!(dir
+        .path()
+        .join("rollouts/local")
+        .join(&trial.native_dir)
+        .join("agent/trajectory.json")
+        .is_file());
+}
+
+#[test]
+fn a_changed_variant_retrains_only_itself_and_reuses_the_rollouts_and_the_dataset() {
+    let repo = Repo::new();
+    decisive(&repo);
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Pass)
+    };
+    let trainer = FakeTrainer::default();
+    let first = tempfile::tempdir().unwrap();
+    run(&resolved(&repo, RECIPE), first.path(), &backend, &trainer).unwrap();
+    let executed = backend.executed().len();
+
+    let changed = RECIPE.replace("params: { rank: 16 }", "params: { rank: 32 }");
+    let second = tempfile::tempdir().unwrap();
+    assert!(fork(first.path(), second.path()).unwrap() > 0);
+    let stages = run(
+        &resolved(&repo, &changed),
+        second.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let computed: Vec<&str> = stages
+        .iter()
+        .filter(|(_, c)| *c)
+        .map(|(k, _)| k.as_str())
+        .collect();
+    assert_eq!(computed, ["training/lora-r16", "eval/lora-r16", "release"]);
+    assert_eq!(trainer.trained.lock().unwrap().len(), 3);
+    // Only the changed candidate's arm ran; the shared baseline was reused.
+    let new: Vec<_> = backend.executed()[executed..]
+        .iter()
+        .map(|s| s.slot.pass.clone())
+        .collect();
+    assert!(
+        new.iter().all(|p| p == "eval-lora-r16") && new.len() == 8,
+        "{new:?}"
+    );
+}
+
+#[test]
+fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    let resolved_now = resolved(&repo, &recipe);
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+    };
+    let _held = Factory::open(&resolved_now, dir.path(), services, OWNER).unwrap();
+    let second = Factory::open(&resolved_now, dir.path(), services, "another-controller");
+    assert!(
+        matches!(
+            second,
+            Err(RunError::State(RunStateError::LeaseHeld { .. }))
+        ),
+        "{:?}",
+        second.err()
+    );
+
+    repo.write("agents/sven.yaml", "agent: { max_turns: 99 }\n");
+    let changed = resolved(&repo, &recipe);
+    let refused = Factory::open(&changed, dir.path(), services, OWNER);
+    match refused {
+        Err(RunError::InputsChanged(changes)) => assert_eq!(changes, ["agents/sven.yaml changed"]),
+        other => panic!("expected InputsChanged, got {:?}", other.err()),
+    }
+}
+
+#[test]
+fn a_tampered_product_fails_verification() {
+    let repo = Repo::new();
+    let resolved = resolved(&repo, RECIPE.split("dataset:").next().unwrap());
+    let backend = FakeBackend::with(Outcome::Pass);
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let trials = dir.path().join("rollouts/local/trials.jsonl");
+    let mut text = std::fs::read_to_string(&trials).unwrap();
+    text.push_str("{}\n");
+    std::fs::remove_file(&trials).unwrap();
+    std::fs::write(&trials, text).unwrap();
+    let problems = verify(dir.path()).unwrap();
+    assert!(
+        problems.iter().any(|p| p.starts_with("rollouts/local")),
+        "{problems:?}"
+    );
+}

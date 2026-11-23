@@ -5,5 +5,8 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod factory_run;
+mod fakes;
+mod native;
 mod repo;
 mod resolve;

@@ -5128,10 +5128,15 @@ dependencies = [
 name = "splinter-factory"
 version = "0.2.0"
 dependencies = [
+ "atif",
  "serde",
  "serde_json",
  "serde_yaml",
  "splinter-core",
+ "splinter-data",
+ "splinter-eval",
+ "splinter-model",
+ "splinter-store",
  "tempfile",
  "thiserror 2.0.21",
  "toml",

@@ -91,7 +91,7 @@ impl Repo {
         write(
             &root,
             "environments/vim.yaml",
-            "schema: splinter.environment/v1\nsandbox: { provider: proot, resources: { timeout: 10m } }\n",
+            "schema: splinter.environment/v1\nsandbox: { provider: proot, resources: { timeout: 10m } }\nnetwork: { mode: open }\n",
         );
         // seed: the plan must state its seed; nothing here draws from it.
         write(
