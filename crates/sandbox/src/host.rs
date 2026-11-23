@@ -117,6 +117,7 @@ pub struct ProcessSandbox {
     allow_unconfined: bool,
     allow_network: bool,
     host_proc: bool,
+    require_private_proc: bool,
     landlock: bool,
 }
 
@@ -160,6 +161,7 @@ impl ProcessSandbox {
             allow_unconfined: false,
             allow_network: false,
             host_proc: false,
+            require_private_proc: false,
             landlock: crate::landlock::abi_version().is_some(),
         }
     }
@@ -188,13 +190,32 @@ impl ProcessSandbox {
 
     /// Lets commands see the host's `/proc`: the environment and command line
     /// of every other process of the user. Off by default: a command runs in
-    /// a private user and pid namespace with a `/proc` of its own, and is
-    /// refused where that cannot be made. The environment record says so when
-    /// this is set.
+    /// a private user and pid namespace with a `/proc` of its own where the
+    /// host can make one (on a host that cannot, it sees the host's, still
+    /// confined by Landlock, which keeps other processes' `environ` and
+    /// memory unreadable; [`ProcessSandbox::require_private_proc`] refuses
+    /// instead). The environment record says when the host's is visible.
     #[must_use]
     pub fn host_proc(mut self, allow: bool) -> Self {
         self.host_proc = allow;
         self
+    }
+
+    /// Refuses every command where the private process view cannot be
+    /// made, instead of running it with the host's `/proc`: for a caller
+    /// that runs untrusted generated code (an environment or verifier a
+    /// model wrote), which needs process isolation.
+    #[must_use]
+    pub fn require_private_proc(mut self, require: bool) -> Self {
+        self.require_private_proc = require;
+        self
+    }
+
+    /// Whether commands get a private user and pid namespace with their own
+    /// `/proc`: unless the host's is allowed, where the host can make one,
+    /// and always when it is required (a command is then refused without).
+    fn private_proc(&self) -> bool {
+        !self.host_proc && (self.require_private_proc || crate::namespace::available())
     }
 
     /// Lets commands use the network. Off by default: a command cannot
@@ -245,7 +266,7 @@ impl ProcessSandbox {
             read_write,
             allow_network: self.allow_network,
             tcp_connect_ports: Vec::new(),
-            private_proc: !self.host_proc,
+            private_proc: self.private_proc(),
         }
     }
 
@@ -339,7 +360,7 @@ impl Sandbox for ProcessSandbox {
             env: self.env.clone(),
             unconfined_commands: self.allow_unconfined,
             network_allowed: self.allow_network,
-            host_proc_visible: self.host_proc,
+            host_proc_visible: !self.private_proc(),
         }
     }
 

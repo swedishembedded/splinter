@@ -145,6 +145,35 @@ pub enum Need {
     IfAvailable,
 }
 
+/// Whether this host lets an unprivileged process make a user and pid
+/// namespace: probed once, in a child that exits at once, so nothing of
+/// this process changes. A container without `CAP_SYS_ADMIN` under a
+/// default seccomp profile does not.
+#[must_use]
+pub fn available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        // SAFETY: the child only calls `unshare` and `_exit`, both
+        // async-signal-safe; the parent waits for it.
+        unsafe {
+            match libc::fork() {
+                -1 => false,
+                0 => {
+                    let made =
+                        libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS | libc::CLONE_NEWPID);
+                    libc::_exit(i32::from(made != 0));
+                }
+                child => {
+                    let mut status = 0;
+                    libc::waitpid(child, &mut status, 0) == child
+                        && libc::WIFEXITED(status)
+                        && libc::WEXITSTATUS(status) == 0
+                }
+            }
+        }
+    })
+}
+
 /// Enters a new user and pid namespace with a fresh `/proc`. Returns in the
 /// process that goes on to `exec` the command; every other process of the
 /// chain ends here. See the module documentation.

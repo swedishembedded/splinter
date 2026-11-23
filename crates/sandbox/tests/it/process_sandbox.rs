@@ -222,3 +222,31 @@ fn the_child_sees_only_allowlisted_variables_from_the_callers_map() {
         );
     }
 }
+
+/// A command runs wherever the kernel can confine it: with a private process
+/// view where the host allows user namespaces and the host's `/proc`
+/// otherwise, and the record says which. A caller that needs the private
+/// view is refused without it instead.
+#[test]
+fn a_command_runs_with_the_process_view_the_host_allows_and_says_which() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let scratch = Scratch::new("process-view");
+    let tree = scratch.0.join("tree");
+    std::fs::create_dir_all(&tree).unwrap();
+    let private = splinter_sandbox::namespace::available();
+    let call = splinter_sandbox::CommandCall {
+        argv: vec!["true".into()],
+        stdin: None,
+    };
+    let sandbox = ProcessSandbox::new(&scratch.0, caller_env(), &[], Limits::default());
+    assert_eq!(sandbox.spec().host_proc_visible, !private);
+    let ran = sandbox.run_command(&tree, &call).unwrap();
+    assert_eq!(ran.exit_code, Some(0), "{ran:?}");
+
+    let strict = ProcessSandbox::new(&scratch.0, caller_env(), &[], Limits::default())
+        .require_private_proc(true);
+    assert!(!strict.spec().host_proc_visible);
+    assert_eq!(strict.run_command(&tree, &call).is_ok(), private);
+}

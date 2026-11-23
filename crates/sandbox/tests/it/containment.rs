@@ -584,8 +584,30 @@ fn another_process_of_the_user_is_invisible_through_proc() {
     );
     assert!(rig.sh(&landlock_only, &status).stdout.contains("Name:"));
 
-    // The private view shows none of it.
+    // Where the host cannot make the private view, the default sandbox runs
+    // with the host's, confined by Landlock as above, and says so; one that
+    // requires the private view refuses to run.
     let sandbox = rig.sandbox();
+    if !splinter_sandbox::namespace::available() {
+        assert!(sandbox.spec().host_proc_visible);
+        let fallback = rig.sh(&sandbox, &environ);
+        assert!(
+            refused(&fallback) && is_permission_error(&fallback),
+            "{fallback:?}"
+        );
+        let strict = rig.sandbox().require_private_proc(true);
+        assert!(strict
+            .run_command(
+                &rig.tree_a,
+                &splinter_sandbox::CommandCall {
+                    argv: vec!["true".into()],
+                    stdin: None
+                }
+            )
+            .is_err());
+        return;
+    }
+    // The private view shows none of it.
     for script in [
         environ,
         status,
