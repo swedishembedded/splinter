@@ -147,6 +147,9 @@ pub fn resolve(
     models.extend(recipe.dataset.iter().map(|d| d.target.clone()));
     models.extend(recipe.training.iter().map(|t| t.base.clone()));
     models.extend(recipe.eval.iter().map(|e| e.baseline.clone()));
+    // A model several sections name is checked, and reported, once.
+    models.sort();
+    models.dedup();
     let mut champions = BTreeMap::new();
     for model in &models {
         if champion::is_champion(model) {
