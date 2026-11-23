@@ -285,7 +285,8 @@ impl Session {
             | Command::Inspect(_)
             | Command::Fork(_)
             | Command::Report(_)
-            | Command::Export(_) => {
+            | Command::Export(_)
+            | Command::Play(_) => {
                 unreachable!("the factory's commands are routed before this match")
             }
             Command::Serve => {

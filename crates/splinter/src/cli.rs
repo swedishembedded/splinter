@@ -101,6 +101,10 @@ pub enum Command {
     Report(RunDirArgs),
     /// Write a factory run's products as a portable bundle.
     Export(ExportArgs),
+    /// Play one session of a factory run's interactive pass on this
+    /// terminal; the run is then continued, so the session reaches the
+    /// dataset and what is trained on it.
+    Play(PlayArgs),
     /// Check that a run can start here: the state root is writable with room
     /// to spare, the policy's weights fit on a GPU, and every role's model
     /// resolves to weights on disk. Loads no model and uses no network. Exits 1
@@ -679,7 +683,7 @@ pub use experiences::{
     CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs,
     RepairArgs, StrataArgs,
 };
-pub use factory::{ExportArgs, ForkArgs, InspectArgs, RecipeArgs, RunArgs, RunDirArgs};
+pub use factory::{ExportArgs, ForkArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

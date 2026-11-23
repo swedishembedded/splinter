@@ -67,4 +67,12 @@ fn a_run_directory_is_resumed_cancelled_inspected_forked_reported_and_exported()
         Cli::try_parse_from(["splinter", "eval", "runs/x", "--plan", "p.yaml"]).is_err(),
         "--plan needs --out"
     );
+    assert!(matches!(
+        command(&["play", "runs/x", "--pass", "guided", "--task", "train/002", "--continue", "0"]),
+        Command::Play(a) if a.continue_from == Some(0) && !a.no_run
+    ));
+    assert!(
+        Cli::try_parse_from(["splinter", "play", "runs/x", "--pass", "guided"]).is_err(),
+        "play needs a task"
+    );
 }

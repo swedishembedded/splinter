@@ -79,3 +79,25 @@ pub struct ExportArgs {
     #[arg(long, value_name = "FILE")]
     pub out: PathBuf,
 }
+
+/// `play`.
+#[derive(Debug, Args)]
+pub struct PlayArgs {
+    /// The run directory.
+    #[arg(value_name = "RUN")]
+    pub run: PathBuf,
+    /// The interactive pass (`interactive: true` in the recipe).
+    #[arg(long, value_name = "PASS")]
+    pub pass: String,
+    /// The task to play, by its id in the collection.
+    #[arg(long, value_name = "TASK")]
+    pub task: String,
+    /// Continue the conversation of this earlier session of the pass (its
+    /// number); the earlier session is left as it is.
+    #[arg(long = "continue", value_name = "SESSION")]
+    pub continue_from: Option<u64>,
+    /// Only play: do not run the recipe again afterwards (the next `resume`
+    /// takes the session in).
+    #[arg(long)]
+    pub no_run: bool,
+}

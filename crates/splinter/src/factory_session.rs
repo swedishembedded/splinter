@@ -23,8 +23,8 @@ use splinter_sdk::factory::{resolve_recipe, resolve_run, trainer, worker};
 use splinter_sdk::{Config, Error};
 
 use crate::cli::{
-    Command, EvalArgs, ExportArgs, ForkArgs, InspectArgs, RecipeArgs, RunArgs, RunStatusArgs,
-    VerifyArgs,
+    Command, EvalArgs, ExportArgs, ForkArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
+    RunStatusArgs, VerifyArgs,
 };
 use crate::output::{emit, Report};
 use crate::session::Exit;
@@ -51,6 +51,7 @@ pub fn route(
         Command::Fork(args) => fork(config, json, &args),
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),
+        Command::Play(args) => play(config, json, &args),
         Command::Verify(VerifyArgs { experience_set, .. })
             if is_run(Path::new(&experience_set)) =>
         {
@@ -417,4 +418,37 @@ pub fn export(args: &ExportArgs) -> Result<Exit, Error> {
         args.out.display()
     );
     Ok(Exit::Ok)
+}
+
+/// `play`: one session of the run's interactive pass on this terminal, then
+/// the run continued so the session reaches what depends on the pass.
+pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error> {
+    let resolved = resolve_run(config, &args.run).map_err(refused)?;
+    let (backend, brain) = services(config)?;
+    let services = Services {
+        backend: &backend,
+        trainer: brain.as_ref().map(|b| b as _),
+    };
+    let trial = {
+        let mut factory =
+            Factory::open(&resolved, &args.run, services, &owner(config)).map_err(refused)?;
+        factory
+            .play(&args.pass, &args.task, args.continue_from)
+            .map_err(refused)?
+    };
+    eprintln!(
+        "session {} of {}: {:?}, {}",
+        trial.slot.slot,
+        args.pass,
+        trial.grade.status,
+        if trial.verified_success() {
+            "a verified success"
+        } else {
+            "not a success"
+        }
+    );
+    if args.no_run {
+        return Ok(Exit::Ok);
+    }
+    execute(config, json, &resolved, &args.run)
 }
