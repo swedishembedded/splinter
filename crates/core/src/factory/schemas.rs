@@ -16,6 +16,7 @@ use schemars::{schema_for, Schema};
 use super::attempt::{AttemptReport, ATTEMPT_SCHEMA};
 use super::execution::{ExecutionSpec, EXECUTION_SCHEMA};
 use super::identity::{StageIdentity, STAGE_SCHEMA};
+use super::operation::{OperationDescriptor, OPERATION_SCHEMA};
 use super::product::{
     DatasetProduct, EvalResult, ModelCandidate, TrialResult, CANDIDATE_SCHEMA, DATASET_SCHEMA,
     EVAL_SCHEMA, TRIAL_SCHEMA,
@@ -34,6 +35,7 @@ pub fn all() -> Vec<(&'static str, Schema)> {
         (DATASET_SCHEMA, schema_for!(DatasetProduct)),
         (CANDIDATE_SCHEMA, schema_for!(ModelCandidate)),
         (EVAL_SCHEMA, schema_for!(EvalResult)),
+        (OPERATION_SCHEMA, schema_for!(OperationDescriptor)),
     ]
 }
 

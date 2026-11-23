@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OperationDescriptor",
+  "description": "An operation's contract.",
+  "type": "object",
+  "properties": {
+    "inputs": {
+      "description": "Its inputs.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Port"
+      }
+    },
+    "isolation": {
+      "description": "The least sandbox isolation its execution needs.",
+      "$ref": "#/$defs/Isolation",
+      "default": "any"
+    },
+    "name": {
+      "description": "The name a recipe's `uses:` names (`attempt.collect`).",
+      "type": "string"
+    },
+    "outputs": {
+      "description": "Its outputs.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Port"
+      }
+    },
+    "parameters": {
+      "description": "The JSON Schema its parameters (`with:`) satisfy; it refuses unknown\nproperties."
+    },
+    "reproducibility": {
+      "description": "Whether it reproduces its output.",
+      "$ref": "#/$defs/Reproducibility"
+    },
+    "revision": {
+      "description": "Bumped whenever the operation's output for the same inputs changes;\npart of every identity it computes.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "schema": {
+      "description": "Always [`OPERATION_SCHEMA`].",
+      "type": "string"
+    },
+    "summary": {
+      "description": "What it does, for a person.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "revision",
+    "summary",
+    "inputs",
+    "outputs",
+    "parameters",
+    "reproducibility"
+  ],
+  "$defs": {
+    "ArtifactKind": {
+      "description": "What a product holds.",
+      "oneOf": [
+        {
+          "description": "Document sections with their source positions.",
+          "type": "string",
+          "const": "documents"
+        },
+        {
+          "description": "Concepts, claims, relationships, rules and their evidence.",
+          "type": "string",
+          "const": "knowledge"
+        },
+        {
+          "description": "A versioned retrieval index over a pinned collection.",
+          "type": "string",
+          "const": "index"
+        },
+        {
+          "description": "Task definitions with their verifiers.",
+          "type": "string",
+          "const": "tasks"
+        },
+        {
+          "description": "Reproducible execution environments.",
+          "type": "string",
+          "const": "environments"
+        },
+        {
+          "description": "Graded agent attempts with their trajectories.",
+          "type": "string",
+          "const": "attempts"
+        },
+        {
+          "description": "Training records with their curation record.",
+          "type": "string",
+          "const": "dataset"
+        },
+        {
+          "description": "A checkpoint or adapter, with how it is served.",
+          "type": "string",
+          "const": "model"
+        },
+        {
+          "description": "Metrics, verdicts and their evidence.",
+          "type": "string",
+          "const": "evaluation"
+        },
+        {
+          "description": "A promotion decision and the model it leaves in use.",
+          "type": "string",
+          "const": "release"
+        },
+        {
+          "description": "A Sven harness, compiled and pinned.",
+          "type": "string",
+          "const": "harness"
+        },
+        {
+          "description": "A versioned collection of files.",
+          "type": "string",
+          "const": "files"
+        }
+      ]
+    },
+    "Isolation": {
+      "description": "The least isolation a sandbox must give.",
+      "oneOf": [
+        {
+          "description": "Any provider.",
+          "type": "string",
+          "const": "any"
+        },
+        {
+          "description": "Filesystem writes and the network confined by the kernel (`confined`,\nor stronger).",
+          "type": "string",
+          "const": "confined"
+        },
+        {
+          "description": "Process and filesystem isolation (`docker`, `userns`).",
+          "type": "string",
+          "const": "strong"
+        }
+      ]
+    },
+    "Port": {
+      "description": "One named input or output of an operation.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What it carries.",
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "many": {
+          "description": "Several products of the kind (an input bound to a list).",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "The port's name in a recipe (`tasks`, `attempts`).",
+          "type": "string"
+        },
+        "optional": {
+          "description": "An input a stage may leave unbound.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind"
+      ]
+    },
+    "Reproducibility": {
+      "description": "Whether an operation gives the same output for the same identity.",
+      "oneOf": [
+        {
+          "description": "Byte-identical output from the same inputs and parameters.",
+          "type": "string",
+          "const": "deterministic"
+        },
+        {
+          "description": "Byte-identical output from the same inputs, parameters and seed.",
+          "type": "string",
+          "const": "seeded"
+        },
+        {
+          "description": "Output that may differ when computed again (a model with no pinned\nrevision, a remote service): its committed product is kept and reused\nwithin a run, never claimed to be reproducible on a fresh one.",
+          "type": "string",
+          "const": "nondeterministic"
+        }
+      ]
+    }
+  }
+}

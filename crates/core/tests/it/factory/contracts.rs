@@ -89,6 +89,13 @@ fn every_golden_fixture_satisfies_its_schema_and_round_trips() {
     let _: EvalResult = round_trips("eval", "splinter.eval/1");
     let _: splinter_core::factory::attempt::AttemptReport =
         round_trips("attempt", "splinter.attempt/1");
+    let operation: splinter_core::factory::operation::OperationDescriptor =
+        round_trips("operation", "splinter.operation/1");
+    assert!(
+        operation.problems().is_empty(),
+        "{:?}",
+        operation.problems()
+    );
     spec.validate().expect("the golden spec is valid");
     assert!(trial.verified_success());
     assert_eq!(
@@ -159,4 +166,29 @@ fn a_collection_refuses_a_repeated_or_escaping_task() {
         TaskCollection::new("c", vec![]),
         Err(CollectionError::Empty(_))
     ));
+}
+
+#[test]
+fn an_operation_contract_refuses_loose_parameters_and_ambiguous_ports() {
+    use splinter_core::factory::operation::{ArtifactKind, OperationDescriptor, Port};
+    let mut op: OperationDescriptor =
+        serde_json::from_value(fixture("operation")).expect("the fixture");
+    op.parameters = serde_json::json!({ "type": "object" });
+    op.inputs.push(Port {
+        name: "tasks".into(),
+        kind: ArtifactKind::Files,
+        many: false,
+        optional: false,
+    });
+    op.outputs.clear();
+    op.name = "Attempt..collect".into();
+    let text = op.problems().join("\n");
+    for expected in [
+        "additionalProperties: false",
+        "input tasks is declared twice",
+        "produces nothing",
+        "not dotted plain names",
+    ] {
+        assert!(text.contains(expected), "{expected:?} missing from {text}");
+    }
 }

@@ -1,0 +1,23 @@
+{
+  "schema": "splinter.operation/1",
+  "name": "attempt.collect",
+  "revision": 1,
+  "summary": "agents attempt tasks; every attempt graded by the one classifier",
+  "inputs": [
+    { "name": "tasks", "kind": "tasks" },
+    { "name": "unsolved_by", "kind": "attempts", "many": true, "optional": true }
+  ],
+  "outputs": [{ "name": "attempts", "kind": "attempts" }],
+  "parameters": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["agent", "attempts", "seed"],
+    "properties": {
+      "agent": { "type": "string" },
+      "attempts": { "type": "integer", "minimum": 1 },
+      "seed": { "type": "integer" }
+    }
+  },
+  "reproducibility": "nondeterministic",
+  "isolation": "confined"
+}

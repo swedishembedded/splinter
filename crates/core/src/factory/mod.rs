@@ -11,6 +11,8 @@
 //! made.
 //!
 //! * [`identity`] - what makes a stage's product reusable.
+//! * [`operation`] - artifact kinds and the typed contracts of the
+//!   operations a recipe composes.
 //! * [`task`] - the pinned task collection a recipe runs.
 //! * [`execution`] - one attempt at one logical slot, as a worker receives
 //!   it.
@@ -25,6 +27,7 @@
 pub mod attempt;
 pub mod execution;
 pub mod identity;
+pub mod operation;
 pub mod product;
 pub mod schemas;
 pub mod task;
