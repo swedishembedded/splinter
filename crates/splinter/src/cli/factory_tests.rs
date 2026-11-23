@@ -48,6 +48,7 @@ fn a_run_directory_is_resumed_cancelled_inspected_forked_reported_and_exported()
         Command::Fork(_)
     ));
     assert!(matches!(command(&["report", "runs/x"]), Command::Report(_)));
+    assert!(matches!(command(&["index", "runs/x"]), Command::Index(_)));
     assert!(matches!(
         command(&["export", "runs/x", "--out", "x.tar.zst"]),
         Command::Export(_)

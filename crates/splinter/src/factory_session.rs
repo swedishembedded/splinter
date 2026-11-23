@@ -463,3 +463,27 @@ pub fn generate(config: &Config, collection: &Path) -> Result<Exit, Error> {
         .map_err(refused)?;
     Ok(Exit::Ok)
 }
+
+/// What `index` filed.
+#[derive(Serialize)]
+pub struct Indexed(pub Vec<splinter_sdk::factory_index::IndexedPass>);
+
+impl Report for Indexed {
+    fn human(&self) -> String {
+        self.0
+            .iter()
+            .map(|p| {
+                let set = p
+                    .experience_set
+                    .as_ref()
+                    .map_or_else(|| "no set".to_owned(), ToString::to_string);
+                format!(
+                    "{:<28} {set} {:?}, {} skipped\n",
+                    p.pass,
+                    p.verdicts,
+                    p.skipped.len()
+                )
+            })
+            .collect()
+    }
+}

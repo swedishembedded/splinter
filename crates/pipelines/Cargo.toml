@@ -15,6 +15,7 @@ splinter-orchestrator = { workspace = true }
 splinter-agent = { workspace = true }
 splinter-knowledge = { workspace = true }
 splinter-eval = { workspace = true }
+splinter-factory = { workspace = true }
 splinter-hub = { workspace = true }
 splinter-model = { workspace = true }
 splinter-sandbox = { workspace = true }

@@ -106,6 +106,7 @@ pub mod exam_seal;
 pub mod exam_set;
 pub mod experiences;
 pub mod experiment;
+pub mod factory_index;
 pub mod family;
 pub mod generations;
 pub mod goal;

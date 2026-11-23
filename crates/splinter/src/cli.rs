@@ -104,6 +104,9 @@ pub enum Command {
     Report(RunDirArgs),
     /// Write a factory run's products as a portable bundle.
     Export(ExportArgs),
+    /// File a factory run's trials in the experience database (an optional
+    /// index across runs; the run's products stay its record).
+    Index(RunDirArgs),
     /// Play one session of a factory run's interactive pass on this
     /// terminal; the run is then continued, so the session reaches the
     /// dataset and what is trained on it.

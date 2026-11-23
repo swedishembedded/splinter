@@ -5339,6 +5339,7 @@ dependencies = [
  "splinter-data",
  "splinter-eval",
  "splinter-expdb",
+ "splinter-factory",
  "splinter-hub",
  "splinter-knowledge",
  "splinter-model",

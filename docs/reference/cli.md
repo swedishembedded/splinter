@@ -95,6 +95,7 @@ Every command takes these.
 - [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
 - [splinter report](#splinter-report) - Print a factory run's report
 - [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
+- [splinter index](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
 - [splinter play](#splinter-play) - Play one session of a factory run's interactive pass on this terminal
 - [splinter doctor](#splinter-doctor) - Check that a run can start here
 - [splinter serve](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
@@ -258,6 +259,7 @@ Subcommands:
 - [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
 - [`report`](#splinter-report) - Print a factory run's report
 - [`export`](#splinter-export) - Write a factory run's products as a portable bundle
+- [`index`](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
 - [`play`](#splinter-play) - Play one session of a factory run's interactive pass on this terminal
 - [`doctor`](#splinter-doctor) - Check that a run can start here
 - [`serve`](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
@@ -647,6 +649,18 @@ Arguments:
 Options:
 
 - `--out <FILE>` (required): The bundle to write (`.tar.zst`)
+
+### splinter index
+
+File a factory run's trials in the experience database (an optional index across runs; the run's products stay its record)
+
+```text
+splinter index [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
 
 ### splinter play
 

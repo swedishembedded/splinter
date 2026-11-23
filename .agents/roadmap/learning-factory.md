@@ -71,7 +71,7 @@ recovery and protected eval.
 | M4 | Harbor worker package, argv-only agent invocation, `connections.yaml` model routing | Sven and one other agent run one collection through the same trial contract; `harbor view` opens the trials | done: `workers/harbor` (run, reconcile, play; sven, claude-code, oracle, nop; userns, proot, docker); live: oracle and Sven on a hosted model under proot. Not run here: userns, docker, a real Claude Code |
 | M5 | One outcome classifier (classification separate from score), logical slot vs physical attempt, `unsolved_by` passes frozen at pass start | no valid graded result lost; a retry never repeats a completed slot | done: the one classifier (the task repository's 30 golden records), slots and attempts, retries, lost attempts, frozen `unsolved_by`, crash reconcile |
 | M6 | Dataset from trial collections: `native-sft` first, `portable-sft` second, admission split from curation, `supervision.jsonl` lineage and the exclusion waterfall | a training dataset built with no experience import | done: native-sft (a live Sven 5.9 trial is a fixture) and portable-sft (rebuilt from the ATIF trajectory) |
-| M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | done: `Trainer` seam, `BrainTrainer` against a scripted brain service (resume key, served adapter, refused parameters). Not run here: a real brain |
+| M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | done: `Trainer` seam, `BrainTrainer` against a scripted brain service (resume key, served adapter, refused parameters). Not run here: a real brain. `splinter index RUN` files a run's trials in the experience database as an optional index |
 | M8 | `splinter eval`: development and protected plans, the existing examination, verdict and signing logic behind its own authority | base and candidates evaluated under the same conditions | development plans done (shared baseline, paired sign test, alpha split among candidates); protected plans done: the task repository's examiner (`bench examine`, its sealed tasks never leave it) examines the candidate, and its signed verdict counts only when the promotion gate's check passes |
 | M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | partial: see Open |
 
@@ -119,9 +119,6 @@ recovery and protected eval.
   factory equivalent yet, so under the parity rule they are not deleted. Next:
   re-express campaigns as forks of recipe runs and hinted repair as a pass mode,
   then delete the drivers and the commands they need.
-- **`splinter index RUN`** (the experience database as an optional index over a
-  run's trials) is not implemented: the Harbor task import it reuses needs a
-  sandbox this container cannot start, so it could not be tested here.
 - **Sven trajectories.** Sven 5.9.2 files a reply's reasoning as an agent step of
   its own after the reply's tool-call step; fixed in sven (a reply's reasoning now
   completes when its first tool call begins), and native-sft reads both shapes.

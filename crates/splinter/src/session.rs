@@ -277,6 +277,10 @@ impl Session {
                 return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
             }
             Command::Status(_) => emit(json, &status(ctx)?),
+            Command::Index(args) => {
+                let indexed = splinter_sdk::factory_index::index_run(ctx, &args.run)?;
+                emit(json, &crate::factory_session::Indexed(indexed));
+            }
             Command::Validate(_)
             | Command::Plan(_)
             | Command::Generate(_)

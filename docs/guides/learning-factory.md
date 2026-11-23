@@ -131,6 +131,10 @@ splinter fork runs/vim-mastery --recipe recipes/vim-mastery-r32.yaml --out runs/
 splinter eval runs/vim-mastery --plan eval/vim-sealed.yaml --out runs/vim-mastery-sealed
 ```
 
+`splinter index RUN` files a run's trials in the experience database, an
+optional index across runs (each trial an experience with the factory's grade as
+its verdict; indexing again files nothing new); the run's products stay its record.
+
 `splinter cancel RUN` stops a run at its next stage or batch boundary;
 `splinter resume RUN` continues it. `splinter export RUN --out run.tar.zst` writes
 a bundle that `splinter verify` checks on another machine.

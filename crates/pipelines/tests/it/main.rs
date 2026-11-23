@@ -10,6 +10,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 mod decision_fixtures;
+mod factory_index;
 
 mod acquire;
 mod acquire_rounds;
