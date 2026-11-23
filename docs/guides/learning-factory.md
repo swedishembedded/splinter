@@ -648,7 +648,11 @@ compiles its collection evaluates on the same compiled tasks:
   pass rate more than `retention_margin`, 0.05, below the baseline's). A promotion requires
   an evaluation of every purpose; `requires: [target]` narrows that in plain sight, where a
   recipe has no transfer or retention suite. Evaluations of one baseline share its arm only
-  when they run the same plan on the same tasks. It names the champion the run leaves in use
+  when they run the same plan on the same tasks. Each release records a `lineage`, one point per
+  generation of the champion (its target and transfer pass rates), carried from the champion's
+  own release; a candidate whose point shows the target climbing over the last
+  `divergence_window` generations (3) while transfer stays flat trips the divergence alarm and is
+  not promoted: it is learning to please its verifier, not the task. It names the champion the run leaves in use
   (below).
 
   ```yaml

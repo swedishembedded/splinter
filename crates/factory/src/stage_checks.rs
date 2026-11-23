@@ -243,6 +243,9 @@ pub(crate) fn promotion_problems(
         out.push("promotes only on an evaluation, and it is given none".to_owned());
         return out;
     }
+    if params.divergence_window < 2 {
+        out.push("divergence_window is at least 2: a trend needs two generations".to_owned());
+    }
     if !(0.0..=1.0).contains(&params.retention_margin) {
         out.push("retention_margin is a share of the tasks, between 0 and 1".to_owned());
     }

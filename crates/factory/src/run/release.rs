@@ -33,16 +33,19 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_core::digest::Digest;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::Decision;
+use splinter_core::verifiability::VerifierClass;
+use splinter_knowledge::factory::alarm::{DivergenceAlarm, DivergencePolicy, Observation, Signal};
 use splinter_store::factory::products::Staging;
 
 use super::eval::result_of;
 use super::training::candidate_of;
 use super::{io, stage_error, write_json, Factory, RunError};
-use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE};
+use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE, RELEASE_RECORD};
 use crate::ops::{EvaluationParams, PromotionParams, Purpose};
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -89,6 +92,8 @@ pub(crate) fn produce(
         let worst = held.get(purpose).map_or(gate, |g| (*g).min(gate));
         held.insert(*purpose, worst);
     }
+    let lineage = lineage_of(factory, kept_champion(factory, stage)?.1.as_ref())?;
+    let generation = lineage.last().map_or(0, |p| p.generation + 1);
     let mut candidates = Vec::new();
     let mut best: Option<(f64, String)> = None;
     for (purpose, result) in &evaluated {
@@ -99,8 +104,14 @@ pub(crate) fn produce(
             .get("difference")
             .and_then(serde_json::Value::as_f64);
         let held = &gates[&name];
+        let point = point_of(&name, &evaluated, generation);
+        let alarm = point
+            .as_ref()
+            .map(|p| divergence(&lineage, p, params.divergence_window));
+        let diverging = matches!(alarm, Some(Signal::Diverging(_)));
         let eligible = held.values().all(|g| g.met())
-            && params.required().iter().all(|p| held.contains_key(p));
+            && params.required().iter().all(|p| held.contains_key(p))
+            && !diverging;
         if eligible && *purpose == Purpose::Target {
             let gain = difference.unwrap_or(0.0);
             if best.as_ref().is_none_or(|(b, _)| gain > *b) {
@@ -118,6 +129,7 @@ pub(crate) fn produce(
             "candidate": name, "purpose": purpose.name(), "decision": result.decision,
             "protected": result.protected, "signed": result.signature.is_some(),
             "difference": difference, "gates": shown, "eligible": eligible,
+            "divergence": alarm.as_ref().map(signal_name), "point": point,
             "served_as": candidate.served_as, "artifacts": candidate.artifacts,
         }));
     }
@@ -126,6 +138,12 @@ pub(crate) fn produce(
     } else {
         None
     };
+    // The lineage the run leaves: its champion's, and the promoted
+    // candidate's point when one is promoted.
+    let mut left = lineage.clone();
+    if let Some(name) = &promoted {
+        left.extend(point_of(name, &evaluated, generation));
+    }
     let champion = match &promoted {
         Some(name) => {
             let view = factory.view(name);
@@ -152,9 +170,100 @@ pub(crate) fn produce(
         &staging.path().join(RELEASE_FILE),
         &json!({
             "schema": "splinter.release/1", "promote": promote, "promoted": promoted,
-            "candidates": candidates, "champion": champion,
+            "candidates": candidates, "champion": champion, "lineage": left,
         }),
     )
+}
+
+/// One generation's point of the divergence alarm: its champion's pass rate
+/// on what it was trained for (the reward a training run can push up) and
+/// on tasks it was not trained on (what it cannot be trained to please).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Point {
+    /// The generation, from 0.
+    pub generation: u64,
+    /// The candidate that became the champion.
+    pub candidate: String,
+    /// Its target evaluations' candidate pass rate, averaged.
+    pub target: f64,
+    /// Its transfer evaluations' candidate pass rate, averaged; `None`
+    /// without one.
+    pub transfer: Option<f64>,
+}
+
+/// The lineage the release of the run's champion recorded; empty for a
+/// base model. The champion's digest covers its release record, so the
+/// stage depends on it.
+fn lineage_of(factory: &Factory<'_>, champion: Option<&Champion>) -> Result<Vec<Point>, RunError> {
+    let Some(champion) = champion else {
+        return Ok(Vec::new());
+    };
+    #[derive(Deserialize)]
+    struct Recorded {
+        #[serde(default)]
+        lineage: Vec<Point>,
+    }
+    let path = factory
+        .resolved
+        .repository
+        .join(&champion.reference.model)
+        .join(RELEASE_RECORD);
+    let bytes = std::fs::read(&path).map_err(io(&path))?;
+    let recorded: Recorded = serde_json::from_slice(&bytes)
+        .map_err(|e| stage_error("release", format!("{}: {e}", path.display())))?;
+    Ok(recorded.lineage)
+}
+
+/// The point `candidate` adds at `generation`: the mean of its target and
+/// of its transfer arms' pass rates; `None` without a target pass rate.
+fn point_of(
+    candidate: &str,
+    evaluated: &[(Purpose, splinter_core::factory::product::EvalResult)],
+    generation: u64,
+) -> Option<Point> {
+    let rate = |purpose: Purpose| {
+        let rates: Vec<f64> = evaluated
+            .iter()
+            .filter(|(p, r)| *p == purpose && r.name == candidate)
+            .filter_map(|(_, r)| r.candidate.as_ref().and_then(|a| a.pass_rate))
+            .collect();
+        (!rates.is_empty()).then(|| rates.iter().sum::<f64>() / rates.len() as f64)
+    };
+    Some(Point {
+        generation,
+        candidate: candidate.to_owned(),
+        target: rate(Purpose::Target)?,
+        transfer: rate(Purpose::Transfer),
+    })
+}
+
+/// What the divergence alarm says of `point` after `lineage`, over the
+/// last `window` generations.
+pub(crate) fn divergence(lineage: &[Point], point: &Point, window: usize) -> Signal {
+    let mut alarm = DivergenceAlarm::new(
+        DivergencePolicy {
+            window,
+            ..DivergencePolicy::default()
+        },
+        VerifierClass::Objective,
+    );
+    let mut signal = Signal::Steady;
+    for p in lineage.iter().chain(std::iter::once(point)) {
+        signal = alarm.observe(Observation {
+            step: p.generation,
+            reward: p.target,
+            heldout: p.transfer,
+        });
+    }
+    signal
+}
+
+fn signal_name(signal: &Signal) -> &'static str {
+    match signal {
+        Signal::Steady => "steady",
+        Signal::Diverging(_) => "diverging",
+        Signal::Unconfirmed { .. } => "unconfirmed",
+    }
 }
 
 /// Whether an evaluation met its purpose's gate, worst first.
@@ -254,6 +363,7 @@ fn gates_of(
             .collect();
         parameters["requires"] = json!(params.required());
         parameters["retention_margin"] = json!(params.retention_margin);
+        parameters["divergence_window"] = json!(params.divergence_window);
         parameters["purposes"] = json!(purposes);
     }
     Ok(parameters)
@@ -313,4 +423,39 @@ fn champion_record(
         adapter_digest,
         candidate,
     })
+}
+
+#[cfg(test)]
+mod divergence_spec {
+    use super::*;
+
+    fn point(generation: u64, target: f64, transfer: Option<f64>) -> Point {
+        Point {
+            generation,
+            candidate: format!("g{generation}"),
+            target,
+            transfer,
+        }
+    }
+
+    /// A target that climbs while transfer stays flat is the alarm; one that
+    /// transfer follows is not; and a single generation reads no trend.
+    #[test]
+    fn a_target_climbing_alone_over_the_window_diverges() {
+        let flat = [point(0, 0.4, Some(0.5)), point(1, 0.6, Some(0.5))];
+        let next = point(2, 0.8, Some(0.5));
+        assert!(matches!(divergence(&flat, &next, 3), Signal::Diverging(_)));
+        let following = [point(0, 0.4, Some(0.4)), point(1, 0.6, Some(0.6))];
+        let next = point(2, 0.8, Some(0.8));
+        assert_eq!(divergence(&following, &next, 3), Signal::Steady);
+        assert_eq!(
+            divergence(&[], &point(0, 0.9, Some(0.1)), 3),
+            Signal::Steady
+        );
+        let unmeasured = [point(0, 0.4, None), point(1, 0.6, None)];
+        assert!(matches!(
+            divergence(&unmeasured, &point(2, 0.8, None), 3),
+            Signal::Unconfirmed { .. }
+        ));
+    }
 }

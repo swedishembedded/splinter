@@ -78,6 +78,12 @@ fn a_generation_is_a_fork_whose_champion_plays_the_frontier_and_is_the_baseline_
     let promoted = g1["promoted"].as_str().unwrap().to_owned();
     assert_eq!(g1["champion"]["candidate"], promoted.as_str());
     assert_eq!(g1["champion"]["base"], "brain:Qwen/Qwen3-4B");
+    // The promoted candidate starts the lineage the divergence alarm reads:
+    // its target pass rate at generation 0.
+    let lineage = g1["lineage"].as_array().unwrap();
+    assert_eq!(lineage.len(), 1, "{g1:#}");
+    assert_eq!(lineage[0]["generation"], 0);
+    assert_eq!(lineage[0]["candidate"], promoted.as_str());
     let adapter = first
         .path()
         .join("release")
@@ -113,6 +119,9 @@ fn a_generation_is_a_fork_whose_champion_plays_the_frontier_and_is_the_baseline_
     let g2 = release(second.path());
     assert_eq!(g2["promoted"], Value::Null);
     assert_eq!(g2["champion"]["candidate"], promoted.as_str());
+    // The champion stays, and so does its lineage: generation 2 read it.
+    assert_eq!(g2["lineage"], g1["lineage"]);
+    assert_eq!(g2["candidates"][0]["point"]["generation"], 1, "{g2:#}");
     let kept = second
         .path()
         .join("release")

@@ -511,6 +511,15 @@ pub struct PromotionParams {
     /// plan's sign test finds significant.
     #[serde(default = "retention_margin")]
     pub retention_margin: f64,
+    /// The generations the divergence alarm reads a trend over: a candidate
+    /// whose target pass rate rises across them while its transfer pass
+    /// rate stays flat is not promoted.
+    #[serde(default = "divergence_window")]
+    pub divergence_window: usize,
+}
+
+fn divergence_window() -> usize {
+    3
 }
 
 impl PromotionParams {
