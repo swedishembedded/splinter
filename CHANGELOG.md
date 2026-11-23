@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (model.train keeps the best monitored step)
+- `model.train` takes `eval_every` and `patience` in a LoRA variant's `params`: the validation records are scored every `eval_every` steps, the run stops after `patience` evaluations without improvement, and the adapter exported is the best evaluation's, not the last step's. Without them nothing is monitored, as before, and a variant's identity is unchanged.
+
 ### Added (published records trained as they are; evaluation arms under the records' prompt)
 - `dataset.import`, a recipe operation that carries a directory of chat records (`train.jsonl`, optionally `validation.jsonl`) over byte for byte as a dataset `model.train` reads (`inputs: { records: $inputs.DIR }`, `with: { target, max_block, thinking }`). A line that is not a supervised chat record, a task in both files, or reasoning in a no-think dataset fails the stage with the file and line; a record past `max_block` is excluded and listed.
 - `evaluation` takes `files`, `system_prompt` and `budget`, given to every arm's agent as an attempt stage's are, so a candidate trained on records whose system prompt carries an appended instruction, or in a mode a configuration file sets, is evaluated under the same.

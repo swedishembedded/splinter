@@ -131,10 +131,23 @@ pub struct LoraParams {
     /// a CPU backend trains `fp32` only).
     #[serde(default)]
     pub base_precision: Option<String>,
+    /// Steps between evaluations of the validation records, which then
+    /// pick the step the adapter is exported at; 0 evaluates nothing and
+    /// exports the last step.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub eval_every: u32,
+    /// Evaluations without improvement before the run stops; 0 runs the
+    /// whole budget (the best evaluation is exported either way).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub patience: u32,
 }
 
 fn one() -> u32 {
     1
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// brain, reached through its API.
@@ -230,9 +243,15 @@ impl Trainer for BrainTrainer {
             train: request.train,
             held_out,
             held_out_text: None,
-            monitor: None,
-            eval_every: 0,
-            patience: 0,
+            // The validation records are what the best step is chosen on
+            // (and what the held-out scores are read over).
+            monitor: (params.eval_every > 0 && !validation_empty).then_some(request.validation),
+            eval_every: if validation_empty {
+                0
+            } else {
+                params.eval_every
+            },
+            patience: params.patience,
             attempt_dir: request.out,
             steps: params.steps,
             rank: params.rank,

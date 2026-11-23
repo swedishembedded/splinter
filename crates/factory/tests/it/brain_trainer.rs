@@ -115,6 +115,25 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         service.jobs().created().last().unwrap()["base_format"],
         "bf16"
     );
+    let monitored = json!({"rank": 4, "steps": 6, "eval_every": 2, "patience": 3});
+    let out_monitored = dir.path().join("lora-r4-monitored");
+    std::fs::create_dir_all(&out_monitored).unwrap();
+    std::fs::write(&validation, std::fs::read(&train).unwrap()).unwrap();
+    trainer
+        .train(&TrainRequest {
+            params: &monitored,
+            out: &out_monitored,
+            resume_key: "lora-r4-monitored",
+            ..request.clone()
+        })
+        .unwrap();
+    let created = service.jobs().created();
+    let job = created.last().unwrap();
+    assert_eq!(
+        (job["eval_every"].as_u64(), job["patience"].as_u64()),
+        (Some(2), Some(3)),
+        "the validation records are monitored and the best step is kept"
+    );
     let wrong = json!({"rank": 4, "steps": 3, "rnak": 8});
     let refused = trainer
         .train(&TrainRequest {
@@ -125,7 +144,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
     assert!(refused.to_string().contains("rnak"), "{refused}");
     assert_eq!(
         service.jobs().created().len(),
-        jobs.len() + 3,
+        jobs.len() + 4,
         "the refused request reached no job"
     );
 }
