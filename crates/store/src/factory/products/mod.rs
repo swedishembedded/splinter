@@ -133,6 +133,26 @@ pub struct ManifestFile {
     pub digest: Digest,
     /// Size in bytes.
     pub size: u64,
+    /// Whether the file is a program (any execute bit set when published).
+    /// Its blob is shared with any file of the same bytes; a view gives an
+    /// executable file a copy of its own, mode 555.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub executable: bool,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+/// Whether the file at `path` has any execute bit set.
+fn is_executable(path: &Path) -> Result<bool, ProductError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = fs::metadata(path)
+        .map_err(io_error(format!("stat {}", path.display())))?
+        .permissions()
+        .mode();
+    Ok(mode & 0o111 != 0)
 }
 
 /// What a committed product contains.
@@ -484,11 +504,17 @@ impl ProductStore {
                     .to_str()
                     .ok_or_else(|| ProductError::UnsupportedEntry(full.clone()))?
                     .replace(std::path::MAIN_SEPARATOR, "/");
+                let executable = is_executable(&full)?;
                 let digest = self.put_file(&full)?;
                 let size = fs::metadata(self.blob_path(&digest)?)
                     .map_err(io_error(format!("stat blob {digest}")))?
                     .len();
-                out.push(ManifestFile { path, digest, size });
+                out.push(ManifestFile {
+                    path,
+                    digest,
+                    size,
+                    executable,
+                });
             } else {
                 return Err(ProductError::UnsupportedEntry(full));
             }
@@ -514,7 +540,18 @@ impl ProductStore {
                         .map_err(io_error(format!("create {}", dir.display())))?;
                 }
                 let blob = self.blob_path(&file.digest)?;
-                if fs::hard_link(&blob, &dest).is_err() {
+                if file.executable {
+                    // A program gets its own copy: the blob is shared with
+                    // every file of its bytes, and a mode is the inode's.
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::copy(&blob, &dest).map_err(io_error(format!(
+                        "copy {} to {}",
+                        blob.display(),
+                        dest.display()
+                    )))?;
+                    fs::set_permissions(&dest, fs::Permissions::from_mode(0o555))
+                        .map_err(io_error(format!("make {} executable", dest.display())))?;
+                } else if fs::hard_link(&blob, &dest).is_err() {
                     // Another device, or a file system without links: copy.
                     fs::copy(&blob, &dest).map_err(io_error(format!(
                         "copy {} to {}",
@@ -601,6 +638,19 @@ impl ProductStore {
                 return Err(mismatch(format!(
                     "{} no longer hashes to {}",
                     file.path, file.digest
+                )));
+            }
+            let executable = is_executable(&path)?;
+            if executable != file.executable {
+                return Err(mismatch(format!(
+                    "{} is {}executable, and was published {}",
+                    file.path,
+                    if executable { "" } else { "not " },
+                    if file.executable {
+                        "executable"
+                    } else {
+                        "plain"
+                    }
                 )));
             }
         }

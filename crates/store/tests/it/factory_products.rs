@@ -207,3 +207,39 @@ fn a_view_another_product_holds_is_made_this_products_again() {
     // A view that already shows the product is left as it is.
     store.ensure_view(&old, &view).unwrap();
 }
+
+/// A product keeps which of its files are programs: an executable file is
+/// executable in every view of it (an import's too), sharing its content
+/// with a plain file of the same bytes.
+#[test]
+fn an_executable_file_stays_executable_in_every_view() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let view = dir.path().join("compiled");
+    let id = stage("compiled");
+    let store = store(dir.path());
+    let staging = stage_output(
+        &store,
+        &[("tests/test.sh", "exit 0\n"), ("same.txt", "exit 0\n")],
+    );
+    let script = staging.path().join("tests/test.sh");
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let manifest = store.publish(&id, "compiled", staging, &view).unwrap();
+    let executable: Vec<(&str, bool)> = manifest
+        .files
+        .iter()
+        .map(|f| (f.path.as_str(), f.executable))
+        .collect();
+    assert_eq!(executable, [("same.txt", false), ("tests/test.sh", true)]);
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&view.join("tests/test.sh")), 0o555);
+    assert_eq!(mode(&view.join("same.txt")), 0o444);
+    store.verify_product(&id, &view).unwrap();
+
+    let other = tempfile::tempdir().unwrap();
+    let imported = other.path().join("compiled");
+    self::store(other.path())
+        .import(&store, &id, &imported)
+        .unwrap();
+    assert_eq!(mode(&imported.join("tests/test.sh")), 0o555);
+}
