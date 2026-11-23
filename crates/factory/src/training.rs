@@ -214,13 +214,13 @@ impl Trainer for BrainTrainer {
             &CheckSpec::chat(&target.model, false, true),
         )
         .map_err(error)?;
+        // Brain numbers the file's lines from 1; record `i` is line `i + 1`.
         (0..lines.len())
-            .map(|line| {
-                // The report numbers lines from 1, as a file's lines are.
+            .map(|record| {
                 report
-                    .tokens_at(line + 1)
+                    .tokens_at(record + 1)
                     .map(|t| t as u64)
-                    .ok_or_else(|| TrainError(format!("brain gave no length for record {line}")))
+                    .ok_or_else(|| TrainError(format!("brain gave no length for record {record}")))
             })
             .collect()
     }

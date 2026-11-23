@@ -5,8 +5,9 @@
 //! training job whose datasets go by digest and whose adapter comes back to
 //! the candidate's directory; asked again under the same resume key, brain
 //! answers from its record and trains nothing; the candidate is counted
-//! only once the endpoint lists it; and parameters brain does not take are
-//! refused before anything is sent.
+//! only once the endpoint lists it; parameters brain does not take are
+//! refused before anything is sent; and a dataset's records are measured by
+//! brain's own check, each record given its own length.
 
 use std::time::Duration;
 
@@ -197,4 +198,43 @@ fn every_record_of_a_batch_has_a_length_the_first_included() {
         .unwrap();
     assert_eq!(lengths.len(), 3);
     assert!(lengths.iter().all(|tokens| *tokens > 0), "{lengths:?}");
+}
+
+#[test]
+fn each_record_is_measured_as_its_own_length_by_brains_check() {
+    // The scripted check counts the characters of a record's messages as its
+    // tokens, so each length says which record it is of; brain numbers the
+    // lines from 1.
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("artifacts");
+    std::fs::create_dir_all(&store).unwrap();
+    let service = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")])
+        .with_training(JobScript::over(store.clone()));
+    let endpoints = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap());
+    let trainer = BrainTrainer::new(endpoints, dir.path().join("models"));
+    let answers = [
+        "short".to_owned(),
+        "long ".repeat(40),
+        "mid mid mid".to_owned(),
+    ];
+    let lines: Vec<String> = answers
+        .iter()
+        .map(|answer| {
+            json!({"messages": [
+                {"role": "user", "content": "edit", "train": false},
+                {"role": "assistant", "content": answer, "train": true}
+            ], "tools": []})
+            .to_string()
+        })
+        .collect();
+    let lengths = trainer
+        .measure(&"brain:Qwen/Toy".parse().unwrap(), &lines)
+        .unwrap();
+    let own: Vec<u64> = answers
+        .iter()
+        .map(|a| ("edit".len() + a.len()) as u64)
+        .collect();
+    assert_eq!(lengths, own);
 }
