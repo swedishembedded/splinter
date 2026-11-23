@@ -108,6 +108,39 @@ recovery and protected eval.
 | Harbor worker | `workers/harbor/` (Python, Harbor's public job API, pinned Harbor) |
 | CLI | `splinter validate/plan/run/status/inspect/cancel/resume/verify/eval/fork/index/export/report/play` |
 
+## Section 19 checks
+
+Each of the plan's required tests, and where it is checked (factory tests are in
+`crates/factory/tests/it/`, worker tests in `workers/harbor/tests/`).
+
+| Check | Where |
+|---|---|
+| identical recipe twice reuses everything | `factory_run::a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product` |
+| controller killed during execution | `factory_run::a_controller_killed_mid_rollout_resumes_without_repeating_a_finished_attempt`; worker `test_reconcile_*` |
+| worker killed mid-trial | `factory_run::the_infrastructures_failures_are_retried_and_never_become_training_negatives` (a lost attempt is launched again); worker `test_reconcile_names_the_slots_whose_trial_never_finished` |
+| reward-0 trial is a graded failure | `factory_run::a_recipe_runs_every_stage_once...` |
+| model API failure is not a training negative | `factory_run::the_infrastructures_failures...`; core `classify::an_endpoint_that_answered_no_request...` (found live with a real Claude Code) |
+| corrupt ATIF quarantined, evidence kept | `factory_run::a_corrupt_trace_keeps_its_evidence_and_is_quarantined_from_training` |
+| Sven, Codex and Claude Code, one trial contract | worker `test_agents.py` (real Sven; scripted claude and codex); live: real Sven and a real Claude Code through the gateway |
+| second pass runs only the frozen unsolved set | `factory_run::a_recipe_runs_every_stage_once...` |
+| changed curation reuses rollouts | `reuse::a_changed_dataset_or_eval_plan_reuses_what_is_upstream...` |
+| changed LoRA rank: new candidate, rest reused | `factory_run::a_changed_variant_retrains_only_itself...` |
+| brain killed after a checkpoint resumes | `brain_trainer::a_variant_is_a_resumable_brain_job...` (resume key; brain resumes exactly) |
+| changed eval plan reuses the candidate | `reuse::a_changed_dataset_or_eval_plan...` |
+| experience database disabled | the factory has no experience-database dependency (`splinter-factory` imports no `expdb`) |
+| experience database index rebuilt | `pipelines factory_index::a_factory_runs_trials_are_indexed_as_graded_experiences_once` |
+| extra skill/knowledge files pinned and audited | worker `test_arguments_files_prompt_and_environment_reach_the_agent...`, `test_an_agent_file_that_does_not_match_its_digest_is_refused`; mounts pinned by tree digest |
+| protected eval material never reaches training | `resolve::examination_tasks_never_reach_a_dataset_under_any_name`; `factory_run::a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies` |
+| archived trial opens in Harbor's viewer | worker `test_paths_are_relative_to_the_output_directory_and_the_job_is_viewable` |
+| run copied to another machine verifies | `reuse::...a_copied_run_verifies_alone`; `factory_run::a_tampered_product_fails_verification` |
+| remote endpoint lost: bounded retries, explicit records | worker `test_an_unreachable_upstream_is_a_502_record`; `factory_run::the_infrastructures_failures...` (retries, then kept as what it was) |
+| two controllers on one run | `factory_run::a_run_refuses_changed_inputs_and_a_second_live_controller` |
+
+Not run here: userns and docker sandboxes (no user namespaces, no daemon), a real
+codex binary, a GPU run of the full recipe. A real Claude Code reached the hosted
+endpoint, which rejects its `anthropic-beta` header; that endpoint's limit, recorded
+and classified as a model error.
+
 ## Open
 
 - **Retirement (M9).** The task repository's run, stage, adopt, task play and task
