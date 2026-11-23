@@ -555,6 +555,13 @@ fn check(
                 }
             }
         }
+        names::MUTATE => {
+            if let Ok(params) = stage.params::<ops::MutateParams>() {
+                for text in crate::stage_checks::mutate_problems(&params, reader.repository) {
+                    problem(reader, &text);
+                }
+            }
+        }
         names::HARNESS_SEARCH => {
             let Ok(params) = stage.params::<ops::HarnessSearchParams>() else {
                 return;

@@ -18,6 +18,7 @@
 //! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 //! | `dataset.text` | `documents` (files) | `dataset` |
 //! | `harness.search` | `tasks` | `harness` |
+//! | `task.mutate` | (a repository and revision) | `tasks` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
@@ -318,6 +319,46 @@ pub struct TrainParams {
     pub seed: u64,
 }
 
+fn twenty() -> u32 {
+    20
+}
+
+fn python_image() -> String {
+    "python:3.12-slim".into()
+}
+
+/// `task.mutate`: a revision of a repository made into Harbor tasks by its
+/// own tests ([`crate::run::task_mutate`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MutateParams {
+    /// The git repository, relative to the task repository or absolute.
+    pub repository: String,
+    /// The revision, by its full commit hash.
+    pub revision: String,
+    /// How the tests are run; detected by rule when empty.
+    #[serde(default)]
+    pub test_command: Vec<String>,
+    /// The files faults are seeded into; detected by rule when empty.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// The most tasks to admit; the generator's bound when unset.
+    #[serde(default)]
+    pub max_tasks: Option<usize>,
+    /// The most faults of one file to try; the generator's bound when unset.
+    #[serde(default)]
+    pub mutants_per_file: Option<usize>,
+    /// The share of families (a family is the file a fault is in) held out
+    /// for evaluation, in percent.
+    #[serde(default = "twenty")]
+    pub eval_percent: u32,
+    /// The image a task's Dockerfile builds on.
+    #[serde(default = "python_image")]
+    pub image: String,
+    /// The seed the held-out families are drawn by.
+    pub seed: u64,
+}
+
 /// How `harness.search` draws its candidates.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -495,6 +536,8 @@ pub mod names {
     pub const PROMOTION: &str = "promotion";
     /// `harness.search`.
     pub const HARNESS_SEARCH: &str = "harness.search";
+    /// `task.mutate`.
+    pub const MUTATE: &str = "task.mutate";
 }
 
 /// `params` as `P`, or why not.
@@ -642,6 +685,15 @@ pub fn registry() -> Registry {
             reproducibility: Reproducibility::Deterministic,
             isolation: Isolation::Any,
             roles: |p| vec![p.target.clone()],
+        })
+        .with(Builtin::<MutateParams> {
+            name: names::MUTATE,
+            summary: "a revision of a repository made into Harbor tasks by its own tests",
+            inputs: Vec::new(),
+            output: port("tasks", ArtifactKind::Files),
+            reproducibility: Reproducibility::Deterministic,
+            isolation: Isolation::Any,
+            roles: |_| Vec::new(),
         })
         .with(Builtin::<HarnessSearchParams> {
             name: names::HARNESS_SEARCH,

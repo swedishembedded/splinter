@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# A model learns a repository from its own tests: faults are seeded into the files under
+# test and kept where the tests catch them, each file's faults are trained on or examined
+# (never both), the model attempts the training tasks, and a LoRA trained on its verified
+# fixes is compared with the base on the held-out files. `init` made project/ a git
+# repository and named its commit below; point `repository` and `revision` at your own.
+#   splinter run recipes/repository-practice.yaml --out runs/practice
+schema: splinter.recipe/v2
+name: repository-practice
+models:
+  student: "brain:Qwen/Qwen3-4B"
+stages:
+  - id: practised
+    uses: task.mutate
+    with: { repository: project, revision: REVISION, max_tasks: 24, eval_percent: 25, seed: 1 }
+  - { id: train-tasks, uses: tasks.pin, inputs: { collection: $stages.practised.tasks }, with: { split: train } }
+  - { id: held-tasks, uses: tasks.pin, inputs: { collection: $stages.practised.tasks }, with: { split: eval } }
+  - id: attempts
+    uses: attempt.collect
+    inputs: { tasks: $stages.train-tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/default.yaml, attempts: 4, seed: 2 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.attempts.attempts] }
+    with: { target: student, seed: 3 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 200 }, seed: 4 }
+  - id: eval
+    uses: evaluation
+    inputs: { candidate: $stages.lora.model, tasks: $stages.held-tasks.tasks }
+    with: { plan: eval/held.yaml, agent: sven, baseline: student }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval.evaluation] }
+    with: { promote: false }

@@ -28,7 +28,8 @@ splinter report runs/vim-hosted-sft
 starting point, each working as written: its recipes, the collection, tasks,
 environment and plans they name. `splinter init --template NAME DIR` writes
 one into a directory and writes over no file; it refuses, naming the files,
-before writing any.
+before writing any. `repository-practice` ships an example project, which `init` makes a git
+repository of and names by its commit in the recipe.
 
 | Template | What its recipe does |
 |---|---|
@@ -36,6 +37,7 @@ before writing any.
 | `knowledge-learning` | a model learns what documents say from closed-book tasks generated from them |
 | `generations` | a generation of a model, promoted only when it improves, transfers and retains |
 | `harness-search` | the harness that verifiably beats a baseline, among its mutations |
+| `repository-practice` | a model learns a repository from its own tests, by faults seeded into it |
 
 ```sh
 splinter init --template agent-sft my-repo
@@ -125,6 +127,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `dataset.text` | `documents` (a recipe input) | `dataset` |
 | `harness.search` | `tasks` | `harness` |
+| `task.mutate` | (a repository and a commit) | `tasks` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model), `tasks` (optional) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
@@ -405,6 +408,27 @@ runtime is missing, is refused by name. Each item holds `experience-N.json` and
     foreach: $stages.generated.tasks
     inputs: { task: $item }
     with: { model: student, attempts: 4 }
+```
+
+## Tasks from a repository's own tests
+
+`task.mutate` makes a revision of a git repository into Harbor tasks by the
+repository's own tests. The revision is named by its commit, so the stage is
+the tree's. How the tests run is read by rule (or given as `test_command` and
+`files`), and the baseline is run twice: a red or flaky one refuses the stage.
+Small faults are seeded into the files under test, each kept only when the
+tests catch it reproducibly, reversing it passes, and the tests that catch it
+can be hidden from the solver. A family is the file a fault is in;
+`eval_percent` of the families, drawn by the seed, go to the `eval` split and
+the rest to `train`, so nothing trained on shares a file with what is
+examined. Each task is a Harbor folder (`SPLIT/FAMILY-KEY`) for `tasks.pin`;
+`mutate.json` records what was admitted, refused and held out.
+
+```yaml
+  - id: practised
+    uses: task.mutate
+    with: { repository: project, revision: 4f1c...e2, max_tasks: 24, eval_percent: 25, seed: 1 }
+  - { id: train-tasks, uses: tasks.pin, inputs: { collection: $stages.practised.tasks }, with: { split: train } }
 ```
 
 ## Environments from an objective

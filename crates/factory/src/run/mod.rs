@@ -38,6 +38,7 @@ pub mod play;
 pub mod release;
 pub mod rollout;
 mod rollout_report;
+pub mod task_mutate;
 pub mod tasks;
 pub mod training;
 
@@ -403,6 +404,7 @@ impl<'a> Factory<'a> {
             | names::EXTEND_DATASET
             | names::TEXT_DATASET
             | names::HARNESS_SEARCH
+            | names::MUTATE
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
@@ -434,6 +436,7 @@ impl<'a> Factory<'a> {
             names::EXTEND_DATASET => dataset_extend::identity(self, stage)?,
             names::TEXT_DATASET => dataset_text::identity(self, stage)?,
             names::HARNESS_SEARCH => harness_search::identity(self, stage)?,
+            names::MUTATE => task_mutate::identity(self, stage)?,
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
@@ -447,6 +450,7 @@ impl<'a> Factory<'a> {
             names::EXTEND_DATASET => dataset_extend::produce(factory, stage, staging),
             names::TEXT_DATASET => dataset_text::produce(factory, stage, staging),
             names::HARNESS_SEARCH => harness_search::produce(factory, stage, staging),
+            names::MUTATE => task_mutate::produce(factory, stage, staging),
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),

@@ -327,3 +327,29 @@ fn examined_tasks(training: &TaskCollection, examined: &[&TaskRef], dataset: &st
     }
     problems
 }
+
+/// What is wrong with a `task.mutate` stage: a revision not named by its
+/// commit (the run's identity is the tree's), no git repository there, or a
+/// share held out that leaves nothing to train on.
+pub(crate) fn mutate_problems(
+    params: &ops::MutateParams,
+    repository: &std::path::Path,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    let commit =
+        params.revision.len() == 40 && params.revision.chars().all(|c| c.is_ascii_hexdigit());
+    if !commit {
+        out.push(format!(
+            "revision {:?}: name the revision by its commit, so the run is the tree's",
+            params.revision
+        ));
+    }
+    let at = repository.join(&params.repository);
+    if !at.join(".git").exists() && !at.join("HEAD").is_file() {
+        out.push(format!("{} is not a git repository", at.display()));
+    }
+    if params.eval_percent >= 100 {
+        out.push("eval_percent holds every family out, leaving nothing to train on".to_owned());
+    }
+    out
+}

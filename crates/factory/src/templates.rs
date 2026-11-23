@@ -15,7 +15,9 @@
 //! so). A template is what a removed command did, as a recipe a team can
 //! read and change: `knowledge-learning` is `learn`, `agent-sft` the plainest
 //! learning loop, `generations` a campaign of promotions, `harness-search`
-//! is `harness optimise`. [`init`] writes a
+//! is `harness optimise` and `repository-practice` is `practice`; `init`
+//! makes the latter's example project a git repository and names its commit
+//! in the recipe. [`init`] writes a
 //! template into a directory and never writes over a file already there:
 //! it refuses, naming the files, before writing any.
 
@@ -43,10 +45,26 @@ pub struct Template {
     pub summary: &'static str,
     /// Its own files.
     pub files: &'static [TemplateFile],
-    /// Whether it holds the example tasks, collection, environment and
-    /// plan that the task-based templates share.
-    pub example_tasks: bool,
+    /// What of the files the templates share it holds.
+    pub shared: Shared,
+    /// A directory of it that `init` makes a git repository of, committing
+    /// its files; the commit replaces `REVISION` in the template's recipes.
+    pub repository: Option<&'static str>,
 }
+
+/// The files templates share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shared {
+    /// None of them.
+    Nothing,
+    /// The environment tasks run in and the plan candidates are evaluated by.
+    Environment,
+    /// Those, and the example task collection.
+    EnvironmentAndTasks,
+}
+
+/// The token a template's recipe names its repository's revision by.
+const REVISION: &str = "REVISION";
 
 /// The example task collection, environment and evaluation plan the
 /// task-based templates share.
@@ -106,7 +124,8 @@ pub const TEMPLATES: &[Template] = &[
             "recipes/agent-sft.yaml",
             include_str!("../templates/agent-sft/recipes/agent-sft.yaml"),
         )],
-        example_tasks: true,
+        shared: Shared::EnvironmentAndTasks,
+        repository: None,
     },
     Template {
         name: "knowledge-learning",
@@ -121,7 +140,8 @@ pub const TEMPLATES: &[Template] = &[
                 include_str!("../templates/knowledge-learning/recipes/knowledge-learning.yaml"),
             ),
         ],
-        example_tasks: false,
+        shared: Shared::Nothing,
+        repository: None,
     },
     Template {
         name: "harness-search",
@@ -140,7 +160,48 @@ pub const TEMPLATES: &[Template] = &[
                 include_str!("../templates/harness-search/recipes/harness-search.yaml"),
             ),
         ],
-        example_tasks: true,
+        shared: Shared::EnvironmentAndTasks,
+        repository: None,
+    },
+    Template {
+        name: "repository-practice",
+        summary: "a model learns a repository from its own tests, by faults seeded into it",
+        files: &[
+            file(
+                "project/pyproject.toml",
+                include_str!("../templates/repository-practice/project/pyproject.toml"),
+            ),
+            file(
+                "project/shop/__init__.py",
+                include_str!("../templates/repository-practice/project/shop/__init__.py"),
+            ),
+            file(
+                "project/shop/pricing.py",
+                include_str!("../templates/repository-practice/project/shop/pricing.py"),
+            ),
+            file(
+                "project/shop/status.py",
+                include_str!("../templates/repository-practice/project/shop/status.py"),
+            ),
+            file(
+                "project/tests/__init__.py",
+                include_str!("../templates/repository-practice/project/tests/__init__.py"),
+            ),
+            file(
+                "project/tests/test_pricing.py",
+                include_str!("../templates/repository-practice/project/tests/test_pricing.py"),
+            ),
+            file(
+                "project/tests/test_status.py",
+                include_str!("../templates/repository-practice/project/tests/test_status.py"),
+            ),
+            file(
+                "recipes/repository-practice.yaml",
+                include_str!("../templates/repository-practice/recipes/repository-practice.yaml"),
+            ),
+        ],
+        shared: Shared::Environment,
+        repository: Some("project"),
     },
     Template {
         name: "generations",
@@ -187,7 +248,8 @@ pub const TEMPLATES: &[Template] = &[
                 include_str!("../templates/generations/tasks/transfer/001-note/tests/test.sh"),
             ),
         ],
-        example_tasks: true,
+        shared: Shared::EnvironmentAndTasks,
+        repository: None,
     },
 ];
 
@@ -216,6 +278,14 @@ pub enum InitError {
         /// The files, relative to it.
         files: String,
     },
+    /// The template's repository could not be made.
+    #[error("making {dir} a git repository: {why}")]
+    Git {
+        /// The directory.
+        dir: String,
+        /// Why.
+        why: String,
+    },
     /// A file could not be written.
     #[error("{path}: {source}")]
     Write {
@@ -229,8 +299,17 @@ pub enum InitError {
 impl Template {
     /// Every file the template writes, its shared ones first.
     pub fn all_files(&self) -> impl Iterator<Item = &'static TemplateFile> {
-        let shared: &'static [TemplateFile] = if self.example_tasks { COMMON } else { &[] };
-        shared.iter().chain(self.files.iter())
+        let shared = self.shared;
+        COMMON
+            .iter()
+            .filter(move |f| match shared {
+                Shared::Nothing => false,
+                Shared::Environment => {
+                    f.path.starts_with("environments/") || f.path.starts_with("eval/")
+                }
+                Shared::EnvironmentAndTasks => true,
+            })
+            .chain(self.files.iter())
     }
 }
 
@@ -278,5 +357,56 @@ pub fn init(name: &str, dir: &Path) -> Result<Vec<PathBuf>, InitError> {
         }
         written.push(path);
     }
+    if let Some(project) = template.repository {
+        let commit = commit(&dir.join(project))?;
+        for path in written
+            .iter()
+            .filter(|p| p.starts_with(dir.join("recipes")))
+        {
+            let text = std::fs::read_to_string(path).map_err(|source| InitError::Write {
+                path: path.display().to_string(),
+                source,
+            })?;
+            std::fs::write(path, text.replace(REVISION, &commit)).map_err(|source| {
+                InitError::Write {
+                    path: path.display().to_string(),
+                    source,
+                }
+            })?;
+        }
+    }
     Ok(written)
+}
+
+/// Makes `dir` a git repository of the files in it, committed, and returns
+/// the commit.
+fn commit(dir: &Path) -> Result<String, InitError> {
+    let git = |args: &[&str]| -> Result<String, InitError> {
+        let out = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=splinter init",
+                "-c",
+                "user.email=init@splinter.invalid",
+            ])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .map_err(|e| InitError::Git {
+                dir: dir.display().to_string(),
+                why: e.to_string(),
+            })?;
+        if !out.status.success() {
+            return Err(InitError::Git {
+                dir: dir.display().to_string(),
+                why: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            });
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    };
+    git(&["init", "-q", "-b", "main"])?;
+    git(&["add", "-A"])?;
+    git(&["commit", "-q", "-m", "The example project"])?;
+    git(&["rev-parse", "HEAD"])
 }
