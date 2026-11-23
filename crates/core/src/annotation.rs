@@ -65,7 +65,7 @@ pub enum AnnotationBody {
     },
     /// How this experience relates to another.
     Relation {
-        /// The relation, read as "this experience <kind> `other`".
+        /// The relation, read as "this experience `<kind>` `other`".
         kind: RelationKind,
         /// The other experience.
         other: ExperienceId,

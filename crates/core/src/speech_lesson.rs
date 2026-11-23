@@ -30,12 +30,12 @@ use crate::speech::Portrayal;
 /// What the user asked for, read from what they said.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Directive {
-    /// "Talk as follows: <example>": say the example the way it is said here.
+    /// "Talk as follows: `<example>`": say the example the way it is said here.
     Imitate {
         /// The words of the example.
         example: String,
     },
-    /// "Pronounce <word> as <spelling>": say the word as the spelling reads.
+    /// "Pronounce `<word>` as `<spelling>`": say the word as the spelling reads.
     Respell {
         /// The word as it is written.
         word: String,

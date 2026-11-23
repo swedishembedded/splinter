@@ -12,7 +12,7 @@
 //! A [`Source`] is its [`Origin`] (a document, a repository tree, a command
 //! run) and its named [`Part`]s, each a media type and the [`Digest`] of its
 //! content. The content itself is stored once per digest, shared by every
-//! source that holds it (see [`crate::sources`]).
+//! source that holds it (see `splinter_store::sources`).
 //!
 //! The [`SourceId`] is the digest of the canonical JSON (see
 //! [`crate::digest`]) of the origin and the parts, ordered by name. The
