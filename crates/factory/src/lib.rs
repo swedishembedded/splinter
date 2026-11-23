@@ -15,6 +15,8 @@
 //!   which tasks, and how candidates are judged.
 //! * [`resolve`] - a recipe with every file it names read, checked and
 //!   pinned in a lock.
+//! * [`graph`] - a `splinter.recipe/v2` recipe compiled into a typed graph
+//!   of operations.
 //! * [`plan`] - the graph of stages.
 //! * [`run`] - the controller over one run directory, and every stage.
 //! * [`backend`] and [`training`] - the seams to the execution worker and
@@ -33,6 +35,7 @@ pub mod collection;
 pub mod connections;
 pub mod environment;
 pub mod eval_plan;
+pub mod graph;
 pub mod hint;
 pub mod plan;
 pub mod recipe;

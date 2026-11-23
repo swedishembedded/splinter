@@ -10,6 +10,7 @@ mod factory_run;
 mod fakes;
 mod generations;
 mod golden;
+mod graph;
 mod hinted;
 mod native;
 mod repo;
