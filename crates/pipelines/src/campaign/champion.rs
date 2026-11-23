@@ -20,8 +20,8 @@ use splinter_core::digest::digest_of;
 use splinter_store::stage_ledger::{Commit, KeyParts, OnCorrupt, StageLedger, StageWork};
 
 use super::controller::{record, unit};
-use super::types::CampaignError;
 use super::work::Model;
+use crate::served::ServedError;
 
 /// The unit-name prefix of a rollback record.
 const ROLLBACK: &str = "rollback/";
@@ -54,7 +54,7 @@ pub struct Move {
     pub reason: String,
 }
 
-fn moves(commits: &[Commit]) -> Result<Vec<Move>, CampaignError> {
+fn moves(commits: &[Commit]) -> Result<Vec<Move>, ServedError> {
     commits
         .iter()
         .filter(|c| c.unit.starts_with(ROLLBACK) || c.unit.ends_with("/promote"))
@@ -67,7 +67,7 @@ fn moves(commits: &[Commit]) -> Result<Vec<Move>, CampaignError> {
 ///
 /// # Errors
 /// A record of another build.
-pub fn history(base: &Model, commits: &[Commit]) -> Result<(Model, Vec<Move>), CampaignError> {
+pub fn history(base: &Model, commits: &[Commit]) -> Result<(Model, Vec<Move>), ServedError> {
     let moves = moves(commits)?;
     let champion = moves
         .iter()
@@ -82,9 +82,9 @@ fn append(
     name: &str,
     key: &KeyParts,
     moved: &Move,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let summary = serde_json::to_value(moved)
-        .map_err(|e| CampaignError::Config(format!("a champion move: {e}")))?;
+        .map_err(|e| ServedError::Config(format!("a champion move: {e}")))?;
     let ran = ledger.run(name, &key.key(), OnCorrupt::Refuse, |_| {
         Ok::<_, String>(StageWork::new(summary))
     })?;
@@ -96,7 +96,7 @@ fn ended(
     generation: u32,
     moved: &Move,
     gate: &Value,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let key = KeyParts::new("promote")
         .config(&json!({"kind": moved.kind}))
         .input("gate", &digest_of(gate))
@@ -115,7 +115,7 @@ pub fn promote(
     from: &Model,
     candidate: &Model,
     gate: &Value,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let moved = Move {
         kind: MoveKind::Promote,
         generation: Some(generation),
@@ -136,7 +136,7 @@ pub fn keep(
     champion: &Model,
     reason: &str,
     gate: &Value,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let moved = Move {
         kind: MoveKind::Keep,
         generation: Some(generation),
@@ -159,10 +159,10 @@ pub fn rollback(
     base: &Model,
     to: u32,
     reason: &str,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let reason = reason.trim();
     if reason.is_empty() {
-        return Err(CampaignError::Config(
+        return Err(ServedError::Config(
             "a rollback is recorded with its reason: give one".into(),
         ));
     }
@@ -181,13 +181,13 @@ pub fn rollback(
             .find(|m| m.kind == MoveKind::Promote && m.to.generation == to)
             .map(|m| m.to.clone())
             .ok_or_else(|| {
-                CampaignError::Config(format!(
+                ServedError::Config(format!(
                     "generation {to}'s candidate was never the champion: a rollback moves only to an earlier champion"
                 ))
             })?
     };
     if target == champion {
-        return Err(CampaignError::Config(format!(
+        return Err(ServedError::Config(format!(
             "generation {to}'s model is the champion now: there is nothing to roll back"
         )));
     }

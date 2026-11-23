@@ -38,12 +38,12 @@ use splinter_agent::CancelToken;
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
-use splinter_pipelines::campaign::endpoint::EpisodeCollector;
-use splinter_pipelines::campaign::{CollectRequest, PolicyRef, RolloutCollector};
 use splinter_pipelines::episodes::{
     load_collection, run_episodes, EpisodeError, EpisodeOutcome, EpisodeReport, EpisodeRequest,
     EpisodeSettings, PracticeTask, SvenEpisodes,
 };
+use splinter_pipelines::served::endpoint::EpisodeCollector;
+use splinter_pipelines::served::{CollectRequest, PolicyRef, RolloutCollector};
 use sven_sdk::model::{
     CompletionRequest, ModelProvider, ResponseEvent, ResponseStream, SamplingParams,
 };

@@ -42,9 +42,6 @@ use std::time::Instant;
 
 use anyhow::{Context as _, Result};
 use splinter_sdk::agent::chat::Reply;
-use splinter_sdk::campaign::brain::TaskFamily;
-use splinter_sdk::campaign::served::{Answered, ServedValidator};
-use splinter_sdk::campaign::{PolicyRef, Validator};
 use splinter_sdk::measure::campaign::gate::{decide, Action, DevGate, DevResult};
 use splinter_sdk::measure::campaign::plan::{
     plan_arm, retention_units_needed, ArmGoal, ExamShape, PlannedArm,
@@ -52,6 +49,9 @@ use splinter_sdk::measure::campaign::plan::{
 use splinter_sdk::model::served_train::fine_tune_served;
 use splinter_sdk::model::stats::ExactSignTest;
 use splinter_sdk::model::train::FineTune;
+use splinter_sdk::served::brain::TaskFamily;
+use splinter_sdk::served::{Answered, ServedValidator};
+use splinter_sdk::served::{PolicyRef, Validator};
 use splinter_sdk::served_host::ServedHost;
 use splinter_sdk::vocabulary::digest::Digest;
 

@@ -30,7 +30,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use serde_json::Value;
 use sha2::Digest as _;
 use splinter_eval::promotion::{Reason, Rejection, Role};
-use splinter_pipelines::campaign::{CampaignError, MoveKind, Stopped, CAMPAIGN_UNIT, STAGES};
+use splinter_pipelines::campaign::{MoveKind, Stopped, CAMPAIGN_UNIT, STAGES};
+use splinter_pipelines::served::ServedError;
 use splinter_store::stage_ledger::Commit;
 
 use super::world::{generation_of, Doubles, Rig, Says, Spoil, GOOD};
@@ -313,7 +314,7 @@ fn a_rollback_moves_the_champion_back_with_its_reason_and_the_next_generation_st
         assert_eq!(generation_of(&report.champion), 1);
 
         let refused = controller.rollback(2, "no such champion").unwrap_err();
-        assert!(matches!(refused, CampaignError::Config(_)), "{refused}");
+        assert!(matches!(refused, ServedError::Config(_)), "{refused}");
         assert!(
             controller.rollback(0, " ").is_err(),
             "a rollback needs its reason"
@@ -386,12 +387,12 @@ fn a_campaign_is_continued_as_it_began() {
     changed.train.rank = 8;
     assert!(matches!(
         doubles.open(&rig, changed),
-        Err(CampaignError::Config(_))
+        Err(ServedError::Config(_))
     ));
     let reseeded = rig.spec("same", 1, seed.wrapping_add(1));
     assert!(matches!(
         doubles.open(&rig, reseeded),
-        Err(CampaignError::Config(_))
+        Err(ServedError::Config(_))
     ));
 }
 
@@ -440,7 +441,7 @@ fn a_campaign_begun_from_an_adapter_champion_practises_it_trains_from_the_base_a
     let mut other = spec;
     other.champion = None;
     assert!(
-        matches!(doubles.open(&rig, other), Err(CampaignError::Config(_))),
+        matches!(doubles.open(&rig, other), Err(ServedError::Config(_))),
         "a campaign is continued from the champion it began with"
     );
     let mut wrong = rig.spec("wrong", 1, seed);

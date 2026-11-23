@@ -137,7 +137,7 @@ Every arm:
 
 **Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments
 from an objective](../guides/environment-factory.md)). Only an `Admitted` environment whose recorded base pass rate
-lies inside the learnable band it was admitted at may enter (`campaign::factory::select` refuses the rest with the
+lies inside the learnable band it was admitted at may enter (`served::factory::select` refuses the rest with the
 reason); its task folders are staged per attempt and removed. Every ledger entry then records, per environment, how its
 rewards are established and the label the weakest class forces on the verdict (`proxy only` is never lost on the way to
 a "better" model), and at every gate each environment's training reward and dev pass rate go to the divergence alarm:

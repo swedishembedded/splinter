@@ -26,7 +26,7 @@ use splinter_data::{write_dataset, AdvantageKind, Objective, Projection};
 use splinter_model::policy_gradient::{PolicyGradientOptions, PolicyGradientTune};
 use splinter_model::precision::BasePrecision;
 
-use super::types::{CampaignError, TrainReport, TrainRequest, Trained};
+use super::types::{ServedError, TrainReport, TrainRequest, Trained};
 
 /// How a completion was graded.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,13 +55,13 @@ pub trait TaskFamily: Send + Sync {
     ///
     /// # Errors
     /// The task is not in the family.
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError>;
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError>;
     /// Grades `completion` of `task`.
     ///
     /// # Errors
     /// The task is not in the family, or the verifier failed (not the same as
     /// a wrong answer).
-    fn grade(&self, task: &str, completion: &str) -> Result<Graded, CampaignError>;
+    fn grade(&self, task: &str, completion: &str) -> Result<Graded, ServedError>;
 }
 
 /// How the model is loaded and sampled.
@@ -136,14 +136,14 @@ fn directory_bytes(dir: &Path) -> u64 {
 /// directory under its card id and refuses a second file with an id it already
 /// serves, so each arm's candidate must carry its own tag. A fixed name made
 /// every candidate after the first unservable beside it.
-pub(super) fn attempt_dir(request: &TrainRequest) -> Result<PathBuf, CampaignError> {
+pub(super) fn attempt_dir(request: &TrainRequest) -> Result<PathBuf, ServedError> {
     let arm = request
         .out_dir
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|n| !n.is_empty() && !n.contains([':', '/']))
         .ok_or_else(|| {
-            CampaignError::Trainer(format!(
+            ServedError::Trainer(format!(
                 "{}: an arm's directory needs a name to tag its adapter with",
                 request.out_dir.display()
             ))
@@ -153,8 +153,8 @@ pub(super) fn attempt_dir(request: &TrainRequest) -> Result<PathBuf, CampaignErr
 
 /// Writes the request's records as the policy-gradient dataset the trainer
 /// reads, in the arm's own directory.
-pub(super) fn write_records(request: &TrainRequest) -> Result<PathBuf, CampaignError> {
-    let fail = |why: String| CampaignError::Trainer(why);
+pub(super) fn write_records(request: &TrainRequest) -> Result<PathBuf, ServedError> {
+    let fail = |why: String| ServedError::Trainer(why);
     std::fs::create_dir_all(&request.out_dir)
         .map_err(|e| fail(format!("creating {}: {e}", request.out_dir.display())))?;
     let mut projection = Projection::new("campaign", Objective::PolicyGradient, None, None);
@@ -203,8 +203,8 @@ pub(super) fn tune<'a>(
 pub(super) fn trained_from(
     request: &TrainRequest,
     trained: &splinter_model::policy_gradient::TrainedPolicyGradient,
-) -> Result<Trained, CampaignError> {
-    let fail = |why: String| CampaignError::Trainer(why);
+) -> Result<Trained, ServedError> {
+    let fail = |why: String| ServedError::Trainer(why);
     let stats = &trained.statistics;
     Ok(Trained {
         digest: Digest::parse(&trained.adapter_digest)

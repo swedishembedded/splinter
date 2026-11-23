@@ -19,9 +19,9 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::gate::DevResult;
 use splinter_sdk::model::measure::RecordMeter;
+use splinter_sdk::served::PolicyRef;
 
 use crate::frontier::{self, Admit, Frontier, Measured, Overlong, Stage, Wave};
 use crate::language::LUA51;

@@ -56,25 +56,18 @@
 //! interventions with a belief each, revised by every generation's verdict,
 //! and the next single-variable hypothesis as an arm of this campaign.
 //!
-//! The in-memory rollout machinery over a served policy ([`served`],
-//! [`endpoint`], [`brain`], [`factory`]) is what samples and the episode
-//! executors are built on; the campaign controller itself practises through
+//! The in-memory rollout machinery over a served policy is
+//! [`crate::served`]; the campaign controller itself practises through
 //! [`Rollouts`].
 
 mod account;
-pub mod brain;
 pub mod champion;
 mod controller;
 mod curriculum;
-pub mod endpoint;
-mod environments;
 pub mod examiner;
-pub mod factory;
 pub mod practice;
 pub mod problems;
-pub mod served;
 mod spec;
-mod types;
 mod work;
 
 pub use account::{
@@ -84,15 +77,9 @@ pub use champion::{Move, MoveKind};
 pub use controller::{
     campaign_dir, unit, CampaignController, Parts, Stopped, CAMPAIGN_UNIT, STAGES,
 };
-pub use environments::EnvironmentLabels;
 pub use spec::{
     Budget, CampaignSpec, CurateSpec, RolloutCurriculum, RolloutSpec, TrainSpec, TransferSpec,
     DEFAULT_RETIRE_AT,
-};
-pub use types::{
-    AllFailHandler, CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector,
-    RolloutGroup, RolloutTrace, TraceSequence, TrainReport, TrainRequest, Trained, Trainer,
-    Validator,
 };
 pub use work::{
     ExamRequest, Examined, Examiner, Model, Rolled, RolloutRequest, Rollouts, Stopwatch,

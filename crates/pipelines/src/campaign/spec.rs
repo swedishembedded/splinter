@@ -14,8 +14,8 @@
 use serde::{Deserialize, Serialize};
 use splinter_core::model_ref::ModelRef;
 
-use super::types::CampaignError;
 use crate::datasets::{RewardPreset, ViewName};
+use crate::served::ServedError;
 use crate::train::Recipe;
 
 /// The tasks a champion has mastered at this pass rate are not rolled out
@@ -259,9 +259,9 @@ impl CampaignSpec {
     ///
     /// # Errors
     /// Not TOML of this shape, or [`Self::validate`].
-    pub fn parse(text: &str) -> Result<Self, CampaignError> {
+    pub fn parse(text: &str) -> Result<Self, ServedError> {
         let spec: Self = toml::from_str(text)
-            .map_err(|e| CampaignError::Config(format!("campaign specification: {e}")))?;
+            .map_err(|e| ServedError::Config(format!("campaign specification: {e}")))?;
         spec.validate()?;
         Ok(spec)
     }
@@ -270,14 +270,14 @@ impl CampaignSpec {
     ///
     /// # Errors
     /// Not a `local:` reference.
-    pub fn base_ref(&self) -> Result<ModelRef, CampaignError> {
+    pub fn base_ref(&self) -> Result<ModelRef, ServedError> {
         let base: ModelRef = self
             .base
             .parse()
-            .map_err(|e| CampaignError::Config(format!("base {:?}: {e}", self.base)))?;
+            .map_err(|e| ServedError::Config(format!("base {:?}: {e}", self.base)))?;
         match &base {
             ModelRef::Local { adapter: None, .. } => Ok(base),
-            _ => Err(CampaignError::Config(format!(
+            _ => Err(ServedError::Config(format!(
                 "base {:?}: a campaign trains from a local checkpoint with no adapter",
                 self.base
             ))),
@@ -289,14 +289,14 @@ impl CampaignSpec {
     ///
     /// # Errors
     /// The base's, or a champion that is not an adapter on the base.
-    pub fn champion_ref(&self) -> Result<ModelRef, CampaignError> {
+    pub fn champion_ref(&self) -> Result<ModelRef, ServedError> {
         let base = self.base_ref()?;
         let Some(champion) = &self.champion else {
             return Ok(base);
         };
         let parsed: ModelRef = champion
             .parse()
-            .map_err(|e| CampaignError::Config(format!("champion {champion:?}: {e}")))?;
+            .map_err(|e| ServedError::Config(format!("champion {champion:?}: {e}")))?;
         match (&parsed, &base) {
             (
                 ModelRef::Local {
@@ -309,7 +309,7 @@ impl CampaignSpec {
                     ..
                 },
             ) if checkpoint == base_checkpoint => Ok(parsed),
-            _ => Err(CampaignError::Config(format!(
+            _ => Err(ServedError::Config(format!(
                 "champion {champion:?}: generation 0's champion is an adapter on the base {:?} \
                  (local:<base>+<adapter>)",
                 self.base
@@ -321,8 +321,8 @@ impl CampaignSpec {
     ///
     /// # Errors
     /// The first setting out of range, named.
-    pub fn validate(&self) -> Result<(), CampaignError> {
-        let refuse = |why: String| Err(CampaignError::Config(why));
+    pub fn validate(&self) -> Result<(), ServedError> {
+        let refuse = |why: String| Err(ServedError::Config(why));
         let sound = !self.name.is_empty()
             && self.name.len() <= 64
             && !self.name.starts_with('.')

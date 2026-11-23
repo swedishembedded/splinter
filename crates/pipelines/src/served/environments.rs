@@ -26,7 +26,7 @@
 
 use splinter_store::campaign::RewardSource;
 
-use super::types::CampaignError;
+use super::types::ServedError;
 
 /// The environment behind each task of a campaign.
 pub trait EnvironmentLabels {
@@ -41,5 +41,5 @@ pub trait EnvironmentLabels {
     ///
     /// # Errors
     /// The quarantine could not be recorded.
-    fn quarantine(&self, environment: &str, reason: &str) -> Result<(), CampaignError>;
+    fn quarantine(&self, environment: &str, reason: &str) -> Result<(), ServedError>;
 }

@@ -49,8 +49,8 @@ use splinter_store::stage_ledger::{
 use super::account::{begun, campaign_status};
 use super::controller::{campaign_dir, record, unit};
 use super::spec::CampaignSpec;
-use super::types::CampaignError;
 use crate::arm_compare::ArmComparison;
+use crate::served::ServedError;
 
 /// The problem state's directory under a campaign's.
 pub const PROBLEMS_DIR: &str = "problems";
@@ -157,11 +157,11 @@ pub struct VerdictRequest {
     pub reason: Option<String>,
 }
 
-fn config(why: impl Into<String>) -> CampaignError {
-    CampaignError::Config(why.into())
+fn config(why: impl Into<String>) -> ServedError {
+    ServedError::Config(why.into())
 }
 
-fn unseeded(campaign: &str) -> CampaignError {
+fn unseeded(campaign: &str) -> ServedError {
     config(format!(
         "campaign {campaign} has no problem state: add a document first (campaign problems add)"
     ))
@@ -172,7 +172,7 @@ fn unseeded(campaign: &str) -> CampaignError {
 ///
 /// # Errors
 /// A specification that does not serialise.
-pub fn configuration(spec: &CampaignSpec) -> Result<Value, CampaignError> {
+pub fn configuration(spec: &CampaignSpec) -> Result<Value, ServedError> {
     let mut value =
         serde_json::to_value(spec).map_err(|e| config(format!("campaign specification: {e}")))?;
     if let Value::Object(map) = &mut value {
@@ -188,7 +188,7 @@ pub fn configuration(spec: &CampaignSpec) -> Result<Value, CampaignError> {
 ///
 /// # Errors
 /// Not a document of this shape.
-pub fn parse_document(text: &str, path: &Path) -> Result<Document, CampaignError> {
+pub fn parse_document(text: &str, path: &Path) -> Result<Document, ServedError> {
     let parsed = if path.extension().is_some_and(|e| e == "json") {
         serde_json::from_str(text).map_err(|e| e.to_string())
     } else {
@@ -200,7 +200,7 @@ pub fn parse_document(text: &str, path: &Path) -> Result<Document, CampaignError
 /// Refuses what the rules cannot know is wrong with a campaign: a variable
 /// that names a whole section, and an engineering list that reaches what
 /// the firewall protects.
-fn check_document(document: &Document) -> Result<(), CampaignError> {
+fn check_document(document: &Document) -> Result<(), ServedError> {
     if let Some(parameters) = &document.parameters {
         for path in &parameters.engineering {
             if let Some(protected) = PROTECTED.iter().find(|p| under(path, p) || under(p, path)) {
@@ -232,7 +232,7 @@ struct Problems {
 impl Problems {
     /// The ledger of `spec`'s problem state; with `create` false, a state
     /// never begun is refused without creating anything.
-    fn open(ctx: &Context, spec: &CampaignSpec, create: bool) -> Result<Self, CampaignError> {
+    fn open(ctx: &Context, spec: &CampaignSpec, create: bool) -> Result<Self, ServedError> {
         spec.validate()?;
         let dir = campaign_dir(ctx, &spec.name).join(PROBLEMS_DIR);
         if !create && !dir.join(LEDGER_FILE).is_file() {
@@ -244,7 +244,7 @@ impl Problems {
         })
     }
 
-    fn events(&self) -> Result<Vec<Event>, CampaignError> {
+    fn events(&self) -> Result<Vec<Event>, ServedError> {
         self.ledger
             .commits()?
             .iter()
@@ -256,7 +256,7 @@ impl Problems {
             .collect()
     }
 
-    fn report(&self, recorded: bool) -> Result<ProblemsReport, CampaignError> {
+    fn report(&self, recorded: bool) -> Result<ProblemsReport, ServedError> {
         let events = self.events()?;
         let state = ProblemState::replay(&events)
             .map_err(|e| config(e.to_string()))?
@@ -273,7 +273,7 @@ impl Problems {
 
     /// Records `event` unless it was recorded before; refuses it, writing
     /// nothing, when the state would refuse it.
-    fn record(&self, event: Event) -> Result<ProblemsReport, CampaignError> {
+    fn record(&self, event: Event) -> Result<ProblemsReport, ServedError> {
         let summary = serde_json::to_value(Recorded::new(event.clone()))
             .map_err(|e| config(format!("a problem-state event: {e}")))?;
         let key = KeyParts::new("problem-event").config(&summary).key();
@@ -294,7 +294,7 @@ impl Problems {
 ///
 /// # Errors
 /// No state yet, another process holding it, or its ledger.
-pub fn problems_show(ctx: &Context, spec: &CampaignSpec) -> Result<ProblemsReport, CampaignError> {
+pub fn problems_show(ctx: &Context, spec: &CampaignSpec) -> Result<ProblemsReport, ServedError> {
     Problems::open(ctx, spec, false)?.report(false)
 }
 
@@ -303,7 +303,7 @@ pub fn problems_show(ctx: &Context, spec: &CampaignSpec) -> Result<ProblemsRepor
 ///
 /// # Errors
 /// A state that cannot be read, or another process holding it.
-pub fn engineering_paths(ctx: &Context, spec: &CampaignSpec) -> Result<Vec<String>, CampaignError> {
+pub fn engineering_paths(ctx: &Context, spec: &CampaignSpec) -> Result<Vec<String>, ServedError> {
     let ledger = campaign_dir(ctx, &spec.name)
         .join(PROBLEMS_DIR)
         .join(LEDGER_FILE);
@@ -322,7 +322,7 @@ pub fn problems_add(
     ctx: &Context,
     spec: &CampaignSpec,
     document: Document,
-) -> Result<ProblemsReport, CampaignError> {
+) -> Result<ProblemsReport, ServedError> {
     check_document(&document)?;
     Problems::open(ctx, spec, true)?.record(Event::Add { document })
 }
@@ -336,7 +336,7 @@ pub fn problems_revise(
     ctx: &Context,
     spec: &CampaignSpec,
     revision: Event,
-) -> Result<ProblemsReport, CampaignError> {
+) -> Result<ProblemsReport, ServedError> {
     if !matches!(revision, Event::Belief { .. } | Event::Status { .. }) {
         return Err(config("a revision sets a belief or a status"));
     }
@@ -354,7 +354,7 @@ pub fn problems_update(
     ctx: &Context,
     spec: &CampaignSpec,
     request: VerdictRequest,
-) -> Result<ProblemsReport, CampaignError> {
+) -> Result<ProblemsReport, ServedError> {
     let problems = Problems::open(ctx, spec, false)?;
     let state = problems.report(false)?.state;
     let (problem, candidate) = state
@@ -417,11 +417,7 @@ pub fn problems_update(
 /// The effect of `arm`'s contrast in `report`, at the state's level: the
 /// family interval when the report has one, the task interval otherwise, and
 /// the Holm-adjusted two-sided sign test.
-fn compared(
-    report: &ArmComparison,
-    arm: &str,
-    alpha: f64,
-) -> Result<Option<Effect>, CampaignError> {
+fn compared(report: &ArmComparison, arm: &str, alpha: f64) -> Result<Option<Effect>, ServedError> {
     if (report.level - (1.0 - alpha)).abs() > 1e-9 {
         return Err(config(format!(
             "the report's intervals hold {} of the resamples; the problem state decides at {}",
@@ -454,7 +450,7 @@ fn gate_record(
     ctx: &Context,
     arm: &CampaignSpec,
     generation: u32,
-) -> Result<Promotion, CampaignError> {
+) -> Result<Promotion, ServedError> {
     let (ledger, _) =
         begun(ctx, arm)?.ok_or_else(|| config(format!("campaign {} has not begun", arm.name)))?;
     let name = unit(generation, "gate");
@@ -485,7 +481,7 @@ pub fn check_arm(
     variable: Option<&str>,
     engineering: bool,
     allowed: &[String],
-) -> Result<ArmCheck, CampaignError> {
+) -> Result<ArmCheck, ServedError> {
     if variable.is_none() && !engineering {
         return Err(config(
             "check an arm against a variable, the engineering paths, or both",
@@ -517,7 +513,7 @@ pub fn campaign_next(
     ctx: &Context,
     spec: &CampaignSpec,
     phase: Phase,
-) -> Result<NextReport, CampaignError> {
+) -> Result<NextReport, ServedError> {
     let state = problems_show(ctx, spec)?.state;
     let proposal = state.next(phase);
     let mut report = NextReport {
@@ -578,7 +574,7 @@ fn arm_name(campaign: &str, candidate: &str) -> String {
     name.chars().take(64).collect()
 }
 
-fn set_path(value: &mut Value, path: &str, leaf: Value) -> Result<(), CampaignError> {
+fn set_path(value: &mut Value, path: &str, leaf: Value) -> Result<(), ServedError> {
     let mut at = value;
     let segments: Vec<&str> = path.split('.').collect();
     for (i, segment) in segments.iter().enumerate() {
@@ -614,7 +610,7 @@ fn set_path(value: &mut Value, path: &str, leaf: Value) -> Result<(), CampaignEr
 /// # Errors
 /// A specification TOML cannot hold, or one that does not read back as
 /// itself.
-pub fn arm_text(arm: &CampaignSpec) -> Result<String, CampaignError> {
+pub fn arm_text(arm: &CampaignSpec) -> Result<String, ServedError> {
     let mut unseeded = arm.clone();
     let seed = unseeded.seed.take();
     let mut text =

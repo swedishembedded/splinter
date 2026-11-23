@@ -23,8 +23,8 @@ use splinter_core::outcome::FailureClass;
 use splinter_eval::promotion::{Pair, PublicKey};
 use splinter_orchestrator::context::Context;
 
-use super::types::CampaignError;
 use crate::bench::practice::TaskFacts;
+use crate::served::ServedError;
 
 /// A model of the campaign's lineage: the base (generation 0) or a
 /// candidate trained in a generation.
@@ -47,10 +47,10 @@ impl Model {
     ///
     /// # Errors
     /// A reference this build cannot read.
-    pub fn reference(&self) -> Result<ModelRef, CampaignError> {
+    pub fn reference(&self) -> Result<ModelRef, ServedError> {
         self.model
             .parse()
-            .map_err(|e| CampaignError::Config(format!("model {:?}: {e}", self.model)))
+            .map_err(|e| ServedError::Config(format!("model {:?}: {e}", self.model)))
     }
 
     /// The pair the examiner compares: this model against `predecessor`.
@@ -151,14 +151,14 @@ pub trait Rollouts {
     ///
     /// # Errors
     /// The material cannot be read.
-    fn tasks(&self) -> Result<Vec<String>, CampaignError>;
+    fn tasks(&self) -> Result<Vec<String>, ServedError>;
 
     /// The capability ids of each practice task, by name, as the examiner
     /// labels them; a task it labels with none is absent. None by default.
     ///
     /// # Errors
     /// The material cannot be read.
-    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
+    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, ServedError> {
         Ok(BTreeMap::new())
     }
 
@@ -167,7 +167,7 @@ pub trait Rollouts {
     ///
     /// # Errors
     /// The material cannot be read.
-    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, CampaignError> {
+    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, ServedError> {
         Ok(BTreeMap::new())
     }
 
@@ -186,7 +186,7 @@ pub trait Rollouts {
         ctx: &Context,
         request: &RolloutRequest<'_>,
         cancel: &CancelToken,
-    ) -> Result<Rolled, CampaignError>;
+    ) -> Result<Rolled, ServedError>;
 }
 
 /// One evaluate stage: the examiner compares the candidate with the
@@ -245,7 +245,7 @@ pub trait Examiner {
         ctx: &Context,
         request: &ExamRequest<'_>,
         cancel: &CancelToken,
-    ) -> Result<Examined, CampaignError>;
+    ) -> Result<Examined, ServedError>;
 }
 
 /// Seconds elapsed on whatever clock measures GPU time: wall time in a run,

@@ -19,9 +19,9 @@ use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 
 use super::{run_practice, BenchCheckout, Practice, PracticeRequest, PracticeSettings};
-use crate::campaign::endpoint::{Episode, EpisodeExecutor};
-use crate::campaign::{CampaignError, PolicyRef};
 use crate::episodes::episode_of;
+use crate::served::endpoint::{Episode, EpisodeExecutor};
+use crate::served::{PolicyRef, ServedError};
 
 /// The examiner's practice material run for a campaign.
 pub struct BenchPractice<'c> {
@@ -78,8 +78,8 @@ impl<'c> BenchPractice<'c> {
     }
 }
 
-fn collector(why: impl std::fmt::Display) -> CampaignError {
-    CampaignError::Collector(why.to_string())
+fn collector(why: impl std::fmt::Display) -> ServedError {
+    ServedError::Collector(why.to_string())
 }
 
 impl EpisodeExecutor for BenchPractice<'_> {
@@ -108,7 +108,7 @@ impl EpisodeExecutor for BenchPractice<'_> {
             .collect()
     }
 
-    fn serve(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+    fn serve(&mut self, policy: &PolicyRef) -> Result<(), ServedError> {
         let Some(adapter) = &policy.adapter else {
             self.serving = self.base.clone();
             self.adapter = None;
@@ -120,7 +120,7 @@ impl EpisodeExecutor for BenchPractice<'_> {
             ..
         } = &self.base
         else {
-            return Err(CampaignError::Config(format!(
+            return Err(ServedError::Config(format!(
                 "an adapter is served on a local base; the policy is {}",
                 self.base
             )));
@@ -139,7 +139,7 @@ impl EpisodeExecutor for BenchPractice<'_> {
         tasks: &[String],
         attempts: usize,
         seed: u64,
-    ) -> Result<Vec<Episode>, CampaignError> {
+    ) -> Result<Vec<Episode>, ServedError> {
         let all = self.tasks();
         let chosen =
             (tasks.len() != all.len() || tasks.iter().any(|t| !all.contains(t))).then_some(tasks);

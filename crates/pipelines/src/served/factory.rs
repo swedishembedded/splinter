@@ -37,7 +37,7 @@ use splinter_store::campaign::RewardSource;
 
 use super::brain::{Graded, TaskFamily};
 use super::environments::EnvironmentLabels;
-use super::types::CampaignError;
+use super::types::ServedError;
 
 /// The file the solver of a plugin writes its answer to, for the plugins the
 /// in-process path can run.
@@ -121,15 +121,15 @@ fn judge(report: &AdmissionReport) -> Result<Selected, String> {
 ///
 /// # Errors
 /// The store cannot be read, or an id names no environment.
-pub fn select(store: &EnvironmentStore, ids: &[String]) -> Result<Selection, CampaignError> {
+pub fn select(store: &EnvironmentStore, ids: &[String]) -> Result<Selection, ServedError> {
     let reports = store
         .list()
-        .map_err(|e| CampaignError::Config(format!("reading the environment store: {e}")))?;
+        .map_err(|e| ServedError::Config(format!("reading the environment store: {e}")))?;
     if let Some(missing) = ids
         .iter()
         .find(|id| !reports.iter().any(|r| &r.environment == *id))
     {
-        return Err(CampaignError::Config(format!(
+        return Err(ServedError::Config(format!(
             "the environment store holds no environment {missing:?}"
         )));
     }
@@ -179,20 +179,20 @@ impl FactoryFamily {
         store: EnvironmentStore,
         selection: &Selection,
         host: Host,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, ServedError> {
         let mut tasks = BTreeMap::new();
         let (mut pool, mut dev) = (Vec::new(), Vec::new());
         for selected in &selection.chosen {
             for split in [Split::Train, Split::Dev] {
                 let instances = store.instances(&selected.environment, split).map_err(|e| {
-                    CampaignError::Config(format!("reading {}: {e}", selected.environment))
+                    ServedError::Config(format!("reading {}: {e}", selected.environment))
                 })?;
                 for instance in instances {
                     let meta = instance.meta();
                     let Some(file) = answer_file(&meta.plugin)
                         .filter(|_| meta.solver_tools == SolverTools::Files)
                     else {
-                        return Err(CampaignError::Config(format!(
+                        return Err(ServedError::Config(format!(
                             "{} ({}) needs a solver with tools: run it through the agent executor, not in process",
                             selected.environment, meta.plugin
                         )));
@@ -224,9 +224,9 @@ impl FactoryFamily {
         })
     }
 
-    fn prepared(&self, task: &str) -> Result<&Prepared, CampaignError> {
+    fn prepared(&self, task: &str) -> Result<&Prepared, ServedError> {
         self.tasks.get(task).ok_or_else(|| {
-            CampaignError::Config(format!("{task:?} is not a task of the factory family"))
+            ServedError::Config(format!("{task:?} is not a task of the factory family"))
         })
     }
 }
@@ -254,7 +254,7 @@ impl TaskFamily for FactoryFamily {
         Vec::new()
     }
 
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError> {
         let prepared = self.prepared(task)?;
         Ok(vec![
             ("system".into(), SYSTEM.into()),
@@ -262,9 +262,9 @@ impl TaskFamily for FactoryFamily {
         ])
     }
 
-    fn grade(&self, task: &str, completion: &str) -> Result<Graded, CampaignError> {
+    fn grade(&self, task: &str, completion: &str) -> Result<Graded, ServedError> {
         let prepared = self.prepared(task)?;
-        let infrastructure = |what: String| CampaignError::Collector(format!("{task}: {what}"));
+        let infrastructure = |what: String| ServedError::Collector(format!("{task}: {what}"));
         // The folder is staged for this attempt and removed with the session.
         let session = self
             .host
@@ -306,17 +306,17 @@ impl EnvironmentLabels for FactoryFamily {
         self.selected.iter().map(|s| s.source.clone()).collect()
     }
 
-    fn quarantine(&self, environment: &str, reason: &str) -> Result<(), CampaignError> {
+    fn quarantine(&self, environment: &str, reason: &str) -> Result<(), ServedError> {
         let mut report = self
             .store
             .report(environment)
-            .map_err(|e| CampaignError::Config(format!("reading {environment}: {e}")))?;
+            .map_err(|e| ServedError::Config(format!("reading {environment}: {e}")))?;
         report.status = Status::Quarantined;
         report
             .reasons
             .push(format!("campaign divergence alarm: {reason}"));
         self.store.save(&report, &[]).map_err(|e| {
-            CampaignError::Config(format!("recording the quarantine of {environment}: {e}"))
+            ServedError::Config(format!("recording the quarantine of {environment}: {e}"))
         })?;
         if let Ok(mut list) = self.quarantined.lock() {
             list.push(environment.to_string());

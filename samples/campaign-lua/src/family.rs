@@ -24,8 +24,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use splinter_sdk::campaign::brain::{Graded, TaskFamily};
-use splinter_sdk::campaign::CampaignError;
+use splinter_sdk::served::brain::{Graded, TaskFamily};
+use splinter_sdk::served::ServedError;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::language::{Language, LUA51};
@@ -131,11 +131,8 @@ impl ProposalFamily {
     ///
     /// # Errors
     /// The file cannot be read or holds a line that is not a proposal.
-    pub fn open(
-        generators: Vec<(Language, LuaPredict)>,
-        file: &Path,
-    ) -> Result<Self, CampaignError> {
-        let config = |what: String| CampaignError::Config(what);
+    pub fn open(generators: Vec<(Language, LuaPredict)>, file: &Path) -> Result<Self, ServedError> {
+        let config = |what: String| ServedError::Config(what);
         let mut proposals = BTreeMap::new();
         if file.exists() {
             let text = std::fs::read_to_string(file)
@@ -220,7 +217,7 @@ impl ProposalFamily {
     ///
     /// # Errors
     /// The file cannot be written.
-    pub fn add(&self, proposals: Vec<Proposal>) -> Result<usize, CampaignError> {
+    pub fn add(&self, proposals: Vec<Proposal>) -> Result<usize, ServedError> {
         let mut held = self.lock();
         let mut fresh: Vec<Proposal> = Vec::new();
         for proposal in proposals {
@@ -235,16 +232,16 @@ impl ProposalFamily {
             .create(true)
             .append(true)
             .open(&self.file)
-            .map_err(|e| CampaignError::Config(format!("opening {}: {e}", self.file.display())))?;
+            .map_err(|e| ServedError::Config(format!("opening {}: {e}", self.file.display())))?;
         for proposal in &fresh {
-            let line = serde_json::to_string(proposal)
-                .map_err(|e| CampaignError::Config(e.to_string()))?;
+            let line =
+                serde_json::to_string(proposal).map_err(|e| ServedError::Config(e.to_string()))?;
             writeln!(file, "{line}").map_err(|e| {
-                CampaignError::Config(format!("writing {}: {e}", self.file.display()))
+                ServedError::Config(format!("writing {}: {e}", self.file.display()))
             })?;
         }
         file.sync_all()
-            .map_err(|e| CampaignError::Config(format!("syncing {}: {e}", self.file.display())))?;
+            .map_err(|e| ServedError::Config(format!("syncing {}: {e}", self.file.display())))?;
         let count = fresh.len();
         held.extend(fresh.into_iter().map(|p| (p.id.clone(), p)));
         Ok(count)
@@ -356,7 +353,7 @@ impl TaskFamily for ProposalFamily {
         self.ids(Part::Keep, self.generated(LuaPredict::retention))
     }
 
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError> {
         // The lock is released before a generated task is looked up: `known`
         // takes it again.
         let proposed = self.lock().get(task).map(|p| p.request.clone());
@@ -374,7 +371,7 @@ impl TaskFamily for ProposalFamily {
         Ok(vec![("user".into(), text)])
     }
 
-    fn grade(&self, task: &str, completion: &str) -> Result<Graded, CampaignError> {
+    fn grade(&self, task: &str, completion: &str) -> Result<Graded, ServedError> {
         let expected = self.known(task)?.1;
         let passed = neutral::answers(completion, &expected);
         Ok(Graded {
@@ -399,7 +396,7 @@ impl ProposalFamily {
     }
 
     /// The program and what it prints, of a proposed or a generated task.
-    fn known(&self, task: &str) -> Result<(String, String), CampaignError> {
+    fn known(&self, task: &str) -> Result<(String, String), ServedError> {
         if let Some(p) = self.lock().get(task) {
             return Ok((p.program.clone(), p.expected.clone()));
         }
@@ -407,7 +404,7 @@ impl ProposalFamily {
             .iter()
             .find_map(|(_, g)| g.program(task))
             .map(|p| (p.source.clone(), p.expected.clone()))
-            .ok_or_else(|| CampaignError::Config(format!("{task:?} is not a task of the family")))
+            .ok_or_else(|| ServedError::Config(format!("{task:?} is not a task of the family")))
     }
 }
 

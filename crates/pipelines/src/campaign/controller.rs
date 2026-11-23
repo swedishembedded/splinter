@@ -32,11 +32,11 @@ use super::account::{
 use super::champion::{self, Move};
 use super::curriculum::{self, Planned};
 use super::spec::CampaignSpec;
-use super::types::CampaignError;
 use super::work::{ExamRequest, Examiner, Model, RolloutRequest, Rollouts, TransferRequest};
 use super::Stopwatch;
 use crate::bench::{ingest_bench_trials, IngestOptions};
 use crate::datasets::{self, BuildRequest, RewardPreset};
+use crate::served::ServedError;
 use crate::train::{self, TrainRequest, Trainer, Tuning};
 
 /// The ledger unit that holds the campaign's identity and seed.
@@ -118,17 +118,17 @@ pub(super) fn parse_unit(name: &str) -> Option<(u32, &str)> {
     Some((generation.strip_prefix('g')?.parse().ok()?, stage))
 }
 
-pub(super) fn record<T: for<'de> Deserialize<'de>>(commit: &Commit) -> Result<T, CampaignError> {
+pub(super) fn record<T: for<'de> Deserialize<'de>>(commit: &Commit) -> Result<T, ServedError> {
     serde_json::from_value(commit.summary.clone()).map_err(|e| {
-        CampaignError::Config(format!(
+        ServedError::Config(format!(
             "the ledger's {} record is not of this build: {e}",
             commit.unit
         ))
     })
 }
 
-fn to_value<T: Serialize>(value: &T) -> Result<Value, CampaignError> {
-    serde_json::to_value(value).map_err(|e| CampaignError::Config(format!("a stage record: {e}")))
+fn to_value<T: Serialize>(value: &T) -> Result<Value, ServedError> {
+    serde_json::to_value(value).map_err(|e| ServedError::Config(format!("a stage record: {e}")))
 }
 
 /// Runs `work` as ledger unit `name` under `key` unless a sound commit of it
@@ -138,12 +138,12 @@ fn stage(
     cancel: &CancelToken,
     name: &str,
     key: &KeyParts,
-    work: impl FnOnce(&Path) -> Result<StageWork, CampaignError>,
-) -> Result<(Commit, bool), CampaignError> {
+    work: impl FnOnce(&Path) -> Result<StageWork, ServedError>,
+) -> Result<(Commit, bool), ServedError> {
     if cancel.is_cancelled() {
-        return Err(CampaignError::Cancelled);
+        return Err(ServedError::Cancelled);
     }
-    let failed: RefCell<Option<CampaignError>> = RefCell::new(None);
+    let failed: RefCell<Option<ServedError>> = RefCell::new(None);
     let dir = ledger.dir().to_path_buf();
     let ran = ledger
         .run(name, &key.key(), OnCorrupt::Refuse, |_| {
@@ -161,11 +161,11 @@ fn stage(
 }
 
 /// `path` relative to `root`, as a ledger output names it.
-fn relative(root: &Path, path: &Path) -> Result<String, CampaignError> {
+fn relative(root: &Path, path: &Path) -> Result<String, ServedError> {
     path.strip_prefix(root)
         .map(|p| p.to_string_lossy().into_owned())
         .map_err(|_| {
-            CampaignError::Config(format!(
+            ServedError::Config(format!(
                 "{} is outside the campaign's directory {}",
                 path.display(),
                 root.display()
@@ -173,25 +173,23 @@ fn relative(root: &Path, path: &Path) -> Result<String, CampaignError> {
         })
 }
 
-fn stage_dir(root: &Path, generation: u32, stage: &str) -> Result<PathBuf, CampaignError> {
+fn stage_dir(root: &Path, generation: u32, stage: &str) -> Result<PathBuf, ServedError> {
     let dir = root.join(padded(generation)).join(stage);
     std::fs::create_dir_all(&dir)
-        .map_err(|e| CampaignError::Config(format!("cannot create {}: {e}", dir.display())))?;
+        .map_err(|e| ServedError::Config(format!("cannot create {}: {e}", dir.display())))?;
     Ok(dir)
 }
 
-fn output<'c>(commit: &'c Commit, name: &str) -> Result<&'c Digest, CampaignError> {
-    commit.output(name).ok_or_else(|| {
-        CampaignError::Config(format!("the ledger's {} names no {name}", commit.unit))
-    })
+fn output<'c>(commit: &'c Commit, name: &str) -> Result<&'c Digest, ServedError> {
+    commit
+        .output(name)
+        .ok_or_else(|| ServedError::Config(format!("the ledger's {} names no {name}", commit.unit)))
 }
 
-fn orchestrated(e: OrchestratorError) -> CampaignError {
+fn orchestrated(e: OrchestratorError) -> ServedError {
     match e {
-        OrchestratorError::Cancelled | OrchestratorError::JobCancelled(_) => {
-            CampaignError::Cancelled
-        }
-        other => CampaignError::Orchestrator(Box::new(other)),
+        OrchestratorError::Cancelled | OrchestratorError::JobCancelled(_) => ServedError::Cancelled,
+        other => ServedError::Orchestrator(Box::new(other)),
     }
 }
 
@@ -208,18 +206,18 @@ impl<'p> CampaignController<'p> {
         ctx: &'p Context,
         spec: CampaignSpec,
         parts: Parts<'p>,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, ServedError> {
         spec.validate()?;
         let slices = parts.examiner.slices().len();
         if slices < spec.generations as usize {
-            return Err(CampaignError::Config(format!(
+            return Err(ServedError::Config(format!(
                 "{} generations need as many fresh sealed slices; the examiner has {slices}",
                 spec.generations
             )));
         }
         let dir = campaign_dir(ctx, &spec.name);
         std::fs::create_dir_all(&dir)
-            .map_err(|e| CampaignError::Config(format!("cannot create {}: {e}", dir.display())))?;
+            .map_err(|e| ServedError::Config(format!("cannot create {}: {e}", dir.display())))?;
         let ledger = StageLedger::open(&dir)?;
         let identity = json!({
             "spec": spec.identity(),
@@ -232,7 +230,7 @@ impl<'p> CampaignController<'p> {
             .iter()
             .any(|c| c.unit == CAMPAIGN_UNIT && c.key != key.key())
         {
-            return Err(CampaignError::Config(format!(
+            return Err(ServedError::Config(format!(
                 "campaign {} began under another specification, other rollouts or another \
                  examiner; a campaign is continued as it began: start a new one to change it",
                 spec.name
@@ -245,9 +243,9 @@ impl<'p> CampaignController<'p> {
         })?;
         let seed = begun.summary["seed"]
             .as_u64()
-            .ok_or_else(|| CampaignError::Config("the ledger records no seed".into()))?;
+            .ok_or_else(|| ServedError::Config("the ledger records no seed".into()))?;
         if given.is_some_and(|given| given != seed) {
-            return Err(CampaignError::Config(format!(
+            return Err(ServedError::Config(format!(
                 "campaign {} began with seed {seed}, and is continued with it",
                 spec.name
             )));
@@ -299,7 +297,7 @@ impl<'p> CampaignController<'p> {
     /// # Errors
     /// `to` was never a champion or is the champion now, the reason is
     /// empty, or the ledger.
-    pub fn rollback(&self, to: u32, reason: &str) -> Result<Move, CampaignError> {
+    pub fn rollback(&self, to: u32, reason: &str) -> Result<Move, ServedError> {
         champion::rollback(&self.ledger, &self.first, to, reason)
     }
 
@@ -307,7 +305,7 @@ impl<'p> CampaignController<'p> {
     ///
     /// # Errors
     /// The ledger cannot be read, or holds a record of another build.
-    pub fn report(&self) -> Result<CampaignReport, CampaignError> {
+    pub fn report(&self) -> Result<CampaignReport, ServedError> {
         report(
             &self.spec.name,
             self.seed,
@@ -322,8 +320,8 @@ impl<'p> CampaignController<'p> {
     ///
     /// # Errors
     /// The first stage that failed (its attempt stays open in the ledger and
-    /// the next run resumes it), or [`CampaignError::Cancelled`].
-    pub fn run(&mut self) -> Result<CampaignReport, CampaignError> {
+    /// the next run resumes it), or [`ServedError::Cancelled`].
+    pub fn run(&mut self) -> Result<CampaignReport, ServedError> {
         let mut stopped = Stopped::Done;
         loop {
             let generation = next_generation(&self.ledger.commits()?);
@@ -341,7 +339,7 @@ impl<'p> CampaignController<'p> {
     }
 
     /// The limit a stage that spends `rollouts` more, or trains, would break.
-    fn over_budget(&self, rollouts: u64, trains: bool) -> Result<Option<Stopped>, CampaignError> {
+    fn over_budget(&self, rollouts: u64, trains: bool) -> Result<Option<Stopped>, ServedError> {
         let budget = &self.spec.budget;
         let spent = spent(&self.ledger.commits()?)?;
         let over = |limit: &str, spent: f64, allowed: f64| {
@@ -363,7 +361,7 @@ impl<'p> CampaignController<'p> {
         Ok(None)
     }
 
-    fn committed(&self, name: &str, key: &KeyParts) -> Result<bool, CampaignError> {
+    fn committed(&self, name: &str, key: &KeyParts) -> Result<bool, ServedError> {
         Ok(matches!(
             self.ledger.standing(name, &key.key())?,
             Standing::Committed(_)
@@ -372,7 +370,7 @@ impl<'p> CampaignController<'p> {
 
     /// Runs the stages of `generation` that have no record; `Some` when a
     /// budget stopped it before a stage.
-    fn generation(&mut self, generation: u32) -> Result<Option<Stopped>, CampaignError> {
+    fn generation(&mut self, generation: u32) -> Result<Option<Stopped>, ServedError> {
         let commits = self.ledger.commits()?;
         let (champion, _) = champion::history(&self.first, &commits)?;
         // The tasks of a generation follow from the rollouts before it alone, so
@@ -608,7 +606,7 @@ impl<'p> CampaignController<'p> {
             .get(generation as usize - 1)
             .cloned()
             .ok_or_else(|| {
-                CampaignError::Config(format!(
+                ServedError::Config(format!(
                     "no sealed slice is left for generation {generation}"
                 ))
             })?;
@@ -622,9 +620,9 @@ impl<'p> CampaignController<'p> {
             .ctx
             .datasets()
             .get(&splinter_core::dataset::DatasetId(
-                Digest::parse(&dataset).map_err(|e| CampaignError::Config(e.to_string()))?,
+                Digest::parse(&dataset).map_err(|e| ServedError::Config(e.to_string()))?,
             ))
-            .map_err(|e| CampaignError::Config(format!("dataset {dataset}: {e}")))?
+            .map_err(|e| ServedError::Config(format!("dataset {dataset}: {e}")))?
             .path;
         let examiner = &mut *self.parts.examiner;
         let campaign_name = self.spec.name.clone();
@@ -658,17 +656,17 @@ impl<'p> CampaignController<'p> {
             .input("sealed", output(&examined, "sealed")?);
         let name = unit(generation, "gate");
         let root = self.ledger.dir().to_path_buf();
-        let read = |name: &str| -> Result<Value, CampaignError> {
+        let read = |name: &str| -> Result<Value, ServedError> {
             let path = examined
                 .outputs
                 .iter()
                 .find(|o| o.name == name)
                 .map(|o| root.join(&o.path))
-                .ok_or_else(|| CampaignError::Config(format!("no {name} verdict")))?;
+                .ok_or_else(|| ServedError::Config(format!("no {name} verdict")))?;
             let text = std::fs::read_to_string(&path)
-                .map_err(|e| CampaignError::Config(format!("{}: {e}", path.display())))?;
+                .map_err(|e| ServedError::Config(format!("{}: {e}", path.display())))?;
             serde_json::from_str(&text)
-                .map_err(|e| CampaignError::Config(format!("{}: {e}", path.display())))
+                .map_err(|e| ServedError::Config(format!("{}: {e}", path.display())))
         };
         let verdict_key = self.parts.examiner.key().clone();
         let (gated, _) = stage(&self.ledger, &cancel, &name, &key, |_| {
@@ -721,7 +719,7 @@ fn curated(
     ctx: &Context,
     request: &BuildRequest,
     sets: &[SetId],
-) -> Result<CurateRecord, CampaignError> {
+) -> Result<CurateRecord, ServedError> {
     let (projection, _) = datasets::project_with(ctx, request, None).map_err(orchestrated)?;
     if projection.records.is_empty() {
         return Ok(CurateRecord {

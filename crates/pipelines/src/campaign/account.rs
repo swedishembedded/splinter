@@ -26,10 +26,10 @@ use splinter_store::stage_ledger::{Commit, StageLedger};
 use super::champion::{self, Move};
 use super::controller::{campaign_dir, parse_unit, record, unit, Stopped, CAMPAIGN_UNIT};
 use super::spec::CampaignSpec;
-use super::types::CampaignError;
 use super::work::{Model, Trial};
 use crate::curriculum::capability::Selection;
 use crate::curriculum::signal::SignalSelection;
+use crate::served::ServedError;
 
 /// What one generation came to.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -154,9 +154,9 @@ pub(super) fn rates(
     spec: &CampaignSpec,
     commits: &[Commit],
     before: u32,
-) -> Result<PassRates, CampaignError> {
+) -> Result<PassRates, ServedError> {
     let mut rates = PassRates::new(spec.rollout.retire_at, spec.rollout.retire_after)
-        .map_err(|e| CampaignError::Config(e.to_string()))?;
+        .map_err(|e| ServedError::Config(e.to_string()))?;
     for commit in latest_per_generation(commits, "rollout", before.saturating_sub(1)) {
         let generation = parse_unit(&commit.unit).map_or(0, |(g, _)| g);
         let rolled: RolloutRecord = record(commit)?;
@@ -172,7 +172,7 @@ pub(super) fn rates(
 }
 
 /// What every spending stage recorded, summed.
-pub(super) fn spent(commits: &[Commit]) -> Result<Spent, CampaignError> {
+pub(super) fn spent(commits: &[Commit]) -> Result<Spent, ServedError> {
     let mut spent = Spent::default();
     for commit in commits {
         match parse_unit(&commit.unit) {
@@ -200,7 +200,7 @@ pub fn report(
     seed: u64,
     base: &Model,
     commits: &[Commit],
-) -> Result<CampaignReport, CampaignError> {
+) -> Result<CampaignReport, ServedError> {
     let latest = |unit_name: &str| commits.iter().rev().find(|c| c.unit == unit_name);
     let mut generations = Vec::new();
     for commit in latest_per_generation(commits, "promote", u32::MAX) {
@@ -234,7 +234,7 @@ pub fn report(
 pub(super) fn begun(
     ctx: &Context,
     spec: &CampaignSpec,
-) -> Result<Option<(StageLedger, u64)>, CampaignError> {
+) -> Result<Option<(StageLedger, u64)>, ServedError> {
     spec.validate()?;
     let dir = campaign_dir(ctx, &spec.name);
     if !dir
@@ -249,11 +249,11 @@ pub(super) fn begun(
         .iter()
         .find(|c| c.unit == CAMPAIGN_UNIT)
         .and_then(|c| c.summary["seed"].as_u64())
-        .ok_or_else(|| CampaignError::Config(format!("campaign {} records no seed", spec.name)))?;
+        .ok_or_else(|| ServedError::Config(format!("campaign {} records no seed", spec.name)))?;
     Ok(Some((ledger, seed)))
 }
 
-pub(super) fn base_of(spec: &CampaignSpec) -> Result<Model, CampaignError> {
+pub(super) fn base_of(spec: &CampaignSpec) -> Result<Model, ServedError> {
     Ok(Model {
         generation: 0,
         model: spec.base_ref()?.to_string(),
@@ -264,7 +264,7 @@ pub(super) fn base_of(spec: &CampaignSpec) -> Result<Model, CampaignError> {
 
 /// Generation 0's champion: the base, or the adapter on it the campaign
 /// names, identified by its file's digest as the examiner names it.
-pub(super) fn first_champion(spec: &CampaignSpec) -> Result<Model, CampaignError> {
+pub(super) fn first_champion(spec: &CampaignSpec) -> Result<Model, ServedError> {
     let reference = spec.champion_ref()?;
     let ModelRef::Local {
         adapter: Some(adapter),
@@ -274,7 +274,7 @@ pub(super) fn first_champion(spec: &CampaignSpec) -> Result<Model, CampaignError
         return base_of(spec);
     };
     let digest = crate::bench::artifact::sha256_file(std::path::Path::new(adapter))
-        .map_err(|e| CampaignError::Config(format!("champion adapter {adapter}: {e}")))?;
+        .map_err(|e| ServedError::Config(format!("champion adapter {adapter}: {e}")))?;
     Ok(Model {
         generation: 0,
         model: reference.to_string(),
@@ -287,12 +287,9 @@ pub(super) fn first_champion(spec: &CampaignSpec) -> Result<Model, CampaignError
 ///
 /// # Errors
 /// A campaign never begun, another process holding it, or its ledger.
-pub fn campaign_status(
-    ctx: &Context,
-    spec: &CampaignSpec,
-) -> Result<CampaignReport, CampaignError> {
+pub fn campaign_status(ctx: &Context, spec: &CampaignSpec) -> Result<CampaignReport, ServedError> {
     let (ledger, seed) = begun(ctx, spec)?
-        .ok_or_else(|| CampaignError::Config(format!("campaign {} has not begun", spec.name)))?;
+        .ok_or_else(|| ServedError::Config(format!("campaign {} has not begun", spec.name)))?;
     report(&spec.name, seed, &first_champion(spec)?, &ledger.commits()?)
 }
 
@@ -307,18 +304,18 @@ pub fn campaign_rollback(
     spec: &CampaignSpec,
     to: u32,
     reason: &str,
-) -> Result<Move, CampaignError> {
+) -> Result<Move, ServedError> {
     let (ledger, _) = begun(ctx, spec)?
-        .ok_or_else(|| CampaignError::Config(format!("campaign {} has not begun", spec.name)))?;
+        .ok_or_else(|| ServedError::Config(format!("campaign {} has not begun", spec.name)))?;
     champion::rollback(&ledger, &first_champion(spec)?, to, reason)
 }
 
-impl From<CampaignError> for OrchestratorError {
-    fn from(e: CampaignError) -> Self {
+impl From<ServedError> for OrchestratorError {
+    fn from(e: ServedError) -> Self {
         match e {
-            CampaignError::Cancelled => Self::Cancelled,
-            CampaignError::Orchestrator(inner) => *inner,
-            CampaignError::Trainer(reason) => Self::Train(reason),
+            ServedError::Cancelled => Self::Cancelled,
+            ServedError::Orchestrator(inner) => *inner,
+            ServedError::Trainer(reason) => Self::Train(reason),
             other => Self::Refused(other.to_string()),
         }
     }

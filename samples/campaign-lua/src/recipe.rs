@@ -13,9 +13,9 @@
 
 use anyhow::Result;
 use clap::Args;
-use splinter_sdk::campaign::brain::{ModelSettings, TrainerSettings};
 use splinter_sdk::model::policy_gradient::{Behaviour, PolicyGradientOptions, Reference};
 use splinter_sdk::model::precision::BasePrecision;
+use splinter_sdk::served::brain::{ModelSettings, TrainerSettings};
 
 /// The settings of an arm.
 #[derive(Args, Clone, Debug)]

@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 use anyhow::{ensure, Result};
 use clap::{Args, ValueEnum};
 use serde::{Deserialize, Serialize};
-use splinter_sdk::campaign::served::Answered;
+use splinter_sdk::served::Answered;
 use splinter_sdk::served_host::{ExamDecoding, ReasoningHost};
 
 use crate::frontier::{Frontier, Measured};

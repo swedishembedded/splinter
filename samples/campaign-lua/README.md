@@ -15,7 +15,7 @@ recorded seed under different salts and share no program. Everything a run
 asks of a model (sampling, the policy's proposals, training jobs) goes to a
 `brain serve` through its API. The campaign controller that once ran this
 family in process is retired: `lineage` below is the sample's driver, and the
-controller's served path is `splinter_sdk::campaign::served`.
+controller's served path is `splinter_sdk::served`.
 
 ## The `lineage` driver: self-taught rounds
 

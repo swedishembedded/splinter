@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use serde_json::json;
-use splinter_sdk::campaign::brain::ModelSettings;
-use splinter_sdk::campaign::served::ServedValidator;
-use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 use splinter_sdk::measure::campaign::gate::DevGate;
+use splinter_sdk::served::brain::ModelSettings;
+use splinter_sdk::served::PolicyRef;
+use splinter_sdk::served::ServedValidator;
 
 use campaign_lua::family::ProposalFamily;
 use campaign_lua::frontier::FrontierArgs;

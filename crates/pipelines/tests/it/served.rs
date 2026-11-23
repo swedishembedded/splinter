@@ -13,12 +13,10 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use splinter_agent::solve::Model;
-use splinter_pipelines::campaign::brain::{Graded, ModelSettings, TaskFamily};
-use splinter_pipelines::campaign::served::{
-    CallFailure, PolicyModels, ServedCollector, ServedValidator,
-};
-use splinter_pipelines::campaign::{
-    CampaignError, CollectRequest, PolicyRef, RolloutCollector, Validator,
+use splinter_pipelines::served::brain::{Graded, ModelSettings, TaskFamily};
+use splinter_pipelines::served::{CallFailure, PolicyModels, ServedCollector, ServedValidator};
+use splinter_pipelines::served::{
+    CollectRequest, PolicyRef, RolloutCollector, ServedError, Validator,
 };
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
@@ -51,7 +49,7 @@ struct Host {
 }
 
 impl PolicyModels for Host {
-    fn model(&self, _: &PolicyRef, greedy: bool) -> Result<Model, CampaignError> {
+    fn model(&self, _: &PolicyRef, greedy: bool) -> Result<Model, ServedError> {
         self.asked.fetch_add(1, Ordering::SeqCst);
         self.greedy.lock().unwrap().push(greedy);
         Ok(Model::new(self.provider.clone(), "says"))
@@ -73,10 +71,10 @@ impl TaskFamily for Family {
     fn retention(&self) -> Vec<String> {
         vec!["k".into()]
     }
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError> {
         Ok(vec![("user".into(), format!("what is {task}?"))])
     }
-    fn grade(&self, _: &str, completion: &str) -> Result<Graded, CampaignError> {
+    fn grade(&self, _: &str, completion: &str) -> Result<Graded, ServedError> {
         let passed = completion == "7";
         Ok(Graded {
             reward: f64::from(u8::from(passed)),
@@ -206,7 +204,7 @@ impl ModelProvider for Mixed {
 struct MixedHost(Arc<Mixed>);
 
 impl PolicyModels for MixedHost {
-    fn model(&self, _: &PolicyRef, _: bool) -> Result<Model, CampaignError> {
+    fn model(&self, _: &PolicyRef, _: bool) -> Result<Model, ServedError> {
         Ok(Model::new(self.0.clone(), "mixed"))
     }
 }

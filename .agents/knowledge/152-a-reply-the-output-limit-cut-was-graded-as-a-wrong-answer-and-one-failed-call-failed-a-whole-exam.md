@@ -17,7 +17,7 @@ are recorded as `truncated` (before: 48 wrong answers). 880 calls at the protoco
 0 malformed, every call recorded. Unit tests: `a_bare_reply_says_when_the_output_limit_cut_it_and_carries_the_trace_asked_for`
 (`crates/agent/src/chat.rs`) and
 `a_failed_call_is_its_own_outcome_a_cut_reply_says_so_and_a_traced_exam_asks_for_the_trace`
-(`crates/pipelines/tests/it/campaign/served.rs`).
+(`crates/pipelines/tests/it/served.rs`).
 
 The dev gate's `Outcomes` are still booleans: a truncated reply fails its task there, as a reply under a fixed budget is the
 policy's; a caller that must not count truncation (a measurement of competence) reads `attempt_with`.

@@ -137,6 +137,7 @@ pub mod retrieval;
 mod rl_build;
 pub mod router;
 pub mod sealed;
+pub mod served;
 pub mod serving;
 pub mod sessions;
 pub mod set_import;

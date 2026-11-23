@@ -20,8 +20,8 @@ use splinter_orchestrator::context::Context;
 
 use super::grade::rollout_trace;
 use super::{run_with_adapter, EpisodeOutcome, EpisodeRequest, EpisodeSettings, PracticeTask};
-use crate::campaign::endpoint::{Episode, EpisodeExecutor};
-use crate::campaign::{CampaignError, PolicyRef};
+use crate::served::endpoint::{Episode, EpisodeExecutor};
+use crate::served::{PolicyRef, ServedError};
 
 /// Practice tasks run through sven for a campaign.
 pub struct SvenEpisodes<'c> {
@@ -66,8 +66,8 @@ impl<'c> SvenEpisodes<'c> {
     }
 }
 
-fn collector(why: impl std::fmt::Display) -> CampaignError {
-    CampaignError::Collector(why.to_string())
+fn collector(why: impl std::fmt::Display) -> ServedError {
+    ServedError::Collector(why.to_string())
 }
 
 impl EpisodeExecutor for SvenEpisodes<'_> {
@@ -91,7 +91,7 @@ impl EpisodeExecutor for SvenEpisodes<'_> {
         self.tasks.iter().map(|t| t.task.to_string()).collect()
     }
 
-    fn serve(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+    fn serve(&mut self, policy: &PolicyRef) -> Result<(), ServedError> {
         let Some(adapter) = &policy.adapter else {
             self.serving = self.base.clone();
             self.adapter = None;
@@ -103,7 +103,7 @@ impl EpisodeExecutor for SvenEpisodes<'_> {
             ..
         } = &self.base
         else {
-            return Err(CampaignError::Config(format!(
+            return Err(ServedError::Config(format!(
                 "an adapter is served on a local base; the policy is {}",
                 self.base
             )));
@@ -122,7 +122,7 @@ impl EpisodeExecutor for SvenEpisodes<'_> {
         tasks: &[String],
         attempts: usize,
         seed: u64,
-    ) -> Result<Vec<Episode>, CampaignError> {
+    ) -> Result<Vec<Episode>, ServedError> {
         let chosen = tasks
             .iter()
             .map(|name| {

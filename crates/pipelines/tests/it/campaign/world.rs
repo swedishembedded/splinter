@@ -36,9 +36,10 @@ use splinter_model::BrainEndpoints;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::Context;
 use splinter_pipelines::campaign::{
-    CampaignController, CampaignError, CampaignSpec, ExamRequest, Examined, Examiner, Model, Parts,
-    Rolled, RolloutRequest, Rollouts, Stopwatch, Trial,
+    CampaignController, CampaignSpec, ExamRequest, Examined, Examiner, Model, Parts, Rolled,
+    RolloutRequest, Rollouts, Stopwatch, Trial,
 };
+use splinter_pipelines::served::ServedError;
 use splinter_pipelines::train::{BrainTrainer, TrainPlan, Trainer};
 
 use crate::common::bench::{export, Trial as BenchTrial};
@@ -147,7 +148,7 @@ impl Rollouts for Practice {
         json!({"practice": "scripted", "tasks": TASKS})
     }
 
-    fn tasks(&self) -> Result<Vec<String>, CampaignError> {
+    fn tasks(&self) -> Result<Vec<String>, ServedError> {
         Ok(TASKS.iter().map(ToString::to_string).collect())
     }
 
@@ -156,7 +157,7 @@ impl Rollouts for Practice {
         _ctx: &Context,
         request: &RolloutRequest<'_>,
         _cancel: &CancelToken,
-    ) -> Result<Rolled, CampaignError> {
+    ) -> Result<Rolled, ServedError> {
         self.ran.set(self.ran.get() + 1);
         self.champions
             .borrow_mut()
@@ -320,7 +321,7 @@ impl Examiner for Exam {
         _ctx: &Context,
         request: &ExamRequest<'_>,
         _cancel: &CancelToken,
-    ) -> Result<Examined, CampaignError> {
+    ) -> Result<Examined, ServedError> {
         self.ran.set(self.ran.get() + 1);
         assert!(
             request.training.is_file(),
@@ -423,7 +424,7 @@ impl Doubles {
         &'a mut self,
         rig: &'a Rig,
         spec: CampaignSpec,
-    ) -> Result<CampaignController<'a>, CampaignError> {
+    ) -> Result<CampaignController<'a>, ServedError> {
         CampaignController::open(
             &rig.ctx,
             spec,

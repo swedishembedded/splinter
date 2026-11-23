@@ -27,13 +27,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use splinter_sdk::campaign::brain::TaskFamily;
-use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::dev_pool::DevPool;
 use splinter_sdk::measure::campaign::evidence::Budget;
 use splinter_sdk::measure::campaign::gate::{decide_evidence, Decision, DevResult, EvidenceStatus};
 use splinter_sdk::measure::campaign::plan::retention_units_needed;
 use splinter_sdk::model::stats::ExactSignTest;
+use splinter_sdk::served::brain::TaskFamily;
+use splinter_sdk::served::PolicyRef;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::lineage::{fail, policy_key, DevRecord, Lineage, RoundRecord};

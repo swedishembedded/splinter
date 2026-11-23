@@ -26,12 +26,12 @@ use anyhow::{Context as _, Result};
 use clap::Parser;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use splinter_sdk::campaign::brain::ModelSettings;
-use splinter_sdk::campaign::served::{CallFailure, PolicyModels, ServedValidator};
-use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::model::precision::BasePrecision;
 use splinter_sdk::model::served_train::fine_tune_served;
 use splinter_sdk::model::train::FineTune;
+use splinter_sdk::served::brain::ModelSettings;
+use splinter_sdk::served::PolicyRef;
+use splinter_sdk::served::{CallFailure, PolicyModels, ServedValidator};
 use splinter_sdk::served_host::{HostSettings, ServedHost};
 use splinter_sdk::vocabulary::digest::Digest;
 

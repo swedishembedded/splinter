@@ -29,13 +29,13 @@ use splinter_store::stage_ledger::Commit;
 use super::account::{latest_per_generation, RolloutRecord};
 use super::controller::record;
 use super::spec::{CampaignSpec, RolloutCurriculum};
-use super::types::CampaignError;
 use super::work::Rollouts;
 use crate::curriculum::capability::{competence, select, Attempt, SelectRequest, Selection};
 use crate::curriculum::signal::{
     select as select_signal, Rewarding, Scored, SignalRequest, SignalSelection,
 };
 use crate::rl_build::{DEFAULT_FAIL_CEILING, PARTIAL_METRIC};
+use crate::served::ServedError;
 use splinter_data::PartialCredit;
 
 /// What a generation rolls out.
@@ -50,7 +50,7 @@ pub(super) struct Planned {
 
 /// Every attempt of the rollouts before `generation`, with what the signal
 /// curriculum reads: its verdict, partial credit and cost.
-fn scored_history(commits: &[Commit], generation: u32) -> Result<Vec<Scored>, CampaignError> {
+fn scored_history(commits: &[Commit], generation: u32) -> Result<Vec<Scored>, ServedError> {
     let mut scored = Vec::new();
     for commit in latest_per_generation(commits, "rollout", generation.saturating_sub(1)) {
         let rolled: RolloutRecord = record(commit)?;
@@ -74,7 +74,7 @@ fn plan_signal(
     pool: &[String],
     rollouts: &dyn Rollouts,
     seed: u64,
-) -> Result<Planned, CampaignError> {
+) -> Result<Planned, ServedError> {
     let facts = rollouts.facts()?;
     let families: BTreeMap<String, String> = facts
         .iter()
@@ -116,7 +116,7 @@ fn history(
     commits: &[Commit],
     generation: u32,
     labels: &BTreeMap<String, Vec<String>>,
-) -> Result<Vec<Attempt>, CampaignError> {
+) -> Result<Vec<Attempt>, ServedError> {
     let mut attempts = Vec::new();
     for commit in latest_per_generation(commits, "rollout", generation.saturating_sub(1)) {
         let rolled: RolloutRecord = record(commit)?;
@@ -147,7 +147,7 @@ pub(super) fn plan(
     generation: u32,
     rollouts: &dyn Rollouts,
     seed: u64,
-) -> Result<Planned, CampaignError> {
+) -> Result<Planned, ServedError> {
     let pool = rollouts.tasks()?;
     match spec.rollout.curriculum {
         RolloutCurriculum::All => {

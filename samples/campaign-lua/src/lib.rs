@@ -40,8 +40,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
-use splinter_sdk::campaign::brain::{Graded, TaskFamily};
-use splinter_sdk::campaign::CampaignError;
+use splinter_sdk::served::brain::{Graded, TaskFamily};
+use splinter_sdk::served::ServedError;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::language::{Language, Runner};
@@ -152,7 +152,7 @@ impl LuaPredict {
         scratch: &Path,
         sizes: Sizes,
         seed: u64,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, ServedError> {
         Self::generate_for(&Language::lua51(lua, &[]), scratch, sizes, seed)
     }
 
@@ -169,8 +169,8 @@ impl LuaPredict {
         scratch: &Path,
         sizes: Sizes,
         seed: u64,
-    ) -> Result<Self, CampaignError> {
-        let config = |e: anyhow::Error| CampaignError::Config(format!("{e:#}"));
+    ) -> Result<Self, ServedError> {
+        let config = |e: anyhow::Error| ServedError::Config(format!("{e:#}"));
         let runner = Runner::new(language, scratch).map_err(config)?;
         let mut programs: BTreeMap<String, Program> = BTreeMap::new();
         let mut seen: BTreeMap<String, ()> = BTreeMap::new();
@@ -178,14 +178,14 @@ impl LuaPredict {
                         count: usize,
                         levels: &[usize],
                         prefix: &str|
-         -> Result<Vec<String>, CampaignError> {
+         -> Result<Vec<String>, ServedError> {
             let mut rng = SplitMix64::new(seed ^ salt.wrapping_mul(0x9E37_79B9_7F4A_7C15));
             let mut ids = Vec::new();
             let mut attempts = 0;
             while ids.len() < count {
                 attempts += 1;
                 if attempts > count * 50 {
-                    return Err(CampaignError::Config(format!(
+                    return Err(ServedError::Config(format!(
                         "the generator cannot make {count} distinct programs of levels {levels:?}"
                     )));
                 }
@@ -241,10 +241,10 @@ impl LuaPredict {
         self.programs.values().map(|p| p.source.as_str())
     }
 
-    fn get(&self, task: &str) -> Result<&Program, CampaignError> {
+    fn get(&self, task: &str) -> Result<&Program, ServedError> {
         self.programs
             .get(task)
-            .ok_or_else(|| CampaignError::Config(format!("{task:?} is not a task of the family")))
+            .ok_or_else(|| ServedError::Config(format!("{task:?} is not a task of the family")))
     }
 }
 
@@ -278,7 +278,7 @@ impl TaskFamily for LuaPredict {
         self.retention.clone()
     }
 
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError> {
         let program = self.get(task)?;
         Ok(vec![
             ("system".into(), SYSTEM.into()),
@@ -292,7 +292,7 @@ impl TaskFamily for LuaPredict {
         ])
     }
 
-    fn grade(&self, task: &str, completion: &str) -> Result<Graded, CampaignError> {
+    fn grade(&self, task: &str, completion: &str) -> Result<Graded, ServedError> {
         let program = self.get(task)?;
         let passed = answer_of(completion) == program.expected;
         Ok(Graded {

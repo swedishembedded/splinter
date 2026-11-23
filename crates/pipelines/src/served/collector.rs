@@ -29,8 +29,8 @@ use super::brain::{
     attempt_dir, trained_from, tune, write_records, ModelSettings, TaskFamily, TrainerSettings,
 };
 use super::types::{
-    CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup,
-    TrainRequest, Trained, Trainer, Validator,
+    CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup, ServedError, TrainRequest,
+    Trained, Trainer, Validator,
 };
 use splinter_core::chat::WireMessage;
 use splinter_model::policy_gradient::PolicyGradientTune;
@@ -47,17 +47,17 @@ pub trait PolicyModels: Send + Sync {
     ///
     /// # Errors
     /// The policy cannot be served.
-    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError>;
+    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, ServedError>;
 }
 
-fn turns(family: &dyn TaskFamily, task: &str) -> Result<Vec<Turn>, CampaignError> {
+fn turns(family: &dyn TaskFamily, task: &str) -> Result<Vec<Turn>, ServedError> {
     family
         .prompt(task)?
         .into_iter()
         .map(|(role, text)| match role.as_str() {
             "user" => Ok(Turn::user(text)),
             "assistant" => Ok(Turn::assistant(text)),
-            other => Err(CampaignError::Config(format!(
+            other => Err(ServedError::Config(format!(
                 "the served path sends user and assistant turns, not {other:?} (task {task})"
             ))),
         })
@@ -116,12 +116,12 @@ impl<'f> ServedCollector<'f> {
         family: &'f dyn TaskFamily,
         models: &'f dyn PolicyModels,
         settings: ModelSettings,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, ServedError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .build()
-            .map_err(|e| CampaignError::Collector(format!("starting the runtime: {e}")))?;
+            .map_err(|e| ServedError::Collector(format!("starting the runtime: {e}")))?;
         Ok(Self {
             family,
             models,
@@ -141,13 +141,13 @@ impl RolloutCollector for ServedCollector<'_> {
         self.family.pool()
     }
 
-    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), ServedError> {
         // The host serves it when the first request names it.
         self.policy = policy.clone();
         Ok(())
     }
 
-    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError> {
+    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, ServedError> {
         let model = self.models.model(&request.policy, false)?;
         let max_tokens = self.settings.max_tokens;
         let mut jobs = Vec::new();
@@ -162,8 +162,8 @@ impl RolloutCollector for ServedCollector<'_> {
             futures::stream::iter(jobs.into_iter().map(|(t, conversation)| async move {
                 let reply = ask(model, &conversation, max_tokens, false)
                     .await
-                    .map_err(|e| CampaignError::Collector(e.to_string()))?;
-                Ok::<_, CampaignError>((t, conversation, reply.text))
+                    .map_err(|e| ServedError::Collector(e.to_string()))?;
+                Ok::<_, ServedError>((t, conversation, reply.text))
             }))
             .buffered(self.settings.concurrency.max(1))
             .collect::<Vec<_>>()
@@ -216,12 +216,12 @@ impl<'f> ServedValidator<'f> {
         family: &'f dyn TaskFamily,
         models: &'f dyn PolicyModels,
         settings: ModelSettings,
-    ) -> Result<Self, CampaignError> {
+    ) -> Result<Self, ServedError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .build()
-            .map_err(|e| CampaignError::Validator(format!("starting the runtime: {e}")))?;
+            .map_err(|e| ServedError::Validator(format!("starting the runtime: {e}")))?;
         Ok(Self {
             family,
             models,
@@ -251,7 +251,7 @@ impl<'f> ServedValidator<'f> {
         &self,
         policy: &PolicyRef,
         tasks: &[String],
-    ) -> Result<Vec<Answered>, CampaignError> {
+    ) -> Result<Vec<Answered>, ServedError> {
         let model = self.models.model(policy, true)?;
         self.answer_with(&model, tasks)
     }
@@ -267,12 +267,12 @@ impl<'f> ServedValidator<'f> {
         &self,
         model: &Model,
         tasks: &[String],
-    ) -> Result<Vec<Answered>, CampaignError> {
+    ) -> Result<Vec<Answered>, ServedError> {
         self.attempt_with(model, tasks)?
             .into_iter()
             .map(|attempt| {
                 attempt.outcome.map_err(|failure| {
-                    CampaignError::Validator(format!("task {}: {failure}", attempt.task))
+                    ServedError::Validator(format!("task {}: {failure}", attempt.task))
                 })
             })
             .collect()
@@ -289,7 +289,7 @@ impl<'f> ServedValidator<'f> {
         &self,
         model: &Model,
         tasks: &[String],
-    ) -> Result<Vec<Attempt>, CampaignError> {
+    ) -> Result<Vec<Attempt>, ServedError> {
         let (family, max_tokens, trace) = (self.family, self.settings.max_tokens, self.trace);
         let attempts = self.runtime.block_on(async {
             futures::stream::iter(tasks.iter().map(|task| async move {
@@ -305,7 +305,7 @@ impl<'f> ServedValidator<'f> {
                     }
                     Err(e) => Err(CallFailure::of(&e)),
                 };
-                Ok::<_, CampaignError>(Attempt {
+                Ok::<_, ServedError>(Attempt {
                     task: task.clone(),
                     outcome,
                 })
@@ -317,7 +317,7 @@ impl<'f> ServedValidator<'f> {
         attempts.into_iter().collect()
     }
 
-    fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, CampaignError> {
+    fn pass_each(&self, model: &Model, tasks: &[String]) -> Result<Outcomes, ServedError> {
         Ok(self
             .answer_with(model, tasks)?
             .into_iter()
@@ -404,7 +404,7 @@ impl Validator for ServedValidator<'_> {
         &mut self,
         policy: &PolicyRef,
         dev: &[String],
-    ) -> Result<DevResult, CampaignError> {
+    ) -> Result<DevResult, ServedError> {
         let held = key(policy);
         let mut known = self
             .kept
@@ -455,13 +455,10 @@ impl ServedTrainer {
     ///
     /// # Errors
     /// The endpoints name no artifact store, which a job needs.
-    pub fn new(
-        settings: TrainerSettings,
-        endpoints: BrainEndpoints,
-    ) -> Result<Self, CampaignError> {
+    pub fn new(settings: TrainerSettings, endpoints: BrainEndpoints) -> Result<Self, ServedError> {
         endpoints
             .artifact_store()
-            .map_err(|e| CampaignError::Config(e.to_string()))?;
+            .map_err(|e| ServedError::Config(e.to_string()))?;
         Ok(Self {
             settings,
             endpoints,
@@ -474,12 +471,12 @@ impl Trainer for ServedTrainer {
         json!({"path": "brain training job", "settings": self.settings})
     }
 
-    fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError> {
+    fn train(&mut self, request: &TrainRequest) -> Result<Trained, ServedError> {
         let records = write_records(request)?;
         let attempt = attempt_dir(request)?;
         let tune: PolicyGradientTune<'_> = tune(&self.settings, request, &records, &attempt);
         let trained = train_policy_gradient_served(&self.endpoints, &tune)
-            .map_err(|e| CampaignError::Trainer(e.to_string()))?;
+            .map_err(|e| ServedError::Trainer(e.to_string()))?;
         trained_from(request, &trained)
     }
 }

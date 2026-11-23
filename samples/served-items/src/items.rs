@@ -19,8 +19,8 @@ use std::path::Path;
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use splinter_sdk::campaign::brain::{Graded, TaskFamily};
-use splinter_sdk::campaign::CampaignError;
+use splinter_sdk::served::brain::{Graded, TaskFamily};
+use splinter_sdk::served::ServedError;
 
 /// One item as the file holds it.
 #[derive(Clone, Debug, Deserialize)]
@@ -166,10 +166,10 @@ impl Items {
     ///
     /// # Errors
     /// No item has the id.
-    pub fn get(&self, id: &str) -> Result<&Item, CampaignError> {
+    pub fn get(&self, id: &str) -> Result<&Item, ServedError> {
         self.items
             .get(id)
-            .ok_or_else(|| CampaignError::Config(format!("{id:?} is not an item")))
+            .ok_or_else(|| ServedError::Config(format!("{id:?} is not an item")))
     }
 }
 
@@ -190,11 +190,11 @@ impl TaskFamily for Items {
         Vec::new()
     }
 
-    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, CampaignError> {
+    fn prompt(&self, task: &str) -> Result<Vec<(String, String)>, ServedError> {
         Ok(vec![("user".to_string(), self.get(task)?.prompt.clone())])
     }
 
-    fn grade(&self, task: &str, completion: &str) -> Result<Graded, CampaignError> {
+    fn grade(&self, task: &str, completion: &str) -> Result<Graded, ServedError> {
         let passed = judge(completion, &self.get(task)?.answer) == Verdict::Correct;
         Ok(Graded {
             reward: f64::from(u8::from(passed)),

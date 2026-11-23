@@ -19,7 +19,7 @@ use splinter_eval::verifiers::Verification;
 use splinter_knowledge::tasks::workspace::{is_harbor_runner, NO_REWARD_EXIT};
 
 use super::{EpisodeOutcome, EpisodeUsage, TraceSummary};
-use crate::campaign::{RolloutTrace, TraceSequence};
+use crate::served::{RolloutTrace, TraceSequence};
 
 /// The exit status of the Harbor runner when it could not set itself up.
 const RUNNER_SETUP_EXIT: i64 = 2;

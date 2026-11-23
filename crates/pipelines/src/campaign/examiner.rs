@@ -34,9 +34,9 @@ use splinter_agent::CancelToken;
 use splinter_eval::promotion::{PublicKey, ALPHA};
 use splinter_orchestrator::context::{Context, ServedEndpoint};
 
-use super::types::CampaignError;
 use super::work::{ExamRequest, Examined, Examiner, Model};
 use crate::bench::practice::KEY_VARIABLE;
+use crate::served::ServedError;
 
 /// How often a running examination is asked whether it was cancelled.
 const CANCEL_POLL: Duration = Duration::from_millis(250);
@@ -128,19 +128,19 @@ impl BenchExaminer {
     ///
     /// # Errors
     /// The key cannot be used, or the agent protocol has no settings.
-    pub fn new(spec: ExamineSpec) -> Result<Self, CampaignError> {
+    pub fn new(spec: ExamineSpec) -> Result<Self, ServedError> {
         let key =
-            PublicKey::read(&spec.public_key).map_err(|e| CampaignError::Config(e.to_string()))?;
+            PublicKey::read(&spec.public_key).map_err(|e| ServedError::Config(e.to_string()))?;
         match (spec.protocol, &spec.agent) {
             (Protocol::Agent, None) => {
-                return Err(CampaignError::Config(
+                return Err(ServedError::Config(
                     "[examine] protocol = \"agent\" needs [examine.agent] (profile, min_gain, \
                      serving_build)"
                         .into(),
                 ))
             }
             (Protocol::DirectCompletion, Some(_)) => {
-                return Err(CampaignError::Config(
+                return Err(ServedError::Config(
                     "[examine.agent] is for protocol = \"agent\"; direct completion is served \
                      by bench itself (serving)"
                         .into(),
@@ -212,7 +212,7 @@ impl BenchExaminer {
         args: &[String],
         env: &[(&str, &str)],
         cancel: &CancelToken,
-    ) -> Result<(), CampaignError> {
+    ) -> Result<(), ServedError> {
         let mut command = Command::new("./bench");
         command.args(args).current_dir(&self.spec.bench);
         for (name, value) in env {
@@ -220,16 +220,16 @@ impl BenchExaminer {
         }
         let mut child = command
             .spawn()
-            .map_err(|e| CampaignError::Validator(format!("starting bench: {e}")))?;
+            .map_err(|e| ServedError::Validator(format!("starting bench: {e}")))?;
         loop {
             if let Some(status) = child
                 .try_wait()
-                .map_err(|e| CampaignError::Validator(format!("waiting for bench: {e}")))?
+                .map_err(|e| ServedError::Validator(format!("waiting for bench: {e}")))?
             {
                 return if status.success() {
                     Ok(())
                 } else {
-                    Err(CampaignError::Validator(format!(
+                    Err(ServedError::Validator(format!(
                         "bench {} ended with {status}",
                         args.first().map_or("", String::as_str)
                     )))
@@ -238,7 +238,7 @@ impl BenchExaminer {
             if cancel.is_cancelled() {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(CampaignError::Cancelled);
+                return Err(ServedError::Cancelled);
             }
             std::thread::sleep(CANCEL_POLL);
         }
@@ -252,7 +252,7 @@ impl BenchExaminer {
         examined: &Examined,
         fleet: &[String],
         cancel: &CancelToken,
-    ) -> Result<(), CampaignError> {
+    ) -> Result<(), ServedError> {
         for (collection, out) in [
             (self.spec.dev.as_str(), &examined.dev),
             (self.spec.retention.as_str(), &examined.retention),
@@ -282,9 +282,9 @@ impl BenchExaminer {
         endpoints: (&ServedEndpoint, &ServedEndpoint),
         examined: &Examined,
         cancel: &CancelToken,
-    ) -> Result<(), CampaignError> {
+    ) -> Result<(), ServedError> {
         let agent = self.spec.agent.as_ref().ok_or_else(|| {
-            CampaignError::Config("the agent protocol has no [examine.agent]".into())
+            ServedError::Config("the agent protocol has no [examine.agent]".into())
         })?;
         let files = self.candidate_files(request)?;
         let session = format!("{}-g{:04}", request.campaign, request.generation);
@@ -300,7 +300,7 @@ impl BenchExaminer {
             let path = request.dir.join(format!("{side}.profile.toml"));
             let text = agent_profile(&agent.profile, endpoint, &session, &agent.serving_build)?;
             std::fs::write(&path, text)
-                .map_err(|e| CampaignError::Validator(format!("{}: {e}", path.display())))?;
+                .map_err(|e| ServedError::Validator(format!("{}: {e}", path.display())))?;
             profiles.push((side, endpoint, path));
         }
         let comparisons = [
@@ -319,11 +319,11 @@ impl BenchExaminer {
                 let dir = jobs.join(role).join(side);
                 if dir.exists() {
                     std::fs::remove_dir_all(&dir).map_err(|e| {
-                        CampaignError::Validator(format!("clearing {}: {e}", dir.display()))
+                        ServedError::Validator(format!("clearing {}: {e}", dir.display()))
                     })?;
                 }
                 std::fs::create_dir_all(&dir)
-                    .map_err(|e| CampaignError::Validator(format!("{}: {e}", dir.display())))?;
+                    .map_err(|e| ServedError::Validator(format!("{}: {e}", dir.display())))?;
                 let set = (role == "dev")
                     .then_some(agent.dev_set.as_deref())
                     .flatten();
@@ -344,7 +344,7 @@ impl BenchExaminer {
 
     /// The candidate files of `request`'s two models, written into its
     /// directory (none for a base predecessor).
-    fn candidate_files(&self, request: &ExamRequest<'_>) -> Result<CandidateFiles, CampaignError> {
+    fn candidate_files(&self, request: &ExamRequest<'_>) -> Result<CandidateFiles, ServedError> {
         let candidate = request.dir.join("candidate.json");
         write(
             &candidate,
@@ -438,16 +438,16 @@ fn verdict_arguments(
 
 /// The one run directory `bench run --jobs-dir parent` made (a dated
 /// directory holding `bench-run.json`). Only its name is read.
-fn job_of(parent: &Path) -> Result<PathBuf, CampaignError> {
+fn job_of(parent: &Path) -> Result<PathBuf, ServedError> {
     let runs: Vec<PathBuf> = std::fs::read_dir(parent)
-        .map_err(|e| CampaignError::Validator(format!("{}: {e}", parent.display())))?
+        .map_err(|e| ServedError::Validator(format!("{}: {e}", parent.display())))?
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.join("bench-run.json").is_file())
         .collect();
     match runs.as_slice() {
         [one] => Ok(one.clone()),
-        _ => Err(CampaignError::Validator(format!(
+        _ => Err(ServedError::Validator(format!(
             "{} holds {} bench runs, not one",
             parent.display(),
             runs.len()
@@ -464,8 +464,8 @@ fn agent_profile(
     endpoint: &ServedEndpoint,
     session: &str,
     serving_build: &str,
-) -> Result<String, CampaignError> {
-    let refuse = |reason: String| CampaignError::Config(format!("{}: {reason}", base.display()));
+) -> Result<String, ServedError> {
+    let refuse = |reason: String| ServedError::Config(format!("{}: {reason}", base.display()));
     let derived = crate::bench::practice::policy_profile(base, endpoint, session)
         .map_err(|e| refuse(e.to_string()))?;
     let mut profile: toml::Table = toml::from_str(&derived).map_err(|e| refuse(e.to_string()))?;
@@ -477,9 +477,9 @@ fn agent_profile(
     toml::to_string(&profile).map_err(|e| refuse(e.to_string()))
 }
 
-fn write(path: &Path, value: &Value) -> Result<(), CampaignError> {
+fn write(path: &Path, value: &Value) -> Result<(), ServedError> {
     std::fs::write(path, value.to_string())
-        .map_err(|e| CampaignError::Validator(format!("{}: {e}", path.display())))
+        .map_err(|e| ServedError::Validator(format!("{}: {e}", path.display())))
 }
 
 impl Examiner for BenchExaminer {
@@ -516,7 +516,7 @@ impl Examiner for BenchExaminer {
         ctx: &Context,
         request: &ExamRequest<'_>,
         cancel: &CancelToken,
-    ) -> Result<Examined, CampaignError> {
+    ) -> Result<Examined, ServedError> {
         let examined = Examined {
             dev: request.dir.join("dev.json"),
             retention: request.dir.join("retention.json"),
@@ -531,7 +531,7 @@ impl Examiner for BenchExaminer {
             Protocol::Agent => {
                 let endpoint = |model: &Model| {
                     ctx.served_endpoint(&model.reference()?).map_err(|e| {
-                        CampaignError::Validator(format!(
+                        ServedError::Validator(format!(
                             "no endpoint serves {} for the examiner: {e}",
                             model.model
                         ))
@@ -553,7 +553,7 @@ impl Examiner for BenchExaminer {
 /// checks for itself that every server lists exactly the model it examines.
 /// None outside such an allocation, or with endpoints given by the command
 /// line: bench serves on its own card as configured.
-fn fleet_flags(ctx: &Context, request: &ExamRequest<'_>) -> Result<Vec<String>, CampaignError> {
+fn fleet_flags(ctx: &Context, request: &ExamRequest<'_>) -> Result<Vec<String>, ServedError> {
     let config = ctx.config();
     let spans = config
         .cluster
@@ -566,7 +566,7 @@ fn fleet_flags(ctx: &Context, request: &ExamRequest<'_>) -> Result<Vec<String>, 
     }
     for model in [request.predecessor, request.candidate] {
         ctx.served_endpoint(&model.reference()?).map_err(|e| {
-            CampaignError::Validator(format!(
+            ServedError::Validator(format!(
                 "the fleet does not serve {} for the examiner: {e}",
                 model.model
             ))
@@ -708,7 +708,7 @@ mod tests {
         agentic.public_key = public;
         assert!(matches!(
             BenchExaminer::new(agentic),
-            Err(CampaignError::Config(_))
+            Err(ServedError::Config(_))
         ));
     }
 }

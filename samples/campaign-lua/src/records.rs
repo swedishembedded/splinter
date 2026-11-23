@@ -15,8 +15,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_sdk::campaign::PolicyRef;
 use splinter_sdk::measure::campaign::gate::{Decision, DevResult};
+use splinter_sdk::served::PolicyRef;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::frontier_round::FrontierOutcome;

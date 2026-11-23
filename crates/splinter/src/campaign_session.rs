@@ -23,13 +23,14 @@ use splinter_sdk::campaign::problems::{
     VerdictRequest, VerdictSource,
 };
 use splinter_sdk::campaign::{
-    campaign_rollback, campaign_status, CampaignController, CampaignError, CampaignReport,
-    CampaignSpec, Move, MoveKind, Parts, Stopped, WallClock,
+    campaign_rollback, campaign_status, CampaignController, CampaignReport, CampaignSpec, Move,
+    MoveKind, Parts, Stopped, WallClock,
 };
 use splinter_sdk::measure::campaign::problems::{
     priority, CandidateStatus, Event, Evidence, Phase, ProblemStatus, Verdict,
 };
 use splinter_sdk::runs::record;
+use splinter_sdk::served::ServedError;
 use splinter_sdk::{Context, Error};
 
 use crate::cli::{CampaignCommand, ProblemsCommand, StatusArg, VerdictArg};
@@ -392,7 +393,7 @@ fn read(path: &Path) -> Result<CampaignSpec, Error> {
     CampaignSpec::parse(&text).map_err(|e| Error::Refused(format!("{}: {e}", path.display())))
 }
 
-fn refused(e: CampaignError) -> Error {
+fn refused(e: ServedError) -> Error {
     Error::from(e)
 }
 
@@ -409,7 +410,7 @@ pub fn campaign(
             let arguments = json!({"spec": spec, "gpus": gpus});
             let ran = record(ctx, "campaign run", &arguments, |run| {
                 let missing = |section: &str| {
-                    CampaignError::Config(format!("the campaign file has no [{section}] section"))
+                    ServedError::Config(format!("the campaign file has no [{section}] section"))
                 };
                 let mut rollouts = PracticeRollouts::new(
                     campaign

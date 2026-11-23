@@ -20,9 +20,9 @@ use splinter_knowledge::factory::host::Host;
 use splinter_knowledge::factory::objective::{Budget, ObjectiveSpec};
 use splinter_knowledge::factory::plugins::builtin;
 use splinter_knowledge::factory::store::EnvironmentStore;
-use splinter_pipelines::campaign::brain::TaskFamily;
-use splinter_pipelines::campaign::factory::{select, FactoryFamily};
-use splinter_pipelines::campaign::EnvironmentLabels;
+use splinter_pipelines::served::brain::TaskFamily;
+use splinter_pipelines::served::factory::{select, FactoryFamily};
+use splinter_pipelines::served::EnvironmentLabels;
 use splinter_sandbox::host::DEFAULT_SEARCH_PATH;
 
 fn compiled_store(dir: &std::path::Path) -> EnvironmentStore {

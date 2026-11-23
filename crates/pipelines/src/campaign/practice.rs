@@ -28,13 +28,13 @@ use serde_json::{json, Value};
 use splinter_agent::CancelToken;
 use splinter_orchestrator::context::Context;
 
-use super::types::CampaignError;
 use super::work::{Rolled, RolloutRequest, Rollouts, TransferRequest, Trial};
 use crate::bench::diagnose::diagnose_dirs;
 use crate::bench::practice::{
     run_practice, BenchCheckout, Practice, PracticeDraw, PracticeReport, PracticeRequest,
     PracticeSettings, TaskFacts,
 };
+use crate::served::ServedError;
 
 /// Where and how the champion practises, as a campaign file's `[practice]`
 /// names it.
@@ -89,9 +89,9 @@ impl PracticeRollouts {
     ///
     /// # Errors
     /// The material cannot be read.
-    pub fn new(spec: &PracticeSpec) -> Result<Self, CampaignError> {
+    pub fn new(spec: &PracticeSpec) -> Result<Self, ServedError> {
         let practice = Practice::read(&spec.dir)
-            .map_err(|e| CampaignError::Config(format!("{}: {e}", spec.dir.display())))?;
+            .map_err(|e| ServedError::Config(format!("{}: {e}", spec.dir.display())))?;
         let mut checkout = BenchCheckout::new(spec.bench.clone());
         if let Some(harbor) = &spec.harbor {
             checkout.harbor.clone_from(harbor);
@@ -103,7 +103,7 @@ impl PracticeRollouts {
             .map(|p| {
                 std::fs::read(p)
                     .map(|bytes| crate::bench::artifact::sha256_hex(&bytes))
-                    .map_err(|e| CampaignError::Config(format!("{}: {e}", p.display())))
+                    .map_err(|e| ServedError::Config(format!("{}: {e}", p.display())))
             })
             .transpose()?;
         Ok(Self {
@@ -174,7 +174,7 @@ impl Rollouts for PracticeRollouts {
         })
     }
 
-    fn tasks(&self) -> Result<Vec<String>, CampaignError> {
+    fn tasks(&self) -> Result<Vec<String>, ServedError> {
         Ok(self
             .practice
             .manifest
@@ -184,11 +184,11 @@ impl Rollouts for PracticeRollouts {
             .collect())
     }
 
-    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
+    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, ServedError> {
         Ok(self.practice.capabilities())
     }
 
-    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, CampaignError> {
+    fn facts(&self) -> Result<BTreeMap<String, TaskFacts>, ServedError> {
         Ok(self
             .practice
             .task_facts()
@@ -206,7 +206,7 @@ impl Rollouts for PracticeRollouts {
         ctx: &Context,
         request: &RolloutRequest<'_>,
         cancel: &CancelToken,
-    ) -> Result<Rolled, CampaignError> {
+    ) -> Result<Rolled, ServedError> {
         let export = request.dir.join("export");
         // A rollout starts over: what an interrupted attempt linked is replaced.
         let _ = std::fs::remove_dir_all(&export);
@@ -220,10 +220,7 @@ impl Rollouts for PracticeRollouts {
         let mut counted = Vec::new();
         for (report, labels) in &runs {
             merge_export(&report.dir.join("export"), &export).map_err(|e| {
-                CampaignError::Collector(format!(
-                    "linking the export into {}: {e}",
-                    export.display()
-                ))
+                ServedError::Collector(format!("linking the export into {}: {e}", export.display()))
             })?;
             let classes: BTreeMap<String, _> = diagnose_dirs(std::slice::from_ref(&report.dir))
                 .attempts
@@ -262,7 +259,7 @@ impl PracticeRollouts {
         practice: &Practice,
         tasks: Option<&[String]>,
         cancel: &CancelToken,
-    ) -> Result<(PracticeReport, BTreeMap<String, Vec<String>>), CampaignError> {
+    ) -> Result<(PracticeReport, BTreeMap<String, Vec<String>>), ServedError> {
         let policy = request.champion.reference()?;
         let report = run_practice(
             ctx,
@@ -283,8 +280,8 @@ impl PracticeRollouts {
             },
         )
         .map_err(|e| match e {
-            crate::episodes::EpisodeError::Cancelled => CampaignError::Cancelled,
-            other => CampaignError::Collector(other.to_string()),
+            crate::episodes::EpisodeError::Cancelled => ServedError::Cancelled,
+            other => ServedError::Collector(other.to_string()),
         })?;
         Ok((report, practice.capabilities()))
     }
@@ -292,7 +289,7 @@ impl PracticeRollouts {
     /// The transfer exercises of `transfer`, drawn from the material's
     /// collection into `<dir>/transfer` (the draw already there when a
     /// resumed rollout made it).
-    fn draw(&self, transfer: &TransferRequest<'_>, dir: &Path) -> Result<Practice, CampaignError> {
+    fn draw(&self, transfer: &TransferRequest<'_>, dir: &Path) -> Result<Practice, ServedError> {
         let out = dir.join("transfer");
         let drawn = out.join(self.practice.staged_name());
         if let Ok(practice) = Practice::read(&drawn) {
@@ -315,8 +312,8 @@ impl PracticeRollouts {
                 &out,
                 &dir.join("transfer.log"),
             )
-            .map_err(CampaignError::Collector)?;
-        Practice::read(&written).map_err(|e| CampaignError::Collector(e.to_string()))
+            .map_err(ServedError::Collector)?;
+        Practice::read(&written).map_err(|e| ServedError::Collector(e.to_string()))
     }
 }
 

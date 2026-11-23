@@ -34,7 +34,7 @@ use serde_json::{json, Value};
 use splinter_core::chat::WireMessage;
 
 use super::types::{
-    CampaignError, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup, RolloutTrace,
+    CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup, RolloutTrace, ServedError,
 };
 
 /// One episode the executor ran.
@@ -71,7 +71,7 @@ pub trait EpisodeExecutor {
     ///
     /// # Errors
     /// The endpoint cannot serve the policy.
-    fn serve(&mut self, policy: &PolicyRef) -> Result<(), CampaignError>;
+    fn serve(&mut self, policy: &PolicyRef) -> Result<(), ServedError>;
     /// Runs `attempts` episodes of each task, drawing under `seed`.
     ///
     /// # Errors
@@ -82,7 +82,7 @@ pub trait EpisodeExecutor {
         tasks: &[String],
         attempts: usize,
         seed: u64,
-    ) -> Result<Vec<Episode>, CampaignError>;
+    ) -> Result<Vec<Episode>, ServedError>;
 }
 
 /// Rollout groups from an [`EpisodeExecutor`].
@@ -107,11 +107,11 @@ impl<E: EpisodeExecutor> RolloutCollector for EpisodeCollector<E> {
         self.executor.tasks()
     }
 
-    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), ServedError> {
         self.executor.serve(policy)
     }
 
-    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError> {
+    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, ServedError> {
         let episodes = self
             .executor
             .run(&request.tasks, request.attempts, request.seed)?;
@@ -128,7 +128,7 @@ impl<E: EpisodeExecutor> RolloutCollector for EpisodeCollector<E> {
                 continue;
             };
             let Some(group) = groups.iter_mut().find(|g| g.task == episode.task) else {
-                return Err(CampaignError::Collector(format!(
+                return Err(ServedError::Collector(format!(
                     "the executor returned an episode of {:?}, which was not asked for",
                     episode.task
                 )));
@@ -151,7 +151,7 @@ impl<E: EpisodeExecutor> RolloutCollector for EpisodeCollector<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::campaign::types::TraceSequence;
+    use crate::served::types::TraceSequence;
 
     struct Scripted {
         episodes: Vec<Episode>,
@@ -165,7 +165,7 @@ mod tests {
         fn tasks(&self) -> Vec<String> {
             vec!["a".into(), "b".into()]
         }
-        fn serve(&mut self, policy: &PolicyRef) -> Result<(), CampaignError> {
+        fn serve(&mut self, policy: &PolicyRef) -> Result<(), ServedError> {
             self.served.push(policy.version);
             Ok(())
         }
@@ -174,7 +174,7 @@ mod tests {
             _tasks: &[String],
             _attempts: usize,
             _seed: u64,
-        ) -> Result<Vec<Episode>, CampaignError> {
+        ) -> Result<Vec<Episode>, ServedError> {
             Ok(self.episodes.clone())
         }
     }

@@ -24,9 +24,10 @@ use splinter_agent::CancelToken;
 use splinter_core::outcome::FailureClass;
 use splinter_orchestrator::Context;
 use splinter_pipelines::campaign::{
-    CampaignController, CampaignError, Parts, Rolled, RolloutCurriculum, RolloutRequest, Rollouts,
-    TransferSpec, Trial,
+    CampaignController, Parts, Rolled, RolloutCurriculum, RolloutRequest, Rollouts, TransferSpec,
+    Trial,
 };
+use splinter_pipelines::served::ServedError;
 use splinter_store::stage_ledger::Commit;
 
 use super::world::{Dying, Exam, Rig, Ticks, GOOD};
@@ -70,11 +71,11 @@ impl Rollouts for Labelled {
         json!({"practice": "labelled", "tasks": TASKS})
     }
 
-    fn tasks(&self) -> Result<Vec<String>, CampaignError> {
+    fn tasks(&self) -> Result<Vec<String>, ServedError> {
         Ok(TASKS.iter().map(|(t, _)| (*t).to_string()).collect())
     }
 
-    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, CampaignError> {
+    fn capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, ServedError> {
         Ok(TASKS
             .iter()
             .map(|(t, c)| ((*t).to_string(), vec![(*c).to_string()]))
@@ -86,7 +87,7 @@ impl Rollouts for Labelled {
         _ctx: &Context,
         request: &RolloutRequest<'_>,
         _cancel: &CancelToken,
-    ) -> Result<Rolled, CampaignError> {
+    ) -> Result<Rolled, ServedError> {
         let transfer = request.transfer.map(|t| (t.capabilities.to_vec(), t.count));
         self.asked.borrow_mut().push(Asked {
             tasks: request.tasks.to_vec(),

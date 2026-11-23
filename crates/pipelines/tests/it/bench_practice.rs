@@ -496,7 +496,7 @@ fn a_run_of_some_tasks_names_them_to_harbor_over_the_staged_tasks_and_is_its_own
 #[test]
 fn as_a_campaigns_executor_each_trial_is_an_episode_and_only_a_graded_one_has_a_reward() {
     use splinter_pipelines::bench::practice::BenchPractice;
-    use splinter_pipelines::campaign::endpoint::EpisodeExecutor;
+    use splinter_pipelines::served::endpoint::EpisodeExecutor;
 
     let (scratch, ctx, policy) = served("practice-executor");
     let dir = practice_dir(&scratch.0, "train");

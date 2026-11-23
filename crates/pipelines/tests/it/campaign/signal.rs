@@ -23,9 +23,9 @@ use serde_json::{json, Value};
 use splinter_agent::CancelToken;
 use splinter_orchestrator::Context;
 use splinter_pipelines::campaign::{
-    CampaignController, CampaignError, Parts, Rolled, RolloutCurriculum, RolloutRequest, Rollouts,
-    Trial,
+    CampaignController, Parts, Rolled, RolloutCurriculum, RolloutRequest, Rollouts, Trial,
 };
+use splinter_pipelines::served::ServedError;
 
 use super::world::{Dying, Exam, Rig, Ticks, GOOD};
 use crate::common::bench::{export, Trial as BenchTrial};
@@ -43,7 +43,7 @@ impl Rollouts for Costed {
         json!({"practice": "costed", "tasks": TASKS})
     }
 
-    fn tasks(&self) -> Result<Vec<String>, CampaignError> {
+    fn tasks(&self) -> Result<Vec<String>, ServedError> {
         Ok(TASKS.iter().map(|t| (*t).to_string()).collect())
     }
 
@@ -52,7 +52,7 @@ impl Rollouts for Costed {
         _ctx: &Context,
         request: &RolloutRequest<'_>,
         _cancel: &CancelToken,
-    ) -> Result<Rolled, CampaignError> {
+    ) -> Result<Rolled, ServedError> {
         self.asked.borrow_mut().push(request.tasks.to_vec());
         let mut trials = Vec::new();
         let mut bench = Vec::new();

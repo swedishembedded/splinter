@@ -11,8 +11,7 @@
 //! collector, a trainer and a validator are, and the plain data that crosses
 //! them (rollout groups with the sampler's own token ids and
 //! log-probabilities). Samples and the episode executors are built on them;
-//! the campaign controller's own seams are [`super::work`]. The campaign's
-//! error, [`CampaignError`], is shared by both.
+//! the error, [`ServedError`], is shared by all of them.
 
 use std::path::PathBuf;
 
@@ -26,7 +25,7 @@ use splinter_eval::campaign::sampling::{Attempt, Group};
 
 /// Why a campaign operation failed.
 #[derive(Debug, thiserror::Error)]
-pub enum CampaignError {
+pub enum ServedError {
     /// The configuration cannot run a campaign.
     #[error("invalid campaign configuration: {0}")]
     Config(String),
@@ -170,13 +169,13 @@ pub trait RolloutCollector {
     ///
     /// # Errors
     /// The policy cannot be served.
-    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), CampaignError>;
+    fn set_policy(&mut self, policy: &PolicyRef) -> Result<(), ServedError>;
     /// A group per task of the request, under the policy it names. A task the
     /// collector cannot attempt is an error, not an empty group.
     ///
     /// # Errors
     /// The attempts could not be made or graded.
-    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, CampaignError>;
+    fn collect(&mut self, request: &CollectRequest) -> Result<Vec<RolloutGroup>, ServedError>;
 }
 
 /// What the trainer is asked for.
@@ -240,7 +239,7 @@ pub trait Trainer {
     ///
     /// # Errors
     /// The training failed; nothing was adopted.
-    fn train(&mut self, request: &TrainRequest) -> Result<Trained, CampaignError>;
+    fn train(&mut self, request: &TrainRequest) -> Result<Trained, ServedError>;
 }
 
 /// The dev-validation exam.
@@ -263,16 +262,13 @@ pub trait Validator {
     ///
     /// # Errors
     /// The policy could not be attempted or graded.
-    fn validate_on(
-        &mut self,
-        policy: &PolicyRef,
-        dev: &[String],
-    ) -> Result<DevResult, CampaignError>;
+    fn validate_on(&mut self, policy: &PolicyRef, dev: &[String])
+        -> Result<DevResult, ServedError>;
     /// [`Self::validate_on`] every dev task: what the greedy gate compares.
     ///
     /// # Errors
     /// The policy could not be attempted or graded.
-    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, CampaignError> {
+    fn validate(&mut self, policy: &PolicyRef) -> Result<DevResult, ServedError> {
         let dev = self.dev_tasks();
         self.validate_on(policy, &dev)
     }
@@ -285,11 +281,11 @@ pub trait AllFailHandler {
     ///
     /// # Errors
     /// The teacher could not be asked.
-    fn teach(&mut self, groups: &[&RolloutGroup]) -> Result<Vec<Record>, CampaignError>;
+    fn teach(&mut self, groups: &[&RolloutGroup]) -> Result<Vec<Record>, ServedError>;
     /// Easier tasks the policy might solve, split from the failed ones; they
     /// join the pool.
     ///
     /// # Errors
     /// The decomposition could not be made.
-    fn decompose(&mut self, groups: &[&RolloutGroup]) -> Result<Vec<String>, CampaignError>;
+    fn decompose(&mut self, groups: &[&RolloutGroup]) -> Result<Vec<String>, ServedError>;
 }

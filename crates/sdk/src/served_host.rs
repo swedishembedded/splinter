@@ -26,8 +26,8 @@ use splinter_core::digest::Digest;
 use splinter_model::served_train::ArtifactStore;
 use splinter_model::BrainEndpoints;
 use splinter_pipelines::brain_server::{self, Failure, Launch, Offer, Started};
-use splinter_pipelines::campaign::served::PolicyModels;
-use splinter_pipelines::campaign::{CampaignError, PolicyRef};
+use splinter_pipelines::served::PolicyModels;
+use splinter_pipelines::served::{PolicyRef, ServedError};
 use splinter_store::StateRoot;
 
 use crate::{Config, Context, Splinter};
@@ -168,8 +168,8 @@ struct Running {
 /// to follow its directory.
 const ADOPT_WAIT: Duration = Duration::from_secs(180);
 
-fn failed(what: &str) -> impl Fn(String) -> CampaignError + '_ {
-    move |why| CampaignError::Config(format!("{what}: {why}"))
+fn failed(what: &str) -> impl Fn(String) -> ServedError + '_ {
+    move |why| ServedError::Config(format!("{what}: {why}"))
 }
 
 /// The server of an experiment; see the module documentation.
@@ -192,7 +192,7 @@ impl ServedHost {
         }
     }
 
-    fn handle(&self, endpoints: &BrainEndpoints, asked: Asked) -> Result<Splinter, CampaignError> {
+    fn handle(&self, endpoints: &BrainEndpoints, asked: Asked) -> Result<Splinter, ServedError> {
         self.handle_in(endpoints, asked, &self.settings.runtime_dirs)
     }
 
@@ -201,7 +201,7 @@ impl ServedHost {
         endpoints: &BrainEndpoints,
         asked: Asked,
         runtime_dirs: &[PathBuf],
-    ) -> Result<Splinter, CampaignError> {
+    ) -> Result<Splinter, ServedError> {
         let s = &self.settings;
         let absolute = |p: &PathBuf| {
             std::path::absolute(p)
@@ -231,7 +231,7 @@ impl ServedHost {
             .map_err(|e| failed("starting a Splinter handle on the server")(e.to_string()))
     }
 
-    fn launch(&self) -> Result<Running, CampaignError> {
+    fn launch(&self) -> Result<Running, ServedError> {
         let s = &self.settings;
         for dir in [&s.work, &s.store, &s.adapters] {
             std::fs::create_dir_all(dir).map_err(|e| {
@@ -275,7 +275,7 @@ impl ServedHost {
         })
     }
 
-    fn running(&self) -> Result<Arc<Running>, CampaignError> {
+    fn running(&self) -> Result<Arc<Running>, ServedError> {
         let mut running = self
             .running
             .lock()
@@ -293,14 +293,14 @@ impl ServedHost {
     ///
     /// # Errors
     /// The server does not start.
-    pub fn endpoints(&self) -> Result<BrainEndpoints, CampaignError> {
+    pub fn endpoints(&self) -> Result<BrainEndpoints, ServedError> {
         Ok(self.running()?.endpoints.clone())
     }
 
     /// Makes `policy` servable: its adapter, when it has one, is offered to
     /// the server's directory and waited for until the server lists it under
     /// the digest of the file.
-    fn adopt(&self, running: &Running, policy: &PolicyRef) -> Result<(), CampaignError> {
+    fn adopt(&self, running: &Running, policy: &PolicyRef) -> Result<(), ServedError> {
         let Some(adapter) = &policy.adapter else {
             return Ok(());
         };
@@ -345,7 +345,7 @@ impl ServedHost {
     ///
     /// # Errors
     /// The server does not start or does not list the policy's adapter.
-    pub fn context(&self, policy: &PolicyRef) -> Result<Context, CampaignError> {
+    pub fn context(&self, policy: &PolicyRef) -> Result<Context, ServedError> {
         let running = self.running()?;
         self.adopt(&running, policy)?;
         Ok(running.sampled.context())
@@ -362,7 +362,7 @@ impl ServedHost {
         &self,
         policy: &PolicyRef,
         runtime_dirs: &[PathBuf],
-    ) -> Result<Context, CampaignError> {
+    ) -> Result<Context, ServedError> {
         let running = self.running()?;
         self.adopt(&running, policy)?;
         let mut scoped = self
@@ -393,7 +393,7 @@ impl ServedHost {
         &self,
         policy: &PolicyRef,
         handle: impl FnOnce(&Running) -> &Splinter,
-    ) -> Result<Model, CampaignError> {
+    ) -> Result<Model, ServedError> {
         let running = self.running()?;
         self.adopt(&running, policy)?;
         let ctx = handle(&running).context();
@@ -403,7 +403,7 @@ impl ServedHost {
             policy.adapter.as_deref(),
         );
         ctx.model(&reference)
-            .map_err(|e| CampaignError::Collector(format!("{e}")))
+            .map_err(|e| ServedError::Collector(format!("{e}")))
     }
 
     /// The model that answers as `policy` does, sampling at the host's
@@ -411,13 +411,13 @@ impl ServedHost {
     ///
     /// # Errors
     /// The policy cannot be served.
-    pub fn predicting(&self, policy: &PolicyRef) -> Result<Model, CampaignError> {
+    pub fn predicting(&self, policy: &PolicyRef) -> Result<Model, ServedError> {
         self.model_on(policy, |running| &running.predicting)
     }
 }
 
 impl PolicyModels for ServedHost {
-    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, CampaignError> {
+    fn model(&self, policy: &PolicyRef, greedy: bool) -> Result<Model, ServedError> {
         self.model_on(policy, |running| {
             if greedy {
                 &running.greedy
