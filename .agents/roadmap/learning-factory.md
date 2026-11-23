@@ -73,7 +73,7 @@ recovery and protected eval.
 | M6 | Dataset from trial collections: `native-sft` first, `portable-sft` second, admission split from curation, `supervision.jsonl` lineage and the exclusion waterfall | a training dataset built with no experience import | done: native-sft (a live Sven 5.9 trial is a fixture) and portable-sft (rebuilt from the ATIF trajectory) |
 | M7 | Training variants through brain's job API, candidate identity, resume, automatic serving and a load check before a candidate counts | an interrupted variant resumes; a completed one is reused | done: `Trainer` seam, `BrainTrainer` against a scripted brain service (resume key, served adapter, refused parameters). Live (2026-11-23): a real brain on CPU trained Qwen3-0.6B LoRA r4 from two hosted-Sven trials, served the adapter, and the candidate was evaluated. `splinter index RUN` files a run's trials in the experience database as an optional index |
 | M8 | `splinter eval`: development and protected plans, the existing examination, verdict and signing logic behind its own authority | base and candidates evaluated under the same conditions | development plans done (shared baseline, paired sign test, alpha split among candidates); protected plans done: the task repository's examiner (`bench examine`, its sealed tasks never leave it) examines the candidate, and its signed verdict counts only when the promotion gate's check passes |
-| M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | partial: see Open |
+| M9 | Retire the duplicate controllers (`learn`, `practice`, `generations`, `campaign` as separate lifecycles; the task repository's run/adopt/export/profile path), fault-injection suite | every test in the plan's section 19 passes | done within the scope decided 2026-11-23: `campaign` and `generation` are forked recipe runs held to a `champion:` model; hinted repair is a `hint:` rollout pass; Splinter's Bench practice and repair drivers and the task repository's run, stage, adopt, play, replay, gateway, export, unpack, practice and session commands are gone; section 19 below |
 
 ## Decisions
 
@@ -96,6 +96,10 @@ recovery and protected eval.
 - 2026-11-22: YAML for every factory file (recipes, connections, environments,
   agent presets, eval plans); a TOML file the factory reads is converted.
 - 2026-11-22: commits stay local; nothing is pushed.
+- 2026-11-23: M9 retires the flows that run on task-repository material
+  (`campaign`, `generation`, the Bench practice and repair drivers); `learn`,
+  `practice` (a repository's tests), `corrections` and `absorb` build their tasks
+  from documents, repositories and sessions and stay outside the factory.
 
 ## Design
 
@@ -143,20 +147,17 @@ and classified as a model error.
 
 ## Open
 
-- **Retirement (M9).** The task repository's run, stage, adopt, task play and task
-  replay commands are retired. Its `gateway serve`, `export`, `unpack`,
-  `task practice` and `task session` stay: Splinter's practice, campaign and hinted
-  repair drivers (`crates/pipelines/src/bench/practice`, `bench/repair`,
-  `campaign/`) still run them as subprocesses, and those flows (multi-generation
-  campaigns, hinted repair, the request-based views beyond native-sft) have no
-  factory equivalent yet, so under the parity rule they are not deleted. Next:
-  re-express campaigns as forks of recipe runs and hinted repair as a pass mode,
-  then delete the drivers and the commands they need.
-- **Live end-to-end with a real model and brain** (the decision of 2026-11-22).
-  Done on CPU (2026-11-23): Sven on a hosted model solved 2 of 2 vim tasks under
-  proot; native-sft made 2 records; brain trained a LoRA r4 of Qwen3-0.6B (fp32
-  base); the development eval ran baseline and candidate under Sven and decided
-  NotImproved (1 pair, p = 1.0); the forked run reused rollouts and dataset and
-  `splinter verify` passed. Still open: the full `recipes/vim-mastery.yaml` on a
-  GPU host. The sven trajectory fixes this needed (a reply's reasoning ordering,
-  the SDK export carrying reasoning) are in sven.
+- **Full GPU run** of `recipes/vim-mastery.yaml` (or the campaign recipes) on
+  Qwen3-4B: this host has no GPU; the CPU run on Qwen3-0.6B is the evidence.
+- **Not ported from the retired repair drivers:** fork corrections from a
+  student's last good step, knowledge-backed corrections, decomposition into
+  subgoals, and the hinted retry's opt-in sufficiency run and re-grading. The
+  hinted pass carries the default rationalisation (hint shown, learned without it,
+  quoting excluded). A campaign's frontier is a pass's `unsolved_by`, not a
+  pass-rate threshold over earlier generations.
+- **Hosted endpoint and Claude Code:** the hosted endpoint rejects Claude Code's
+  `anthropic-beta` header, so a real Claude Code trial there is a model error (as
+  classified); the endpoint, not Splinter, would have to accept or drop it.
+- **`ReplayPolicy::{FailureTargeted, LearningProgress}`** in `splinter-data` are
+  unreachable from the CLI since `generation run` went; kept so recorded ledgers
+  still read.
