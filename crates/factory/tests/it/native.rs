@@ -69,3 +69,40 @@ fn calls_that_are_not_the_trajectorys_are_refused_rather_than_guessed() {
     calls.pop();
     assert!(native_record(&trajectory, &calls).is_err());
 }
+
+#[test]
+fn a_trial_whose_runtime_files_each_requests_tokens_as_a_step_of_its_own_projects_every_action() {
+    // Sven 5.9 files a request's token account as an agent step that says,
+    // reasons and calls nothing, beside the step of the reply: three model
+    // calls, five agent steps. The empty steps are no actions.
+    let read = |name: &str| {
+        std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/it/fixtures/sven-5.9-trial")
+                .join(name),
+        )
+        .unwrap()
+    };
+    let trajectory: atif::Trajectory =
+        serde_json::from_slice(&read("agent/trajectory.json")).unwrap();
+    let calls: Vec<_> = read_request_log(&read("agent/requests.jsonl"))
+        .unwrap()
+        .into_iter()
+        .filter_map(|r| r.call)
+        .collect();
+    assert_eq!(calls.len(), 3);
+    assert_eq!(
+        trajectory
+            .steps
+            .iter()
+            .filter(|s| s.source == atif::StepOrigin::Agent)
+            .count(),
+        5
+    );
+    let native = native_record(&trajectory, &calls).expect("the trial projects");
+    assert_eq!(native.actions, 3);
+    let RecordBody::Chat { messages, .. } = &native.record else {
+        panic!("a chat record")
+    };
+    assert_eq!(messages.iter().filter(|m| m.train).count(), 3);
+}

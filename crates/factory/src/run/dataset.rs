@@ -56,8 +56,6 @@ pub const DATASET_FILE: &str = "dataset.json";
 pub const PROJECTIONS: &[&str] = &["native-sft"];
 /// The admission rules the stage implements.
 pub const ADMISSIONS: &[&str] = &["verified-success"];
-/// The model role whose calls are the policy's.
-pub const POLICY_ROLE: &str = "main";
 /// The agent's request log in a trial directory.
 pub const CALL_LOG: &str = "agent/requests.jsonl";
 /// The agent's ATIF trajectory in a trial directory.
@@ -154,7 +152,7 @@ pub(crate) fn identity(
     let parameters = json!({
         "objective": dataset.objective, "admission": dataset.admission, "projection": dataset.projection,
         "target": dataset.target, "max_block": dataset.max_block, "validation": dataset.validation,
-        "policy_role": POLICY_ROLE,
+        "policy_role": "first-request",
     });
     Ok(super::identity_of(
         StageKind::Dataset,
@@ -181,9 +179,13 @@ fn project(
     let trajectory: atif::Trajectory =
         serde_json::from_slice(&trace).map_err(|e| ("invalid_trace".to_owned(), e.to_string()))?;
     let logged = read_request_log(&log).map_err(|e| ("calls_unreadable".to_owned(), e))?;
+    // The policy's calls are those made for the role of the agent's own
+    // loop: its first request's. Another role's (an advisor, a delegated
+    // model) are never the policy's actions.
+    let role = logged.first().and_then(|r| r.role.clone());
     let policy: Vec<_> = logged
         .iter()
-        .filter(|r| r.role.as_deref().unwrap_or(POLICY_ROLE) == POLICY_ROLE)
+        .filter(|r| r.role == role)
         .filter_map(|r| r.call.clone())
         .collect();
     let native = native_record(&trajectory, &policy)
