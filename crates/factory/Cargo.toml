@@ -16,8 +16,10 @@ splinter-core = { workspace = true }
 splinter-data = { workspace = true }
 splinter-eval = { workspace = true }
 splinter-model = { workspace = true }
+splinter-sandbox = { workspace = true }
 splinter-store = { workspace = true }
 
+jsonschema = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }

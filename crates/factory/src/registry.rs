@@ -42,6 +42,11 @@ pub trait OperationSpec: Send + Sync {
     fn check_files(&self, _params: &Value, _files: &BTreeMap<String, String>) -> Vec<String> {
         Vec::new()
     }
+    /// What the lock pins of it beside the files its parameters name: an
+    /// external operator's file and code, by one key and digest.
+    fn pinned(&self) -> Option<(String, splinter_core::digest::Digest)> {
+        None
+    }
     /// Its implementation, when the controller runs it as a plain
     /// computation ([`Execute`]); only such an operation runs once per item.
     fn executor(&self) -> Option<&dyn Execute> {

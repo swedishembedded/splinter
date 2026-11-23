@@ -251,6 +251,36 @@ as an attempt stage's `harness:`.
     with: { harness: harnesses/summary.yaml, model: writer }
 ```
 
+## The task repository's own operators
+
+A task repository may add operations of its own: a program it ships, declared
+in `operators/NAME.yaml` (`splinter.operator/v1`) and used by name in its
+recipes like a built-in one.
+
+```yaml
+schema: splinter.operator/v1
+name: text.upper
+revision: 1
+summary: a text file upper-cased
+inputs: [{ name: text, kind: files, many: false, optional: false }]
+output: { name: upper, kind: files, many: false, optional: false }
+parameters: { type: object, properties: { suffix: { type: string } },
+              additionalProperties: false }
+reproducibility: deterministic
+command: [./bin/upper.sh]
+code: [bin/upper.sh]
+```
+
+Splinter runs the command with `--request FILE`, a `splinter.operator-request/1`
+naming its `params`, its `inputs` (each port's paths), the directory `out` it
+writes its product into, and the `repository`. It runs in the process sandbox:
+it reads its inputs, the request and the repository, writes only `out`, and
+reaches the network only with `network: true`, within `timeout_seconds`. It
+exits 0 having written its product, 3 to reject its input (the reason on its
+last line of output), anything else when it failed. Its parameters are checked
+against `parameters` before anything runs, and `code` is pinned: a changed
+program is a changed input, which a run refuses and a fork recomputes.
+
 ## What each stage guarantees
 
 - **Attempts** (`attempt.collect`). Every attempt is graded by the one outcome classifier: a reward-0

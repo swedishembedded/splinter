@@ -39,6 +39,7 @@ mod describe;
 pub mod environment;
 pub mod eval_plan;
 pub mod execute;
+pub mod external_op;
 pub mod failures_op;
 pub mod graph;
 pub mod harness_op;

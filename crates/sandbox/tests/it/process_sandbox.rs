@@ -250,3 +250,37 @@ fn a_command_runs_with_the_process_view_the_host_allows_and_says_which() {
     assert!(!strict.spec().host_proc_visible);
     assert_eq!(strict.run_command(&tree, &call).is_ok(), private);
 }
+
+/// A command reads the paths it is granted read-only, and nothing else
+/// outside its tree; it cannot write to a granted path.
+#[test]
+fn a_command_reads_the_paths_it_is_granted_and_writes_none_of_them() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let scratch = Scratch::new("granted-reads");
+    let tree = scratch.0.join("tree");
+    let granted = scratch.0.join("granted");
+    let other = scratch.0.join("other");
+    for dir in [&tree, &granted, &other] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    std::fs::write(granted.join("in.txt"), "granted").unwrap();
+    std::fs::write(other.join("in.txt"), "other").unwrap();
+    let sandbox = ProcessSandbox::new(&scratch.0, caller_env(), &[], Limits::default())
+        .read_only(vec![granted.clone()]);
+    let run = |script: String| {
+        let call = splinter_sandbox::CommandCall {
+            argv: vec!["sh".into(), "-c".into(), script],
+            stdin: None,
+        };
+        sandbox.run_command(&tree, &call).unwrap()
+    };
+    let read = run(format!("cat {}", granted.join("in.txt").display()));
+    assert_eq!(read.stdout, "granted", "{read:?}");
+    let refused = run(format!("cat {}", other.join("in.txt").display()));
+    assert_ne!(refused.exit_code, Some(0), "{refused:?}");
+    let written = run(format!("echo x > {}", granted.join("out.txt").display()));
+    assert_ne!(written.exit_code, Some(0), "{written:?}");
+    assert!(!granted.join("out.txt").exists());
+}

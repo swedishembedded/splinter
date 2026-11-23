@@ -204,7 +204,9 @@ pub fn resolve(
     recipe_text: &str,
     connections: Connections,
 ) -> Result<Resolved, RecipeError> {
-    resolve_with(repository, recipe_text, connections, ops::registry())
+    let registry =
+        crate::external_op::with_operators(ops::registry(), repository).map_err(RecipeError)?;
+    resolve_with(repository, recipe_text, connections, registry)
 }
 
 /// [`resolve`] against the operations of `registry` (the built-in ones and
@@ -255,6 +257,9 @@ pub fn resolve_with(
     for stage in &plan.stages {
         check(stage, &compiled, &mut reader, &mut found);
         if let Some(operation) = registry.get(&stage.operation) {
+            if let Some((key, digest)) = operation.pinned() {
+                reader.files.insert(key, digest);
+            }
             let mut named = BTreeMap::new();
             for path in operation.files(&stage.params) {
                 if let Some(text) = reader.read(&path) {

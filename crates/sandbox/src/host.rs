@@ -119,6 +119,8 @@ pub struct ProcessSandbox {
     host_proc: bool,
     require_private_proc: bool,
     landlock: bool,
+    /// Paths every command may read, beside the system and its tree.
+    read_only: Vec<PathBuf>,
 }
 
 impl ProcessSandbox {
@@ -163,6 +165,7 @@ impl ProcessSandbox {
             host_proc: false,
             require_private_proc: false,
             landlock: crate::landlock::abi_version().is_some(),
+            read_only: Vec::new(),
         }
     }
 
@@ -218,6 +221,14 @@ impl ProcessSandbox {
         !self.host_proc && (self.require_private_proc || crate::namespace::available())
     }
 
+    /// Lets every command read `paths` (and what is below them), never
+    /// write them: the inputs and the code of a program the caller runs.
+    #[must_use]
+    pub fn read_only(mut self, paths: Vec<PathBuf>) -> Self {
+        self.read_only = paths;
+        self
+    }
+
     /// Lets commands use the network. Off by default: a command cannot
     /// connect anywhere (a brain server on the loopback included) and a
     /// kernel that cannot deny the network refuses to run it. The
@@ -243,6 +254,7 @@ impl ProcessSandbox {
     /// other tree, no state root.
     fn command_confinement(&self, tree: &Path, home: &Path) -> Confinement {
         let mut read_only: Vec<PathBuf> = SYSTEM_ROOTS.iter().map(PathBuf::from).collect();
+        read_only.extend(self.read_only.iter().cloned());
         for entry in self.search_path().split(':').filter(|e| !e.is_empty()) {
             read_only.extend(toolchain_root(Path::new(entry)));
             read_only.extend(toolchain_root(
