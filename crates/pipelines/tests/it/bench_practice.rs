@@ -527,61 +527,6 @@ fn as_a_campaigns_executor_each_trial_is_an_episode_and_only_a_graded_one_has_a_
         .contains("Repair the firmware"));
 }
 
-#[test]
-fn as_a_campaigns_rollouts_the_tokens_are_summed_from_each_trials_usage_so_a_token_budget_binds() {
-    use splinter_pipelines::campaign::practice::{PracticeRollouts, PracticeSpec};
-    use splinter_pipelines::campaign::{Model, RolloutRequest, Rollouts};
-
-    let (scratch, ctx, policy) = served("practice-rollout-tokens");
-    let dir = practice_dir(&scratch.0, "train");
-    let checkout = checkout(
-        &scratch.0,
-        &graded_export(&scratch.0),
-        &dir.join("practice.json"),
-    );
-    let mut rollouts = PracticeRollouts::new(&PracticeSpec {
-        dir: dir.clone(),
-        bench: checkout.dir.clone(),
-        harbor: Some(checkout.harbor.clone()),
-        sven_build: checkout.sven_build.clone(),
-        profile: None,
-        jobs: 2,
-        rung: None,
-        families: Vec::new(),
-    })
-    .unwrap();
-    let champion = Model {
-        generation: 0,
-        model: policy.to_string(),
-        candidate: None,
-        adapter: None,
-    };
-    let stage = scratch.0.join("rollout");
-    fs::create_dir_all(&stage).unwrap();
-    let tasks: Vec<String> = ["alpha", "beta", "gamma"].map(String::from).to_vec();
-    let rolled = rollouts
-        .rollout(
-            &ctx,
-            &RolloutRequest {
-                generation: 1,
-                champion: &champion,
-                tasks: &tasks,
-                attempts: 1,
-                // seed: the scripted examiner ignores it; any seed names a job.
-                seed: 3,
-                transfer: None,
-                dir: &stage,
-            },
-            &CancelToken::new(),
-        )
-        .unwrap();
-    // alpha and beta were graded, each 10 prompt and 5 completion tokens by
-    // its score record; gamma never reached the model and spent nothing
-    // counted.
-    assert_eq!(rolled.tokens, Some(30));
-    assert_eq!(rolled.trials.len(), 3);
-}
-
 /// A two-page reference-knowledge collection in `root/knowledge` (with a
 /// `.git` the examiner leaves out), and its digest as the examiner documents
 /// it: sha256 over `<relative path>\0<sha256 of the file>\n` per file in

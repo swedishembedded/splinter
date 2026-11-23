@@ -41,8 +41,8 @@ and starts nothing twice. What each call returns is the durable job record
 
 - **The commands**, one module each, with their requests and reports: `learn`, `practice`, `ask`, `sources`,
   `sessions`, `claims`, `absorb`, `tasks`, `timeline`, `solving`, `verify`, `critique`, `datasets`, `train`,
-  `release`, `eval`, `lineage`, `status`, `doctor`, `state`, `router`, `campaign` (the continuous campaign
-  controller) and the rest. `absorb::consolidate` takes a
+  `release`, `eval`, `lineage`, `status`, `doctor`, `state`, `router`, `served` (rollouts over a served
+  policy) and the rest. `absorb::consolidate` takes a
   generation of a policy's claims into the weights.
 - **What a command works with:** `Config`, `Context`, `Runtime`, the roles (`roles`), the recorded run (`runs`) and the pipeline
   engine (`pipeline`) a new pipeline is defined on.

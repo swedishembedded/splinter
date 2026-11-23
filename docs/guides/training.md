@@ -95,7 +95,7 @@ policy by a KL of 0.002 and clipped about 1% of its tokens, which teaches nothin
 aims for a mean KL to the reference of 0.02-0.05 and a clip fraction of 0.10-0.20, and the
 candidate records where its run came out against both (`recipe`, printed as one line:
 `below`, `within` or `above`). Every flag named beside it wins. It is refused for any other
-regime. A campaign names it as `[train] recipe = "on-policy-rl"`.
+regime.
 
 The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
 importance ratio of each step, and the candidate is released through the same gate as any

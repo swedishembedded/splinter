@@ -8,8 +8,7 @@
 > candidates. What the examiner publishes *for* a learner is its practice material, the train side of a collection
 > staged as a Harbor job (`bench task practice`); [Practice material](#practice-material-the-examiners-staged-train-side)
 > below runs it under a policy and admits the graded trials through the same intake. The other source of training
-> episodes is sven's training executor (see [A continuous campaign, and where its rollouts come
-> from](../concepts/learning-loop.md#a-continuous-campaign-and-where-its-rollouts-come-from)). Ingesting a benchmark
+> episodes is sven's training executor (see [Rollouts over a served policy](../concepts/learning-loop.md#rollouts-over-a-served-policy)). Ingesting a benchmark
 > run's export stays for the recorded arms and for exports that cannot be regenerated.
 
 A benchmark that runs an agent on tasks it grades itself can feed Splinter's
@@ -164,9 +163,9 @@ Every trial is diagnosed (above). A pass is a graded pass; a failure the diagnos
 task is ungraded and never a `0`; every other failure is a graded fail with its class. Per policy (a practice run's
 report names it: `<model>+<adapter>`; `--policy` names it for a bare export) and capability the report gives the tasks,
 graded attempts and passes, the pass rate with its 95% Wilson interval, the ungraded attempts, the tasks in each band
-(frontier, never solved, retired, unmeasured: the campaign's own bands over these trials, retired at 0.9 on 8 graded
+(frontier, never solved, retired, unmeasured: the bands of the practice curriculum over these trials, retired at 0.9 on 8 graded
 attempts), the failures by class, and the curriculum's weight (`[rollout] curriculum = "capability"`,
-`docs/guides/campaigns.md`). The report is kept in the state's store, by the digest of everything it counted and the
+`docs/guides/learning-factory.md`). The report is kept in the state's store, by the digest of everything it counted and the
 `index.jsonl` and `practice.json` digests it came from, and printed with that address. A sealed export is refused whole.
 
 Each policy's graded attempts are also measured for what they can teach a group-relative policy gradient per token

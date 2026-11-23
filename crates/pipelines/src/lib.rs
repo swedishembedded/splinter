@@ -82,7 +82,6 @@ pub mod bench;
 mod block;
 pub use splinter_model::server as brain_server;
 pub mod budget;
-pub mod campaign;
 pub mod canaries;
 pub mod checkpoints;
 pub mod claim_quality;

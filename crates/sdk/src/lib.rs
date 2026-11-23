@@ -78,14 +78,13 @@ pub use splinter_orchestrator::{
 
 // The commands.
 pub use splinter_pipelines::{
-    absorb, acquire, arm_compare, ask, bench, brain_server, budget, campaign, canaries,
-    checkpoints, claim_quality, claims, compare, conversation_policy_gradient, critique,
-    curriculum, datasets, decision_fixtures, describe, dialogue, doctor, episodes, eval, exam,
-    exam_set, experiences, experiment, factory_index, generations, goal, graded, harbor,
-    harness_opt, history, hub, improve, judge, learn, lineage, objects, plan, powered, practice,
-    preflight, raft, rehearsal, release, rerank, reserve, retrieval, router, sealed, served,
-    serving, sessions, set_import, solving, sources, state, status, tasks, timeline, train,
-    validate, variants, verify,
+    absorb, acquire, arm_compare, ask, bench, brain_server, budget, canaries, checkpoints,
+    claim_quality, claims, compare, conversation_policy_gradient, critique, curriculum, datasets,
+    decision_fixtures, describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences,
+    experiment, factory_index, generations, goal, graded, harbor, harness_opt, history, hub,
+    improve, judge, learn, lineage, objects, plan, powered, practice, preflight, raft, rehearsal,
+    release, rerank, reserve, retrieval, router, sealed, served, serving, sessions, set_import,
+    solving, sources, state, status, tasks, timeline, train, validate, variants, verify,
 };
 
 // The layers, each under one name.

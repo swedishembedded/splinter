@@ -92,7 +92,7 @@ A verifier or infrastructure failure is never a reward of zero.
 A rerun with the same seed, policy and settings skips every attempt that has a record
 and redoes the ones the infrastructure stopped; more `--attempts` adds the missing ones.
 A record is written only after its experience and verdicts are stored, so an attempt
-killed before then is run again from the start. A campaign reaches the same episodes
+killed before then is run again from the start. A host reaches the same episodes
 through `episodes::SvenEpisodes`, its episode executor.
 
 ## Human-guided trials

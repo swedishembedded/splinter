@@ -94,60 +94,38 @@ The same pipeline, planned from a directory of someone's writing: see [Learn how
 thinks](../guides/personas.md). Learning a repository from its own tests is the same loop with
 an agent working in copies of the tree: see [Learn a repository](../guides/repositories.md).
 
-## A continuous campaign, and where its rollouts come from
+## Rollouts over a served policy
 
-A learning run that keeps going (many arms, each one a cycle of calibrate, collect, train, gate, account) is a
-*campaign*, run by the campaign controller (`splinter_sdk::campaign`; the sample `samples/campaign-lua` drives it on a
-real model). Its state is one append-only file per campaign, so a crash resumes where it stopped and a second
-controller on the same campaign is refused rather than allowed to corrupt it.
+A learning run that keeps going (many generations, each one a cycle of rollout, train, gate and account) is a forked
+recipe run of the learning factory: a generation is a run that forks the previous one and names the previous
+generation's model as its `champion:`. That workflow, its recipes and its commands are described in
+`docs/guides/learning-factory.md`. What this page describes is where such a run's training episodes come from and
+what Splinter keeps of them.
 
-Every arm:
-
-1. checks that the disks have the bytes and the *files* the arm needs (a file quota, not the disk's size, ended
-   registered runs);
-2. refuses itself when the exam that will judge it cannot detect the effect it targets, at the level that gate may spend
-   (alpha is spent by gate number, so ten gates in a row do not release a null candidate 40 percent of the time);
-3. calibrates every unmeasured task at 8 to 16 attempts with the current policy and drops, for good, tasks the policy
-   already solves at 0.9 or more;
-4. collects groups of attempts on tasks near the frontier, keeping only groups whose attempts earned different
-   rewards, over-provisioned and refilled; groups that all failed go to a strategy (skip, a teacher, per-token
-   distillation, decomposition);
-5. trains on the batch, beside a bounded replay of earlier arms' verified data, through brain;
-6. gates the candidate on dev tasks the campaign never trains on, and rolls it back unless it beat the champion
-   without losing retention;
-7. appends the arm to the experiment ledger (hypothesis, configuration digest, GPU-hours, cost, verdict) and moves to
-   the next strategy of its ladder when discovery per GPU-hour has fallen.
-
-**Where rollouts come from.** The controller collects its training episodes through one of two paths and no other:
+**Where rollouts come from.** Training episodes come through one of these paths and no other:
 
 - the episode path: practice task folders in the Harbor format (instruction, starting files, tests that write a
   reward) run as workspace episodes through sven's agent against the served policy (`tasks harbor episodes`, and
-  `episodes::SvenEpisodes` as the campaign's episode executor; see [Harbor tasks and trials](../guides/harbor-tasks.md)).
+  `episodes::SvenEpisodes` as the episode executor; see [Harbor tasks and trials](../guides/harbor-tasks.md)).
   Each attempt is graded by the task's own tests outside the agent's reach and kept as an experience whose trajectory
   holds the policy trace (the prompt and generated token ids and their log-probabilities as the serving endpoint
   returned them). An attempt with no reward (the infrastructure or the verifier failed) enters no group, and one whose
   trace is not provable is never trained on, never re-tokenized.
-- the served path, a model brain serves sampled at temperature 1 against a verifier the policy cannot reach;
-- the examiner's practice material: the train side of a collection bench publishes for learners, staged as a Harbor
-  job (`bench task practice`), run under the served policy and graded by the examiner's verifiers (`tasks harbor
-  practice`, and `bench::practice::BenchPractice` as the campaign's episode executor; see [Benchmark trials as
-  training data](../guides/bench-trials.md#practice-material-the-examiners-staged-train-side)). Its trials carry no
-  sampler log-probabilities, so they train as demonstrations, or on a policy-gradient step with a proxy for the
-  behaviour policy.
+- the served path: a model brain serves, sampled at temperature 1 against a verifier the policy cannot reach.
 
-**Where its tasks come from.** A campaign's tasks may be environments from the environment factory ([Environments
+**Where its tasks come from.** A run's tasks may be environments from the environment factory ([Environments
 from an objective](../guides/environment-factory.md)). Only an `Admitted` environment whose recorded base pass rate
 lies inside the learnable band it was admitted at may enter (`served::factory::select` refuses the rest with the
-reason); its task folders are staged per attempt and removed. Every ledger entry then records, per environment, how its
-rewards are established and the label the weakest class forces on the verdict (`proxy only` is never lost on the way to
-a "better" model), and at every gate each environment's training reward and dev pass rate go to the divergence alarm:
-a reward that climbs while the dev measure does not stops the arm, the candidate is not adopted, and that environment
-is quarantined for the rest of the campaign.
+reason); its task folders are staged per attempt and removed. A host that feeds a run from the factory labels each
+task with its environment (`served::EnvironmentLabels`) so that the weakest verifier class forces its label on the
+verdict (`proxy only` is never lost on the way to a "better" model), and so that each environment's training reward and
+dev pass rate can go to the factory's divergence alarm: a reward that climbs while the dev measure does not is reward
+hacking or memorisation, and that environment is quarantined.
 
-The controller never drives `bench run` on bench collections to get training data. A benchmark is the sealed
+Training data is never taken by running a benchmark's own runner on its collections. A benchmark is the sealed
 measurement authority: it holds the exams, and the proposer must not be able to see or influence them. Bench is asked
-for verdicts on finished candidates and for its practice material, which is never a sealed collection or the eval
-side; the campaign's own gate is a dev-validation gate on tasks of its own, and it does not move a release alias.
+for verdicts on finished candidates; a run's own gate is a dev-validation gate on tasks of its own, and it does not move
+a release alias.
 
 The bench-mediated flow (a benchmark run exported and admitted with `experiences ingest-bench`, see
 [Benchmark trials as training data](../guides/bench-trials.md)) is **legacy** for new work: it remains for the

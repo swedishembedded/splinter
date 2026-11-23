@@ -27,7 +27,7 @@ A check that could not be measured fails. A number that was not measured is abse
 ## One promotion rule
 
 Improvement and retention are decided by the one promotion rule every promotion in Splinter goes
-through (the same rule `splinter campaign` decides on): the paired gain on the improvement suite
+through: the paired gain on the improvement suite
 must have its two-sided 95% interval above zero over at least six families, and on the retention
 suites (every earlier release's suite and the anchor suite together) the lower bound of the
 one-sided 95% interval of the paired change must be above -0.05, both intervals resampling whole

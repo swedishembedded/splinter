@@ -159,11 +159,6 @@ pub enum Command {
     /// had: run one, or show the ledger and the full retention matrix.
     #[command(subcommand)]
     Generation(GenerationCommand),
-    /// A resumable multi-generation learning campaign with one promotion
-    /// gate: run its generations, show what it has done, roll its champion
-    /// back, keep its problem state, or propose its next hypothesis.
-    #[command(subcommand)]
-    Campaign(CampaignCommand),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -644,7 +639,6 @@ pub struct RunStatusArgs {
 mod absorb;
 mod baseline;
 mod bench;
-mod campaign;
 mod consolidate;
 mod control;
 mod corrections;
@@ -675,7 +669,6 @@ mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
 pub use bench::BenchSplit;
-pub use campaign::{CampaignCommand, ProblemsCommand, StatusArg, VerdictArg};
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;

@@ -25,7 +25,6 @@ mod arms_output;
 mod ask_session;
 mod baseline_report;
 mod build_info;
-mod campaign_session;
 mod cli;
 mod compare_output;
 mod compare_session;

@@ -246,9 +246,6 @@ impl Session {
             Command::Improve(args) => {
                 return crate::improve_session::improve_command(ctx, json, args)
             }
-            Command::Campaign(command) => {
-                return crate::campaign_session::campaign(&self.splinter, ctx, json, command)
-            }
             Command::Generation(command) => {
                 return crate::improve_session::generation_command(
                     &self.splinter,

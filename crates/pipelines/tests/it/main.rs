@@ -30,7 +30,6 @@ mod bench_rationalise;
 mod bench_repair;
 mod bench_request_records;
 mod budget;
-mod campaign;
 mod canary_sets;
 mod capability_curriculum;
 mod clusters;

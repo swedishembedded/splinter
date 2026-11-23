@@ -128,7 +128,7 @@ they are overwritten.
 `splinter serve` starts the same servers (a fleet in an allocation that
 spans nodes, else one server here), prints their endpoints, the file listing
 them, the key file and the certificate authority, and keeps them until
-interrupted, for another program (a benchmark, a campaign loop) to use. A
+interrupted, for another program (a benchmark, a recipe run) to use. A
 client outside Splinter trusts the authority file (`curl --cacert`, or a
 bundle in `SSL_CERT_FILE` for an agent that reads the system's roots).
 
@@ -239,8 +239,8 @@ for. A manifest offers one adapter at a time, so the gate's two arms are asked o
 endpoints, the gate starts no `brain` of its own: its serve check is that each endpoint lists the candidate
 under the digest the release records. `--brain-adapter-dir DIR` instead names the directory the endpoint
 serves (`brain serve --serve-adapters DIR`): an adapter is offered by writing it there under its digest, and
-none is withdrawn, so a champion and its candidate are served at once, as a campaign's agent examination
-needs.
+none is withdrawn, so a champion and its candidate are served at once, as an examination of a candidate
+against its champion needs.
 
 ### Training on a brain endpoint
 
