@@ -181,10 +181,22 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
     assert_eq!(trainer.trained.lock().unwrap().len(), 2);
     let problems = verify(dir.path()).unwrap();
     assert!(problems.is_empty(), "{problems:?}");
-    assert!(status(dir.path())
-        .unwrap()
-        .iter()
-        .all(|s| s.state == "completed"));
+    let stages = status(dir.path()).unwrap();
+    assert!(stages.iter().all(|s| s.state == "completed"));
+    // Every attempt stage and evaluation arm reports its slots, all finished.
+    for key in [
+        "local",
+        "remote",
+        "eval-lora-r8/_arms/baseline",
+        "eval-lora-r8/_arms/candidate",
+    ] {
+        let stage = stages.iter().find(|s| s.key == key).unwrap();
+        assert!(
+            !stage.slots.is_empty() && stage.slots.keys().all(|k| k == "finished"),
+            "{key}: {:?}",
+            stage.slots
+        );
+    }
 }
 
 #[test]

@@ -343,14 +343,14 @@ pub(crate) fn identity(
 pub(crate) fn produce(
     factory: &Factory<'_>,
     stage: &PlannedStage,
-    _identity: &StageIdentity,
+    identity: &StageIdentity,
     staging: &Staging,
 ) -> Result<(), RunError> {
     let arm = arm(factory, stage)?;
     if arm.pass.interactive {
         return super::play::produce(factory, &arm, staging);
     }
-    run_arm(factory, &arm, staging)
+    run_arm(factory, &arm, &identity.digest(), staging)
 }
 
 /// The handle a batch's attempts carry in the run state.
@@ -581,6 +581,7 @@ fn append_entries(work: &Path, entries: &[AttemptEntry]) -> Result<(), RunError>
 pub(crate) fn run_arm(
     factory: &Factory<'_>,
     arm: &Arm<'_>,
+    stage: &Digest,
     staging: &Staging,
 ) -> Result<(), RunError> {
     let run = Running::new(factory, arm, factory.work(&arm.key))?;
@@ -600,6 +601,7 @@ pub(crate) fn run_arm(
     let ids: Vec<String> = arm.tasks.iter().map(|t| t.id.clone()).collect();
     factory.state.ensure_slots(
         &factory.fence,
+        stage,
         &arm.name,
         &ids,
         arm.pass.attempts,

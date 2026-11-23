@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS stages (
     error TEXT,
     updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS stage_slots (
+    stage_id TEXT NOT NULL,
+    pass TEXT NOT NULL,
+    PRIMARY KEY (stage_id, pass)
+);
 CREATE TABLE IF NOT EXISTS slots (
     pass TEXT NOT NULL,
     task TEXT NOT NULL,

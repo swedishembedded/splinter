@@ -104,15 +104,21 @@ fn slots_are_ensured_idempotently_and_finish_once() {
     let state = RunState::open(dir.path()).unwrap();
     let fence = state.acquire("alpha", 10, 0).unwrap();
     let tasks = vec!["t1".to_string(), "t2".to_string()];
+    let stage = Digest::of(b"stage");
     assert_eq!(
-        state.ensure_slots(&fence, "pass-a", &tasks, 2, 1).unwrap(),
+        state
+            .ensure_slots(&fence, &stage, "pass-a", &tasks, 2, 1)
+            .unwrap(),
         4
     );
     assert_eq!(
-        state.ensure_slots(&fence, "pass-a", &tasks, 2, 2).unwrap(),
+        state
+            .ensure_slots(&fence, &stage, "pass-a", &tasks, 2, 2)
+            .unwrap(),
         0
     );
     assert_eq!(state.list_slots("pass-a").unwrap().len(), 4);
+    assert_eq!(state.slot_namespaces(&stage).unwrap(), ["pass-a"]);
 
     let attempt = state
         .claim_next(&fence, "pass-a", r#"{"pid":7}"#, 3)
@@ -173,7 +179,7 @@ fn unfinished_attempts_are_listed_after_reopen_and_events_are_appended() {
         let state = RunState::open(dir.path()).unwrap();
         let fence = state.acquire("alpha", 10, 0).unwrap();
         state
-            .ensure_slots(&fence, "p", &["t".to_string()], 1, 1)
+            .ensure_slots(&fence, &Digest::of(b"stage"), "p", &["t".to_string()], 1, 1)
             .unwrap();
         let attempt = state
             .claim_next(&fence, "p", r#"{"container":"c1"}"#, 2)

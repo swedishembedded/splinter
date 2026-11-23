@@ -129,16 +129,22 @@ impl RunState {
     /// Makes sure `pass` has `slots_per_task` slots for each of `tasks`,
     /// creating the missing ones as pending, and returns how many it created.
     /// Existing slots are never touched, so replaying the plan after a
-    /// restart is safe.
+    /// restart is safe. The slots are recorded as the stage `stage_id`'s
+    /// ([`Self::slot_namespaces`]).
     pub fn ensure_slots(
         &self,
         fence: &Fence,
+        stage_id: &Digest,
         pass: &str,
         tasks: &[String],
         slots_per_task: u32,
         now: u64,
     ) -> Result<usize, RunStateError> {
         let tx = self.begin_fenced(fence)?;
+        tx.execute(
+            "INSERT OR IGNORE INTO stage_slots (stage_id, pass) VALUES (?1, ?2)",
+            params![stage_id.as_str(), pass],
+        )?;
         let mut created = 0;
         for task in tasks {
             for index in 0..slots_per_task {
@@ -366,6 +372,15 @@ impl RunState {
     /// The slot `key`, if known.
     pub fn slot(&self, key: &SlotKey) -> Result<Option<SlotRecord>, RunStateError> {
         fetch_slot(&self.conn, key)
+    }
+
+    /// The slot namespaces the stage `stage_id` ran its slots in, in order.
+    pub fn slot_namespaces(&self, stage_id: &Digest) -> Result<Vec<String>, RunStateError> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT pass FROM stage_slots WHERE stage_id = ?1 ORDER BY pass")?;
+        let rows = statement.query_map([stage_id.as_str()], |row| row.get::<_, String>(0))?;
+        rows.map(|row| row.map_err(RunStateError::from)).collect()
     }
 
     /// Every slot of `pass`, by task then index.

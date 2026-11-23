@@ -249,7 +249,8 @@ fn arm_trials(
         &factory.services.backend.identity(),
         Some(arm.pass.seed),
     );
-    let produce = |f: &Factory<'_>, staging: &Staging| run_arm(f, arm, staging);
+    let stage = identity.digest();
+    let produce = |f: &Factory<'_>, staging: &Staging| run_arm(f, arm, &stage, staging);
     let (manifest, _) = factory.commit(key, EVAL_ARM, &identity, &produce)?;
     Ok((trials_of(&factory.view(key))?, manifest.digest()))
 }

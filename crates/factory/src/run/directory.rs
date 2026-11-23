@@ -95,9 +95,8 @@ pub fn status(run: &Path) -> Result<Vec<StageStatus>, RunError> {
     let state = RunState::open(run)?;
     let mut out = Vec::new();
     for record in state.list()? {
-        let pass = record.key_pass();
         let mut slots = BTreeMap::new();
-        if let Some(pass) = pass {
+        for pass in state.slot_namespaces(&record.stage_id)? {
             for slot in state.list_slots(&pass)? {
                 *slots.entry(slot.state.to_string()).or_default() += 1;
             }
@@ -111,22 +110,6 @@ pub fn status(run: &Path) -> Result<Vec<StageStatus>, RunError> {
         });
     }
     Ok(out)
-}
-
-/// The slot namespace of a stage record, for the stages that have slots.
-trait SlotNamespace {
-    fn key_pass(&self) -> Option<String>;
-}
-
-impl SlotNamespace for splinter_store::factory::runstate::StageRecord {
-    fn key_pass(&self) -> Option<String> {
-        if let Some(pass) = self.name.strip_prefix("rollouts/") {
-            return Some(pass.to_owned());
-        }
-        self.name
-            .strip_prefix("eval/_arms/")
-            .map(|arm| format!("eval-{arm}"))
-    }
 }
 
 /// The run's report: every stage with its product, then each stage's own
