@@ -23,6 +23,7 @@
 
 pub mod dataset;
 pub mod eval;
+mod pass;
 pub mod play;
 pub mod release;
 pub mod rollout;
@@ -36,11 +37,12 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use splinter_core::clock::{unix_now, SystemClock};
 use splinter_core::digest::Digest;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_store::factory::products::{ProductError, ProductManifest, ProductStore, Staging};
 use splinter_store::factory::runstate::{Fence, RunState, RunStateError, StageOutcome, StageState};
 
 use crate::backend::{BackendError, ExecutionBackend};
+use crate::ops::names;
 use crate::plan::PlannedStage;
 use crate::resolve::{Lock, Resolved};
 use crate::training::Trainer;
@@ -196,8 +198,8 @@ pub struct Services<'a> {
 pub struct StageEntry {
     /// The stage key.
     pub key: String,
-    /// Its kind.
-    pub kind: StageKind,
+    /// The operation it ran.
+    pub operation: String,
     /// Its identity.
     pub stage: Digest,
     /// Its product manifest's digest.
@@ -274,11 +276,13 @@ impl<'a> Factory<'a> {
         }
         // A variant the trainer would refuse is refused before any rollout
         // spends anything.
-        if let (Some(training), Some(trainer)) = (&resolved.recipe.training, services.trainer) {
-            for variant in &training.variants {
+        if let Some(trainer) = services.trainer {
+            for stage in resolved.plan.of_operation(crate::ops::names::TRAIN) {
+                let params: crate::ops::TrainParams =
+                    stage.params().map_err(|e| stage_error(&stage.key, e))?;
                 trainer
-                    .resolve(&variant.method, &variant.params)
-                    .map_err(|e| stage_error(&format!("training/{}", variant.name), e))?;
+                    .resolve(&params.method, &params.params)
+                    .map_err(|e| stage_error(&stage.key, e))?;
             }
         }
         let state = RunState::open(run)?;
@@ -341,7 +345,7 @@ impl<'a> Factory<'a> {
         }
         let manifest = RunManifest {
             schema: "splinter.run/1".into(),
-            recipe: self.resolved.recipe.name.clone(),
+            recipe: self.resolved.name().to_owned(),
             lock: self.resolved.lock.clone(),
             stages: entries,
         };
@@ -352,29 +356,31 @@ impl<'a> Factory<'a> {
     }
 
     fn stage(&mut self, stage: &PlannedStage) -> Result<StageEntry, RunError> {
-        let identity = match stage.kind {
-            StageKind::Tasks => tasks::identity(self)?,
-            StageKind::Rollout => rollout::identity(self, stage)?,
-            StageKind::Dataset => dataset::identity(self, stage)?,
-            StageKind::Training => training::identity(self, stage)?,
-            StageKind::Eval => eval::identity(self, stage)?,
-            StageKind::Release => release::identity(self, stage)?,
+        let identity = match stage.operation.as_str() {
+            names::PIN => tasks::identity(self, stage)?,
+            names::ATTEMPTS => rollout::identity(self, stage)?,
+            names::PROJECT => dataset::identity(self, stage)?,
+            names::TRAIN => training::identity(self, stage)?,
+            names::EVALUATION => eval::identity(self, stage)?,
+            names::PROMOTION => release::identity(self, stage)?,
+            other => return Err(stage_error(&stage.key, format!("no operation {other}"))),
         };
-        let produce = |factory: &Self, staging: &Staging| match stage.kind {
-            StageKind::Tasks => tasks::produce(factory, staging),
-            StageKind::Rollout => rollout::produce(factory, stage, &identity, staging),
-            StageKind::Dataset => dataset::produce(factory, stage, staging),
-            StageKind::Training => training::produce(factory, stage, &identity, staging),
-            StageKind::Eval => eval::produce(factory, stage, &identity, staging),
-            StageKind::Release => release::produce(factory, stage, staging),
+        let produce = |factory: &Self, staging: &Staging| match stage.operation.as_str() {
+            names::PIN => tasks::produce(factory, stage, staging),
+            names::ATTEMPTS => rollout::produce(factory, stage, &identity, staging),
+            names::PROJECT => dataset::produce(factory, stage, staging),
+            names::TRAIN => training::produce(factory, stage, &identity, staging),
+            names::EVALUATION => eval::produce(factory, stage, &identity, staging),
+            _ => release::produce(factory, stage, staging),
         };
-        let (manifest, computed) = self.commit(&stage.key, stage.kind, &identity, &produce)?;
+        let (manifest, computed) =
+            self.commit(&stage.key, &stage.operation, &identity, &produce)?;
         let id = identity.digest();
         let product = manifest.digest();
         self.done.insert(stage.key.clone(), (id.clone(), manifest));
         Ok(StageEntry {
             key: stage.key.clone(),
-            kind: stage.kind,
+            operation: stage.operation.clone(),
             stage: id,
             product,
             computed,
@@ -389,14 +395,14 @@ impl<'a> Factory<'a> {
     pub(crate) fn commit(
         &self,
         key: &str,
-        kind: StageKind,
+        operation: &str,
         identity: &StageIdentity,
         produce: &dyn Fn(&Self, &Staging) -> Result<(), RunError>,
     ) -> Result<(ProductManifest, bool), RunError> {
         let id = identity.digest();
-        let record =
-            self.state
-                .upsert_pending(&self.fence, &id, key, &format!("{kind:?}"), unix_now())?;
+        let record = self
+            .state
+            .upsert_pending(&self.fence, &id, key, operation, unix_now())?;
         if let Ok(manifest) = self.products.ensure_view(&id, &self.run.join(key)) {
             if record.state != StageState::Completed {
                 let running = self.to_running(&id, record.version, record.state)?;
@@ -570,7 +576,7 @@ pub(crate) fn read_lines<T: serde::de::DeserializeOwned>(path: &Path) -> Result<
 /// The identity of a stage with no randomness and no parameters beyond
 /// those given.
 pub(crate) fn identity_of(
-    kind: StageKind,
+    operation: &str,
     name: &str,
     parameters: serde_json::Value,
     inputs: Vec<(String, Digest)>,
@@ -578,7 +584,7 @@ pub(crate) fn identity_of(
     seed: Option<u64>,
 ) -> StageIdentity {
     StageIdentity::new(
-        kind,
+        operation,
         name,
         parameters,
         inputs,

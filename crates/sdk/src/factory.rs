@@ -21,8 +21,8 @@ use splinter_factory::training::BrainTrainer;
 use splinter_orchestrator::config::Config;
 
 pub use splinter_factory::{
-    backend, collection, connections, environment, eval_plan, plan, recipe, resolve as resolution,
-    run, training, tree,
+    backend, collection, connections, environment, eval_plan, graph, ops, plan, recipe,
+    resolve as resolution, run, training, tree,
 };
 
 /// Why the factory could not be set up.

@@ -648,7 +648,7 @@ Arguments:
 Play one session of a factory run's interactive pass on this terminal; the run is then continued, so the session reaches the dataset and what is trained on it
 
 ```text
-splinter play [OPTIONS] --pass <PASS> --task <TASK> <RUN>
+splinter play [OPTIONS] --stage <STAGE> --task <TASK> <RUN>
 ```
 
 Arguments:
@@ -657,9 +657,9 @@ Arguments:
 
 Options:
 
-- `--pass <PASS>` (required): The interactive pass (`interactive: true` in the recipe)
+- `--stage <STAGE>` (required): The interactive attempt stage (`interactive: true` in the recipe), by its id.
 - `--task <TASK>` (required): The task to play, by its id in the collection.
-- `--continue <SESSION>`: Continue the conversation of this earlier session of the pass (its number); the earlier session is left as it is.
+- `--continue <SESSION>`: Continue the conversation of this earlier session of the stage (its number); the earlier session is left as it is.
 - `--no-run`: Only play: do not run the recipe again afterwards (the next `resume` takes the session in)
 
 ### splinter doctor

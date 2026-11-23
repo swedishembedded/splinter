@@ -22,7 +22,7 @@ use splinter_factory::run::fork;
 
 use crate::factory_run::{decisive, resolved, run, signed_verdict};
 use crate::fakes::{FakeBackend, FakeTrainer, Outcome};
-use crate::repo::{connections, Repo, RECIPE};
+use crate::repo::{connections, evaluation, Repo, DATASET, EVALUATION, RECIPE};
 
 fn release(run: &Path) -> Value {
     serde_json::from_slice(&std::fs::read(run.join("release/release.json")).unwrap()).unwrap()
@@ -30,22 +30,27 @@ fn release(run: &Path) -> Value {
 
 /// Generation 1 with promotion, and the recipe of generation 2 after it.
 fn generations(first: &Path) -> (String, String) {
-    let one = RECIPE.replace("release: { promote: false }", "release: { promote: true }");
+    let one = RECIPE.replace("with: { promote: false }", "with: { promote: true }");
     let champion = format!("champion:{}", first.display());
     let two = one
         .replace(
-            "dataset:",
+            "  teacher: \"hosted:deepseek/deepseek-v4.1-flash\"\n",
+            &format!("  teacher: \"hosted:deepseek/deepseek-v4.1-flash\"\n  champion: \"{champion}\"\n"),
+        )
+        .replace(
+            DATASET,
             // seed: a recipe states every pass's seed; the fake backend draws nothing from it.
             &format!(
-                "  - name: g2\n    agent: sven\n    model: \"{champion}\"\n    environment: environments/vim.yaml\n    \
-                 tasks: {{ unsolved_by: [local, remote] }}\n    attempts: 2\n    seed: 21\ndataset:"
+                "  - id: g2\n    uses: attempt.collect\n    \
+                 inputs: {{ tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts, $stages.remote.attempts] }}\n    \
+                 with: {{ agent: sven, model: champion, environment: environments/vim.yaml, attempts: 2, seed: 21 }}\n{DATASET}"
             ),
         )
-        .replace("sources: [local, remote]", "sources: [local, remote, g2]")
         .replace(
-            "baseline: \"brain:Qwen/Qwen3-4B\"",
-            &format!("baseline: \"{champion}\""),
-        );
+            "inputs: { attempts: [$stages.local.attempts, $stages.remote.attempts] }",
+            "inputs: { attempts: [$stages.local.attempts, $stages.remote.attempts, $stages.g2.attempts] }",
+        )
+        .replace("baseline: student", "baseline: champion");
     (one, two)
 }
 
@@ -96,7 +101,7 @@ fn a_generation_is_a_fork_whose_champion_plays_the_frontier_and_is_the_baseline_
         .any(|s| s.slot.pass == "local" || s.slot.pass == "remote"));
     assert!(new
         .iter()
-        .filter(|s| s.slot.pass == "eval-baseline")
+        .filter(|s| s.slot.pass.starts_with("baseline-"))
         .all(|s| s.model.as_ref().unwrap().model.contains("candidate")));
 
     // No candidate beat the champion, so generation 1's champion stays.
@@ -118,10 +123,14 @@ fn a_champion_is_served_never_trained_from_and_must_name_a_finished_run() {
     let repo = Repo::new();
     let nowhere = tempfile::tempdir().unwrap();
     let champion = format!("champion:{}", nowhere.path().display());
-    let recipe = RECIPE.replace(
-        "base: \"brain:Qwen/Qwen3-4B\"",
-        &format!("base: \"{champion}\""),
-    );
+    let recipe = RECIPE
+        .replace(
+            "  teacher: \"hosted:deepseek/deepseek-v4.1-flash\"\n",
+            &format!(
+                "  teacher: \"hosted:deepseek/deepseek-v4.1-flash\"\n  champion: \"{champion}\"\n"
+            ),
+        )
+        .replace("base: student", "base: champion");
     let problems = resolve(&repo.root, &recipe, connections())
         .expect_err("refused")
         .0;
@@ -151,7 +160,7 @@ fn a_protected_plan_examines_a_candidate_against_the_champion_as_its_predecessor
     // Generation 2's candidates, trained, then examined by an authority.
     let second = tempfile::tempdir().unwrap();
     fork(first.path(), second.path()).unwrap();
-    let training_only = two.split("eval:").next().unwrap().to_owned();
+    let training_only = two.split(EVALUATION).next().unwrap().to_owned();
     run(
         &resolved(&repo, &training_only),
         second.path(),
@@ -159,15 +168,14 @@ fn a_protected_plan_examines_a_candidate_against_the_champion_as_its_predecessor
         &trainer,
     )
     .unwrap();
-    let candidate =
-        splinter_factory::run::training::candidate_of(&second.path().join("training/lora-r8"))
-            .unwrap()
-            .artifacts
-            .into_iter()
-            .find(|a| a.path.ends_with(".safetensors"))
-            .unwrap()
-            .digest
-            .to_string();
+    let candidate = splinter_factory::run::training::candidate_of(&second.path().join("lora-r8"))
+        .unwrap()
+        .artifacts
+        .into_iter()
+        .find(|a| a.path.ends_with(".safetensors"))
+        .unwrap()
+        .digest
+        .to_string();
     // seed: the examiner's test key; the gate checks a signature under it.
     let signer = ed25519_dalek::SigningKey::from_bytes(&[5; 32]);
     let public: String = signer
@@ -194,9 +202,10 @@ fn a_protected_plan_examines_a_candidate_against_the_champion_as_its_predecessor
         "schema: splinter.evalplan/v1\nattempts: 1\nseed: 5\ndecision: { alpha: 0.05, comparisons: 1 }\n\
          authority: { command: [sh, eval/examine.sh], public_key: eval/examiner.pub }\n",
     );
-    let sealed = two
-        .replace("plan: eval/dev.yaml", "plan: eval/sealed.yaml")
-        .replace("candidates: [lora-r8, lora-r16]", "candidates: [lora-r8]");
+    let sealed = training_only.clone()
+        + &evaluation("lora-r8", "eval/sealed.yaml", "champion")
+        + "  - id: release\n    uses: promotion\n    inputs: { evaluations: [$stages.eval-lora-r8.evaluation] }\n    \
+           with: { promote: true }\n";
     let examined = tempfile::tempdir().unwrap();
     fork(second.path(), examined.path()).unwrap();
     run(

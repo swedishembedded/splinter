@@ -50,5 +50,6 @@
  "exclusions": {
   "not_a_success": 242,
   "trace_invalid": 6
- }
+ },
+ "thinking": false
 }

@@ -80,7 +80,7 @@ fn round_trips<T: Serialize + DeserializeOwned>(fixture_name: &str, schema_name:
 
 #[test]
 fn every_golden_fixture_satisfies_its_schema_and_round_trips() {
-    let stage: StageIdentity = round_trips("stage", "splinter.stage/1");
+    let stage: StageIdentity = round_trips("stage", "splinter.stage/2");
     let tasks: TaskCollection = round_trips("tasks", "splinter.tasks/1");
     let spec: ExecutionSpec = round_trips("execution", "splinter.execution/1");
     let trial: TrialResult = round_trips("trial", "splinter.trial/1");
@@ -119,8 +119,17 @@ fn a_stage_identity_ignores_the_order_its_inputs_were_listed_in() {
     let stage: StageIdentity = serde_json::from_value(fixture("stage")).expect("a stage");
     let a = splinter_core::digest::Digest::of(b"a");
     let b = splinter_core::digest::Digest::of(b"b");
-    let build =
-        |inputs| StageIdentity::new(stage.kind, "x", Value::Null, inputs, "impl", None).digest();
+    let build = |inputs| {
+        StageIdentity::new(
+            stage.operation.clone(),
+            "x",
+            Value::Null,
+            inputs,
+            "impl",
+            None,
+        )
+        .digest()
+    };
     assert_eq!(
         build(vec![("x".into(), a.clone()), ("y".into(), b.clone())]),
         build(vec![("y".into(), b), ("x".into(), a)])

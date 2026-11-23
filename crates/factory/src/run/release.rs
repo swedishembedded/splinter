@@ -28,7 +28,7 @@ use std::path::PathBuf;
 
 use serde_json::json;
 use splinter_core::digest::Digest;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::Decision;
 use splinter_store::factory::products::Staging;
 
@@ -36,7 +36,8 @@ use super::eval::result_of;
 use super::training::candidate_of;
 use super::{io, stage_error, write_json, Factory, RunError};
 use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE};
-use crate::plan::{stage_key, PlannedStage};
+use crate::ops::{EvaluationParams, PromotionParams};
+use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 
 /// The release decision in a release product.
@@ -47,19 +48,14 @@ pub(crate) fn identity(
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
     let mut inputs = Vec::new();
-    for key in &stage.depends_on {
-        inputs.push((key.clone(), factory.product(key)?.1.digest()));
+    for key in stage.sources("evaluations") {
+        inputs.push((key.to_owned(), factory.product(key)?.1.digest()));
     }
-    let promote = factory
-        .resolved
-        .recipe
-        .release
-        .as_ref()
-        .is_some_and(|r| r.promote);
-    let kept = kept_champion(factory, &stage.key)?;
+    let promote = promote(stage)?;
+    let kept = kept_champion(factory, stage)?;
     Ok(super::identity_of(
-        StageKind::Release,
-        &stage.name,
+        &stage.versioned_operation(),
+        &stage.key,
         json!({ "promote": promote, "kept": kept.0, "kept_digest": kept.1.map(|c| c.digest) }),
         inputs,
         "",
@@ -72,18 +68,13 @@ pub(crate) fn produce(
     stage: &PlannedStage,
     staging: &Staging,
 ) -> Result<(), RunError> {
-    let promote = factory
-        .resolved
-        .recipe
-        .release
-        .as_ref()
-        .is_some_and(|r| r.promote);
+    let promote = promote(stage)?;
     let mut candidates = Vec::new();
     let mut best: Option<(f64, String)> = None;
-    for key in &stage.depends_on {
+    for key in stage.sources("evaluations") {
         let result = result_of(&factory.view(key))?;
         let name = result.name.clone();
-        let candidate = candidate_of(&factory.view(&stage_key(StageKind::Training, &name)))?;
+        let candidate = candidate_of(&factory.view(&name))?;
         let difference = result
             .statistics
             .get("difference")
@@ -109,17 +100,17 @@ pub(crate) fn produce(
     };
     let champion = match &promoted {
         Some(name) => {
-            let view = factory.view(&stage_key(StageKind::Training, name));
+            let view = factory.view(name);
             let candidate = candidate_of(&view)?;
             let adapter = candidate
                 .artifacts
                 .iter()
                 .find(|a| a.path.ends_with(".safetensors"))
                 .map(|a| (view.join(&a.path), a.digest.clone()));
-            let base = super::eval::training_base(factory, &stage.key)?.clone();
+            let base = super::eval::training_base(factory, name)?.clone();
             champion_record(staging, base, adapter, Some(name.clone()))?
         }
-        None => match kept_champion(factory, &stage.key)? {
+        None => match kept_champion(factory, stage)? {
             (_, Some(kept)) => champion_record(
                 staging,
                 kept.record.base.clone(),
@@ -138,23 +129,32 @@ pub(crate) fn produce(
     )
 }
 
-/// The model the run keeps when it promotes nothing: the evaluation's
-/// baseline (a champion, resolved), else the base its variants train from.
+/// Whether the stage promotes.
+fn promote(stage: &PlannedStage) -> Result<bool, RunError> {
+    stage
+        .params::<PromotionParams>()
+        .map(|p| p.promote)
+        .map_err(|e| stage_error(&stage.key, e))
+}
+
+/// The model the run keeps when it promotes nothing: the baseline its
+/// evaluations measured against (a champion, resolved).
 fn kept_champion(
     factory: &Factory<'_>,
-    key: &str,
+    stage: &PlannedStage,
 ) -> Result<(ModelRef, Option<Champion>), RunError> {
-    let recipe = &factory.resolved.recipe;
-    let model = match (&recipe.eval, &recipe.training) {
-        (Some(eval), _) => eval.baseline.clone(),
-        (None, Some(training)) => training.base.clone(),
-        (None, None) => {
-            return Err(stage_error(
-                key,
-                "a release decides about trained candidates",
-            ))
-        }
-    };
+    let role = stage
+        .sources("evaluations")
+        .into_iter()
+        .filter_map(|e| factory.resolved.plan.stage(e))
+        .find_map(|e| e.params::<EvaluationParams>().ok())
+        .map(|p| p.baseline)
+        .ok_or_else(|| stage_error(&stage.key, "a release decides about evaluated candidates"))?;
+    let model = factory
+        .resolved
+        .model(&role)
+        .cloned()
+        .ok_or_else(|| stage_error(&stage.key, format!("model role {role} is not bound")))?;
     let champion = factory.resolved.champions.get(&model.to_string()).cloned();
     Ok((model, champion))
 }

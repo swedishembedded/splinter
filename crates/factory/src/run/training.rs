@@ -21,35 +21,50 @@
 
 use serde_json::json;
 use splinter_core::factory::execution::FileRef;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{CandidateKind, ModelCandidate, CANDIDATE_SCHEMA};
 use splinter_store::factory::products::Staging;
 
 use super::dataset::dataset_of;
 use super::{io, stage_error, write_json, Factory, RunError};
-use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::{TrainingSection, TrainingVariant};
+use crate::ops::TrainParams;
+use crate::plan::PlannedStage;
+use crate::recipe::ModelRef;
 use crate::training::{sha256, TrainRequest, Trainer};
 
 /// The candidate's description in a training product.
 pub const CANDIDATE_FILE: &str = "candidate.json";
 
-fn variant<'r>(
-    factory: &'r Factory<'_>,
-    stage: &PlannedStage,
-) -> Result<(&'r TrainingSection, &'r TrainingVariant), RunError> {
-    let training = factory
+/// A `model.train` stage with its base resolved.
+pub(crate) struct Variant {
+    pub(crate) name: String,
+    pub(crate) engine: String,
+    pub(crate) base: ModelRef,
+    pub(crate) method: String,
+    pub(crate) params: serde_json::Value,
+    pub(crate) seed: u64,
+}
+
+pub(crate) fn variant(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Variant, RunError> {
+    let params: TrainParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+    let base = factory
         .resolved
-        .recipe
-        .training
-        .as_ref()
-        .ok_or_else(|| stage_error(&stage.key, "the recipe trains nothing"))?;
-    let variant = training
-        .variants
-        .iter()
-        .find(|v| v.name == stage.name)
-        .ok_or_else(|| stage_error(&stage.key, "is not a training variant"))?;
-    Ok((training, variant))
+        .model(&params.base)
+        .cloned()
+        .ok_or_else(|| {
+            stage_error(
+                &stage.key,
+                format!("model role {} is not bound", params.base),
+            )
+        })?;
+    Ok(Variant {
+        name: stage.key.clone(),
+        engine: params.engine,
+        base,
+        method: params.method,
+        params: params.params,
+        seed: params.seed,
+    })
 }
 
 fn trainer<'a>(factory: &Factory<'a>, stage: &PlannedStage) -> Result<&'a dyn Trainer, RunError> {
@@ -59,30 +74,27 @@ fn trainer<'a>(factory: &Factory<'a>, stage: &PlannedStage) -> Result<&'a dyn Tr
         .ok_or_else(|| stage_error(&stage.key, "no trainer is configured"))
 }
 
-fn dataset_key(factory: &Factory<'_>, stage: &PlannedStage) -> Result<String, RunError> {
-    let dataset = factory
-        .resolved
-        .recipe
-        .dataset
-        .as_ref()
-        .ok_or_else(|| stage_error(&stage.key, "no dataset"))?;
-    Ok(stage_key(StageKind::Dataset, &dataset.name))
+fn dataset_key(stage: &PlannedStage) -> Result<String, RunError> {
+    stage
+        .source("dataset")
+        .map(str::to_owned)
+        .ok_or_else(|| stage_error(&stage.key, "trains on no dataset"))
 }
 
 pub(crate) fn identity(
     factory: &Factory<'_>,
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
-    let (training, variant) = variant(factory, stage)?;
-    let key = dataset_key(factory, stage)?;
+    let variant = variant(factory, stage)?;
+    let key = dataset_key(stage)?;
     let inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
     let parameters = json!({
-        "engine": training.engine, "base": training.base, "method": variant.method,
+        "engine": variant.engine, "base": variant.base, "method": variant.method,
         // As the trainer will train them: a changed default is a new candidate.
         "params": trainer(factory, stage)?.resolve(&variant.method, &variant.params).map_err(|e| stage_error(&stage.key, e))?,
     });
     Ok(super::identity_of(
-        StageKind::Training,
+        &stage.versioned_operation(),
         &variant.name,
         parameters,
         inputs,
@@ -97,9 +109,9 @@ pub(crate) fn produce(
     identity: &StageIdentity,
     staging: &Staging,
 ) -> Result<(), RunError> {
-    let (training, variant) = variant(factory, stage)?;
+    let variant = variant(factory, stage)?;
     let trainer = trainer(factory, stage)?;
-    let key = dataset_key(factory, stage)?;
+    let key = dataset_key(stage)?;
     let view = factory.view(&key);
     let dataset = dataset_of(&view)?;
     let stage_id = identity.digest();
@@ -110,18 +122,14 @@ pub(crate) fn produce(
     std::fs::create_dir_all(&out).map_err(io(&out))?;
     let trained = trainer
         .train(&TrainRequest {
-            base: &training.base,
+            base: &variant.base,
             method: &variant.method,
             params: &variant.params,
             train: &view.join(&dataset.train.path),
             validation: &view.join(&dataset.validation.path),
             seed: variant.seed,
-            thinking: factory
-                .resolved
-                .recipe
-                .dataset
-                .as_ref()
-                .is_some_and(|d| d.thinking),
+            // The mode the dataset was built for.
+            thinking: dataset.thinking,
             resume_key: &tag,
             out: &out,
         })
@@ -144,7 +152,7 @@ pub(crate) fn produce(
         .map(|n| staging.path().join(n));
     // The load check: the candidate counts only once the trainer's server lists it.
     let served_as = trainer
-        .serve(&training.base, adapter.as_deref())
+        .serve(&variant.base, adapter.as_deref())
         .map_err(|e| stage_error(&stage.key, e))?;
     let candidate = ModelCandidate {
         schema: CANDIDATE_SCHEMA.into(),
@@ -154,7 +162,7 @@ pub(crate) fn produce(
         } else {
             CandidateKind::Full
         },
-        base: training.base.to_string(),
+        base: variant.base.to_string(),
         artifacts,
         dataset: factory.product(&key)?.1.digest(),
         method: variant.method.clone(),

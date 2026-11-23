@@ -16,35 +16,72 @@ pub struct Repo {
 // seed: a recipe must state every seed; these values reach no random choice in
 // these tests, which only resolve and plan the recipe.
 pub const RECIPE: &str = r#"
-schema: splinter.factory/v1
+schema: splinter.recipe/v2
 name: vim-mastery
-tasks: { collection: collections/vim.yaml, split: train }
-rollouts:
-  - name: local
-    agent: sven
-    args: [--config, presets/sven.yaml]
-    files: [presets/sven.yaml]
-    model: "brain:Qwen/Qwen3-4B"
-    environment: environments/vim.yaml
-    attempts: 2
-    seed: 11
-  - name: remote
-    agent: sven
-    model: "hosted:deepseek/deepseek-v4.1-flash"
-    environment: environments/vim.yaml
-    environment_variables: { SVEN_KEY: "env:SVEN_KEY" }
-    tasks: { unsolved_by: [local] }
-    attempts: 2
-    seed: 12
-dataset: { name: sft, sources: [local, remote], target: "brain:Qwen/Qwen3-4B", seed: 13 }
-training:
-  base: "brain:Qwen/Qwen3-4B"
-  variants:
-    - { name: lora-r8, method: lora, params: { rank: 8 }, seed: 1 }
-    - { name: lora-r16, method: lora, params: { rank: 16 }, seed: 1 }
-eval: { plan: eval/dev.yaml, agent: sven, baseline: "brain:Qwen/Qwen3-4B", candidates: [lora-r8, lora-r16] }
-release: { promote: false }
+inputs:
+  course: { kind: files, path: collections/vim.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - id: tasks
+    uses: tasks.pin
+    inputs: { collection: $inputs.course }
+    with: { split: train }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with:
+      agent: sven
+      args: [--config, presets/sven.yaml]
+      files: [presets/sven.yaml]
+      model: student
+      environment: environments/vim.yaml
+      attempts: 2
+      seed: 11
+  - id: remote
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts] }
+    with:
+      agent: sven
+      model: teacher
+      environment: environments/vim.yaml
+      environment_variables: { SVEN_KEY: "env:SVEN_KEY" }
+      attempts: 2
+      seed: 12
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts, $stages.remote.attempts] }
+    with: { target: student, seed: 13 }
+  - id: lora-r8
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 8 }, seed: 1 }
+  - id: lora-r16
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16 }, seed: 1 }
+  - id: eval-lora-r8
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r8.model }
+    with: { plan: eval/dev.yaml, agent: sven, baseline: student, comparisons: 2 }
+  - id: eval-lora-r16
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model }
+    with: { plan: eval/dev.yaml, agent: sven, baseline: student, comparisons: 2 }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-lora-r8.evaluation, $stages.eval-lora-r16.evaluation] }
+    with: { promote: false }
 "#;
+
+/// Where the reference recipe's dataset stage begins: the recipe up to it
+/// collects attempts only.
+pub const DATASET: &str = "  - id: sft\n";
+/// Where its training stages begin.
+pub const TRAINING: &str = "  - id: lora-r8\n";
+/// Where its evaluation stages begin.
+pub const EVALUATION: &str = "  - id: eval-lora-r8\n";
 
 pub const CONNECTIONS: &str = r#"
 connections:
@@ -108,4 +145,28 @@ impl Repo {
     pub fn write(&self, path: &str, text: &str) {
         write(&self.root, path, text);
     }
+}
+
+/// A `dataset.project` stage `sft` over the attempts of `sources`, with
+/// `extra` parameters (`, projection: portable-sft`).
+// seed: a recipe states the dataset's seed; the split it draws is not what these tests check.
+pub fn dataset(sources: &[&str], extra: &str) -> String {
+    let attempts: Vec<String> = sources
+        .iter()
+        .map(|s| format!("$stages.{s}.attempts"))
+        .collect();
+    format!(
+        "  - id: sft\n    uses: dataset.project\n    inputs: {{ attempts: [{}] }}\n    \
+         with: {{ target: student, seed: 13{extra} }}\n",
+        attempts.join(", ")
+    )
+}
+
+/// An `evaluation` stage `eval-<candidate>` of the candidate trained by the
+/// stage `candidate`, under `plan`, against the model role `baseline`.
+pub fn evaluation(candidate: &str, plan: &str, baseline: &str) -> String {
+    format!(
+        "  - id: eval-{candidate}\n    uses: evaluation\n    inputs: {{ candidate: $stages.{candidate}.model }}\n    \
+         with: {{ plan: {plan}, agent: sven, baseline: {baseline} }}\n"
+    )
 }

@@ -46,14 +46,16 @@ fn a_changed_dataset_or_eval_plan_reuses_what_is_upstream_and_a_copied_run_verif
     assert!(
         !stages
             .iter()
-            .any(|k| k.starts_with("rollouts/") || k == "tasks"),
+            .any(|k| ["tasks", "local", "remote"].contains(&k.as_str())),
         "{stages:?}"
     );
-    assert!(stages.contains(&"datasets/sft".to_owned()), "{stages:?}");
+    assert!(stages.contains(&"sft".to_owned()), "{stages:?}");
     assert_eq!(
         backend.executed()[executed..]
             .iter()
-            .filter(|s| !s.slot.pass.starts_with("eval-"))
+            .filter(
+                |s| !s.slot.pass.starts_with("baseline-") && !s.slot.pass.ends_with(".candidate")
+            )
             .count(),
         0
     );
@@ -78,11 +80,8 @@ fn a_changed_dataset_or_eval_plan_reuses_what_is_upstream_and_a_copied_run_verif
         )
         .unwrap(),
     );
-    assert!(
-        !stages.iter().any(|k| k.starts_with("training/")),
-        "{stages:?}"
-    );
-    assert!(stages.contains(&"eval/lora-r8".to_owned()), "{stages:?}");
+    assert!(!stages.iter().any(|k| k.starts_with("lora-")), "{stages:?}");
+    assert!(stages.contains(&"eval-lora-r8".to_owned()), "{stages:?}");
     assert_eq!(trainer.trained.lock().unwrap().len(), trained);
 
     // The run copied elsewhere, its original gone, verifies on its own.

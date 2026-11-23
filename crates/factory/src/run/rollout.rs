@@ -50,19 +50,20 @@ use splinter_core::factory::execution::{
     AgentInvocation, EnvValue, ExecutionSpec, FileRef, ModelBinding, Mount, SandboxSpec, SlotKey,
     EXECUTION_SCHEMA,
 };
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{AgentIdentity, TrialResult, TRIAL_SCHEMA};
 use splinter_core::factory::task::TaskRef;
 use splinter_core::factory::trial::{grade, GradingPolicy};
 use splinter_store::factory::products::Staging;
 use splinter_store::factory::runstate::{AttemptRecord, AttemptState, SlotState};
 
+use super::pass::{pass, pin, RolloutPass};
 use super::rollout_report::report;
 use super::{io, read_lines, stage_error, write_lines, Factory, RunError};
 use crate::backend::Batch;
 use crate::champion::{Champion, CHAMPION};
-use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::{ModelRef, RolloutPass};
+use crate::plan::PlannedStage;
+use crate::recipe::ModelRef;
 use crate::tree::{link_tree, tree_digest};
 
 /// The trials of a rollout product.
@@ -254,27 +255,23 @@ impl Arm<'_> {
     }
 }
 
-fn pass<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<&'r RolloutPass, RunError> {
-    factory
-        .resolved
-        .recipe
-        .rollouts
-        .iter()
-        .find(|p| p.name == stage.name)
-        .ok_or_else(|| stage_error(&stage.key, "is not a rollout pass of the recipe"))
-}
-
 /// The arm of the rollout pass `stage`, its tasks frozen from the committed
 /// upstream products.
 pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<Arm<'r>, RunError> {
     let pass = pass(factory, stage)?;
-    let tasks = &factory.resolved.collection.collection.tasks;
+    let pin = pin(stage)?;
+    let tasks = &factory
+        .resolved
+        .collections
+        .get(pin)
+        .ok_or_else(|| stage_error(&stage.key, format!("{pin} pins no tasks")))?
+        .collection
+        .tasks;
     let selected: Vec<&TaskRef> = if pass.tasks.ids.is_empty() {
         let mut solved = BTreeSet::new();
         for upstream in &pass.tasks.unsolved_by {
-            let key = stage_key(StageKind::Rollout, upstream);
-            factory.product(&key)?;
-            for trial in trials_of(&factory.view(&key))? {
+            factory.product(upstream)?;
+            for trial in trials_of(&factory.view(upstream))? {
                 if trial.verified_success() {
                     solved.insert(trial.task);
                 }
@@ -298,9 +295,9 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
     Ok(Arm {
         name: pass.name.clone(),
         key: stage.key.clone(),
-        pass: pass.clone(),
+        pass,
         tasks: selected,
-        task_root: factory.view("tasks"),
+        task_root: factory.view(pin),
         model,
         champion,
     })
@@ -312,15 +309,15 @@ pub(crate) fn identity(
 ) -> Result<StageIdentity, RunError> {
     let arm = arm(factory, stage)?;
     if arm.pass.interactive {
-        return super::play::identity(factory, &arm);
+        return super::play::identity(factory, stage, &arm);
     }
-    let mut inputs = vec![("tasks".to_owned(), factory.product("tasks")?.1.digest())];
+    let pin = pin(stage)?;
+    let mut inputs = vec![(pin.to_owned(), factory.product(pin)?.1.digest())];
     for upstream in &arm.pass.tasks.unsolved_by {
-        let key = stage_key(StageKind::Rollout, upstream);
-        inputs.push((key.clone(), factory.product(&key)?.1.digest()));
+        inputs.push((upstream.clone(), factory.product(upstream)?.1.digest()));
     }
     Ok(super::identity_of(
-        StageKind::Rollout,
+        &stage.versioned_operation(),
         &arm.name,
         arm.parameters(factory)?,
         inputs,

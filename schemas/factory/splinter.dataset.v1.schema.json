@@ -56,6 +56,11 @@
       "description": "The model the records are rendered for.",
       "type": "string"
     },
+    "thinking": {
+      "description": "Whether the records keep the target's reasoning (it is trained to\nreason before it answers); false: no-think mode, every turn's\nreasoning removed. A trainer trains in the mode the dataset was built\nfor.",
+      "type": "boolean",
+      "default": false
+    },
     "train": {
       "description": "The training records.",
       "$ref": "#/$defs/FileRef"

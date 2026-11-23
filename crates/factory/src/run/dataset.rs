@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use splinter_core::digest::{digest_of, Digest};
 use splinter_core::factory::execution::FileRef;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, TrialResult, WaterfallStep, DATASET_SCHEMA};
 use splinter_data::request_log::read_request_log;
 use splinter_data::{
@@ -51,8 +51,9 @@ use splinter_store::factory::products::Staging;
 
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
-use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::DatasetSection;
+use crate::ops::{AttemptParams, Hint, ProjectParams, ValidationSplit};
+use crate::plan::PlannedStage;
+use crate::recipe::ModelRef;
 
 /// The dataset product's own description.
 pub const DATASET_FILE: &str = "dataset.json";
@@ -101,17 +102,48 @@ pub struct Excluded {
     pub detail: String,
 }
 
-fn section<'r>(
-    factory: &'r Factory<'_>,
-    stage: &PlannedStage,
-) -> Result<&'r DatasetSection, RunError> {
-    factory
+/// A `dataset.project` stage with its target resolved and its sources named.
+struct Dataset {
+    name: String,
+    sources: Vec<String>,
+    objective: String,
+    admission: String,
+    projection: String,
+    target: ModelRef,
+    max_block: Option<u64>,
+    thinking: bool,
+    validation: Option<ValidationSplit>,
+    seed: u64,
+}
+
+fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunError> {
+    let params: ProjectParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+    let target = factory
         .resolved
-        .recipe
-        .dataset
-        .as_ref()
-        .filter(|d| d.name == stage.name)
-        .ok_or_else(|| stage_error(&stage.key, "is not the recipe's dataset"))
+        .model(&params.target)
+        .cloned()
+        .ok_or_else(|| {
+            stage_error(
+                &stage.key,
+                format!("model role {} is not bound", params.target),
+            )
+        })?;
+    Ok(Dataset {
+        name: stage.key.clone(),
+        sources: stage
+            .sources("attempts")
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        objective: params.objective,
+        admission: params.admission,
+        projection: params.projection,
+        target,
+        max_block: params.max_block,
+        thinking: params.thinking,
+        validation: params.validation,
+        seed: params.seed,
+    })
 }
 
 pub(crate) fn identity(
@@ -145,8 +177,7 @@ pub(crate) fn identity(
     }
     let mut inputs = Vec::new();
     for source in &dataset.sources {
-        let key = stage_key(StageKind::Rollout, source);
-        inputs.push((key.clone(), factory.product(&key)?.1.digest()));
+        inputs.push((source.clone(), factory.product(source)?.1.digest()));
     }
     let trainer = factory
         .services
@@ -159,7 +190,7 @@ pub(crate) fn identity(
         "policy_role": "first-request", "thinking": dataset.thinking,
     });
     Ok(super::identity_of(
-        StageKind::Dataset,
+        &stage.versioned_operation(),
         &dataset.name,
         parameters,
         inputs,
@@ -210,14 +241,38 @@ fn project(
     ))
 }
 
-/// The hint the rollout pass `source` showed, if it is a hinted pass.
-fn hint_of(factory: &Factory<'_>, source: &str) -> Option<crate::recipe::Hint> {
+/// How many tasks the sources' passes were offered: the tasks of every
+/// `tasks.pin` stage feeding them, each once.
+fn tasks_offered(factory: &Factory<'_>, sources: &[String]) -> usize {
+    let pins: std::collections::BTreeSet<&str> = sources
+        .iter()
+        .filter_map(|s| factory.resolved.plan.stage(s))
+        .filter_map(|s| s.source("tasks"))
+        .collect();
+    pins.iter()
+        .filter_map(|p| factory.resolved.collections.get(*p))
+        .map(|c| c.collection.tasks.len())
+        .sum()
+}
+
+/// The view of the tasks the stage `source` attempted.
+fn pinned_view(factory: &Factory<'_>, source: &str) -> std::path::PathBuf {
+    let pin = factory
+        .resolved
+        .plan
+        .stage(source)
+        .and_then(|s| s.source("tasks"))
+        .unwrap_or_default();
+    factory.view(pin)
+}
+
+/// The hint the stage `source` showed, if it is a hinted pass.
+fn hint_of(factory: &Factory<'_>, source: &str) -> Option<Hint> {
     factory
         .resolved
-        .recipe
-        .rollouts
-        .iter()
-        .find(|p| p.name == source)
+        .plan
+        .stage(source)
+        .and_then(|s| s.params::<AttemptParams>().ok())
         .and_then(|p| p.hint)
 }
 
@@ -260,9 +315,8 @@ pub(crate) fn produce(
     let mut excluded: Vec<Excluded> = Vec::new();
     let mut sources = Vec::new();
     for source in &dataset.sources {
-        let key = stage_key(StageKind::Rollout, source);
-        sources.push(factory.product(&key)?.1.digest());
-        let view = factory.view(&key);
+        sources.push(factory.product(source)?.1.digest());
+        let view = factory.view(source);
         for trial in trials_of(&view)? {
             raw += 1;
             let exclude = |reason: String, detail: String| Excluded {
@@ -298,9 +352,11 @@ pub(crate) fn produce(
                 if let Some(hint) = hint_of(factory, source) {
                     // Learned under the task's own instruction, from the
                     // tasks the run pinned.
-                    let (instruction, solution) =
-                        crate::hint::material(&factory.view("tasks").join(&trial.task), hint)
-                            .map_err(|e| ("hint_not_found".to_owned(), e))?;
+                    let (instruction, solution) = crate::hint::material(
+                        &pinned_view(factory, source).join(&trial.task),
+                        hint,
+                    )
+                    .map_err(|e| ("hint_not_found".to_owned(), e))?;
                     crate::hint::unhint(&mut found.0.body, &instruction, &solution)?;
                 }
                 Ok(found)
@@ -375,11 +431,12 @@ pub(crate) fn produce(
     }
     let group_of = |trial: &TrialResult| -> String {
         match dataset.validation.as_ref().map(|v| v.group_by.as_str()) {
+            // The task's family, from whichever pinned collection holds it.
             Some("task_family") => factory
                 .resolved
-                .collection
-                .collection
-                .task(&trial.task)
+                .collections
+                .values()
+                .find_map(|c| c.collection.task(&trial.task))
                 .and_then(|t| t.family.clone())
                 .unwrap_or_else(|| trial.task.clone()),
             _ => trial.task.clone(),
@@ -518,6 +575,7 @@ pub(crate) fn produce(
         supervision: file_ref(staging, "supervision.jsonl")?,
         waterfall: waterfall.clone(),
         exclusions: exclusions.clone(),
+        thinking: dataset.thinking,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let report = Report {
@@ -532,7 +590,7 @@ pub(crate) fn produce(
         tools: &tool_counts,
         composition: &composition,
         per_task: &per_task,
-        tasks: factory.resolved.collection.collection.tasks.len(),
+        tasks: tasks_offered(factory, &dataset.sources),
     };
     std::fs::write(staging.path().join("report.md"), report.render()).map_err(io(staging.path()))
 }

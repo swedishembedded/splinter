@@ -34,44 +34,92 @@ use std::path::Path;
 use std::process::Command;
 
 use serde_json::json;
-use splinter_core::digest::Digest;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::digest::{digest_of, Digest};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{ArmResult, Decision, EvalResult, TrialResult, EVAL_SCHEMA};
 use splinter_core::factory::task::TaskRef;
 use splinter_eval::promotion::{verify, Pair, PublicKey, Role};
 use splinter_model::stats::one_sided_p;
 use splinter_store::factory::products::Staging;
 
+use super::pass::{RolloutPass, TaskSelector};
 use super::rollout::{run_arm, trials_of, Arm};
 use super::training::candidate_of;
 use super::{io, read_json, stage_error, write_json, Factory, RunError};
 use crate::eval_plan::EvalPlan;
-use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::{EvalSection, ModelRef, RolloutPass, TaskSelector};
+use crate::ops::{names, EvaluationParams, TrainParams};
+use crate::plan::PlannedStage;
+use crate::recipe::ModelRef;
 use crate::tree::link_tree;
+
+/// The operation of an evaluation's pinned tasks.
+const EVAL_TASKS: &str = "tasks.pin@1";
+/// The operation of an evaluation's arms.
+const EVAL_ARM: &str = "attempt.collect@1";
 
 /// The evaluation result in an eval product.
 pub const RESULT_FILE: &str = "result.json";
 
+/// An `evaluation` stage with its baseline resolved and its candidate named.
+pub(crate) struct Evaluation {
+    /// The evaluation plan's path.
+    plan: String,
+    agent: String,
+    args: Vec<String>,
+    baseline: ModelRef,
+    comparisons: Option<u32>,
+    /// The `model.train` stage whose candidate it evaluates.
+    pub(crate) candidate: String,
+}
+
 fn section<'r>(
     factory: &'r Factory<'_>,
     stage: &PlannedStage,
-) -> Result<(&'r EvalSection, &'r EvalPlan), RunError> {
-    let section = factory
+) -> Result<(Evaluation, &'r EvalPlan), RunError> {
+    let params: EvaluationParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+    let baseline = factory
         .resolved
-        .recipe
-        .eval
-        .as_ref()
-        .ok_or_else(|| stage_error(&stage.key, "the recipe evaluates nothing"))?;
+        .model(&params.baseline)
+        .cloned()
+        .ok_or_else(|| {
+            stage_error(
+                &stage.key,
+                format!("model role {} is not bound", params.baseline),
+            )
+        })?;
     let (plan, _) = factory
         .resolved
-        .eval
-        .as_ref()
-        .ok_or_else(|| stage_error(&stage.key, "the eval plan is not resolved"))?;
-    Ok((section, plan))
+        .eval_plans
+        .get(&params.plan)
+        .ok_or_else(|| stage_error(&stage.key, format!("{} is not resolved", params.plan)))?;
+    let candidate = stage
+        .source("candidate")
+        .ok_or_else(|| stage_error(&stage.key, "evaluates no candidate"))?
+        .to_owned();
+    Ok((
+        Evaluation {
+            plan: params.plan,
+            agent: params.agent,
+            args: params.args,
+            baseline,
+            comparisons: params.comparisons,
+            candidate,
+        },
+        plan,
+    ))
 }
 
-fn plan_digest(factory: &Factory<'_>, section: &EvalSection) -> Result<Digest, RunError> {
+/// The comparisons the plan's level is divided among: the plan's own
+/// setting, else the stage's, else one.
+fn comparisons(section: &Evaluation, plan: &EvalPlan) -> u32 {
+    plan.decision
+        .comparisons
+        .or(section.comparisons)
+        .unwrap_or(1)
+        .max(1)
+}
+
+fn plan_digest(factory: &Factory<'_>, section: &Evaluation) -> Result<Digest, RunError> {
     factory
         .resolved
         .lock
@@ -86,20 +134,22 @@ fn plan_digest(factory: &Factory<'_>, section: &EvalSection) -> Result<Digest, R
         })
 }
 
-fn tasks<'r>(factory: &'r Factory<'_>, plan: &EvalPlan) -> Result<Vec<&'r TaskRef>, RunError> {
-    let (_, loaded) = factory
+fn tasks<'r>(
+    factory: &'r Factory<'_>,
+    section: &Evaluation,
+    plan: &EvalPlan,
+) -> Result<Vec<&'r TaskRef>, RunError> {
+    let loaded = factory
         .resolved
-        .eval
-        .as_ref()
-        .ok_or_else(|| stage_error("eval", "no eval plan"))?;
-    let loaded = loaded
-        .as_ref()
+        .eval_plans
+        .get(&section.plan)
+        .and_then(|(_, loaded)| loaded.as_ref())
         .ok_or_else(|| stage_error("eval", "a development plan names a collection"))?;
     Ok(loaded.split(plan.split.as_deref()))
 }
 
 /// The settings every arm of the evaluation runs under.
-fn arm_pass(section: &EvalSection, plan: &EvalPlan, name: &str) -> Result<RolloutPass, RunError> {
+fn arm_pass(section: &Evaluation, plan: &EvalPlan, name: &str) -> Result<RolloutPass, RunError> {
     Ok(RolloutPass {
         name: name.to_owned(),
         agent: section.agent.clone(),
@@ -129,14 +179,11 @@ pub(crate) fn identity(
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
     let (section, plan) = section(factory, stage)?;
-    let training = stage_key(StageKind::Training, &stage.name);
+    let training = section.candidate.clone();
     let inputs = vec![(training.clone(), factory.product(&training)?.1.digest())];
-    let comparisons = plan
-        .decision
-        .comparisons
-        .unwrap_or(section.candidates.len() as u32);
+    let comparisons = comparisons(&section, plan);
     let parameters = json!({
-        "plan": plan_digest(factory, section)?, "agent": section.agent, "args": section.args,
+        "plan": plan_digest(factory, &section)?, "agent": section.agent, "args": section.args,
         "baseline": super::rollout::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
     });
     let backend = if plan.protected() {
@@ -145,8 +192,8 @@ pub(crate) fn identity(
         factory.services.backend.identity()
     };
     Ok(super::identity_of(
-        StageKind::Eval,
-        &stage.name,
+        &stage.versioned_operation(),
+        &stage.key,
         parameters,
         inputs,
         &backend,
@@ -157,20 +204,19 @@ pub(crate) fn identity(
 /// Commit the plan's pinned tasks and return their view.
 fn pinned_tasks(
     factory: &Factory<'_>,
-    section: &EvalSection,
+    stage: &PlannedStage,
+    section: &Evaluation,
     plan: &EvalPlan,
 ) -> Result<std::path::PathBuf, RunError> {
-    let (_, loaded) = factory
+    let loaded = factory
         .resolved
-        .eval
-        .as_ref()
-        .ok_or_else(|| stage_error("eval", "no eval plan"))?;
-    let loaded = loaded
-        .as_ref()
+        .eval_plans
+        .get(&section.plan)
+        .and_then(|(_, loaded)| loaded.as_ref())
         .ok_or_else(|| stage_error("eval", "a development plan names a collection"))?;
-    let selected = tasks(factory, plan)?;
+    let selected = tasks(factory, section, plan)?;
     let identity = super::identity_of(
-        StageKind::Tasks,
+        EVAL_TASKS,
         "eval",
         json!({ "plan": plan_digest(factory, section)?, "tasks": selected.iter().map(|t| json!([t.id, t.digest])).collect::<Vec<_>>() }),
         Vec::new(),
@@ -183,8 +229,9 @@ fn pinned_tasks(
         }
         write_json(&staging.path().join("tasks.json"), &selected)
     };
-    factory.commit("eval/_tasks", StageKind::Tasks, &identity, &produce)?;
-    Ok(factory.view("eval/_tasks"))
+    let key = format!("{}/_tasks", stage.key);
+    factory.commit(&key, EVAL_TASKS, &identity, &produce)?;
+    Ok(factory.view(&key))
 }
 
 /// Commit one arm and return its trials and product digest.
@@ -195,7 +242,7 @@ fn arm_trials(
     inputs: Vec<(String, Digest)>,
 ) -> Result<(Vec<TrialResult>, Digest), RunError> {
     let identity = super::identity_of(
-        StageKind::Rollout,
+        EVAL_ARM,
         &arm.name,
         arm.parameters(factory)?,
         inputs,
@@ -203,7 +250,7 @@ fn arm_trials(
         Some(arm.pass.seed),
     );
     let produce = |f: &Factory<'_>, staging: &Staging| run_arm(f, arm, staging);
-    let (manifest, _) = factory.commit(key, StageKind::Rollout, &identity, &produce)?;
+    let (manifest, _) = factory.commit(key, EVAL_ARM, &identity, &produce)?;
     Ok((trials_of(&factory.view(key))?, manifest.digest()))
 }
 
@@ -278,11 +325,11 @@ pub(crate) fn produce(
     staging: &Staging,
 ) -> Result<(), RunError> {
     let (section, plan) = section(factory, stage)?;
-    let training_key = stage_key(StageKind::Training, &stage.name);
+    let training_key = section.candidate.clone();
     let candidate = candidate_of(&factory.view(&training_key))?;
     if let Some(authority) = &plan.authority {
         return protected(
-            factory, stage, section, plan, authority, &candidate, staging,
+            factory, stage, &section, plan, authority, &candidate, staging,
         );
     }
     let trainer = factory.services.trainer.ok_or_else(|| {
@@ -291,23 +338,32 @@ pub(crate) fn produce(
             "evaluation serves candidates through the trainer",
         )
     })?;
-    let task_root = pinned_tasks(factory, section, plan)?;
+    let task_root = pinned_tasks(factory, stage, &section, plan)?;
     let tasks_digest = factory
         .products
-        .manifest(&tasks_identity_id(factory, section, plan)?)?
+        .manifest(&tasks_identity_id(factory, &section, plan)?)?
         .digest();
-    let selected = tasks(factory, plan)?;
+    let selected = tasks(factory, &section, plan)?;
     let (base_binding, champion) =
         super::rollout::binding_of(factory, &stage.key, &section.baseline)?;
-    let comparisons = plan
-        .decision
-        .comparisons
-        .unwrap_or(section.candidates.len() as u32)
-        .max(1);
+    let comparisons = comparisons(&section, plan);
+    // Named by what it is, so evaluations of one baseline under one plan
+    // share it (one identity, run once), whichever candidates they judge.
+    let baseline_name = format!(
+        "baseline-{}",
+        &digest_of(&(
+            plan_digest(factory, &section)?,
+            &section.agent,
+            &section.args,
+            &base_binding
+        ))
+        .hex()[..12]
+    );
+    let baseline_key = format!("{}/_arms/baseline", stage.key);
     let baseline = Arm {
-        name: "eval-baseline".into(),
-        key: "eval/_arms/baseline".into(),
-        pass: arm_pass(section, plan, "eval-baseline")?,
+        name: baseline_name.clone(),
+        key: baseline_key.clone(),
+        pass: arm_pass(&section, plan, &baseline_name)?,
         tasks: selected.clone(),
         task_root: task_root.clone(),
         model: Some(base_binding),
@@ -315,7 +371,7 @@ pub(crate) fn produce(
     };
     let (base_trials, base_product) = arm_trials(
         factory,
-        "eval/_arms/baseline",
+        &baseline_key,
         &baseline,
         vec![("tasks".into(), tasks_digest.clone())],
     )?;
@@ -328,7 +384,7 @@ pub(crate) fn produce(
         .map(|a| factory.view(&training_key).join(&a.path));
     // A candidate is served from the base it was trained from, which is the
     // baseline unless the baseline is a champion.
-    let base = &training_base(factory, &stage.key)?;
+    let base = &training_base(factory, &section.candidate)?;
     let served = trainer
         .serve(base, adapter.as_deref())
         .map_err(|e| stage_error(&stage.key, e))?;
@@ -338,12 +394,12 @@ pub(crate) fn produce(
         .bind(base)
         .map_err(|e| stage_error(&stage.key, e))?;
     binding.model = served.clone();
-    let name = format!("eval-{}", stage.name);
-    let key = format!("eval/_arms/{}", stage.name);
+    let name = format!("{}.candidate", stage.key);
+    let key = format!("{}/_arms/candidate", stage.key);
     let candidate_arm = Arm {
         name: name.clone(),
         key: key.clone(),
-        pass: arm_pass(section, plan, &name)?,
+        pass: arm_pass(&section, plan, &name)?,
         tasks: selected,
         task_root,
         model: Some(binding),
@@ -366,16 +422,21 @@ pub(crate) fn produce(
     );
     let result = EvalResult {
         schema: EVAL_SCHEMA.into(),
-        plan: plan_digest(factory, section)?,
+        plan: plan_digest(factory, &section)?,
         protected: false,
-        name: stage.name.clone(),
+        name: section.candidate.clone(),
         baseline: Some(arm_result(
             "baseline",
             &section.baseline.to_string(),
             &base_trials,
             base_product,
         )),
-        candidate: Some(arm_result(&stage.name, &served, &cand_trials, cand_product)),
+        candidate: Some(arm_result(
+            &section.candidate,
+            &served,
+            &cand_trials,
+            cand_product,
+        )),
         decision,
         statistics,
         signature: None,
@@ -384,28 +445,32 @@ pub(crate) fn produce(
     std::fs::write(staging.path().join("report.md"), report(&result)).map_err(io(staging.path()))
 }
 
-/// The base model the recipe's variants train from.
+/// The base model the `model.train` stage `training` trained from.
 pub(crate) fn training_base<'r>(
     factory: &'r Factory<'_>,
-    key: &str,
+    training: &str,
 ) -> Result<&'r ModelRef, RunError> {
+    let stage = factory
+        .resolved
+        .plan
+        .stage(training)
+        .filter(|s| s.operation == names::TRAIN)
+        .ok_or_else(|| stage_error(training, "is not a training stage"))?;
+    let params: TrainParams = stage.params().map_err(|e| stage_error(training, e))?;
     factory
         .resolved
-        .recipe
-        .training
-        .as_ref()
-        .map(|t| &t.base)
-        .ok_or_else(|| stage_error(key, "an evaluation judges trained candidates"))
+        .model(&params.base)
+        .ok_or_else(|| stage_error(training, format!("model role {} is not bound", params.base)))
 }
 
 fn tasks_identity_id(
     factory: &Factory<'_>,
-    section: &EvalSection,
+    section: &Evaluation,
     plan: &EvalPlan,
 ) -> Result<Digest, RunError> {
-    let selected = tasks(factory, plan)?;
+    let selected = tasks(factory, section, plan)?;
     Ok(super::identity_of(
-        StageKind::Tasks,
+        EVAL_TASKS,
         "eval",
         json!({ "plan": plan_digest(factory, section)?, "tasks": selected.iter().map(|t| json!([t.id, t.digest])).collect::<Vec<_>>() }),
         Vec::new(),
@@ -428,7 +493,7 @@ fn tasks_identity_id(
 fn protected(
     factory: &Factory<'_>,
     stage: &PlannedStage,
-    section: &EvalSection,
+    section: &Evaluation,
     plan: &EvalPlan,
     authority: &crate::eval_plan::Authority,
     candidate: &splinter_core::factory::product::ModelCandidate,
@@ -437,7 +502,7 @@ fn protected(
     let Some((program, args)) = authority.command.split_first() else {
         return Err(stage_error(&stage.key, "the authority's command is empty"));
     };
-    let training = factory.view(&stage_key(StageKind::Training, &stage.name));
+    let training = factory.view(&section.candidate);
     let adapter = candidate
         .artifacts
         .iter()
@@ -505,7 +570,8 @@ fn protected(
     let comparisons = plan
         .decision
         .comparisons
-        .unwrap_or(section.candidates.len() as u32)
+        .or(section.comparisons)
+        .unwrap_or(1)
         .max(1);
     let alpha = plan.decision.alpha / f64::from(comparisons);
     let expected = Pair {
@@ -527,7 +593,7 @@ fn protected(
         schema: EVAL_SCHEMA.into(),
         plan: plan_digest(factory, section)?,
         protected: true,
-        name: stage.name.clone(),
+        name: section.candidate.clone(),
         baseline: None,
         candidate: None,
         decision,

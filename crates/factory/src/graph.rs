@@ -34,7 +34,7 @@
 //! the stage's ports - there is no nested controller.
 //!
 //! A stage consumes only stages declared above it, so a recipe reads top to
-//! bottom and cannot express a cycle. [`compile`] reports every problem at once - an unknown operation, port or
+//! bottom, cannot express a cycle, and its stages run in the order written. [`compile`] reports every problem at once - an unknown operation, port or
 //! parameter, an unresolved or ill-typed reference, an unbound input, a
 //! missing model role, a cycle, a repeated or malformed id - and otherwise
 //! returns the [`CompiledPlan`]: stages in an order in which each comes after
@@ -639,28 +639,6 @@ pub fn parse(text: &str) -> Result<RecipeV2, RecipeError> {
     serde_yaml::from_str(text).map_err(|e| RecipeError(vec![e.to_string()]))
 }
 
-/// Stages ordered so each comes after what it consumes, or the stages on
-/// a cycle.
-fn ordered(stages: Vec<CompiledStage>) -> Result<Vec<CompiledStage>, Vec<String>> {
-    let mut remaining = stages;
-    let mut done: BTreeSet<String> = BTreeSet::new();
-    let mut out = Vec::new();
-    while !remaining.is_empty() {
-        let (ready, blocked): (Vec<_>, Vec<_>) = remaining
-            .into_iter()
-            .partition(|s| s.depends_on.iter().all(|d| done.contains(d)));
-        if ready.is_empty() {
-            return Err(blocked.into_iter().map(|s| s.id).collect());
-        }
-        for stage in ready {
-            done.insert(stage.id.clone());
-            out.push(stage);
-        }
-        remaining = blocked;
-    }
-    Ok(out)
-}
-
 /// Compile `text` against `registry`; `load` reads a subrecipe's text by its
 /// path in the task repository.
 ///
@@ -671,6 +649,25 @@ pub fn compile(
     registry: &Registry,
     load: &dyn Fn(&str) -> Result<String, String>,
 ) -> Result<CompiledPlan, RecipeError> {
+    let (plan, problems) = compile_partly(text, registry, load)?;
+    if problems.is_empty() {
+        Ok(plan)
+    } else {
+        Err(RecipeError(problems))
+    }
+}
+
+/// [`compile`]'s plan of every stage that compiled, with every problem
+/// found: what a caller that checks further (the files the stages name, the
+/// connections) needs to report all problems at once.
+///
+/// # Errors
+/// The text is not a v2 recipe at all.
+pub fn compile_partly(
+    text: &str,
+    registry: &Registry,
+    load: &dyn Fn(&str) -> Result<String, String>,
+) -> Result<(CompiledPlan, Vec<String>), RecipeError> {
     let recipe = parse(text)?;
     let mut problems = Vec::new();
     for name in recipe
@@ -724,25 +721,15 @@ pub fn compile(
             Err(why) => compiler.problems.push(format!("output {name}: {why}")),
         }
     }
-    let mut problems = compiler.problems;
-    let stages = match ordered(compiler.stages) {
-        Ok(stages) => stages,
-        Err(cycle) => {
-            problems.push(format!(
-                "stages depend on each other in a cycle: {}",
-                cycle.join(", ")
-            ));
-            Vec::new()
-        }
-    };
-    if !problems.is_empty() {
-        return Err(RecipeError(problems));
-    }
-    Ok(CompiledPlan {
+    // Declaration order is an order in which each stage comes after what it
+    // consumes: a stage consumes only stages declared above it.
+    let (problems, stages) = (compiler.problems, compiler.stages);
+    let plan = CompiledPlan {
         name: recipe.name,
         inputs: recipe.inputs,
         models: recipe.models,
         stages,
         outputs,
-    })
+    };
+    Ok((plan, problems))
 }

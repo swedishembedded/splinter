@@ -17,11 +17,11 @@ use crate::repo::{Repo, RECIPE};
 
 /// What a run of the reference recipe gave, as a user would read it.
 pub(crate) fn observed(dir: &std::path::Path) -> Value {
-    let dataset = dataset_of(&dir.join("datasets/sft")).unwrap();
-    let train = std::fs::read_to_string(dir.join("datasets/sft/train.jsonl")).unwrap();
+    let dataset = dataset_of(&dir.join("sft")).unwrap();
+    let train = std::fs::read_to_string(dir.join("sft/train.jsonl")).unwrap();
     let mut evals = serde_json::Map::new();
     for candidate in ["lora-r8", "lora-r16"] {
-        let result = result_of(&dir.join(format!("eval/{candidate}"))).unwrap();
+        let result = result_of(&dir.join(format!("eval-{candidate}"))).unwrap();
         evals.insert(
             candidate.into(),
             json!({

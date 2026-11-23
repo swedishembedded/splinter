@@ -4,31 +4,22 @@
 //! A recipe is read with every file it names, every problem is reported at
 //! once, and its graph orders each stage after all it consumes.
 
-use splinter_core::factory::identity::StageKind;
 use splinter_factory::resolve::resolve;
 
-use crate::repo::{connections, Repo, RECIPE};
+use crate::repo::{connections, Repo, DATASET, RECIPE};
 
 #[test]
 fn a_recipe_resolves_into_an_ordered_graph_of_its_stages() {
     let repo = Repo::new();
     let resolved = resolve(&repo.root, RECIPE, connections()).expect("the recipe resolves");
-    let ids: Vec<&str> = resolved
-        .collection
-        .collection
-        .tasks
-        .iter()
-        .map(|t| t.id.as_str())
-        .collect();
+    let pinned = &resolved.collections["tasks"].collection;
+    let ids: Vec<&str> = pinned.tasks.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(
         ids,
         ["train/001-first", "train/002-second"],
         "only the train split"
     );
-    assert_eq!(
-        resolved.collection.collection.tasks[0].family.as_deref(),
-        Some("course")
-    );
+    assert_eq!(pinned.tasks[0].family.as_deref(), Some("course"));
     let keys: Vec<&str> = resolved
         .plan
         .stages
@@ -39,32 +30,32 @@ fn a_recipe_resolves_into_an_ordered_graph_of_its_stages() {
         keys,
         [
             "tasks",
-            "rollouts/local",
-            "rollouts/remote",
-            "datasets/sft",
-            "training/lora-r8",
-            "training/lora-r16",
-            "eval/lora-r8",
-            "eval/lora-r16",
+            "local",
+            "remote",
+            "sft",
+            "lora-r8",
+            "lora-r16",
+            "eval-lora-r8",
+            "eval-lora-r16",
             "release"
         ]
     );
     assert!(resolved.plan.is_ordered());
     assert_eq!(
-        resolved.plan.stage("rollouts/remote").unwrap().depends_on,
-        ["tasks", "rollouts/local"]
+        resolved.plan.stage("remote").unwrap().depends_on,
+        ["local", "tasks"]
     );
     assert_eq!(
-        resolved.plan.stage("eval/lora-r8").unwrap().kind,
-        StageKind::Eval
+        resolved.plan.stage("eval-lora-r8").unwrap().operation,
+        "evaluation"
     );
     // Changing a variant's training touches only its own downstream.
-    let downstream = resolved.plan.downstream("training/lora-r8");
+    let downstream = resolved.plan.downstream("lora-r8");
     assert_eq!(
         downstream.into_iter().collect::<Vec<_>>(),
-        ["eval/lora-r8", "release"]
+        ["eval-lora-r8", "release"]
     );
-    let (plan, tasks) = resolved.eval.as_ref().expect("an eval plan");
+    let (plan, tasks) = &resolved.eval_plans["eval/dev.yaml"];
     assert!(!plan.protected());
     assert_eq!(tasks.as_ref().unwrap().split(Some("eval")).len(), 1);
 }
@@ -73,26 +64,29 @@ fn a_recipe_resolves_into_an_ordered_graph_of_its_stages() {
 fn every_problem_of_a_recipe_is_reported_at_once() {
     let repo = Repo::new();
     let broken = RECIPE
-        .replace("unsolved_by: [local]", "unsolved_by: [later]")
-        .replace("sources: [local, remote]", "sources: [local, missing]")
         .replace(
-            "candidates: [lora-r8, lora-r16]",
-            "candidates: [lora-r8, lora-r99]",
+            "unsolved_by: [$stages.local.attempts]",
+            "unsolved_by: [$stages.later.attempts]",
+        )
+        .replace(
+            "with: { target: student, seed: 13 }",
+            "with: { target: nobody, seed: 13 }",
+        )
+        .replace(
+            "candidate: $stages.lora-r16.model",
+            "candidate: $stages.lora-r99.model",
         )
         .replace("\"hosted:deepseek", "\"nowhere:deepseek")
-        .replace(
-            "presets/sven.yaml]\n    model",
-            "presets/gone.yaml]\n    model",
-        )
+        .replace("files: [presets/sven.yaml]", "files: [presets/gone.yaml]")
         .replace("SVEN_KEY: \"env:SVEN_KEY\"", "SVEN_KEY: sk-literal");
     let problems = resolve(&repo.root, &broken, connections())
         .expect_err("refused")
         .0;
     let text = problems.join("\n");
     for expected in [
-        "selects tasks unsolved by later",
-        "reads missing, which is not a rollout pass",
-        "candidate lora-r99 is not a training variant",
+        "stage later is not above this one",
+        "model role nobody is not in `models:`",
+        "stage lora-r99 is not above this one",
         "names connection nowhere",
         "presets/gone.yaml",
         "SVEN_KEY looks like a credential",
@@ -108,14 +102,16 @@ fn every_problem_of_a_recipe_is_reported_at_once() {
 fn an_unknown_key_is_refused_rather_than_ignored() {
     let repo = Repo::new();
     let typo = RECIPE.replace(
-        "    attempts: 2\n    seed: 11",
-        "    attempts: 2\n    seed: 11\n    attempt: 3",
+        "      attempts: 2\n      seed: 11",
+        "      attempts: 2\n      seed: 11\n      attempt: 3",
     );
     let problems = resolve(&repo.root, &typo, connections())
         .expect_err("refused")
         .0;
     assert!(
-        problems[0].contains("unknown field `attempt`"),
+        problems
+            .iter()
+            .any(|p| p.contains("stage local: unknown field `attempt`")),
         "{problems:?}"
     );
 }
@@ -190,7 +186,7 @@ fn a_collection_names_the_command_that_generates_its_tasks_and_a_missing_root_sa
 fn examination_tasks_never_reach_a_dataset_under_any_name() {
     let repo = Repo::new();
     // No split: the collection's held-out task would be attempted for training.
-    let unsplit = RECIPE.replace(", split: train }", " }");
+    let unsplit = RECIPE.replace("    with: { split: train }\n", "");
     let problems = resolve(&repo.root, &unsplit, connections())
         .expect_err("refused")
         .0;
@@ -216,7 +212,7 @@ fn examination_tasks_never_reach_a_dataset_under_any_name() {
         "{problems:?}"
     );
     // A recipe with no dataset trains on nothing, so it may attempt them.
-    let no_dataset = unsplit.split("dataset:").next().unwrap().to_owned();
+    let no_dataset = unsplit.split(DATASET).next().unwrap().to_owned();
     std::fs::remove_dir_all(repo.root.join("tasks/vim/train/003-copy")).unwrap();
     resolve(&repo.root, &no_dataset, connections()).expect("a recipe that trains on nothing");
 }

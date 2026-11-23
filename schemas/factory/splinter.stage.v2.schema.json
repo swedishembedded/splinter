@@ -25,12 +25,12 @@
         ]
       }
     },
-    "kind": {
-      "description": "What the stage does.",
-      "$ref": "#/$defs/StageKind"
-    },
     "name": {
       "description": "The stage's name in its recipe (`local`, `sft`, `lora-r16`).",
+      "type": "string"
+    },
+    "operation": {
+      "description": "The operation the stage runs (`attempt.collect`), with its revision\n(`attempt.collect@1`).",
       "type": "string"
     },
     "parameters": {
@@ -52,7 +52,7 @@
   },
   "required": [
     "schema",
-    "kind",
+    "operation",
     "name",
     "parameters",
     "inputs",
@@ -63,41 +63,6 @@
       "description": "A content address: blake3 or sha256, 64 lowercase hex digits.",
       "type": "string",
       "pattern": "^(blake3|sha256):[0-9a-f]{64}$"
-    },
-    "StageKind": {
-      "description": "The kinds of stage a recipe is planned into.",
-      "oneOf": [
-        {
-          "description": "Load and pin the task collection.",
-          "type": "string",
-          "const": "tasks"
-        },
-        {
-          "description": "One rollout pass: agents attempt tasks.",
-          "type": "string",
-          "const": "rollout"
-        },
-        {
-          "description": "Project trials into a training dataset.",
-          "type": "string",
-          "const": "dataset"
-        },
-        {
-          "description": "Train one candidate.",
-          "type": "string",
-          "const": "training"
-        },
-        {
-          "description": "Evaluate candidates against a baseline.",
-          "type": "string",
-          "const": "eval"
-        },
-        {
-          "description": "Promote a candidate.",
-          "type": "string",
-          "const": "release"
-        }
-      ]
     }
   }
 }

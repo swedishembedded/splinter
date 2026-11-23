@@ -16,8 +16,8 @@ splinter validate recipes/vim-hosted-sft.yaml
 splinter plan recipes/vim-hosted-sft.yaml
 splinter run recipes/vim-hosted-sft.yaml --out runs/vim-hosted-sft
 splinter status runs/vim-hosted-sft
-splinter inspect runs/vim-hosted-sft --stage datasets
-splinter inspect runs/vim-hosted-sft --stage rollouts/hosted --viewer harbor
+splinter inspect runs/vim-hosted-sft --stage sft
+splinter inspect runs/vim-hosted-sft --stage hosted --viewer harbor
 splinter verify runs/vim-hosted-sft
 splinter report runs/vim-hosted-sft
 ```
@@ -47,27 +47,75 @@ connections:
 
 ## The recipe
 
+A recipe (`splinter.recipe/v2`) is a graph of stages over typed products. It
+names its inputs (files of the repository), binds model roles, and lists stages:
+each names the operation it `uses`, binds the operation's inputs to products of
+the recipe (`$inputs.NAME`) or of stages above it (`$stages.ID.PORT`), and gives
+the operation's parameters under `with:`. A stage's id is its key in the run.
+
 ```yaml
-schema: splinter.factory/v1
+schema: splinter.recipe/v2
 name: vim-mastery
-tasks: { collection: collections/vim-headless-mastery.yaml, split: train }
-rollouts:
-  - { name: local, agent: sven, model: "brain:Qwen/Qwen3-4B",
-      environment: environments/vim/environment.yaml, attempts: 4, seed: 1 }
-  - { name: hosted, agent: sven, model: "hosted:deepseek/deepseek-v4.1-flash",
-      environment: environments/vim/environment.yaml,
-      tasks: { unsolved_by: [local] }, attempts: 4, seed: 2 }
-dataset: { name: sft, sources: [local, hosted], target: "brain:Qwen/Qwen3-4B", seed: 3 }
-training:
-  base: "brain:Qwen/Qwen3-4B"
-  variants: [{ name: lora-r16, method: lora, params: { rank: 16, steps: 500 }, seed: 4 }]
-eval: { plan: eval/vim-dev.yaml, agent: sven, baseline: "brain:Qwen/Qwen3-4B", candidates: [lora-r16] }
-release: { promote: false }
+inputs:
+  course: { kind: files, path: collections/vim-headless-mastery.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - id: tasks
+    uses: tasks.pin
+    inputs: { collection: $inputs.course }
+    with: { split: train }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/vim/environment.yaml,
+            attempts: 4, seed: 1 }
+  - id: hosted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts] }
+    with: { agent: sven, model: teacher, environment: environments/vim/environment.yaml,
+            attempts: 4, seed: 2 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts, $stages.hosted.attempts] }
+    with: { target: student, seed: 3 }
+  - id: lora-r16
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 500 }, seed: 4 }
+  - id: eval-r16
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model }
+    with: { plan: eval/vim-dev.yaml, agent: sven, baseline: student }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-r16.evaluation] }
+    with: { promote: false }
+outputs: { dataset: $stages.sft.dataset }
 ```
 
-Unknown keys are refused, every seed is written down, and `splinter validate`
-reports every problem at once: a missing file, a model with no connection, a pass
-that selects tasks unsolved by a pass after it, a credential written as a literal.
+| operation | inputs | output |
+|---|---|---|
+| `tasks.pin` | `collection` (a recipe input) | `tasks` |
+| `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional) | `attempts` |
+| `dataset.project` | `attempts` (one or more) | `dataset` |
+| `model.train` | `dataset` | `model` |
+| `evaluation` | `candidate` (a model) | `evaluation` |
+| `promotion` | `evaluations` (one or more) | `release` |
+
+A stage consumes only stages above it, so a recipe reads top to bottom and runs
+in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
+subrecipe: its stages join the graph under the stage's id (`book.sft`), its
+inputs bound to the stage's and its outputs the stage's ports. Each candidate's
+evaluation is a stage; several evaluations of one experiment state how the
+plan's significance level is shared (`comparisons: N`), and those with the same
+baseline and plan share one baseline arm, run once.
+
+Unknown operations, ports and parameters are refused, every seed is written
+down, and `splinter validate` reports every problem at once: a missing file, a
+model role with no connection, a reference to a stage below, a product of the
+wrong kind, a credential written as a literal.
 
 - **Collections** name a directory of Harbor tasks, and optionally the command
   that compiles them (`generate:`, which `splinter generate` runs).
@@ -82,25 +130,25 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   full machine and in a hardened container; each trial records the sandbox it
   ran in and what it enforced, the run report lists them per pass, and an
   environment no sandbox here can honour is refused, never run weaker.
-- **Rollout passes** name an agent and its own argv (`args`, passed as given,
+- **Attempt stages** (`attempt.collect`) name an agent and its own argv (`args`, passed as given,
   never through a shell), the files those arguments refer to, an appended system
   prompt, environment variables (`env:NAME` passes this machine's variable), a
-  model or none (the agent's own provider), attempts, retries and seed. A pass
-  with `unsolved_by` runs only the tasks no earlier pass solved, frozen when it
-  starts. A pass with `interactive: true` is played by people (below). A pass
+  model role or none (the agent's own provider), attempts, retries and seed. A
+  stage given `unsolved_by` runs only the tasks those stages left unsolved, frozen
+  when it starts. A pass with `interactive: true` is played by people (below). A pass
   with `hint: solution` works each task from the run's own copy of it whose
   instruction carries the task's reference solution (`solution/solve.sh`), in
   the task's own sandbox and graded by its own verifier (below).
 
 ## What each stage guarantees
 
-- **Rollouts.** Every attempt is graded by the one outcome classifier: a reward-0
+- **Attempts** (`attempt.collect`). Every attempt is graded by the one outcome classifier: a reward-0
   trial is a graded failure and is kept; a sandbox, model-endpoint, verifier or
   agent failure is retried up to `retries` times and then kept as what it was,
   never as the agent's 0. A killed controller resumes without repeating an
   attempt that reported. The trials, every attempt's report and the native Harbor
-  output are in `rollouts/<pass>/`.
-- **Dataset** (`native-sft`). Every verified success becomes one record: the
+  output are in the stage's directory (`hosted/`).
+- **Dataset** (`dataset.project`, `projection: native-sft`). Every verified success becomes one record: the
   conversation exactly as the agent's model was sent it - its own system prompt
   and tools - with every action supervised. Nothing is ranked, capped or
   rewritten; a trial excluded is listed in `excluded.jsonl` with its exact reason,
@@ -111,13 +159,13 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   is told the same mode. `projection: portable-sft` rebuilds
   each conversation from the trial's ATIF trajectory instead, for an agent whose
   model calls are not recorded (Claude Code).
-- **Training.** Each variant is one brain job, resumable under a key derived from
+- **Training** (`model.train`). Each candidate is one brain job, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
-  variant's parameters trains a new candidate and reuses the dataset and rollouts.
-- **Evaluation.** A development plan runs a baseline arm (once, shared by every
-  candidate) and a candidate arm under the same agent, arguments, environment,
+  stage's parameters trains a new candidate and reuses the dataset and attempts.
+- **Evaluation** (`evaluation`). A development plan runs a baseline arm (once,
+  shared by every evaluation with the same plan and baseline) and a candidate arm under the same agent, arguments, environment,
   tasks, attempts and seeds, and decides by the exact one-sided paired sign test
-  at the plan's alpha divided among the candidates. A protected plan names the
+  at the plan's alpha divided among the stage's `comparisons`. A protected plan names the
   task repository's examiner instead of tasks, whose sealed tasks never leave it:
 
   ```yaml
@@ -134,7 +182,7 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   Splinter appends `--candidate FILE --out FILE`, and keeps the examiner's
   verdict only when its signature verifies under the public key and it is about
   this candidate against the base at the plan's level.
-- **Release.** Records every decision; with `promote: true` it promotes the best
+- **Release** (`promotion`). Records every decision; with `promote: true` it promotes the best
   improved candidate. It names the champion the run leaves in use (below).
 
 ## Changing an experiment
@@ -155,16 +203,18 @@ of it, and each verified success is learned under the task's own instruction,
 the hint nowhere in the record:
 
 ```yaml
-  - { name: hinted, agent: sven, model: "brain:Qwen/Qwen3-4B", hint: solution,
-      environment: environments/vim/environment.yaml,
-      tasks: { unsolved_by: [local] }, attempts: 2, seed: 5 }
+  - id: hinted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts] }
+    with: { agent: sven, model: student, hint: solution,
+            environment: environments/vim/environment.yaml, attempts: 2, seed: 5 }
 ```
 
 A trial whose own replies or reasoning repeat a line of the solution learned
 to quote the hint, not to do the task, and is excluded (`hint_repeated`); so is
 a record that still shows the hint (`hint_not_removed`) or never held it
 (`hint_not_found`). `supervision.jsonl` marks every record of a hinted pass
-`hinted`. A hinted pass is never interactive, and every task it runs needs a
+`hinted`. A hinted stage is never interactive, and every task it runs needs a
 reference solution.
 
 ## Generations
@@ -173,18 +223,32 @@ A campaign of generations is a chain of forked runs, each held to the champion
 before it. A run's release names the champion it leaves in use: the candidate
 it promoted, else the model it was measured against. A trained champion's
 adapter is kept in the release product. The next generation's recipe is the
-last one with one more pass, in which the champion attempts what no earlier
-pass solved, and with the champion as the baseline to beat:
+last one with a `champion` model role, one more attempt stage in which the
+champion attempts what no earlier stage solved, and the champion as the
+baseline to beat:
 
 ```yaml
-rollouts:
-  # ... every pass of the generation before, unchanged, so the fork reuses them ...
-  - { name: g2, agent: sven, model: "champion:runs/vim-g1",
-      environment: environments/vim/environment.yaml,
-      tasks: { unsolved_by: [local, hosted] }, attempts: 4, seed: 21 }
-dataset: { name: sft, sources: [local, hosted, g2], target: "brain:Qwen/Qwen3-4B", seed: 3 }
-eval: { plan: eval/vim-dev.yaml, agent: sven, baseline: "champion:runs/vim-g1", candidates: [lora-r16] }
-release: { promote: true }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+  champion: "champion:runs/vim-g1"
+stages:
+  # ... every stage of the generation before, unchanged, so the fork reuses them ...
+  - id: g2
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks,
+              unsolved_by: [$stages.local.attempts, $stages.hosted.attempts] }
+    with: { agent: sven, model: champion, environment: environments/vim/environment.yaml,
+            attempts: 4, seed: 21 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts, $stages.hosted.attempts, $stages.g2.attempts] }
+    with: { target: student, seed: 3 }
+  # ... model.train from base: student, evaluation with baseline: champion ...
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-r16.evaluation] }
+    with: { promote: true }
 ```
 
 ```sh
@@ -193,7 +257,8 @@ splinter fork runs/vim-g1 --recipe recipes/vim-g2.yaml --out runs/vim-g2
 
 `champion:RUN` names the run directory, relative to the task repository or
 absolute. The champion is served from its base and adapter wherever an agent's
-model goes, and it is never trained from: every variant trains from the base
+model role goes, and it is never trained from (a `model.train` base or a
+dataset target that is the champion is refused): every variant trains from the base
 model on the data of every generation so far. A protected plan hands the
 champion to its examiner as the predecessor (`--predecessor FILE`), and keeps
 the verdict only when it is about that predecessor. A changed champion is a
@@ -209,14 +274,14 @@ a bundle that `splinter verify` checks on another machine.
 
 ## Guided sessions
 
-A pass with `interactive: true` is never run unattended. `splinter play` starts
+An attempt stage with `interactive: true` is never run unattended. `splinter play` starts
 one of its tasks on this terminal; a person works with the agent, the finished
 session is graded like any trial and marked guided, and the run continues, so the
 session reaches the dataset and what is trained on it:
 
 ```sh
-splinter play runs/vim-hosted-sft --pass guided --task train/019-move-backward-by-word
-splinter play runs/vim-hosted-sft --pass guided --task train/019-move-backward-by-word --continue 0
+splinter play runs/vim-hosted-sft --stage guided --task train/019-move-backward-by-word
+splinter play runs/vim-hosted-sft --stage guided --task train/019-move-backward-by-word --continue 0
 ```
 
 `--continue N` continues session N's conversation as a new session; the earlier

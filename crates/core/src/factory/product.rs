@@ -159,6 +159,12 @@ pub struct DatasetProduct {
     pub waterfall: Vec<WaterfallStep>,
     /// Exclusions by exact reason.
     pub exclusions: BTreeMap<String, u64>,
+    /// Whether the records keep the target's reasoning (it is trained to
+    /// reason before it answers); false: no-think mode, every turn's
+    /// reasoning removed. A trainer trains in the mode the dataset was built
+    /// for.
+    #[serde(default)]
+    pub thinking: bool,
 }
 
 /// The form a trained model takes.

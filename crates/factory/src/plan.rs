@@ -6,173 +6,109 @@
 // team needs expertise in machine-learning experiment orchestration, you can
 // procure our services by sending an email to info@swedishembedded.com.
 
-//! A recipe as a graph of stages, each with what it depends on and the work
-//! it will do.
+//! A compiled recipe as the controller runs it: each stage with the stages
+//! it consumes, its bound inputs and parameters, and the work it will do.
 //!
-//! The graph is fixed by the recipe: one tasks stage; one stage per rollout
-//! pass, after the tasks and after every pass it selects unsolved tasks
-//! from; the dataset after its sources; one training stage per variant
-//! after the dataset; one evaluation per candidate after its training stage;
-//! the release after every evaluation. Stages are listed in an order in
-//! which each comes after all it depends on. Their identities are computed
-//! when they run, from the products of what they depend on.
+//! The graph is the compiled recipe's ([`crate::graph`]): stages are listed
+//! in an order in which each comes after all it consumes, and a stage's key
+//! in the run (its product's view, its slots' namespace) is its id. Their
+//! identities are computed when they run, from the products of what they
+//! consume.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use serde::de::DeserializeOwned;
 use serde::Serialize;
-use splinter_core::factory::identity::StageKind;
+use serde_json::Value;
 
-use crate::recipe::Recipe;
+use crate::graph::Source;
 
 /// One planned stage.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PlannedStage {
-    /// The stage's key in the run (`rollouts/local`).
+    /// Its id in the recipe, and its key in the run.
     pub key: String,
-    /// What it does.
-    pub kind: StageKind,
-    /// Its name in the recipe.
-    pub name: String,
+    /// The operation it runs.
+    pub operation: String,
+    /// The operation's revision.
+    pub revision: u32,
     /// The keys of the stages it consumes.
     pub depends_on: Vec<String>,
     /// What it will do, for a person.
     pub work: String,
+    /// Each input port's sources.
+    #[serde(skip)]
+    pub inputs: BTreeMap<String, Vec<Source>>,
+    /// Its parameters, checked against the operation's when compiled.
+    #[serde(skip)]
+    pub params: Value,
+}
+
+impl PlannedStage {
+    /// The stages feeding `port`, in the order bound.
+    #[must_use]
+    pub fn sources(&self, port: &str) -> Vec<&str> {
+        self.inputs
+            .get(port)
+            .into_iter()
+            .flatten()
+            .filter_map(|s| match s {
+                Source::Stage { stage, .. } => Some(stage.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The one stage feeding `port`.
+    #[must_use]
+    pub fn source(&self, port: &str) -> Option<&str> {
+        self.sources(port).into_iter().next()
+    }
+
+    /// The recipe input bound to `port`, when it is one.
+    #[must_use]
+    pub fn input(&self, port: &str) -> Option<&str> {
+        self.inputs.get(port)?.iter().find_map(|s| match s {
+            Source::Input(name) => Some(name.as_str()),
+            _ => None,
+        })
+    }
+
+    /// Its parameters as the operation's type.
+    ///
+    /// # Errors
+    /// They do not fit it (refused when compiled; kept as an error here).
+    pub fn params<P: DeserializeOwned>(&self) -> Result<P, String> {
+        crate::ops::params(&self.params).map_err(|e| format!("stage {}: {e}", self.key))
+    }
+
+    /// The operation with its revision, as an identity names it.
+    #[must_use]
+    pub fn versioned_operation(&self) -> String {
+        format!("{}@{}", self.operation, self.revision)
+    }
 }
 
 /// The planned graph, in dependency order.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Plan {
     /// The stages.
     pub stages: Vec<PlannedStage>,
 }
 
-/// The key of a stage: `<directory>/<name>`, or the directory alone for the
-/// run's single tasks and release stages.
-#[must_use]
-pub fn stage_key(kind: StageKind, name: &str) -> String {
-    match kind {
-        StageKind::Tasks | StageKind::Release => kind.directory().to_owned(),
-        _ => format!("{}/{name}", kind.directory()),
-    }
-}
-
 impl Plan {
-    /// Plan a validated recipe; `tasks` is the number of tasks the tasks
-    /// section selects.
-    #[must_use]
-    pub fn of(recipe: &Recipe, tasks: usize) -> Self {
-        let mut stages = vec![PlannedStage {
-            key: stage_key(StageKind::Tasks, ""),
-            kind: StageKind::Tasks,
-            name: recipe.name.clone(),
-            depends_on: Vec::new(),
-            work: format!("pin {tasks} tasks of {}", recipe.tasks.collection),
-        }];
-        for pass in &recipe.rollouts {
-            let mut depends_on = vec![stage_key(StageKind::Tasks, "")];
-            depends_on.extend(
-                pass.tasks
-                    .unsolved_by
-                    .iter()
-                    .map(|p| stage_key(StageKind::Rollout, p)),
-            );
-            let selected = if !pass.tasks.ids.is_empty() {
-                format!("{} named tasks", pass.tasks.ids.len())
-            } else if pass.tasks.unsolved_by.is_empty() {
-                format!("{tasks} tasks")
-            } else {
-                format!(
-                    "at most {tasks} tasks (those unsolved by {})",
-                    pass.tasks.unsolved_by.join(", ")
-                )
-            };
-            let model = pass
-                .model
-                .as_ref()
-                .map_or_else(|| "its own model".to_owned(), ToString::to_string);
-            let work = if pass.interactive {
-                format!(
-                    "the sessions people play of {selected} with {} on {model} (`splinter play`)",
-                    pass.agent
-                )
-            } else {
-                format!(
-                    "{selected} x {} attempts of {} on {model}, {} at a time",
-                    pass.attempts, pass.agent, pass.concurrency
-                )
-            };
-            stages.push(PlannedStage {
-                key: stage_key(StageKind::Rollout, &pass.name),
-                kind: StageKind::Rollout,
-                name: pass.name.clone(),
-                depends_on,
-                work,
-            });
-        }
-        if let Some(dataset) = &recipe.dataset {
-            stages.push(PlannedStage {
-                key: stage_key(StageKind::Dataset, &dataset.name),
-                kind: StageKind::Dataset,
-                name: dataset.name.clone(),
-                depends_on: dataset
-                    .sources
-                    .iter()
-                    .map(|s| stage_key(StageKind::Rollout, s))
-                    .collect(),
-                work: format!(
-                    "{} {} records of {} trials for {}",
-                    dataset.projection, dataset.objective, dataset.admission, dataset.target
-                ),
-            });
-            if let Some(training) = &recipe.training {
-                for variant in &training.variants {
-                    stages.push(PlannedStage {
-                        key: stage_key(StageKind::Training, &variant.name),
-                        kind: StageKind::Training,
-                        name: variant.name.clone(),
-                        depends_on: vec![stage_key(StageKind::Dataset, &dataset.name)],
-                        work: format!(
-                            "{} {} of {} with {}",
-                            training.engine, variant.method, training.base, variant.params
-                        ),
-                    });
-                }
-            }
-        }
-        let mut evals = Vec::new();
-        if let Some(eval) = &recipe.eval {
-            for candidate in &eval.candidates {
-                let key = stage_key(StageKind::Eval, candidate);
-                evals.push(key.clone());
-                stages.push(PlannedStage {
-                    key,
-                    kind: StageKind::Eval,
-                    name: candidate.clone(),
-                    depends_on: vec![stage_key(StageKind::Training, candidate)],
-                    work: format!("{candidate} against {} under {}", eval.baseline, eval.plan),
-                });
-            }
-        }
-        if let Some(release) = &recipe.release {
-            stages.push(PlannedStage {
-                key: stage_key(StageKind::Release, ""),
-                kind: StageKind::Release,
-                name: recipe.name.clone(),
-                depends_on: evals,
-                work: if release.promote {
-                    "promote the best improved candidate".into()
-                } else {
-                    "record the candidates without promoting any".into()
-                },
-            });
-        }
-        Self { stages }
-    }
-
     /// The stage with `key`.
     #[must_use]
     pub fn stage(&self, key: &str) -> Option<&PlannedStage> {
         self.stages.iter().find(|s| s.key == key)
+    }
+
+    /// The stages running `operation`, in order.
+    pub fn of_operation<'p>(
+        &'p self,
+        operation: &'p str,
+    ) -> impl Iterator<Item = &'p PlannedStage> {
+        self.stages.iter().filter(move |s| s.operation == operation)
     }
 
     /// Whether every stage comes after all it depends on.

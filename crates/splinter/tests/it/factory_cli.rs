@@ -52,9 +52,12 @@ impl Repository {
         // seed: a recipe states its pass's seed; nothing runs here.
         write(
             &root.join("recipes/demo.yaml"),
-            "schema: splinter.factory/v1\nname: demo\ntasks: { collection: collections/demo.yaml, split: train }\n\
-             rollouts:\n  - { name: hosted, agent: sven, model: \"hosted:some/model\", \
-             environment: environments/demo.yaml, attempts: 1, seed: 1 }\n",
+            "schema: splinter.recipe/v2\nname: demo\n\
+             inputs: { course: { kind: files, path: collections/demo.yaml } }\n\
+             models: { teacher: \"hosted:some/model\" }\nstages:\n\
+             \x20 - { id: tasks, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: train } }\n\
+             \x20 - { id: hosted, uses: attempt.collect, inputs: { tasks: $stages.tasks.tasks }, \
+             with: { agent: sven, model: teacher, environment: environments/demo.yaml, attempts: 1, seed: 1 } }\n",
         );
         Self { home, root }
     }

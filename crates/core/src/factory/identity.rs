@@ -22,50 +22,16 @@ use serde_json::Value;
 use crate::digest::{digest_of, Digest};
 
 /// The schema of a [`StageIdentity`].
-pub const STAGE_SCHEMA: &str = "splinter.stage/1";
-
-/// The kinds of stage a recipe is planned into.
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum StageKind {
-    /// Load and pin the task collection.
-    Tasks,
-    /// One rollout pass: agents attempt tasks.
-    Rollout,
-    /// Project trials into a training dataset.
-    Dataset,
-    /// Train one candidate.
-    Training,
-    /// Evaluate candidates against a baseline.
-    Eval,
-    /// Promote a candidate.
-    Release,
-}
-
-impl StageKind {
-    /// The directory a stage of this kind is viewed under in a run.
-    #[must_use]
-    pub fn directory(self) -> &'static str {
-        match self {
-            Self::Tasks => "tasks",
-            Self::Rollout => "rollouts",
-            Self::Dataset => "datasets",
-            Self::Training => "training",
-            Self::Eval => "eval",
-            Self::Release => "release",
-        }
-    }
-}
+pub const STAGE_SCHEMA: &str = "splinter.stage/2";
 
 /// Everything a stage's output depends on.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct StageIdentity {
     /// Always [`STAGE_SCHEMA`].
     pub schema: String,
-    /// What the stage does.
-    pub kind: StageKind,
+    /// The operation the stage runs (`attempt.collect`), with its revision
+    /// (`attempt.collect@1`).
+    pub operation: String,
     /// The stage's name in its recipe (`local`, `sft`, `lora-r16`).
     pub name: String,
     /// The resolved parameters, after defaults and file contents (as their
@@ -85,7 +51,7 @@ impl StageIdentity {
     /// not change it.
     #[must_use]
     pub fn new(
-        kind: StageKind,
+        operation: impl Into<String>,
         name: impl Into<String>,
         parameters: Value,
         mut inputs: Vec<(String, Digest)>,
@@ -95,7 +61,7 @@ impl StageIdentity {
         inputs.sort();
         Self {
             schema: STAGE_SCHEMA.into(),
-            kind,
+            operation: operation.into(),
             name: name.into(),
             parameters,
             inputs,

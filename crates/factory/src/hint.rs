@@ -31,7 +31,7 @@ use splinter_core::chat::WireMessage;
 use splinter_core::factory::task::TaskRef;
 use splinter_data::RecordBody;
 
-use crate::recipe::Hint;
+use crate::ops::Hint;
 use crate::tree::link_tree;
 
 /// The reference solution of a Harbor task, relative to the task.

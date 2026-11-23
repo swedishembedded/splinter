@@ -1,6 +1,6 @@
 {
- "schema": "splinter.stage/1",
- "kind": "rollout",
+ "schema": "splinter.stage/2",
+ "operation": "attempt.collect@1",
  "name": "local",
  "parameters": {
   "agent": "sven",

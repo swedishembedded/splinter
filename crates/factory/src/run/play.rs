@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 use splinter_core::factory::attempt::AttemptReport;
 use splinter_core::factory::execution::SlotKey;
-use splinter_core::factory::identity::{StageIdentity, StageKind};
+use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::TrialResult;
 use splinter_store::factory::products::Staging;
 
@@ -35,7 +35,7 @@ use super::rollout::{
 use super::rollout_report::report;
 use super::{io, stage_error, write_lines, Factory, RunError};
 use crate::backend::{read_reports, Batch};
-use crate::plan::{stage_key, PlannedStage};
+use crate::plan::PlannedStage;
 use crate::tree::link_tree;
 
 /// Where an interactive pass's sessions are kept in a run.
@@ -66,18 +66,25 @@ fn played(dir: &Path) -> Result<Vec<(u64, AttemptReport)>, RunError> {
     Ok(out)
 }
 
-pub(crate) fn identity(factory: &Factory<'_>, arm: &Arm<'_>) -> Result<StageIdentity, RunError> {
+pub(crate) fn identity(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    arm: &Arm<'_>,
+) -> Result<StageIdentity, RunError> {
     let reports: Vec<_> = played(&sessions(factory, &arm.name))?
         .into_iter()
         .map(|(n, report)| json!([n, splinter_core::digest::digest_of(&report)]))
         .collect();
     let mut parameters = arm.parameters(factory)?;
     parameters["sessions"] = json!(reports);
+    let pin = stage
+        .source("tasks")
+        .ok_or_else(|| stage_error(&stage.key, "its tasks come from no stage"))?;
     Ok(super::identity_of(
-        StageKind::Rollout,
+        &stage.versioned_operation(),
         &arm.name,
         parameters,
-        vec![("tasks".to_owned(), factory.product("tasks")?.1.digest())],
+        vec![(pin.to_owned(), factory.product(pin)?.1.digest())],
         &factory.services.backend.identity(),
         Some(arm.pass.seed),
     ))
@@ -134,22 +141,27 @@ impl Factory<'_> {
         task: &str,
         continue_from: Option<u64>,
     ) -> Result<TrialResult, RunError> {
-        let key = stage_key(StageKind::Rollout, pass);
-        let tasks_stage = self
-            .resolved
-            .plan
-            .stage("tasks")
-            .cloned()
-            .ok_or_else(|| stage_error("tasks", "not planned"))?;
-        if !self.done.contains_key("tasks") {
-            self.stage(&tasks_stage)?;
-        }
+        let key = pass.to_owned();
         let planned: PlannedStage = self
             .resolved
             .plan
             .stage(&key)
             .cloned()
-            .ok_or_else(|| stage_error(&key, "is not a pass of the recipe"))?;
+            .ok_or_else(|| stage_error(&key, "is not a stage of the recipe"))?;
+        // The pass's tasks are pinned first, as a run would.
+        let pin = planned
+            .source("tasks")
+            .ok_or_else(|| stage_error(&key, "is not a pass: it attempts no tasks"))?
+            .to_owned();
+        if !self.done.contains_key(&pin) {
+            let pin_stage = self
+                .resolved
+                .plan
+                .stage(&pin)
+                .cloned()
+                .ok_or_else(|| stage_error(&pin, "not planned"))?;
+            self.stage(&pin_stage)?;
+        }
         let arm = arm(self, &planned)?;
         if !arm.pass.interactive {
             return Err(stage_error(
@@ -192,7 +204,7 @@ impl Factory<'_> {
             &spec,
             Batch {
                 specs: std::slice::from_ref(&spec),
-                tasks: &self.view("tasks"),
+                tasks: &self.view(&pin),
                 files: &dir.join("files"),
                 out: &run.batch_dir(n),
                 concurrency: 1,

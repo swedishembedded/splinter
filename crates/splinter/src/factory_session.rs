@@ -131,8 +131,12 @@ pub fn plan(
     emit(
         json,
         &PlanReport {
-            recipe: &resolved.recipe.name,
-            tasks: resolved.collection.collection.tasks.len(),
+            recipe: resolved.name(),
+            tasks: resolved
+                .collections
+                .values()
+                .map(|c| c.collection.tasks.len())
+                .sum(),
             stages,
         },
     );
@@ -167,7 +171,12 @@ fn services(config: &Config) -> Result<(HarborWorker, Option<BrainTrainer>), Err
 
 /// Run `resolved` into `dir`.
 fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Result<Exit, Error> {
-    let needs_trainer = resolved.recipe.training.is_some() || resolved.recipe.eval.is_some();
+    // Training, evaluating and serving a champion go through brain.
+    let needs_trainer = !resolved.champions.is_empty()
+        || resolved.plan.stages.iter().any(|s| {
+            s.operation == splinter_sdk::factory::ops::names::TRAIN
+                || s.operation == splinter_sdk::factory::ops::names::EVALUATION
+        });
     let (backend, brain) = services(config)?;
     if needs_trainer && brain.is_none() {
         return Err(refused("the recipe trains or evaluates; give brain with --brain-endpoint (and --brain-artifact-store, --brain-adapter-dir)"));
@@ -443,13 +452,13 @@ pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error>
         let mut factory =
             Factory::open(&resolved, &args.run, services, &owner(config)).map_err(refused)?;
         factory
-            .play(&args.pass, &args.task, args.continue_from)
+            .play(&args.stage, &args.task, args.continue_from)
             .map_err(refused)?
     };
     eprintln!(
         "session {} of {}: {:?}, {}",
         trial.slot.slot,
-        args.pass,
+        args.stage,
         trial.grade.status,
         if trial.verified_success() {
             "a verified success"

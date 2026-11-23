@@ -17,13 +17,13 @@ use splinter_factory::run::dataset::dataset_of;
 
 use crate::factory_run::{resolved, run};
 use crate::fakes::{FakeBackend, FakeTrainer, Outcome};
-use crate::repo::{connections, Repo, RECIPE};
+use crate::repo::{connections, Repo, RECIPE, TRAINING};
 
 /// The recipe up to its dataset, with the second pass hinted.
 fn hinted() -> String {
-    RECIPE.split("training:").next().unwrap().replace(
-        "    tasks: { unsolved_by: [local] }\n",
-        "    tasks: { unsolved_by: [local] }\n    hint: solution\n",
+    RECIPE.split(TRAINING).next().unwrap().replace(
+        "      environment_variables: { SVEN_KEY: \"env:SVEN_KEY\" }\n",
+        "      environment_variables: { SVEN_KEY: \"env:SVEN_KEY\" }\n      hint: solution\n",
     )
 }
 
@@ -75,14 +75,14 @@ fn a_hinted_pass_teaches_the_task_without_its_hint_and_never_a_trial_that_repeat
         original
     );
 
-    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let dataset = dataset_of(&dir.path().join("sft")).unwrap();
     assert_eq!(
         dataset.exclusions.get("hint_repeated"),
         Some(&2),
         "{:?}",
         dataset.exclusions
     );
-    let train = std::fs::read_to_string(dir.path().join("datasets/sft/train.jsonl")).unwrap();
+    let train = std::fs::read_to_string(dir.path().join("sft/train.jsonl")).unwrap();
     assert_eq!(train.lines().count(), 2, "both successes of the first task");
     assert!(train.contains(
         &serde_json::to_string(original.trim_end())
@@ -94,8 +94,7 @@ fn a_hinted_pass_teaches_the_task_without_its_hint_and_never_a_trial_that_repeat
         !train.contains("Hello world' > main.txt"),
         "the hint is in no record"
     );
-    let supervision =
-        std::fs::read_to_string(dir.path().join("datasets/sft/supervision.jsonl")).unwrap();
+    let supervision = std::fs::read_to_string(dir.path().join("sft/supervision.jsonl")).unwrap();
     assert!(supervision.contains("\"hinted\":true"), "{supervision}");
 }
 
@@ -103,8 +102,8 @@ fn a_hinted_pass_teaches_the_task_without_its_hint_and_never_a_trial_that_repeat
 fn a_hinted_pass_is_never_played_and_needs_every_tasks_solution() {
     let repo = Repo::new();
     let played = hinted().replace(
-        "    hint: solution\n",
-        "    hint: solution\n    interactive: true\n",
+        "      hint: solution\n",
+        "      hint: solution\n      interactive: true\n",
     );
     let problems = resolve(&repo.root, &played, connections())
         .expect_err("refused")

@@ -21,7 +21,7 @@ use splinter_factory::run::{fork, status, verify, Factory, RunError, Services};
 use splinter_store::factory::runstate::RunStateError;
 
 use crate::fakes::{FakeBackend, FakeTrainer, Outcome};
-use crate::repo::{connections, Repo, RECIPE};
+use crate::repo::{connections, dataset, evaluation, Repo, DATASET, EVALUATION, RECIPE, TRAINING};
 
 const OWNER: &str = "test-controller";
 
@@ -93,7 +93,7 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
     );
     assert_eq!(tasks_run(&backend, "remote"), ["train/002-second"]);
     // A reward-0 trial is kept as a graded failure and never retried.
-    let local = trials_of(&dir.path().join("rollouts/local")).unwrap();
+    let local = trials_of(&dir.path().join("local")).unwrap();
     assert_eq!(local.len(), 4);
     // Each trial says which sandbox it ran in.
     assert!(local
@@ -116,7 +116,7 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
     );
 
     // The dataset holds the two verified successes, under Sven's own prompt.
-    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let dataset = dataset_of(&dir.path().join("sft")).unwrap();
     let steps: Vec<(&str, u64)> = dataset
         .waterfall
         .iter()
@@ -132,7 +132,7 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
         ]
     );
     assert_eq!(dataset.exclusions.get("not_a_success:graded"), Some(&4));
-    let train = std::fs::read_to_string(dir.path().join("datasets/sft/train.jsonl")).unwrap();
+    let train = std::fs::read_to_string(dir.path().join("sft/train.jsonl")).unwrap();
     assert_eq!(train.lines().count(), 2);
     assert!(
         train.contains("You are Sven"),
@@ -142,7 +142,7 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
     // Both variants trained; each candidate beat the baseline on every pair.
     assert_eq!(trainer.trained.lock().unwrap().len(), 2);
     for candidate in ["lora-r8", "lora-r16"] {
-        let result = result_of(&dir.path().join(format!("eval/{candidate}"))).unwrap();
+        let result = result_of(&dir.path().join(format!("eval-{candidate}"))).unwrap();
         assert_eq!(
             result.decision,
             Decision::Improved,
@@ -162,7 +162,7 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
         backend
             .executed()
             .iter()
-            .filter(|s| s.slot.pass == "eval-baseline")
+            .filter(|s| s.slot.pass.starts_with("baseline-"))
             .count(),
         8
     );
@@ -189,8 +189,8 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
 #[test]
 fn the_infrastructures_failures_are_retried_and_never_become_training_negatives() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned()
-        + "dataset: { name: sft, sources: [local, remote], target: \"brain:Qwen/Qwen3-4B\", seed: 13 }\n";
+    let recipe =
+        RECIPE.split(DATASET).next().unwrap().to_owned() + &dataset(&["local", "remote"], "");
     let resolved = resolved(&repo, &recipe);
     let backend = FakeBackend::with(Outcome::Pass);
     // Slot 0 of the first task: the model fails on every attempt (three: one and two retries).
@@ -208,7 +208,7 @@ fn the_infrastructures_failures_are_retried_and_never_become_training_negatives(
     let dir = tempfile::tempdir().unwrap();
     run(&resolved, dir.path(), &backend, &trainer).unwrap();
 
-    let local = trials_of(&dir.path().join("rollouts/local")).unwrap();
+    let local = trials_of(&dir.path().join("local")).unwrap();
     let model_errors: Vec<_> = local
         .iter()
         .filter(|t| t.grade.status == TrialStatus::ModelError)
@@ -220,14 +220,13 @@ fn the_infrastructures_failures_are_retried_and_never_become_training_negatives(
     );
     assert_eq!(model_errors[0].attempt, 2);
     assert!(!model_errors[0].grade.counted);
-    let attempts =
-        std::fs::read_to_string(dir.path().join("rollouts/local/attempts.jsonl")).unwrap();
+    let attempts = std::fs::read_to_string(dir.path().join("local/attempts.jsonl")).unwrap();
     assert_eq!(
         attempts.lines().count(),
         6,
         "every reported attempt is kept, the retried ones too"
     );
-    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let dataset = dataset_of(&dir.path().join("sft")).unwrap();
     assert_eq!(
         dataset.exclusions.get("not_a_success:model_error"),
         Some(&1)
@@ -242,7 +241,7 @@ fn the_infrastructures_failures_are_retried_and_never_become_training_negatives(
 #[test]
 fn a_controller_killed_mid_rollout_resumes_without_repeating_a_finished_attempt() {
     let repo = Repo::new();
-    let resolved = resolved(&repo, RECIPE.split("dataset:").next().unwrap());
+    let resolved = resolved(&repo, RECIPE.split(DATASET).next().unwrap());
     let backend = FakeBackend::with(Outcome::Pass);
     *backend.crash_after.lock().unwrap() = Some(2);
     let trainer = FakeTrainer::default();
@@ -269,16 +268,13 @@ fn a_controller_killed_mid_rollout_resumes_without_repeating_a_finished_attempt(
         4,
         "the two attempts that reported before the kill were reconciled, not run again"
     );
-    assert_eq!(
-        trials_of(&dir.path().join("rollouts/local")).unwrap().len(),
-        4
-    );
+    assert_eq!(trials_of(&dir.path().join("local")).unwrap().len(), 4);
 }
 
 #[test]
 fn a_corrupt_trace_keeps_its_evidence_and_is_quarantined_from_training() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("training:").next().unwrap().to_owned();
+    let recipe = RECIPE.split(TRAINING).next().unwrap().to_owned();
     let resolved = resolved(&repo, &recipe);
     let backend = FakeBackend::with(Outcome::Pass);
     backend.script(
@@ -287,14 +283,14 @@ fn a_corrupt_trace_keeps_its_evidence_and_is_quarantined_from_training() {
     );
     let dir = tempfile::tempdir().unwrap();
     run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
-    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let dataset = dataset_of(&dir.path().join("sft")).unwrap();
     assert_eq!(dataset.exclusions.get("invalid_trace"), Some(&2));
-    let excluded = std::fs::read_to_string(dir.path().join("datasets/sft/excluded.jsonl")).unwrap();
+    let excluded = std::fs::read_to_string(dir.path().join("sft/excluded.jsonl")).unwrap();
     assert!(excluded.contains("train/002-second"));
-    let trial = &trials_of(&dir.path().join("rollouts/local")).unwrap()[2];
+    let trial = &trials_of(&dir.path().join("local")).unwrap()[2];
     assert!(dir
         .path()
-        .join("rollouts/local")
+        .join("local")
         .join(&trial.native_dir)
         .join("agent/trajectory.json")
         .is_file());
@@ -328,7 +324,7 @@ fn a_changed_variant_retrains_only_itself_and_reuses_the_rollouts_and_the_datase
         .filter(|(_, c)| *c)
         .map(|(k, _)| k.as_str())
         .collect();
-    assert_eq!(computed, ["training/lora-r16", "eval/lora-r16", "release"]);
+    assert_eq!(computed, ["lora-r16", "eval-lora-r16", "release"]);
     assert_eq!(trainer.trained.lock().unwrap().len(), 3);
     // Only the changed candidate's arm ran; the shared baseline was reused.
     let new: Vec<_> = backend.executed()[executed..]
@@ -336,7 +332,7 @@ fn a_changed_variant_retrains_only_itself_and_reuses_the_rollouts_and_the_datase
         .map(|s| s.slot.pass.clone())
         .collect();
     assert!(
-        new.iter().all(|p| p == "eval-lora-r16") && new.len() == 8,
+        new.iter().all(|p| p == "eval-lora-r16.candidate") && new.len() == 8,
         "{new:?}"
     );
 }
@@ -344,7 +340,7 @@ fn a_changed_variant_retrains_only_itself_and_reuses_the_rollouts_and_the_datase
 #[test]
 fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned();
+    let recipe = RECIPE.split(DATASET).next().unwrap().to_owned();
     let backend = FakeBackend::with(Outcome::Pass);
     let trainer = FakeTrainer::default();
     let dir = tempfile::tempdir().unwrap();
@@ -376,7 +372,7 @@ fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
 #[test]
 fn a_finished_controller_gives_up_its_lease_and_a_dead_ones_is_taken_over() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("dataset:").next().unwrap();
+    let recipe = RECIPE.split(DATASET).next().unwrap();
     let resolved = resolved(&repo, recipe);
     let backend = FakeBackend::with(Outcome::Pass);
     let trainer = FakeTrainer::default();
@@ -399,18 +395,18 @@ fn a_finished_controller_gives_up_its_lease_and_a_dead_ones_is_taken_over() {
 #[test]
 fn a_tampered_product_fails_verification() {
     let repo = Repo::new();
-    let resolved = resolved(&repo, RECIPE.split("dataset:").next().unwrap());
+    let resolved = resolved(&repo, RECIPE.split(DATASET).next().unwrap());
     let backend = FakeBackend::with(Outcome::Pass);
     let dir = tempfile::tempdir().unwrap();
     run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
-    let trials = dir.path().join("rollouts/local/trials.jsonl");
+    let trials = dir.path().join("local/trials.jsonl");
     let mut text = std::fs::read_to_string(&trials).unwrap();
     text.push_str("{}\n");
     std::fs::remove_file(&trials).unwrap();
     std::fs::write(&trials, text).unwrap();
     let problems = verify(dir.path()).unwrap();
     assert!(
-        problems.iter().any(|p| p.starts_with("rollouts/local")),
+        problems.iter().any(|p| p.starts_with("local")),
         "{problems:?}"
     );
 }
@@ -418,7 +414,7 @@ fn a_tampered_product_fails_verification() {
 #[test]
 fn a_cancelled_run_stops_at_a_boundary_and_resumes_from_what_it_recorded() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("dataset:").next().unwrap();
+    let recipe = RECIPE.split(DATASET).next().unwrap();
     let resolved_first = resolved(&repo, recipe);
     let backend = FakeBackend::with(Outcome::Pass);
     let trainer = FakeTrainer::default();
@@ -443,30 +439,31 @@ fn a_cancelled_run_stops_at_a_boundary_and_resumes_from_what_it_recorded() {
     let again = resolve(&repository, &text, connections()).unwrap();
     let mut factory = Factory::open(&again, dir.path(), services, OWNER).unwrap();
     factory.run().unwrap();
-    assert_eq!(
-        trials_of(&dir.path().join("rollouts/local")).unwrap().len(),
-        4
-    );
+    assert_eq!(trials_of(&dir.path().join("local")).unwrap().len(), 4);
 }
 
 #[test]
 fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_reused() {
     let repo = Repo::new();
     // seed: a recipe states every seed; nothing here draws from them.
-    let recipe = "schema: splinter.factory/v1\nname: play\ntasks: { collection: collections/vim.yaml, split: train }\n\
-                  rollouts:\n  - { name: local, agent: sven, environment: environments/vim.yaml, seed: 1 }\n\
-                  \x20 - { name: guided, agent: sven, environment: environments/vim.yaml, interactive: true, seed: 2 }\n\
-                  dataset: { name: sft, sources: [local, guided], target: \"brain:Qwen/Qwen3-4B\", seed: 3 }\n";
-    let resolved = resolved(&repo, recipe);
+    let recipe = format!(
+        "schema: splinter.recipe/v2\nname: play\ninputs: {{ course: {{ kind: files, path: collections/vim.yaml }} }}\n\
+         models: {{ student: \"brain:Qwen/Qwen3-4B\" }}\nstages:\n\
+         \x20 - {{ id: tasks, uses: tasks.pin, inputs: {{ collection: $inputs.course }}, with: {{ split: train }} }}\n\
+         \x20 - {{ id: local, uses: attempt.collect, inputs: {{ tasks: $stages.tasks.tasks }}, \
+         with: {{ agent: sven, environment: environments/vim.yaml, seed: 1 }} }}\n\
+         \x20 - {{ id: guided, uses: attempt.collect, inputs: {{ tasks: $stages.tasks.tasks }}, \
+         with: {{ agent: sven, environment: environments/vim.yaml, interactive: true, seed: 2 }} }}\n{}",
+        dataset(&["local", "guided"], "")
+    );
+    let resolved = resolved(&repo, &recipe);
     let backend = FakeBackend::with(Outcome::Fail);
     backend.script("train/001-first", &[Outcome::Pass]);
     let trainer = FakeTrainer::default();
     let dir = tempfile::tempdir().unwrap();
     run(&resolved, dir.path(), &backend, &trainer).unwrap();
     assert!(
-        trials_of(&dir.path().join("rollouts/guided"))
-            .unwrap()
-            .is_empty(),
+        trials_of(&dir.path().join("guided")).unwrap().is_empty(),
         "nobody has played yet"
     );
 
@@ -498,8 +495,8 @@ fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_
         .filter(|(_, c)| *c)
         .map(|(k, _)| k.as_str())
         .collect();
-    assert_eq!(computed, ["rollouts/guided", "datasets/sft"]);
-    let accepted = std::fs::read_to_string(dir.path().join("datasets/sft/accepted.jsonl")).unwrap();
+    assert_eq!(computed, ["guided", "sft"]);
+    let accepted = std::fs::read_to_string(dir.path().join("sft/accepted.jsonl")).unwrap();
     assert_eq!(
         accepted.lines().count(),
         3,
@@ -510,13 +507,13 @@ fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_
 #[test]
 fn a_portable_dataset_is_built_from_the_trajectories_alone() {
     let repo = Repo::new();
-    let recipe = RECIPE.split("dataset:").next().unwrap().to_owned()
-        + "dataset: { name: sft, sources: [local], projection: portable-sft, target: \"brain:Qwen/Qwen3-4B\", seed: 13 }\n";
+    let recipe = RECIPE.split(DATASET).next().unwrap().to_owned()
+        + &dataset(&["local"], ", projection: portable-sft");
     let resolved = resolved(&repo, &recipe);
     let backend = FakeBackend::with(Outcome::Pass);
     let dir = tempfile::tempdir().unwrap();
     run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
-    let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
+    let dataset = dataset_of(&dir.path().join("sft")).unwrap();
     assert_eq!(dataset.projection, "portable-sft");
     assert_eq!(dataset.waterfall.last().map(|w| w.remaining), Some(4));
 }
@@ -559,7 +556,7 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
     let trainer = FakeTrainer::default();
     // Train first, to know the candidate the examiner will be handed.
     let trained = tempfile::tempdir().unwrap();
-    let training_only = RECIPE.split("eval:").next().unwrap();
+    let training_only = RECIPE.split(EVALUATION).next().unwrap();
     run(
         &resolved(&repo, training_only),
         trained.path(),
@@ -568,8 +565,7 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
     )
     .unwrap();
     let candidate =
-        splinter_factory::run::training::candidate_of(&trained.path().join("training/lora-r8"))
-            .unwrap();
+        splinter_factory::run::training::candidate_of(&trained.path().join("lora-r8")).unwrap();
     let digest = candidate
         .artifacts
         .iter()
@@ -601,8 +597,7 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
         "schema: splinter.evalplan/v1\nattempts: 1\nseed: 5\ndecision: { alpha: 0.05, comparisons: 1 }\n\
          authority: { command: [sh, eval/examine.sh], public_key: eval/examiner.pub }\n",
     );
-    let recipe = training_only.to_owned()
-        + "eval: { plan: eval/sealed.yaml, agent: sven, baseline: \"brain:Qwen/Qwen3-4B\", candidates: [lora-r8] }\n";
+    let recipe = training_only.to_owned() + &evaluation("lora-r8", "eval/sealed.yaml", "student");
     let examined = tempfile::tempdir().unwrap();
     fork(trained.path(), examined.path()).unwrap();
     let stages = run(
@@ -615,13 +610,13 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
     assert!(
         stages
             .iter()
-            .all(|(k, computed)| !computed || k.starts_with("eval/")),
+            .all(|(k, computed)| !computed || k.starts_with("eval-")),
         "{stages:?}"
     );
-    let result = result_of(&examined.path().join("eval/lora-r8")).unwrap();
+    let result = result_of(&examined.path().join("eval-lora-r8")).unwrap();
     assert!(result.protected && result.signature.is_some() && result.baseline.is_none());
     assert_eq!(result.decision, Decision::Improved);
-    assert!(examined.path().join("eval/lora-r8/verdict.json").is_file());
+    assert!(examined.path().join("eval-lora-r8/verdict.json").is_file());
 
     // A verdict about another candidate is refused, whatever it says.
     repo.write(
@@ -650,17 +645,17 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
 fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_trainer_is_told() {
     // The live Sven 5.9 trial: its replies carry the model's reasoning.
     let repo = Repo::new();
-    let recipe = RECIPE.split("eval:").next().unwrap();
+    let recipe = RECIPE.split(EVALUATION).next().unwrap();
     let backend = FakeBackend::with(Outcome::Pass);
     let trainer = FakeTrainer::default();
     let dir = tempfile::tempdir().unwrap();
     run(&resolved(&repo, recipe), dir.path(), &backend, &trainer).unwrap();
-    let train = std::fs::read_to_string(dir.path().join("datasets/sft/train.jsonl")).unwrap();
+    let train = std::fs::read_to_string(dir.path().join("sft/train.jsonl")).unwrap();
     assert!(
         !train.contains("reasoning_content"),
         "thinking: false keeps no reasoning"
     );
-    let report = std::fs::read_to_string(dir.path().join("datasets/sft/report.md")).unwrap();
+    let report = std::fs::read_to_string(dir.path().join("sft/report.md")).unwrap();
     assert!(report.contains("reasoning removed"), "{report}");
     assert!(
         trainer.thinking.lock().unwrap().iter().all(|t| !t),
@@ -668,8 +663,8 @@ fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_train
     );
 
     let thinking = recipe.replace(
-        "target: \"brain:Qwen/Qwen3-4B\", seed: 13",
-        "target: \"brain:Qwen/Qwen3-4B\", thinking: true, seed: 13",
+        "target: student, seed: 13",
+        "target: student, thinking: true, seed: 13",
     );
     let other = tempfile::tempdir().unwrap();
     run(
@@ -679,7 +674,7 @@ fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_train
         &trainer,
     )
     .unwrap();
-    let train = std::fs::read_to_string(other.path().join("datasets/sft/train.jsonl")).unwrap();
+    let train = std::fs::read_to_string(other.path().join("sft/train.jsonl")).unwrap();
     assert!(
         train.contains("reasoning_content"),
         "thinking: true keeps the model's reasoning"
@@ -690,7 +685,7 @@ fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_train
 #[test]
 fn a_fork_of_a_run_that_holds_two_products_of_a_stage_shows_the_one_it_reuses() {
     let repo = Repo::new();
-    let before = RECIPE.split("training:").next().unwrap().to_owned();
+    let before = RECIPE.split(TRAINING).next().unwrap().to_owned();
     let backend = FakeBackend::with(Outcome::Pass);
     let trainer = FakeTrainer::default();
     let first = tempfile::tempdir().unwrap();
@@ -698,8 +693,8 @@ fn a_fork_of_a_run_that_holds_two_products_of_a_stage_shows_the_one_it_reuses() 
     // The same run directory gains a second dataset product (a fork into it
     // of a changed recipe), and its view now shows that one.
     let changed = before.replace(
-        "target: \"brain:Qwen/Qwen3-4B\", seed: 13",
-        "target: \"brain:Qwen/Qwen3-4B\", thinking: true, seed: 13",
+        "target: student, seed: 13",
+        "target: student, thinking: true, seed: 13",
     );
     let second = tempfile::tempdir().unwrap();
     fork(first.path(), second.path()).unwrap();
@@ -715,7 +710,7 @@ fn a_fork_of_a_run_that_holds_two_products_of_a_stage_shows_the_one_it_reuses() 
     let third = tempfile::tempdir().unwrap();
     fork(first.path(), third.path()).unwrap();
     run(&resolved(&repo, &before), third.path(), &backend, &trainer).unwrap();
-    let train = std::fs::read_to_string(third.path().join("datasets/sft/train.jsonl")).unwrap();
+    let train = std::fs::read_to_string(third.path().join("sft/train.jsonl")).unwrap();
     assert!(
         !train.contains("reasoning_content"),
         "the view shows the reused product, not the other one"
