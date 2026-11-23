@@ -124,6 +124,9 @@ pub enum Unprojectable {
         /// Its index in the trajectory's `tool_definitions`.
         index: usize,
     },
+    /// The conversation holds no action of the agent to supervise.
+    #[error("the conversation holds no action of the agent to supervise")]
+    NoAction,
     /// Two user steps, or two agent steps, in a row.
     #[error("step {step} does not alternate user and agent turns")]
     NotAlternating {

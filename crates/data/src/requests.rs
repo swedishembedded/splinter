@@ -46,6 +46,7 @@ use splinter_core::experience::Experience;
 use splinter_core::harness::{image_url, is_media, message_parts, ModelCall, ModelResponse};
 
 use crate::markers::{chat_tool_list, is_incomplete};
+use crate::record::RecordBody;
 use crate::render::message;
 use crate::scrub::Scrub;
 use crate::trajectory::{agent_steps, holds_reasoning_markup, Action, Conversation};
@@ -58,11 +59,69 @@ pub(crate) fn conversation_of_requests(
     experience: &Experience,
     calls: &[ModelCall],
 ) -> Result<Conversation, Exclusion> {
-    Ok(build(experience, calls)?)
+    Ok(build(&experience.trajectory, calls)?)
 }
 
-fn build(experience: &Experience, calls: &[ModelCall]) -> Result<Conversation, Unprojectable> {
-    let trajectory = &experience.trajectory;
+/// A record of a whole conversation as its requests were sent (`native-sft`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeRecord {
+    /// The record: the conversation as the agent's model was sent it, its
+    /// system prompt and tools included, every action supervised.
+    pub record: RecordBody,
+    /// The agent's actions the record supervises.
+    pub actions: usize,
+    /// Actions left unsupervised because ATIF marks them copied from another
+    /// trajectory (never the policy's own).
+    pub copied: usize,
+    /// Whether scrubbing (host names, scratch paths) changed any text.
+    pub scrubbed: bool,
+    /// The tools the supervised actions call, in order.
+    pub tools: Vec<String>,
+}
+
+/// The `native-sft` record of a trajectory whose model calls were recorded:
+/// the longest request with every earlier request a prefix of it, each
+/// answer in place, every action of the agent supervised except one copied
+/// from another trajectory. Nothing else is selected or rewritten: no
+/// replaced system prompt, no tool list, no repeat or length filter.
+///
+/// # Errors
+/// The calls are not the trajectory's (their count differs from its agent
+/// steps, or the requests diverge from one another), or a request cannot be
+/// read; [`Unprojectable`] says which.
+pub fn native_record(
+    trajectory: &atif::Trajectory,
+    calls: &[ModelCall],
+) -> Result<NativeRecord, Unprojectable> {
+    let conversation = build(trajectory, calls)?;
+    let supervised: Vec<&crate::trajectory::Action> =
+        conversation.actions.iter().filter(|a| !a.copied).collect();
+    let copied = conversation.actions.len() - supervised.len();
+    let record = conversation
+        .packed_record(&supervised)
+        .ok_or(Unprojectable::NoAction)?;
+    let tools = supervised
+        .iter()
+        .flat_map(|a| {
+            conversation.messages[a.index]
+                .tool_calls
+                .iter()
+                .map(|c| c.function.name.clone())
+        })
+        .collect();
+    Ok(NativeRecord {
+        record,
+        actions: supervised.len(),
+        copied,
+        scrubbed: conversation.scrubbed,
+        tools,
+    })
+}
+
+fn build(
+    trajectory: &atif::Trajectory,
+    calls: &[ModelCall],
+) -> Result<Conversation, Unprojectable> {
     if is_incomplete(trajectory) {
         return Err(Unprojectable::Incomplete);
     }

@@ -87,6 +87,7 @@ pub mod process;
 mod record;
 mod render;
 mod replay;
+pub mod request_log;
 mod requests;
 mod sampled;
 mod scrub;
@@ -124,6 +125,7 @@ pub use record::{
     SplitDraw, TeacherMessage,
 };
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
+pub use requests::{native_record, NativeRecord};
 pub use sampled::{ProxyReason, SampledTurn, SampledTurns, TokenReport};
 pub use store::{DatasetStore, StoredDataset};
 pub use strip::{Fraction, Strip};

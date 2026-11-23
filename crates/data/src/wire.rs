@@ -202,7 +202,8 @@ fn stable_status_line(line: &str) -> std::borrow::Cow<'_, str> {
 /// object: a chat template renders a call's arguments as an object, so a
 /// call a model wrote with broken arguments (which the runtime answered with
 /// an error) cannot be shown to a trainer.
-fn renderable(record: &Value) -> bool {
+#[must_use]
+pub fn renderable(record: &Value) -> bool {
     record["messages"]
         .as_array()
         .into_iter()
