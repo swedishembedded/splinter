@@ -35,6 +35,7 @@ before writing any.
 | `agent-sft` | a model learns a task collection from its own verified attempts |
 | `knowledge-learning` | a model learns what documents say from closed-book tasks generated from them |
 | `generations` | a generation of a model, promoted only when it improves, transfers and retains |
+| `harness-search` | the harness that verifiably beats a baseline, among its mutations |
 
 ```sh
 splinter init --template agent-sft my-repo
@@ -123,6 +124,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `dataset.project` | `attempts`, `answers` (one or more of either) | `dataset` |
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `dataset.text` | `documents` (a recipe input) | `dataset` |
+| `harness.search` | `tasks` | `harness` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model), `tasks` (optional) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
@@ -253,6 +255,30 @@ an agent other than sven, without a model role, interactively or beside a
 `system_prompt` (a harness carries its own instructions). A harness run records
 its trajectory but not its model requests, so a dataset over a harness stage
 uses `projection: portable-sft`.
+
+## Searching for a harness
+
+`harness.search` looks for the harness that verifiably beats a baseline. The
+baseline harness runs on the pinned tasks as an arm of its own; each of
+`candidates` candidates is one mutation of the baseline (`strategy:
+best-of-n`) or of the best found so far (`hill-climb`), drawn by the seed from
+a mutation space (knobs: a path into the harness and the values it may take)
+and kept only when Sven's compiler accepts it. Each runs as an arm with the
+same agent, model, environment, attempts and attempt seeds, and is compared
+with the baseline by the evaluation's paired sign test at `alpha`. Every arm
+is a committed product, so a stopped search resumes without running one
+again. The product holds `harness.yaml` (the winner, else the baseline),
+each candidate under `candidates/` and `search.json` with every candidate's
+decision.
+
+```yaml
+  - id: search
+    uses: harness.search
+    inputs: { tasks: $stages.train-tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/default.yaml,
+            harness: harness/baseline.yaml, space: harness/space.yaml, candidates: 4,
+            strategy: hill-climb, attempts: 4, seed: 1 }
+```
 
 ## Structured extraction: `agent` and `foreach`
 

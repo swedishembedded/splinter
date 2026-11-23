@@ -30,6 +30,7 @@ pub mod dataset_text;
 mod directory;
 pub mod eval;
 pub mod fork;
+pub mod harness_search;
 pub mod import;
 mod models;
 mod pass;
@@ -401,6 +402,7 @@ impl<'a> Factory<'a> {
             | names::IMPORT_DATASET
             | names::EXTEND_DATASET
             | names::TEXT_DATASET
+            | names::HARNESS_SEARCH
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
@@ -431,6 +433,7 @@ impl<'a> Factory<'a> {
             names::IMPORT_DATASET => dataset_import::identity(self, stage)?,
             names::EXTEND_DATASET => dataset_extend::identity(self, stage)?,
             names::TEXT_DATASET => dataset_text::identity(self, stage)?,
+            names::HARNESS_SEARCH => harness_search::identity(self, stage)?,
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
@@ -443,6 +446,7 @@ impl<'a> Factory<'a> {
             names::IMPORT_DATASET => dataset_import::produce(factory, stage, staging),
             names::EXTEND_DATASET => dataset_extend::produce(factory, stage, staging),
             names::TEXT_DATASET => dataset_text::produce(factory, stage, staging),
+            names::HARNESS_SEARCH => harness_search::produce(factory, stage, staging),
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),

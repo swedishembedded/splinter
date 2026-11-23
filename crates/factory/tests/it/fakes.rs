@@ -59,6 +59,9 @@ pub struct FakeBackend {
     pub executed: Mutex<Vec<ExecutionSpec>>,
     /// Every played session: its spec and the trial it continued.
     pub played: Mutex<Vec<(ExecutionSpec, Option<PathBuf>)>>,
+    /// The outcome of an attempt whose harness holds the text, before any
+    /// script: what a harness that helps, or hurts, does.
+    pub harness_says: Vec<(String, Outcome)>,
     /// A failed attempt ends otherwise than a passed one: its last turn
     /// says it could not finish, so two attempts of one task part there.
     pub vary_failures: bool,
@@ -310,7 +313,17 @@ impl ExecutionBackend for FakeBackend {
                 std::fs::read_to_string(batch.tasks.join(&spec.task_dir).join("instruction.md"))
                     .unwrap();
             self.instructions.lock().unwrap().push(instruction.clone());
-            let outcome = self.outcome(spec);
+            let harness = spec
+                .agent
+                .harness
+                .as_ref()
+                .map(|h| std::fs::read_to_string(batch.files.join(&h.path)).unwrap())
+                .unwrap_or_default();
+            let outcome = self
+                .harness_says
+                .iter()
+                .find(|(text, _)| harness.contains(text.as_str()))
+                .map_or_else(|| self.outcome(spec), |(_, outcome)| *outcome);
             if outcome != Outcome::Lost {
                 let given = self.echo_instruction.then_some(instruction.as_str());
                 attempt(batch.out, spec, outcome, given, self.vary_failures);

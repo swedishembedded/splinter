@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# What a candidate may change: each knob is a path into the baseline harness and the values
+# it may take. A candidate is the baseline with one knob changed.
+knobs:
+  - path: [execution, limits, model_turns]
+    choices: [12, 24]
+  - path: [workflow, '0', task]
+    choices:
+      - "{{ inputs.task }}"
+      - "Read the task, check your result against it before you finish, then do it:\n{{ inputs.task }}"

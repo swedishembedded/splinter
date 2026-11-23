@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# The harness every attempt of the baseline arm runs: the task as the one step's prompt.
+api_version: "2"
+name: solver
+inputs: { task: string }
+agent: { profile: coding }
+execution:
+  limits: { model_turns: 12, tool_calls: 24 }
+workflow:
+  - name: work
+    task: "{{ inputs.task }}"

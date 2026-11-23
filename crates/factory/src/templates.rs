@@ -14,7 +14,8 @@
 //! recipe of every template validates as written (the templates' spec says
 //! so). A template is what a removed command did, as a recipe a team can
 //! read and change: `knowledge-learning` is `learn`, `agent-sft` the plainest
-//! learning loop, `generations` a campaign of promotions. [`init`] writes a
+//! learning loop, `generations` a campaign of promotions, `harness-search`
+//! is `harness optimise`. [`init`] writes a
 //! template into a directory and never writes over a file already there:
 //! it refuses, naming the files, before writing any.
 
@@ -121,6 +122,25 @@ pub const TEMPLATES: &[Template] = &[
             ),
         ],
         example_tasks: false,
+    },
+    Template {
+        name: "harness-search",
+        summary: "the harness that verifiably beats a baseline, among its mutations",
+        files: &[
+            file(
+                "harness/baseline.yaml",
+                include_str!("../templates/harness-search/harness/baseline.yaml"),
+            ),
+            file(
+                "harness/space.yaml",
+                include_str!("../templates/harness-search/harness/space.yaml"),
+            ),
+            file(
+                "recipes/harness-search.yaml",
+                include_str!("../templates/harness-search/recipes/harness-search.yaml"),
+            ),
+        ],
+        example_tasks: true,
     },
     Template {
         name: "generations",

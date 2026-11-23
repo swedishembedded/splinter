@@ -56,7 +56,7 @@ use crate::tree::link_tree;
 /// The operation of an evaluation's pinned tasks.
 const EVAL_TASKS: &str = "tasks.pin@1";
 /// The operation of an evaluation's arms.
-const EVAL_ARM: &str = "attempt.collect@1";
+pub(crate) const EVAL_ARM: &str = "attempt.collect@1";
 
 /// The evaluation result in an eval product.
 pub const RESULT_FILE: &str = "result.json";
@@ -218,6 +218,7 @@ fn arm_pass(section: &Evaluation, plan: &EvalPlan, name: &str) -> Result<Rollout
         interactive: false,
         hint: None,
         harness: None,
+        made_harness: None,
     })
 }
 
@@ -278,7 +279,7 @@ fn pinned_tasks(
 }
 
 /// Commit one arm and return its trials and product digest.
-fn arm_trials(
+pub(crate) fn arm_trials(
     factory: &Factory<'_>,
     key: &str,
     arm: &Arm<'_>,

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# The harness that verifiably beats a baseline: candidates drawn from the baseline's
+# mutation space each run on the tasks beside the baseline, attempt for attempt, and the
+# one the paired sign test finds better is kept (the baseline when none is).
+#   splinter run recipes/harness-search.yaml --out runs/harness-search
+#   (the harness found is runs/harness-search/search/harness.yaml)
+schema: splinter.recipe/v2
+name: harness-search
+inputs:
+  tasks: { kind: files, path: collections/tasks.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+stages:
+  - { id: train-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: train } }
+  - id: search
+    uses: harness.search
+    inputs: { tasks: $stages.train-tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/default.yaml,
+            harness: harness/baseline.yaml, space: harness/space.yaml, candidates: 4,
+            strategy: hill-climb, attempts: 4, seed: 1 }

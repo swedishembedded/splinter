@@ -11,15 +11,18 @@
 //! alone: what [`crate::resolve`] reports beside what reading the
 //! repository's files finds.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::champion;
 use crate::collection::LoadedCollection;
 use crate::eval_plan::EvalPlan;
+use crate::plan::Plan;
+
 use crate::graph::CompiledPlan;
 use crate::ops::{self, names, AttemptParams, EvaluationParams, ProjectParams, PromotionParams};
 use crate::plan::PlannedStage;
 use crate::registry::Registry;
+use splinter_core::factory::task::{TaskCollection, TaskRef};
 
 /// Why an evaluation under `plan` (at `path`) has no one source of tasks:
 /// its plan's collection, the stage's pinned tasks, or its examiner's.
@@ -244,4 +247,83 @@ pub(crate) fn promotion_problems(
         }
     }
     out
+}
+
+/// What is wrong with a `harness.search` stage's parameters.
+pub(crate) fn search_problems(
+    stage: &PlannedStage,
+    params: &ops::HarnessSearchParams,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if stage.source("tasks").is_none() {
+        out.push("searches on no tasks: bind `tasks` to a tasks.pin stage".to_owned());
+    }
+    if params.agent != "sven" {
+        out.push("searches harnesses, which only the sven agent runs".to_owned());
+    }
+    if params.candidates == 0 || params.attempts == 0 || params.concurrency == 0 {
+        out.push("needs at least one candidate, one attempt and a concurrency of 1".to_owned());
+    }
+    if !(params.alpha > 0.0 && params.alpha < 1.0) {
+        out.push("alpha is a level between 0 and 1".to_owned());
+    }
+    out
+}
+
+/// The tasks a dataset stage would learn from that are examination material:
+/// on the `eval` split, or the very task (by content) an evaluation plan of
+/// the recipe examines under any name. Trials of them could otherwise reach
+/// training, and a candidate would be examined on what it was taught.
+pub(crate) fn examination_material(
+    plan: &Plan,
+    dataset: &PlannedStage,
+    collections: &BTreeMap<String, LoadedCollection>,
+    eval_plans: &BTreeMap<String, (EvalPlan, Option<LoadedCollection>)>,
+) -> Vec<String> {
+    let examined: Vec<&TaskRef> = eval_plans
+        .values()
+        .filter_map(|(plan, loaded)| loaded.as_ref().map(|l| (plan, l)))
+        .flat_map(|(plan, loaded)| {
+            loaded
+                .collection
+                .tasks
+                .iter()
+                .filter(move |t| plan.split.is_none() || t.split == plan.split)
+        })
+        .collect();
+    // The collections whose trials reach the dataset: through its attempt
+    // stages, and those stages' tasks.
+    let pins: BTreeSet<&str> = dataset
+        .sources("attempts")
+        .into_iter()
+        .filter_map(|a| plan.stage(a))
+        .filter_map(|a| a.source("tasks"))
+        .collect();
+    let mut problems = Vec::new();
+    for training in pins
+        .iter()
+        .filter_map(|p| collections.get(*p))
+        .map(|l| &l.collection)
+    {
+        problems.extend(examined_tasks(training, &examined, &dataset.key));
+    }
+    problems
+}
+
+fn examined_tasks(training: &TaskCollection, examined: &[&TaskRef], dataset: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    for task in &training.tasks {
+        if task.split.as_deref() == Some("eval") {
+            problems.push(format!(
+                "{} is examination material (split eval) and cannot reach dataset {dataset}: select the train split",
+                task.id
+            ));
+        } else if let Some(same) = examined.iter().find(|e| e.digest == task.digest) {
+            problems.push(format!(
+                "{} is the same task as {}, which the eval plan examines; it cannot reach dataset {dataset}",
+                task.id, same.id
+            ));
+        }
+    }
+    problems
 }

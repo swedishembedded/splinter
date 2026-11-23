@@ -20,6 +20,7 @@ mod golden;
 mod graph;
 mod harness_op;
 mod harness_pass;
+mod harness_search;
 mod hinted;
 mod import;
 mod interventions;

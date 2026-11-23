@@ -134,6 +134,25 @@ fn file_ref(repository: &Path, relative: &str) -> Result<FileRef, RunError> {
     })
 }
 
+/// The published path of a harness the run made, at `made`.
+fn made_path(made: &Path) -> String {
+    format!(
+        "harness/{}",
+        made.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("harness.yaml")
+    )
+}
+
+/// A harness the run made, pinned by its SHA-256 under its published path.
+fn made_ref(made: &Path) -> Result<FileRef, RunError> {
+    let file = std::fs::File::open(made).map_err(io(made))?;
+    Ok(FileRef {
+        path: made_path(made),
+        digest: Digest::sha256_of_reader(file).map_err(io(made))?,
+    })
+}
+
 impl Arm<'_> {
     fn sandbox(&self, factory: &Factory<'_>) -> Result<(SandboxSpec, Digest), RunError> {
         let environment = factory
@@ -182,12 +201,15 @@ impl Arm<'_> {
             .as_deref()
             .map(|f| file_ref(repository, f))
             .transpose()?;
-        let harness = self
-            .pass
-            .harness
-            .as_deref()
-            .map(|f| file_ref(repository, f))
-            .transpose()?;
+        let harness = match &self.pass.made_harness {
+            Some(made) => Some(made_ref(made)?),
+            None => self
+                .pass
+                .harness
+                .as_deref()
+                .map(|f| file_ref(repository, f))
+                .transpose()?,
+        };
         let env = self
             .pass
             .environment_variables
@@ -670,7 +692,11 @@ pub(crate) fn pin_files(factory: &Factory<'_>, run: &Running<'_, '_>) -> Result<
             if let Some(parent) = to.parent() {
                 std::fs::create_dir_all(parent).map_err(io(parent))?;
             }
-            std::fs::copy(repository.join(&relative), &to).map_err(io(&to))?;
+            let from = match &run.arm.pass.made_harness {
+                Some(made) if made_path(made) == relative => made.clone(),
+                _ => repository.join(&relative),
+            };
+            std::fs::copy(&from, &to).map_err(io(&to))?;
         }
         let file = std::fs::File::open(&to).map_err(io(&to))?;
         if Digest::sha256_of_reader(file).map_err(io(&to))? != digest {

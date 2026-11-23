@@ -6,6 +6,7 @@
 //! tasks it leaves out, or an evaluation's arm.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use serde::Serialize;
 use splinter_core::factory::task::TaskRef;
@@ -78,6 +79,10 @@ pub struct RolloutPass {
     pub hint: Option<Hint>,
     /// The harness every attempt runs, when not the agent's conversation.
     pub harness: Option<String>,
+    /// A harness the run made (a search's candidate) that every attempt
+    /// runs instead: read from this file, published to the worker as
+    /// `harness/<its file name>`.
+    pub made_harness: Option<PathBuf>,
 }
 
 /// The pass an `attempt.collect` stage runs.
@@ -125,6 +130,7 @@ pub(crate) fn pass(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Rollou
         interactive: params.interactive,
         hint: params.hint,
         harness: params.harness,
+        made_harness: None,
     })
 }
 

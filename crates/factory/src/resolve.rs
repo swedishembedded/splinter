@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{digest_of, Digest};
-use splinter_core::factory::task::{plain_relative, TaskCollection, TaskRef};
+use splinter_core::factory::task::plain_relative;
 
 use crate::champion::{self, Champion};
 use crate::collection::{self, LoadedCollection};
@@ -305,12 +305,14 @@ pub fn resolve_with(
         stage.work = crate::describe::work(stage, &compiled, &found.collections);
     }
     for stage in plan.of_operation(names::PROJECT) {
-        reader.problems.extend(examination_material(
-            &plan,
-            stage,
-            &found.collections,
-            &found.eval_plans,
-        ));
+        reader
+            .problems
+            .extend(crate::stage_checks::examination_material(
+                &plan,
+                stage,
+                &found.collections,
+                &found.eval_plans,
+            ));
     }
     let Reader {
         files, problems, ..
@@ -553,6 +555,28 @@ fn check(
                 }
             }
         }
+        names::HARNESS_SEARCH => {
+            let Ok(params) = stage.params::<ops::HarnessSearchParams>() else {
+                return;
+            };
+            reader.environment(&params.environment, &mut found.environments);
+            for file in &params.files {
+                reader.read(file);
+            }
+            if let Some(text) = reader.read(&params.harness) {
+                if let Err(why) = splinter_agent::attempt_harness::check(&text) {
+                    problem(reader, &format!("{}: {why}", params.harness));
+                }
+            }
+            if let Some(text) = reader.read(&params.space) {
+                if let Err(why) = splinter_agent::harness_space::MutationSpace::parse(&text) {
+                    problem(reader, &format!("{}: {why}", params.space));
+                }
+            }
+            for text in crate::stage_checks::search_problems(stage, &params) {
+                problem(reader, &text);
+            }
+        }
         names::TEXT_DATASET => {
             if stage.input("documents").is_none() {
                 problem(
@@ -696,64 +720,6 @@ fn used_connections<'c>(
         .filter(|(name, _)| names.contains(name.as_str()))
         .map(|(name, c)| (name.as_str(), c))
         .collect()
-}
-
-/// The tasks a dataset stage would learn from that are examination material:
-/// on the `eval` split, or the very task (by content) an evaluation plan of
-/// the recipe examines under any name. Trials of them could otherwise reach
-/// training, and a candidate would be examined on what it was taught.
-fn examination_material(
-    plan: &Plan,
-    dataset: &PlannedStage,
-    collections: &BTreeMap<String, LoadedCollection>,
-    eval_plans: &BTreeMap<String, (EvalPlan, Option<LoadedCollection>)>,
-) -> Vec<String> {
-    let examined: Vec<&TaskRef> = eval_plans
-        .values()
-        .filter_map(|(plan, loaded)| loaded.as_ref().map(|l| (plan, l)))
-        .flat_map(|(plan, loaded)| {
-            loaded
-                .collection
-                .tasks
-                .iter()
-                .filter(move |t| plan.split.is_none() || t.split == plan.split)
-        })
-        .collect();
-    // The collections whose trials reach the dataset: through its attempt
-    // stages, and those stages' tasks.
-    let pins: BTreeSet<&str> = dataset
-        .sources("attempts")
-        .into_iter()
-        .filter_map(|a| plan.stage(a))
-        .filter_map(|a| a.source("tasks"))
-        .collect();
-    let mut problems = Vec::new();
-    for training in pins
-        .iter()
-        .filter_map(|p| collections.get(*p))
-        .map(|l| &l.collection)
-    {
-        problems.extend(examined_tasks(training, &examined, &dataset.key));
-    }
-    problems
-}
-
-fn examined_tasks(training: &TaskCollection, examined: &[&TaskRef], dataset: &str) -> Vec<String> {
-    let mut problems = Vec::new();
-    for task in &training.tasks {
-        if task.split.as_deref() == Some("eval") {
-            problems.push(format!(
-                "{} is examination material (split eval) and cannot reach dataset {dataset}: select the train split",
-                task.id
-            ));
-        } else if let Some(same) = examined.iter().find(|e| e.digest == task.digest) {
-            problems.push(format!(
-                "{} is the same task as {}, which the eval plan examines; it cannot reach dataset {dataset}",
-                task.id, same.id
-            ));
-        }
-    }
-    problems
 }
 
 impl Lock {

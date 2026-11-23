@@ -17,6 +17,7 @@
 //! | `dataset.project` | `attempts`, `answers` (many, optional) | `dataset` |
 //! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 //! | `dataset.text` | `documents` (files) | `dataset` |
+//! | `harness.search` | `tasks` | `harness` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
@@ -317,6 +318,64 @@ pub struct TrainParams {
     pub seed: u64,
 }
 
+/// How `harness.search` draws its candidates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum SearchStrategy {
+    /// Every candidate is one mutation of the baseline.
+    #[default]
+    BestOfN,
+    /// Each candidate is one mutation of the best harness found so far.
+    HillClimb,
+}
+
+fn harness_alpha() -> f64 {
+    0.05
+}
+
+/// `harness.search`: a baseline harness and candidates drawn from its
+/// mutation space, each run on the tasks and compared with the baseline
+/// ([`crate::run::harness_search`]).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HarnessSearchParams {
+    /// The agent every arm runs with (`sven`: a harness is sven's).
+    pub agent: String,
+    /// The agent's arguments, identical for every arm.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Files the arguments refer to, pinned into the run.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// The model role every arm's harness is told.
+    pub model: String,
+    /// The environment file every attempt runs in.
+    pub environment: String,
+    /// The baseline harness file.
+    pub harness: String,
+    /// The mutation space file: the knobs a candidate may change.
+    pub space: String,
+    /// Candidates to draw and run.
+    pub candidates: u32,
+    /// How candidates are drawn.
+    #[serde(default)]
+    pub strategy: SearchStrategy,
+    /// Attempts per task in every arm.
+    pub attempts: u32,
+    /// Attempts run at once.
+    #[serde(default = "one_at_a_time")]
+    pub concurrency: u32,
+    /// The paired sign test's level a candidate must beat the baseline at.
+    #[serde(default = "harness_alpha")]
+    pub alpha: f64,
+    /// The seed candidates and attempt seeds are drawn from.
+    pub seed: u64,
+}
+
+fn one_at_a_time() -> u32 {
+    1
+}
+
 /// What an evaluation measures a candidate for, which a promotion requires.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
@@ -434,6 +493,8 @@ pub mod names {
     pub const EVALUATION: &str = "evaluation";
     /// `promotion`.
     pub const PROMOTION: &str = "promotion";
+    /// `harness.search`.
+    pub const HARNESS_SEARCH: &str = "harness.search";
 }
 
 /// `params` as `P`, or why not.
@@ -581,6 +642,16 @@ pub fn registry() -> Registry {
             reproducibility: Reproducibility::Deterministic,
             isolation: Isolation::Any,
             roles: |p| vec![p.target.clone()],
+        })
+        .with(Builtin::<HarnessSearchParams> {
+            name: names::HARNESS_SEARCH,
+            summary: "candidates from a harness's mutation space, each run on the tasks; the \
+                      one that verifiably beats the baseline",
+            inputs: vec![port("tasks", ArtifactKind::Tasks)],
+            output: port("harness", ArtifactKind::Harness),
+            reproducibility: Reproducibility::Seeded,
+            isolation: Isolation::Any,
+            roles: |p| vec![p.model.clone()],
         })
         .with(Builtin::<TextDatasetParams> {
             name: names::TEXT_DATASET,
