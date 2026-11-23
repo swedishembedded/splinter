@@ -50,6 +50,9 @@ pub struct FakeBackend {
     pub default: Option<Outcome>,
     /// The outcome of every attempt whose model id contains `candidate`.
     pub candidate: Option<Outcome>,
+    /// The outcome of a candidate's attempts at a task, by task id, before
+    /// `candidate`.
+    pub candidate_on: BTreeMap<String, Outcome>,
     /// Fail the next `execute` after writing this many reports.
     pub crash_after: Mutex<Option<usize>>,
     /// Every spec executed, in order.
@@ -86,9 +89,14 @@ impl FakeBackend {
     }
 
     fn outcome(&self, spec: &ExecutionSpec) -> Outcome {
-        if let (Some(outcome), Some(model)) = (self.candidate, &spec.model) {
+        if let Some(model) = &spec.model {
             if model.model.contains("candidate") {
-                return outcome;
+                if let Some(outcome) = self.candidate_on.get(&spec.task.id) {
+                    return *outcome;
+                }
+                if let Some(outcome) = self.candidate {
+                    return outcome;
+                }
             }
         }
         let mut script = self.script.lock().unwrap();

@@ -183,16 +183,19 @@ pub(crate) fn work(
                     stage.source("candidate").unwrap_or("?"),
                     model(&p.baseline),
                     p.plan
-                )
+                ) + &format!(" ({})", p.purpose.name())
             },
         ),
-        names::PROMOTION => {
-            if stage.params::<PromotionParams>().is_ok_and(|p| p.promote) {
-                "promote the best improved candidate".into()
-            } else {
-                "record the candidates without promoting any".into()
+        names::PROMOTION => match stage.params::<PromotionParams>() {
+            Ok(p) if p.promote => {
+                let required: Vec<&str> = p.required().iter().map(|r| r.name()).collect();
+                format!(
+                    "promote the best candidate that meets its {} evaluations",
+                    required.join(", ")
+                )
             }
-        }
+            _ => "record the candidates without promoting any".into(),
+        },
         operation => match &stage.foreach {
             Some(collection) => format!(
                 "{operation} once per item of {}, {} at a time",

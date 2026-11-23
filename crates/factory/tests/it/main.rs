@@ -26,6 +26,7 @@ mod interventions;
 mod knowledge;
 mod native;
 mod projections;
+mod promotion;
 mod qualify;
 mod repo;
 mod resolve;

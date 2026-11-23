@@ -17,7 +17,7 @@ use crate::champion;
 use crate::collection::LoadedCollection;
 use crate::eval_plan::EvalPlan;
 use crate::graph::CompiledPlan;
-use crate::ops::{self, names, AttemptParams, ProjectParams};
+use crate::ops::{self, names, AttemptParams, EvaluationParams, ProjectParams, PromotionParams};
 use crate::plan::PlannedStage;
 use crate::registry::Registry;
 
@@ -203,6 +203,45 @@ pub(crate) fn trained_objective_problems(
         if let Some(objective) = objective {
             out.push(format!(
                 "{source} is a {objective} dataset; model.train trains SFT datasets"
+            ));
+        }
+    }
+    out
+}
+
+/// What is wrong with a `promotion` stage: a promotion with no evaluation,
+/// or without one of every purpose it requires.
+pub(crate) fn promotion_problems(
+    stage: &PlannedStage,
+    params: &PromotionParams,
+    compiled: &CompiledPlan,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if !params.promote {
+        if params.requires.is_some() {
+            out.push("requires is a promotion's, and this one promotes nothing".to_owned());
+        }
+        return out;
+    }
+    let evaluations = stage.sources("evaluations");
+    if evaluations.is_empty() {
+        out.push("promotes only on an evaluation, and it is given none".to_owned());
+        return out;
+    }
+    if !(0.0..=1.0).contains(&params.retention_margin) {
+        out.push("retention_margin is a share of the tasks, between 0 and 1".to_owned());
+    }
+    let purposes: Vec<ops::Purpose> = evaluations
+        .iter()
+        .filter_map(|source| compiled.stages.iter().find(|s| s.id == *source))
+        .filter_map(|s| ops::params::<EvaluationParams>(&s.params).ok())
+        .map(|p| p.purpose)
+        .collect();
+    for purpose in params.required() {
+        if !purposes.contains(&purpose) {
+            out.push(format!(
+                "no {} evaluation: a promoted candidate must have one; add it, or narrow `requires`",
+                purpose.name()
             ));
         }
     }

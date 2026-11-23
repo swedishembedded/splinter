@@ -14,7 +14,7 @@
 //! environment, tasks, attempts and seeds, so their trials pair slot by
 //! slot. Each arm is a product of its own under `eval/_arms/`; the baseline's
 //! is shared by every
-//! candidate: it is run once per plan. The decision is the exact one-sided
+//! candidate: it is run once per plan and tasks. The decision is the exact one-sided
 //! paired sign test over the slots both arms counted, at the plan's alpha
 //! divided among the comparisons it makes (the plan's `comparisons`, or the
 //! recipe's candidates): `improved` below it with the pass-rate difference at
@@ -402,15 +402,17 @@ pub(crate) fn produce(
     let (base_binding, champion) =
         super::models::binding_of(factory, &stage.key, &section.baseline)?;
     let comparisons = comparisons(&section, plan);
-    // Named by what it is, so evaluations of one baseline under one plan
-    // share it (one identity, run once), whichever candidates they judge.
+    // Named by what it is, so evaluations of one baseline under one plan on
+    // the same tasks share it (one identity, run once), whichever candidates
+    // they judge; given other tasks, it is another arm.
     let baseline_name = format!(
         "baseline-{}",
         &digest_of(&(
             plan_digest(factory, &section)?,
             &section.agent,
             &section.args,
-            &base_binding
+            &base_binding,
+            &tasks_digest
         ))
         .hex()[..12]
     );

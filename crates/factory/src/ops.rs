@@ -317,6 +317,36 @@ pub struct TrainParams {
     pub seed: u64,
 }
 
+/// What an evaluation measures a candidate for, which a promotion requires.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum Purpose {
+    /// What it was trained for: it must improve.
+    #[default]
+    Target,
+    /// Tasks it was not trained on: the improvement must carry to them.
+    Transfer,
+    /// What the baseline could already do: it must not be lost.
+    Retention,
+}
+
+impl Purpose {
+    /// Every purpose, in order.
+    pub const ALL: [Purpose; 3] = [Purpose::Target, Purpose::Transfer, Purpose::Retention];
+
+    /// Its name in a recipe.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Target => "target",
+            Self::Transfer => "transfer",
+            Self::Retention => "retention",
+        }
+    }
+}
+
 /// `evaluation`: a candidate against a baseline under an evaluation plan.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -345,15 +375,41 @@ pub struct EvaluationParams {
     /// candidates of one experiment); the plan's own setting, else one.
     #[serde(default)]
     pub comparisons: Option<u32>,
+    /// What the evaluation measures the candidate for.
+    #[serde(default)]
+    pub purpose: Purpose,
+}
+
+fn retention_margin() -> f64 {
+    0.05
 }
 
 /// `promotion`: what the run decides about its candidates.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PromotionParams {
-    /// Promote the best improved candidate.
+    /// Promote the best candidate that meets every requirement.
     #[serde(default)]
     pub promote: bool,
+    /// The purposes a promoted candidate must have been evaluated for and
+    /// met; all three when unset.
+    #[serde(default)]
+    pub requires: Option<Vec<Purpose>>,
+    /// How far below the baseline a retention evaluation's pass rate may
+    /// fall before the candidate counts as having lost it, beside a loss the
+    /// plan's sign test finds significant.
+    #[serde(default = "retention_margin")]
+    pub retention_margin: f64,
+}
+
+impl PromotionParams {
+    /// The purposes a promoted candidate must have met.
+    #[must_use]
+    pub fn required(&self) -> Vec<Purpose> {
+        self.requires
+            .clone()
+            .unwrap_or_else(|| Purpose::ALL.to_vec())
+    }
 }
 
 /// The operation names.

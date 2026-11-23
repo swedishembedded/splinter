@@ -8,12 +8,19 @@
 
 //! The release stage: what the run decided about its candidates.
 //!
-//! Every candidate's evaluation is recorded. With `promote: true`, the
-//! candidate an evaluation found `improved` with the largest pass-rate
-//! difference is promoted (a protected plan's only on a signed verdict);
-//! an inconclusive or worse evaluation promotes nothing and keeps the
-//! candidate. With `promote: false` the run is an experiment: nothing is
-//! promoted whatever the verdicts.
+//! Every candidate's evaluation is recorded, with the gates its candidate
+//! met. Each evaluation measures its candidate for a purpose
+//! ([`Purpose`]): `target` and `transfer` evaluations must find it
+//! `improved` (a protected plan's only on a signed verdict); a `retention`
+//! evaluation must not find it regressed, that is neither a loss the plan's
+//! sign test finds significant nor a pass rate more than `retention_margin`
+//! below the baseline's. A candidate is eligible when every evaluation of
+//! it meets its gate and it was evaluated for every purpose the promotion
+//! `requires` (all three unless the recipe narrows them). With
+//! `promote: true` the eligible candidate with the largest target
+//! difference is promoted; none eligible promotes nothing. With
+//! `promote: false` the run is an experiment: nothing is promoted whatever
+//! the verdicts.
 //!
 //! The release also names the champion the run leaves in use, which a
 //! later generation's recipe names `champion:RUN` ([`crate::champion`]):
@@ -36,7 +43,7 @@ use super::eval::result_of;
 use super::training::candidate_of;
 use super::{io, stage_error, write_json, Factory, RunError};
 use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE};
-use crate::ops::{EvaluationParams, PromotionParams};
+use crate::ops::{EvaluationParams, PromotionParams, Purpose};
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 
@@ -52,11 +59,10 @@ pub(crate) fn identity(
         inputs.push((key.to_owned(), factory.product(key)?.1.digest()));
     }
     let promote = promote(stage)?;
-    let kept = kept_champion(factory, stage)?;
     Ok(super::identity_of(
         &stage.versioned_operation(),
         &stage.key,
-        json!({ "promote": promote, "kept": kept.0, "kept_digest": kept.1.map(|c| c.digest) }),
+        gates_of(factory, stage, promote)?,
         inputs,
         "",
         None,
@@ -69,27 +75,49 @@ pub(crate) fn produce(
     staging: &Staging,
 ) -> Result<(), RunError> {
     let promote = promote(stage)?;
+    let params: PromotionParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+    let mut evaluated = Vec::new();
+    for key in stage.sources("evaluations") {
+        evaluated.push((purpose_of(factory, key), result_of(&factory.view(key))?));
+    }
+    // Each candidate's gates, by purpose: the weakest evaluation decides.
+    let mut gates: std::collections::BTreeMap<String, std::collections::BTreeMap<Purpose, Gate>> =
+        std::collections::BTreeMap::new();
+    for (purpose, result) in &evaluated {
+        let gate = gate(*purpose, result, params.retention_margin);
+        let held = gates.entry(result.name.clone()).or_default();
+        let worst = held.get(purpose).map_or(gate, |g| (*g).min(gate));
+        held.insert(*purpose, worst);
+    }
     let mut candidates = Vec::new();
     let mut best: Option<(f64, String)> = None;
-    for key in stage.sources("evaluations") {
-        let result = result_of(&factory.view(key))?;
+    for (purpose, result) in &evaluated {
         let name = result.name.clone();
         let candidate = candidate_of(&factory.view(&name))?;
         let difference = result
             .statistics
             .get("difference")
             .and_then(serde_json::Value::as_f64);
-        let eligible = result.decision == Decision::Improved
-            && (!result.protected || result.signature.is_some());
-        if eligible {
+        let held = &gates[&name];
+        let eligible = held.values().all(|g| g.met())
+            && params.required().iter().all(|p| held.contains_key(p));
+        if eligible && *purpose == Purpose::Target {
             let gain = difference.unwrap_or(0.0);
             if best.as_ref().is_none_or(|(b, _)| gain > *b) {
                 best = Some((gain, name.clone()));
             }
         }
+        let shown: serde_json::Map<String, serde_json::Value> = Purpose::ALL
+            .iter()
+            .map(|p| {
+                let state = held.get(p).map_or("missing", |g| g.name());
+                (p.name().to_owned(), json!(state))
+            })
+            .collect();
         candidates.push(json!({
-            "candidate": name, "decision": result.decision, "protected": result.protected,
-            "signed": result.signature.is_some(), "difference": difference,
+            "candidate": name, "purpose": purpose.name(), "decision": result.decision,
+            "protected": result.protected, "signed": result.signature.is_some(),
+            "difference": difference, "gates": shown, "eligible": eligible,
             "served_as": candidate.served_as, "artifacts": candidate.artifacts,
         }));
     }
@@ -127,6 +155,108 @@ pub(crate) fn produce(
             "candidates": candidates, "champion": champion,
         }),
     )
+}
+
+/// Whether an evaluation met its purpose's gate, worst first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Gate {
+    /// A protected plan's verdict without its signature.
+    Unsigned,
+    /// The candidate lost what the baseline could do.
+    Regressed,
+    /// It is not better.
+    NotImproved,
+    /// The evidence does not decide.
+    Inconclusive,
+    /// A retention evaluation found nothing lost.
+    Retained,
+    /// It is better.
+    Improved,
+}
+
+impl Gate {
+    fn met(self) -> bool {
+        matches!(self, Self::Improved | Self::Retained)
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Unsigned => "unsigned",
+            Self::Regressed => "regressed",
+            Self::NotImproved => "not-improved",
+            Self::Inconclusive => "inconclusive",
+            Self::Retained => "retained",
+            Self::Improved => "improved",
+        }
+    }
+}
+
+/// The gate `result` meets for `purpose`.
+fn gate(
+    purpose: Purpose,
+    result: &splinter_core::factory::product::EvalResult,
+    margin: f64,
+) -> Gate {
+    if result.protected && result.signature.is_none() {
+        return Gate::Unsigned;
+    }
+    if purpose == Purpose::Retention {
+        let number = |key: &str| {
+            result
+                .statistics
+                .get(key)
+                .and_then(serde_json::Value::as_f64)
+        };
+        let count = |key: &str| number(key).map_or(0, |n| n as usize);
+        let alpha = number("alpha").unwrap_or(0.05);
+        let difference = number("difference").unwrap_or(0.0);
+        let lost = splinter_model::stats::one_sided_p(count("losses"), count("wins")) < alpha;
+        return if lost || difference < -margin {
+            Gate::Regressed
+        } else {
+            Gate::Retained
+        };
+    }
+    match result.decision {
+        Decision::Improved => Gate::Improved,
+        Decision::NotImproved => Gate::NotImproved,
+        Decision::Inconclusive => Gate::Inconclusive,
+    }
+}
+
+/// The purpose the evaluation stage `key` states.
+fn purpose_of(factory: &Factory<'_>, key: &str) -> Purpose {
+    factory
+        .resolved
+        .plan
+        .stage(key)
+        .and_then(|s| s.params::<EvaluationParams>().ok())
+        .map(|p| p.purpose)
+        .unwrap_or_default()
+}
+
+/// The stage identity's parameters: whether it promotes, the champion it
+/// would keep, and for a promotion what it requires of each evaluation.
+fn gates_of(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    promote: bool,
+) -> Result<serde_json::Value, RunError> {
+    let kept = kept_champion(factory, stage)?;
+    let mut parameters =
+        json!({ "promote": promote, "kept": kept.0, "kept_digest": kept.1.map(|c| c.digest) });
+    if promote {
+        let params: PromotionParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+        let purposes: Vec<&str> = stage
+            .sources("evaluations")
+            .iter()
+            .map(|key| purpose_of(factory, key).name())
+            .collect();
+        parameters["requires"] = json!(params.required());
+        parameters["retention_margin"] = json!(params.retention_margin);
+        parameters["purposes"] = json!(purposes);
+    }
+    Ok(parameters)
 }
 
 /// Whether the stage promotes.

@@ -30,7 +30,12 @@ fn release(run: &Path) -> Value {
 
 /// Generation 1 with promotion, and the recipe of generation 2 after it.
 fn generations(first: &Path) -> (String, String) {
-    let one = RECIPE.replace("with: { promote: false }", "with: { promote: true }");
+    // The chain is what is tested here, not the gates: the candidates are
+    // promoted on their target evaluation alone.
+    let one = RECIPE.replace(
+        "with: { promote: false }",
+        "with: { promote: true, requires: [target] }",
+    );
     let champion = format!("champion:{}", first.display());
     let two = one
         .replace(
@@ -205,7 +210,7 @@ fn a_protected_plan_examines_a_candidate_against_the_champion_as_its_predecessor
     let sealed = training_only.clone()
         + &evaluation("lora-r8", "eval/sealed.yaml", "champion")
         + "  - id: release\n    uses: promotion\n    inputs: { evaluations: [$stages.eval-lora-r8.evaluation] }\n    \
-           with: { promote: true }\n";
+           with: { promote: true, requires: [target] }\n";
     let examined = tempfile::tempdir().unwrap();
     fork(second.path(), examined.path()).unwrap();
     run(

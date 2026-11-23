@@ -48,7 +48,8 @@ stages:
   - id: release
     uses: promotion
     inputs: { evaluations: [$stages.eval-r16.evaluation] }
-    with: { promote: true }
+    # vim has no transfer or retention suite yet: promoted on its target alone.
+    with: { promote: true, requires: [target] }
 outputs:
   dataset: $stages.sft.dataset
   release: $stages.release.release

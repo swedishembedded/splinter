@@ -662,14 +662,13 @@ fn check(
                 ),
             }
         }
-        names::PROMOTION
-            if stage.params::<PromotionParams>().is_ok_and(|p| p.promote)
-                && stage.sources("evaluations").is_empty() =>
-        {
-            problem(
-                reader,
-                "promotes only on an evaluation, and it is given none",
-            );
+        names::PROMOTION => {
+            let Ok(params) = stage.params::<PromotionParams>() else {
+                return;
+            };
+            for text in crate::stage_checks::promotion_problems(stage, &params, compiled) {
+                problem(reader, &text);
+            }
         }
         _ => {}
     }

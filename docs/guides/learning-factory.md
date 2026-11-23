@@ -560,8 +560,28 @@ compiles its collection evaluates on the same compiled tasks:
   FILE`. Either way the verdict counts only when its signature verifies under
   the public key and it is about this candidate against the base at the plan's
   level.
-- **Release** (`promotion`). Records every decision; with `promote: true` it promotes the best
-  improved candidate. It names the champion the run leaves in use (below).
+- **Release** (`promotion`). Records every decision and the gates each candidate met; with
+  `promote: true` it promotes the best candidate that meets them all. Each evaluation states its
+  `purpose`: `target` (the default: what it was trained for, must be `improved`), `transfer`
+  (tasks it was not trained on, must be `improved`) and `retention` (what the baseline could
+  already do: must not regress, neither a loss the plan's sign test finds significant nor a
+  pass rate more than `retention_margin`, 0.05, below the baseline's). A promotion requires
+  an evaluation of every purpose; `requires: [target]` narrows that in plain sight, where a
+  recipe has no transfer or retention suite. Evaluations of one baseline share its arm only
+  when they run the same plan on the same tasks. It names the champion the run leaves in use
+  (below).
+
+  ```yaml
+  - id: eval-retention
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model, tasks: $stages.anchors.tasks }
+    with: { plan: eval/anchors.yaml, agent: sven, baseline: student, purpose: retention }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-target.evaluation, $stages.eval-transfer.evaluation,
+                            $stages.eval-retention.evaluation] }
+    with: { promote: true }
+  ```
 
 ## Changing an experiment
 
@@ -739,7 +759,7 @@ stages:
   - id: release
     uses: promotion
     inputs: { evaluations: [$stages.eval-r16.evaluation] }
-    with: { promote: true }
+    with: { promote: true, requires: [target] }
 ```
 
 ```sh
