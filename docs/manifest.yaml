@@ -21,6 +21,7 @@ navigation:
   - title: Guides
     pages:
       - docs/guides/learning-factory.md
+      - docs/guides/workspace.md
       - docs/guides/documents.md
       - docs/guides/repositories.md
       - docs/guides/agent-sessions.md
