@@ -281,7 +281,7 @@ fn hint_of(factory: &Factory<'_>, source: &str) -> Option<Hint> {
         .and_then(|p| p.hint)
 }
 
-fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunError> {
+pub(crate) fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunError> {
     let path = staging.path().join(name);
     let file = std::fs::File::open(&path).map_err(io(&path))?;
     Ok(FileRef {

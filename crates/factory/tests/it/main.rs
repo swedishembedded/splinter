@@ -7,6 +7,7 @@
 
 mod agent_op;
 mod brain_trainer;
+mod dataset_import;
 mod factory_run;
 mod fakes;
 mod foreach;

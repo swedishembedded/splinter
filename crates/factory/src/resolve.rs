@@ -34,8 +34,8 @@ use crate::environment::Environment;
 use crate::eval_plan::EvalPlan;
 use crate::graph::{self, CompiledPlan};
 use crate::ops::{
-    self, names, AttemptParams, EvaluationParams, ImportParams, PinParams, ProjectParams,
-    PromotionParams, TrainParams,
+    self, names, AttemptParams, EvaluationParams, ImportDatasetParams, ImportParams, PinParams,
+    ProjectParams, PromotionParams, TrainParams,
 };
 use crate::plan::{Plan, PlannedStage};
 use crate::recipe::{ModelRef, RecipeError};
@@ -525,6 +525,27 @@ fn check(
                 }
             }
         }
+        names::IMPORT_DATASET => {
+            if stage.input("records").is_none() {
+                problem(
+                    reader,
+                    "imports no records: bind `records` to a recipe input (a directory of train.jsonl and validation.jsonl)",
+                );
+            }
+            pin_inputs(stage, compiled, reader);
+            if let Ok(params) = stage.params::<ImportDatasetParams>() {
+                if compiled
+                    .models
+                    .get(&params.target)
+                    .is_some_and(champion::is_champion)
+                {
+                    problem(
+                        reader,
+                        "a champion is served, never a dataset's target: name the base model",
+                    );
+                }
+            }
+        }
         names::PROJECT => {
             let Ok(params) = stage.params::<ProjectParams>() else {
                 return;
@@ -581,6 +602,9 @@ fn check(
             let Ok(params) = stage.params::<EvaluationParams>() else {
                 return;
             };
+            for file in params.files.iter().chain(params.system_prompt.iter()) {
+                reader.read(file);
+            }
             if found.eval_plans.contains_key(&params.plan) {
                 return;
             }

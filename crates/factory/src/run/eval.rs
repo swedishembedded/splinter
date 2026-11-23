@@ -38,6 +38,7 @@ use splinter_core::digest::{digest_of, Digest};
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{ArmResult, Decision, EvalResult, TrialResult, EVAL_SCHEMA};
 use splinter_core::factory::task::TaskRef;
+use splinter_core::factory::trial::RunBudget;
 use splinter_eval::promotion::{verify, Pair, PublicKey, Role};
 use splinter_model::stats::one_sided_p;
 use splinter_store::factory::products::Staging;
@@ -66,6 +67,9 @@ pub(crate) struct Evaluation {
     plan: String,
     agent: String,
     args: Vec<String>,
+    files: Vec<String>,
+    system_prompt: Option<String>,
+    budget: Option<RunBudget>,
     baseline: ModelRef,
     comparisons: Option<u32>,
     /// The `model.train` stage whose candidate it evaluates.
@@ -101,6 +105,9 @@ fn section<'r>(
             plan: params.plan,
             agent: params.agent,
             args: params.args,
+            files: params.files,
+            system_prompt: params.system_prompt,
+            budget: params.budget,
             baseline,
             comparisons: params.comparisons,
             candidate,
@@ -134,6 +141,27 @@ fn plan_digest(factory: &Factory<'_>, section: &Evaluation) -> Result<Digest, Ru
         })
 }
 
+/// The files the arms' agents are given, with their digests.
+fn pinned_files(
+    factory: &Factory<'_>,
+    section: &Evaluation,
+) -> Result<Vec<(String, Digest)>, RunError> {
+    section
+        .files
+        .iter()
+        .chain(section.system_prompt.iter())
+        .map(|file| {
+            factory
+                .resolved
+                .lock
+                .files
+                .get(file)
+                .map(|digest| (file.clone(), digest.clone()))
+                .ok_or_else(|| stage_error("eval", format!("{file} is not pinned in the lock")))
+        })
+        .collect()
+}
+
 fn tasks<'r>(
     factory: &'r Factory<'_>,
     section: &Evaluation,
@@ -154,9 +182,9 @@ fn arm_pass(section: &Evaluation, plan: &EvalPlan, name: &str) -> Result<Rollout
         name: name.to_owned(),
         agent: section.agent.clone(),
         args: section.args.clone(),
-        files: Vec::new(),
+        files: section.files.clone(),
         model: None,
-        system_prompt: None,
+        system_prompt: section.system_prompt.clone(),
         environment_variables: BTreeMap::new(),
         environment: plan
             .environment
@@ -165,7 +193,7 @@ fn arm_pass(section: &Evaluation, plan: &EvalPlan, name: &str) -> Result<Rollout
         tasks: TaskSelector::default(),
         attempts: plan.attempts,
         concurrency: plan.concurrency,
-        budget: None,
+        budget: section.budget,
         timeout_policy: splinter_core::factory::trial::TimeoutPolicy::Graded,
         retries: 2,
         seed: plan.seed,
@@ -185,6 +213,7 @@ pub(crate) fn identity(
     let comparisons = comparisons(&section, plan);
     let parameters = json!({
         "plan": plan_digest(factory, &section)?, "agent": section.agent, "args": section.args,
+        "files": pinned_files(factory, &section)?, "budget": section.budget,
         "baseline": super::rollout::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
     });
     let backend = if plan.protected() {

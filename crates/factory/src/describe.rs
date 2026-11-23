@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use crate::collection::LoadedCollection;
 use crate::graph::{self, CompiledPlan};
 use crate::ops::{
-    names, AttemptParams, EvaluationParams, ImportParams, ProjectParams, PromotionParams,
-    TrainParams,
+    names, AttemptParams, EvaluationParams, ImportDatasetParams, ImportParams, ProjectParams,
+    PromotionParams, TrainParams,
 };
 use crate::plan::PlannedStage;
 
@@ -90,6 +90,19 @@ pub(crate) fn work(
                 jobs.join(", ")
             )
         }
+        names::IMPORT_DATASET => stage.params::<ImportDatasetParams>().map_or_else(
+            |_| String::new(),
+            |p| {
+                let from = stage
+                    .input("records")
+                    .and_then(|i| compiled.inputs.get(i))
+                    .map_or("?", |i| i.path.as_str());
+                format!(
+                    "import the training records of {from} for {}",
+                    model(&p.target)
+                )
+            },
+        ),
         names::PROJECT => stage.params::<ProjectParams>().map_or_else(
             |_| String::new(),
             |p| {

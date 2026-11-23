@@ -13,6 +13,7 @@
 //! | `tasks.pin` | `collection` (files) | `tasks` |
 //! | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional, many) | `attempts` |
 //! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
+//! | `dataset.import` | `records` (files) | `dataset` |
 //! | `dataset.project` | `attempts` (many) | `dataset` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
@@ -135,6 +136,24 @@ pub struct ImportParams {
     pub tasks: Vec<String>,
 }
 
+/// `dataset.import`: training records made elsewhere, as a dataset
+/// ([`crate::run::dataset_import`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ImportDatasetParams {
+    /// The model role the records are for.
+    pub target: String,
+    /// The longest record, in the target's tokens, when bounded: a longer
+    /// one is excluded and listed.
+    #[serde(default)]
+    pub max_block: Option<u64>,
+    /// The records keep the target's reasoning (it is trained to reason
+    /// before it answers); off: no-think mode, and a record that carries
+    /// reasoning is refused.
+    #[serde(default)]
+    pub thinking: bool,
+}
+
 fn sft() -> String {
     "sft".into()
 }
@@ -220,6 +239,17 @@ pub struct EvaluationParams {
     /// The agent's arguments, identical for every arm.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Files the arguments refer to, pinned into the run and given to every
+    /// arm's agent as an attempt stage's are.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// A system prompt file appended to the agent's own, the same for every
+    /// arm: a candidate trained on records that carry it is served with it.
+    #[serde(default)]
+    pub system_prompt: Option<String>,
+    /// The per-trial budget of every arm.
+    #[serde(default)]
+    pub budget: Option<RunBudget>,
     /// The baseline model's role.
     pub baseline: String,
     /// The comparisons the plan's significance level is divided among (the
@@ -245,6 +275,8 @@ pub mod names {
     pub const ATTEMPTS: &str = "attempt.collect";
     /// `attempt.import`.
     pub const IMPORT: &str = "attempt.import";
+    /// `dataset.import`.
+    pub const IMPORT_DATASET: &str = "dataset.import";
     /// `dataset.project`.
     pub const PROJECT: &str = "dataset.project";
     /// `model.train`.
@@ -354,6 +386,16 @@ pub fn registry() -> Registry {
             reproducibility: Reproducibility::Deterministic,
             isolation: Isolation::Any,
             roles: |_| Vec::new(),
+        })
+        .with(Builtin::<ImportDatasetParams> {
+            name: names::IMPORT_DATASET,
+            summary: "training records made elsewhere (a directory of train.jsonl and \
+                      validation.jsonl), carried over unchanged as a dataset",
+            inputs: vec![port("records", ArtifactKind::Files)],
+            output: port("dataset", ArtifactKind::Dataset),
+            reproducibility: Reproducibility::Deterministic,
+            isolation: Isolation::Any,
+            roles: |p| vec![p.target.clone()],
         })
         .with(Builtin::<ProjectParams> {
             name: names::PROJECT,

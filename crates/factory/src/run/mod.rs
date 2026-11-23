@@ -23,6 +23,7 @@
 
 mod compute;
 pub mod dataset;
+pub mod dataset_import;
 mod directory;
 pub mod eval;
 pub mod import;
@@ -381,6 +382,7 @@ impl<'a> Factory<'a> {
             names::PIN
             | names::ATTEMPTS
             | names::IMPORT
+            | names::IMPORT_DATASET
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
@@ -408,6 +410,7 @@ impl<'a> Factory<'a> {
             names::PIN => tasks::identity(self, stage)?,
             names::ATTEMPTS => rollout::identity(self, stage)?,
             names::IMPORT => import::identity(self, stage)?,
+            names::IMPORT_DATASET => dataset_import::identity(self, stage)?,
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
@@ -417,6 +420,7 @@ impl<'a> Factory<'a> {
             names::PIN => tasks::produce(factory, stage, staging),
             names::ATTEMPTS => rollout::produce(factory, stage, &identity, staging),
             names::IMPORT => import::produce(factory, stage, staging),
+            names::IMPORT_DATASET => dataset_import::produce(factory, stage, staging),
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),

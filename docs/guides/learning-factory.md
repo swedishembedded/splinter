@@ -100,6 +100,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `tasks.pin` | `collection` (a recipe input) | `tasks` |
 | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional) | `attempts` |
 | `attempt.import` | `tasks`, `jobs` (Harbor job directories, recipe inputs) | `attempts` |
+| `dataset.import` | `records` (a recipe input) | `dataset` |
 | `dataset.project` | `attempts` (one or more) | `dataset` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model) | `evaluation` |
@@ -143,6 +144,32 @@ wrong kind, a credential written as a literal.
   with `hint: solution` works each task from the run's own copy of it whose
   instruction carries the task's reference solution (`solution/solve.sh`), in
   the task's own sandbox and graded by its own verifier (below).
+
+## Training records made elsewhere
+
+A published dataset of chat records trains without being rebuilt from trials. A `dataset.import` stage reads a
+directory of the task repository, named as a recipe input, that holds `train.jsonl` and optionally
+`validation.jsonl`, and carries the lines over byte for byte as a dataset that `model.train` reads like any other:
+
+```yaml
+inputs:
+  records: { kind: files, path: data/vim-sft }       # train.jsonl, validation.jsonl
+stages:
+  - id: sft
+    uses: dataset.import
+    inputs: { records: $inputs.records }
+    with: { target: student, max_block: 16384 }
+```
+
+Every line must be a chat record with a supervised message (`train: true`); one that is not is refused with its
+file and line, and the stage fails rather than drop it. A task in both files is refused, and so is a record that
+keeps a turn's reasoning while `thinking` is false (the default, no-think mode). A record longer than `max_block`
+tokens of the target is excluded and listed in `excluded.jsonl`. The records are the caller's word: the stage cannot
+tell whether a trial was verified or a task is examination material, so keep exam tasks out of the files.
+
+An `evaluation` stage takes `files`, `system_prompt` and `budget` as an attempt stage does, for every arm. A
+candidate trained on records whose system prompt carries an appended instruction, or in a mode a configuration
+file sets, is then evaluated under the same.
 
 ## Harness stages
 
