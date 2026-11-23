@@ -44,6 +44,7 @@ pub fn route(
         Command::Status(RunStatusArgs { run: Some(run) }) => status(json, &run),
         Command::Validate(args) => plan(config, json, &args, false),
         Command::Plan(args) => plan(config, json, &args, true),
+        Command::Generate(args) => generate(config, &args.collection),
         Command::Run(args) => run_recipe(config, json, &args),
         Command::Resume(args) => resume(config, json, &args.run),
         Command::Cancel(args) => cancel(&args.run),
@@ -451,4 +452,11 @@ pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error>
         return Ok(Exit::Ok);
     }
     execute(config, json, &resolved, &args.run)
+}
+
+/// `generate`.
+pub fn generate(config: &Config, collection: &Path) -> Result<Exit, Error> {
+    splinter_sdk::factory::collection::generate(&config.working_dir, &collection.to_string_lossy())
+        .map_err(refused)?;
+    Ok(Exit::Ok)
 }

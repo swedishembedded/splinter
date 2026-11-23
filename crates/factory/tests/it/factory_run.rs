@@ -354,11 +354,11 @@ fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
         second.err()
     );
 
-    repo.write("agents/sven.yaml", "agent: { max_turns: 99 }\n");
+    repo.write("presets/sven.yaml", "agent: { max_turns: 99 }\n");
     let changed = resolved(&repo, &recipe);
     let refused = Factory::open(&changed, dir.path(), services, OWNER);
     match refused {
-        Err(RunError::InputsChanged(changes)) => assert_eq!(changes, ["agents/sven.yaml changed"]),
+        Err(RunError::InputsChanged(changes)) => assert_eq!(changes, ["presets/sven.yaml changed"]),
         other => panic!("expected InputsChanged, got {:?}", other.err()),
     }
 }

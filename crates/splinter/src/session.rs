@@ -279,6 +279,7 @@ impl Session {
             Command::Status(_) => emit(json, &status(ctx)?),
             Command::Validate(_)
             | Command::Plan(_)
+            | Command::Generate(_)
             | Command::Run(_)
             | Command::Resume(_)
             | Command::Cancel(_)

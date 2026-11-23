@@ -101,3 +101,11 @@ pub struct PlayArgs {
     #[arg(long)]
     pub no_run: bool,
 }
+
+/// `generate`.
+#[derive(Debug, Args)]
+pub struct GenerateArgs {
+    /// The collection file, relative to the task repository.
+    #[arg(value_name = "COLLECTION")]
+    pub collection: PathBuf,
+}

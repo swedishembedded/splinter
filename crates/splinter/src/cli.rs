@@ -85,6 +85,9 @@ pub enum Command {
     Validate(RecipeArgs),
     /// Show the graph of stages a factory recipe runs and the work each does.
     Plan(RecipeArgs),
+    /// Write a factory collection's task directories with the command its
+    /// file names (the task repository's own compiler).
+    Generate(GenerateArgs),
     /// Run a factory recipe into a run directory, each stage reused when its
     /// product is already committed.
     Run(RunArgs),
@@ -683,7 +686,9 @@ pub use experiences::{
     CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs,
     RepairArgs, StrataArgs,
 };
-pub use factory::{ExportArgs, ForkArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs};
+pub use factory::{
+    ExportArgs, ForkArgs, GenerateArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs,
+};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;

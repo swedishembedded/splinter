@@ -87,6 +87,7 @@ Every command takes these.
 - [splinter status](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [splinter validate](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
 - [splinter plan](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
+- [splinter generate](#splinter-generate) - Write a factory collection's task directories with the command its file names (the task repository's own compiler)
 - [splinter run](#splinter-run) - Run a factory recipe into a run directory, each stage reused when its product is already committed
 - [splinter resume](#splinter-resume) - Continue a factory run from what it recorded
 - [splinter cancel](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
@@ -249,6 +250,7 @@ Subcommands:
 - [`status`](#splinter-status) - Show the policy in use, recent runs and what the stores hold
 - [`validate`](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
 - [`plan`](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
+- [`generate`](#splinter-generate) - Write a factory collection's task directories with the command its file names (the task repository's own compiler)
 - [`run`](#splinter-run) - Run a factory recipe into a run directory, each stage reused when its product is already committed
 - [`resume`](#splinter-resume) - Continue a factory run from what it recorded
 - [`cancel`](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
@@ -531,6 +533,18 @@ splinter plan [OPTIONS] <RECIPE>
 Arguments:
 
 - `<RECIPE>` (required): The recipe, relative to the task repository (the working directory)
+
+### splinter generate
+
+Write a factory collection's task directories with the command its file names (the task repository's own compiler)
+
+```text
+splinter generate [OPTIONS] <COLLECTION>
+```
+
+Arguments:
+
+- `<COLLECTION>` (required): The collection file, relative to the task repository.
 
 ### splinter run
 

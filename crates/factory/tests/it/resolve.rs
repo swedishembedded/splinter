@@ -81,8 +81,8 @@ fn every_problem_of_a_recipe_is_reported_at_once() {
         )
         .replace("\"hosted:deepseek", "\"nowhere:deepseek")
         .replace(
-            "agents/sven.yaml]\n    model",
-            "agents/gone.yaml]\n    model",
+            "presets/sven.yaml]\n    model",
+            "presets/gone.yaml]\n    model",
         )
         .replace("SVEN_KEY: \"env:SVEN_KEY\"", "SVEN_KEY: sk-literal");
     let problems = resolve(&repo.root, &broken, connections())
@@ -94,7 +94,7 @@ fn every_problem_of_a_recipe_is_reported_at_once() {
         "reads missing, which is not a rollout pass",
         "candidate lora-r99 is not a training variant",
         "names connection nowhere",
-        "agents/gone.yaml",
+        "presets/gone.yaml",
         "SVEN_KEY looks like a credential",
     ] {
         assert!(
@@ -143,7 +143,7 @@ fn the_lock_names_exactly_what_changed_since_a_run_started() {
     let repo = Repo::new();
     let before = resolve(&repo.root, RECIPE, connections()).unwrap().lock;
     assert!(before.changes(&before).is_empty());
-    repo.write("agents/sven.yaml", "agent: { max_turns: 40 }\n");
+    repo.write("presets/sven.yaml", "agent: { max_turns: 40 }\n");
     repo.write(
         "tasks/vim/train/002-second/instruction.md",
         "Do it differently.\n",
@@ -151,7 +151,7 @@ fn the_lock_names_exactly_what_changed_since_a_run_started() {
     let after = resolve(&repo.root, RECIPE, connections()).unwrap().lock;
     assert_eq!(
         after.changes(&before),
-        ["the task collection changed", "agents/sven.yaml changed"]
+        ["the task collection changed", "presets/sven.yaml changed"]
     );
 }
 
@@ -162,4 +162,26 @@ fn a_literal_credential_in_connections_is_refused() {
     )
     .expect_err("refused");
     assert!(error.to_string().contains("env:NAME"));
+}
+
+#[test]
+fn a_collection_names_the_command_that_generates_its_tasks_and_a_missing_root_says_so() {
+    let repo = Repo::new();
+    repo.write(
+        "collections/vim.yaml",
+        "schema: splinter.collection/v1\nname: vim\nroot: build/vim\n\
+         generate: [cp, -r, tasks/vim, build/vim]\n",
+    );
+    let problems = resolve(&repo.root, RECIPE, connections())
+        .expect_err("no tasks yet")
+        .0;
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.contains("splinter generate collections/vim.yaml")),
+        "{problems:?}"
+    );
+    std::fs::create_dir_all(repo.root.join("build")).unwrap();
+    splinter_factory::collection::generate(&repo.root, "collections/vim.yaml").unwrap();
+    assert!(resolve(&repo.root, RECIPE, connections()).is_ok());
 }

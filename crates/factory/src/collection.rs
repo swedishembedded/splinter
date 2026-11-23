@@ -46,6 +46,12 @@ pub struct CollectionFile {
     /// Only tasks whose id starts with one of these path prefixes.
     #[serde(default)]
     pub include: Vec<String>,
+    /// The command (an argv, run from the repository root) that writes the
+    /// task directories under `root`: a task repository's own compiler of
+    /// its task sources. `splinter generate` runs it; a run reads only what
+    /// it wrote.
+    #[serde(default)]
+    pub generate: Option<Vec<String>>,
 }
 
 /// Why a collection cannot be loaded.
@@ -119,6 +125,17 @@ pub fn load(repository: &Path, relative: &str) -> Result<LoadedCollection, LoadE
         .into());
     }
     let root = repository.join(&file.root);
+    if !root.is_dir() {
+        let hint = match &file.generate {
+            Some(_) => format!("; `splinter generate {relative}` writes it"),
+            None => String::new(),
+        };
+        return Err(RecipeError(vec![format!(
+            "{relative}: its root {} does not exist{hint}",
+            file.root
+        )])
+        .into());
+    }
     let mut found = Vec::new();
     find_tasks(&root, &root, &mut found)?;
     let mut tasks = Vec::new();
@@ -205,4 +222,37 @@ fn task_ref(dir: &Path, id: String) -> Result<TaskRef, LoadError> {
         family,
         split,
     })
+}
+
+/// Run the collection file's `generate` command from the repository root.
+///
+/// # Errors
+/// The file is unreadable or names no command, or the command failed.
+pub fn generate(repository: &Path, relative: &str) -> Result<(), LoadError> {
+    let path = repository.join(relative);
+    let text = std::fs::read_to_string(&path).map_err(|e| LoadError::Task {
+        path: path.clone(),
+        message: e.to_string(),
+    })?;
+    let file: CollectionFile =
+        serde_yaml::from_str(&text).map_err(|e| RecipeError(vec![format!("{relative}: {e}")]))?;
+    let Some((program, args)) = file.generate.as_deref().and_then(<[String]>::split_first) else {
+        return Err(RecipeError(vec![format!("{relative} names no generate command")]).into());
+    };
+    let status = std::process::Command::new(program)
+        .args(args)
+        .current_dir(repository)
+        .status()
+        .map_err(|e| LoadError::Task {
+            path: path.clone(),
+            message: format!("{program}: {e}"),
+        })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(LoadError::Task {
+            path,
+            message: format!("{program} exited with {status}"),
+        })
+    }
 }

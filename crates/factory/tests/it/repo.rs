@@ -22,8 +22,8 @@ tasks: { collection: collections/vim.yaml, split: train }
 rollouts:
   - name: local
     agent: sven
-    args: [--config, agents/sven.yaml]
-    files: [agents/sven.yaml]
+    args: [--config, presets/sven.yaml]
+    files: [presets/sven.yaml]
     model: "brain:Qwen/Qwen3-4B"
     environment: environments/vim.yaml
     attempts: 2
@@ -100,7 +100,7 @@ impl Repo {
             "schema: splinter.evalplan/v1\ncollection: collections/vim.yaml\nsplit: eval\n\
              environment: environments/vim.yaml\nattempts: 2\nseed: 5\ndecision: { alpha: 0.05 }\n",
         );
-        write(&root, "agents/sven.yaml", "agent: { max_turns: 20 }\n");
+        write(&root, "presets/sven.yaml", "agent: { max_turns: 20 }\n");
         write(&root, "recipes/vim.yaml", RECIPE);
         Self { _dir: dir, root }
     }
