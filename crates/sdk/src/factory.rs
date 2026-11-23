@@ -45,21 +45,22 @@ pub enum SetupError {
     /// The execution worker cannot be run.
     #[error("{0}")]
     Worker(String),
+    /// The run directory refused (it is not a run, or its record is broken).
+    #[error(transparent)]
+    Run(#[from] splinter_factory::run::RunError),
 }
 
-/// This machine's connections; none when the file does not exist.
+/// The connections a run of the task repository at `repository` uses: the
+/// repository's `connections.yaml`, each connection overridden by this
+/// machine's file of the same name ([`Connections::layered`]).
 ///
 /// # Errors
-/// The file exists and is invalid.
-pub fn connections_of(config: &Config) -> Result<Connections, SetupError> {
-    match std::fs::read_to_string(&config.factory.connections) {
-        Ok(text) => Ok(Connections::parse(&text)?),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Connections::default()),
-        Err(e) => Err(SetupError::Read {
-            path: config.factory.connections.display().to_string(),
-            message: e.to_string(),
-        }),
-    }
+/// A file exists and is invalid.
+pub fn connections_of(config: &Config, repository: &Path) -> Result<Connections, SetupError> {
+    Ok(Connections::layered(
+        repository,
+        &config.factory.connections,
+    )?)
 }
 
 /// The recipe at `recipe` (relative to the working directory, the task
@@ -76,7 +77,7 @@ pub fn resolve_recipe(config: &Config, recipe: &Path) -> Result<Resolved, SetupE
     Ok(resolve(
         &config.working_dir,
         &text,
-        connections_of(config)?,
+        connections_of(config, &config.working_dir)?,
     )?)
 }
 
@@ -86,12 +87,12 @@ pub fn resolve_recipe(config: &Config, recipe: &Path) -> Result<Resolved, SetupE
 /// # Errors
 /// The run's record, or what it names, cannot be read.
 pub fn resolve_run(config: &Config, run: &Path) -> Result<Resolved, SetupError> {
-    let (repository, text) =
-        splinter_factory::run::started_with(run).map_err(|e| SetupError::Read {
-            path: run.display().to_string(),
-            message: e.to_string(),
-        })?;
-    Ok(resolve(&repository, &text, connections_of(config)?)?)
+    let (repository, text) = splinter_factory::run::started_with(run)?;
+    Ok(resolve(
+        &repository,
+        &text,
+        connections_of(config, &repository)?,
+    )?)
 }
 
 /// The run in `run` resolved again with its recipe's evaluation plan
@@ -104,13 +105,13 @@ pub fn resolve_run_under_plan(
     run: &Path,
     plan: &Path,
 ) -> Result<Resolved, SetupError> {
-    let (repository, text) =
-        splinter_factory::run::started_with(run).map_err(|e| SetupError::Read {
-            path: run.display().to_string(),
-            message: e.to_string(),
-        })?;
+    let (repository, text) = splinter_factory::run::started_with(run)?;
     let text = splinter_factory::recipe::with_eval_plan(&text, &plan.to_string_lossy())?;
-    Ok(resolve(&repository, &text, connections_of(config)?)?)
+    Ok(resolve(
+        &repository,
+        &text,
+        connections_of(config, &repository)?,
+    )?)
 }
 
 /// The execution worker this machine offers.

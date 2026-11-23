@@ -20,6 +20,7 @@
 //! be shared and recorded with a run.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::factory::execution::{ModelBinding, Protocol, FORWARDED_HEADERS};
@@ -51,7 +52,17 @@ pub struct Connections {
     /// By name.
     #[serde(default)]
     pub connections: BTreeMap<String, Connection>,
+    /// The files these were read from, or the ones looked for when none
+    /// exists: what an unknown connection's error names. Not part of their
+    /// identity.
+    #[serde(skip)]
+    pub looked_in: Vec<String>,
 }
+
+/// The connections file of a task repository: shared defaults (it can hold
+/// no credential), each overridden by this machine's connection of the same
+/// name.
+pub const REPOSITORY_FILE: &str = "connections.yaml";
 
 /// Why connections are refused or a model cannot be bound.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -63,12 +74,14 @@ pub enum ConnectionError {
     #[error("connection {0}: a token must be `env:NAME`, never the credential itself")]
     LiteralToken(String),
     /// A model names a connection that does not exist.
-    #[error("model {model} names connection {connection}, which connections.yaml does not define")]
+    #[error("model {model} names connection {connection}, which no connections file defines ({looked_in})")]
     Unknown {
         /// The model reference.
         model: String,
         /// The missing connection.
         connection: String,
+        /// Where connections were read, or looked for.
+        looked_in: String,
     },
 }
 
@@ -105,6 +118,32 @@ impl Connections {
         Ok(parsed)
     }
 
+    /// The connections for a run of the task repository at `repository` on
+    /// this machine: the repository's [`REPOSITORY_FILE`], each connection
+    /// overridden by the one of the same name in `machine` (this machine's
+    /// file, `~/.config/splinter/connections.yaml`). Either may be missing.
+    ///
+    /// # Errors
+    /// A file exists but cannot be read, or is refused by [`Self::parse`].
+    pub fn layered(repository: &Path, machine: &Path) -> Result<Self, ConnectionError> {
+        let mut layered = Self::default();
+        for path in [repository.join(REPOSITORY_FILE), machine.to_path_buf()] {
+            match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    let found = Self::parse(&text)
+                        .map_err(|e| ConnectionError::Parse(format!("{}: {e}", path.display())))?;
+                    layered.connections.extend(found.connections);
+                    layered.looked_in.push(format!("read {}", path.display()));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    layered.looked_in.push(format!("no {}", path.display()));
+                }
+                Err(e) => return Err(ConnectionError::Parse(format!("{}: {e}", path.display()))),
+            }
+        }
+        Ok(layered)
+    }
+
     /// The binding a worker needs for `model`.
     ///
     /// # Errors
@@ -116,6 +155,11 @@ impl Connections {
                 .ok_or_else(|| ConnectionError::Unknown {
                     model: model.to_string(),
                     connection: model.connection.clone(),
+                    looked_in: if self.looked_in.is_empty() {
+                        "the connections given".into()
+                    } else {
+                        self.looked_in.join("; ")
+                    },
                 })?;
         Ok(ModelBinding {
             connection: model.connection.clone(),

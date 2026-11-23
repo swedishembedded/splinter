@@ -28,7 +28,7 @@ use crate::connections::Connections;
 use crate::environment::Environment;
 use crate::eval_plan::EvalPlan;
 use crate::plan::Plan;
-use crate::recipe::{Recipe, RecipeError};
+use crate::recipe::{ModelRef, Recipe, RecipeError};
 
 /// The schema of a [`Lock`].
 pub const LOCK_SCHEMA: &str = "splinter.lock/v1";
@@ -44,8 +44,9 @@ pub struct Lock {
     pub files: BTreeMap<String, Digest>,
     /// The pinned task collection's digest.
     pub tasks: Digest,
-    /// The connections the run binds, as configured (names of credential
-    /// variables only).
+    /// The connections the recipe's models are reached through, as
+    /// configured (names of credential variables only); a connection no
+    /// model uses is not part of it.
     pub connections: Digest,
 }
 
@@ -256,7 +257,7 @@ pub fn resolve(
         recipe: Digest::of(recipe_text.as_bytes()),
         files,
         tasks: digest_of(&loaded.collection),
-        connections: digest_of(&connections),
+        connections: digest_of(&used_connections(&connections, &models, &champions)),
     };
     let plan = Plan::of(&recipe, loaded.collection.tasks.len());
     Ok(Resolved {
@@ -271,6 +272,29 @@ pub fn resolve(
         lock,
         plan,
     })
+}
+
+/// The connections the recipe's models are reached through (a champion's
+/// through its base): what a run's lock pins. Another connection of the
+/// machine or the repository, added or changed, changes no run.
+fn used_connections<'c>(
+    connections: &'c Connections,
+    models: &[ModelRef],
+    champions: &BTreeMap<String, Champion>,
+) -> BTreeMap<&'c str, &'c crate::connections::Connection> {
+    let names: std::collections::BTreeSet<&str> = models
+        .iter()
+        .map(|m| match champions.get(&m.to_string()) {
+            Some(champion) => champion.record.base.connection.as_str(),
+            None => m.connection.as_str(),
+        })
+        .collect();
+    connections
+        .connections
+        .iter()
+        .filter(|(name, _)| names.contains(name.as_str()))
+        .map(|(name, c)| (name.as_str(), c))
+        .collect()
 }
 
 /// The recipe's tasks that a dataset would learn from but that are

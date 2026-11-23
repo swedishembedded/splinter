@@ -27,10 +27,13 @@ splinter report runs/vim-hosted-sft
 - **The execution worker.** `make worker/install` in Splinter's checkout installs
   `splinter-harbor-worker` (Harbor's job API, pinned) into `workers/harbor/.venv`;
   put its `bin/` on `PATH` or set `SPLINTER_HARBOR_WORKER` to the program.
-- **Connections** in `~/.config/splinter/connections.yaml` (or
-  `$XDG_CONFIG_HOME/splinter/connections.yaml`): how each model is reached. A
-  credential is named by the variable that holds it, never written in the file;
-  the worker reads the variable when it routes the agent's requests.
+- **Connections**: how each model is reached. The task repository's
+  `connections.yaml` gives them for every machine; this machine's
+  `~/.config/splinter/connections.yaml` (or `$XDG_CONFIG_HOME/splinter/...`)
+  overrides any of them by name. A credential is named by the variable that
+  holds it, never written in either file; the worker reads the variable when it
+  routes the agent's requests. A model whose connection neither file defines is
+  refused, naming the files read.
 
 ```yaml
 connections:

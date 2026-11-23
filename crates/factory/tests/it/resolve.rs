@@ -271,3 +271,75 @@ fn an_environment_states_requirements_and_the_worker_picks_the_sandbox() {
     )
     .contains("read-only"));
 }
+
+#[test]
+fn a_task_repository_ships_its_connections_and_this_machine_overrides_them() {
+    use splinter_factory::connections::Connections;
+    let dir = tempfile::tempdir().unwrap();
+    let (repository, machine) = (dir.path().join("repo"), dir.path().join("connections.yaml"));
+    std::fs::create_dir_all(&repository).unwrap();
+    // Neither file: an unknown connection says where it was looked for.
+    let none = Connections::layered(&repository, &machine).unwrap();
+    let unknown = none
+        .bind(&"hosted:m".parse().unwrap())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        unknown.contains("connections.yaml") && unknown.contains(&machine.display().to_string()),
+        "{unknown}"
+    );
+    std::fs::write(
+        repository.join("connections.yaml"),
+        "connections:\n  brain: { protocol: openai, url: \"http://127.0.0.1:8990/v1\" }\n  \
+         hosted: { protocol: openai, url: \"https://shared.invalid/v1\", token: \"env:KEY\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &machine,
+        "connections:\n  hosted: { protocol: openai, url: \"https://mine.invalid/v1\", token: \"env:MINE\" }\n",
+    )
+    .unwrap();
+    let layered = Connections::layered(&repository, &machine).unwrap();
+    let hosted = layered.bind(&"hosted:m".parse().unwrap()).unwrap();
+    assert_eq!(
+        (hosted.url.as_deref(), hosted.token_env.as_deref()),
+        (Some("https://mine.invalid/v1"), Some("MINE"))
+    );
+    assert!(
+        layered.bind(&"brain:m".parse().unwrap()).is_ok(),
+        "the repository's own"
+    );
+    // A literal credential is refused in either file.
+    std::fs::write(
+        &machine,
+        "connections:\n  hosted: { protocol: openai, token: sk-123 }\n",
+    )
+    .unwrap();
+    assert!(Connections::layered(&repository, &machine).is_err());
+}
+
+#[test]
+fn a_connection_no_model_uses_changes_no_lock() {
+    use splinter_factory::connections::Connections;
+    let repo = Repo::new();
+    let lock = |connections: Connections| resolve(&repo.root, RECIPE, connections).unwrap().lock;
+    let before = lock(connections());
+    let mut more = connections();
+    more.connections.insert(
+        "elsewhere".into(),
+        Connections::parse("connections:\n  x: { protocol: anthropic }\n")
+            .unwrap()
+            .connections["x"]
+            .clone(),
+    );
+    assert!(
+        before.changes(&lock(more)).is_empty(),
+        "an unrelated connection"
+    );
+    let mut moved = connections();
+    moved.connections.get_mut("hosted").unwrap().url = Some("https://moved.invalid/v1".into());
+    assert!(before
+        .changes(&lock(moved))
+        .iter()
+        .any(|c| c.contains("connections")));
+}
