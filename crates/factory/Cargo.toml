@@ -25,6 +25,8 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+ed25519-dalek = { workspace = true }
+splinter-eval = { workspace = true }
 splinter-model = { workspace = true, features = ["scripted"] }
 
 [lints]

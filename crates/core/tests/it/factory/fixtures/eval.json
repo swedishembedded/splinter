@@ -2,6 +2,7 @@
  "schema": "splinter.eval/1",
  "plan": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
  "protected": false,
+ "name": "lora-r16",
  "baseline": {
   "arm": "baseline",
   "model": "brain:Qwen/Qwen3-4B",

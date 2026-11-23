@@ -145,7 +145,13 @@ fn a_recipe_runs_every_stage_once_and_a_second_run_reuses_every_product() {
             "{:?}",
             result.statistics
         );
-        assert_eq!((result.baseline.passed, result.candidate.passed), (0, 8));
+        assert_eq!(
+            (
+                result.baseline.as_ref().unwrap().passed,
+                result.candidate.as_ref().unwrap().passed
+            ),
+            (0, 8)
+        );
     }
     // The baseline arm ran once for both candidates.
     assert_eq!(
@@ -509,4 +515,127 @@ fn a_portable_dataset_is_built_from_the_trajectories_alone() {
     let dataset = dataset_of(&dir.path().join("datasets/sft")).unwrap();
     assert_eq!(dataset.projection, "portable-sft");
     assert_eq!(dataset.waterfall.last().map(|w| w.remaining), Some(4));
+}
+
+/// The verdict the examiner signs: about `candidate` against the base, at
+/// `alpha`, with `outcome`.
+fn signed_verdict(
+    signer: &ed25519_dalek::SigningKey,
+    candidate: &str,
+    alpha: f64,
+    outcome: &str,
+) -> String {
+    use ed25519_dalek::Signer as _;
+    let mut doc = serde_json::json!({
+        "schema": "bench.examination/2", "valid": true, "invalid_reasons": [], "integrity_flags": [],
+        "verdict": outcome, "alpha": alpha,
+        "candidate": {"adapter_digest": candidate}, "predecessor": {"adapter_digest": null},
+        "collection": {"name": "vim-sealed", "exam_sha256": "e".repeat(64), "sealed": true, "items": 40},
+        "paired_gain": {"mean": 0.1, "interval": [0.02, 0.18], "one_sided_lower": 0.03, "families": 8},
+    });
+    let bytes = splinter_eval::promotion::canonical::canonical_bytes(&doc).unwrap();
+    let value: String = signer
+        .sign(&bytes)
+        .to_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    doc["signature"] = serde_json::json!({"alg": "ed25519", "key_id": "t", "value": value});
+    doc.to_string()
+}
+
+#[test]
+fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
+    let repo = Repo::new();
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Pass)
+    };
+    let trainer = FakeTrainer::default();
+    // Train first, to know the candidate the examiner will be handed.
+    let trained = tempfile::tempdir().unwrap();
+    let training_only = RECIPE.split("eval:").next().unwrap();
+    run(
+        &resolved(&repo, training_only),
+        trained.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let candidate =
+        splinter_factory::run::training::candidate_of(&trained.path().join("training/lora-r8"))
+            .unwrap();
+    let digest = candidate
+        .artifacts
+        .iter()
+        .find(|a| a.path.ends_with(".safetensors"))
+        .unwrap()
+        .digest
+        .to_string();
+
+    // seed: the examiner's test key; the gate checks a signature under it.
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[3; 32]);
+    let public: String = signer
+        .verifying_key()
+        .to_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    repo.write("eval/examiner.pub", &public);
+    repo.write(
+        "eval/verdict.json",
+        &signed_verdict(&signer, &digest, 0.05, "Promote"),
+    );
+    repo.write(
+        "eval/examine.sh",
+        "#!/bin/sh\n# --candidate FILE --out FILE\ncp eval/verdict.json \"$4\"\n",
+    );
+    // seed: the plan states its seed; the examiner draws nothing from it.
+    repo.write(
+        "eval/sealed.yaml",
+        "schema: splinter.evalplan/v1\nattempts: 1\nseed: 5\ndecision: { alpha: 0.05, comparisons: 1 }\n\
+         authority: { command: [sh, eval/examine.sh], public_key: eval/examiner.pub }\n",
+    );
+    let recipe = training_only.to_owned()
+        + "eval: { plan: eval/sealed.yaml, agent: sven, baseline: \"brain:Qwen/Qwen3-4B\", candidates: [lora-r8] }\n";
+    let examined = tempfile::tempdir().unwrap();
+    fork(trained.path(), examined.path()).unwrap();
+    let stages = run(
+        &resolved(&repo, &recipe),
+        examined.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    assert!(
+        stages
+            .iter()
+            .all(|(k, computed)| !computed || k.starts_with("eval/")),
+        "{stages:?}"
+    );
+    let result = result_of(&examined.path().join("eval/lora-r8")).unwrap();
+    assert!(result.protected && result.signature.is_some() && result.baseline.is_none());
+    assert_eq!(result.decision, Decision::Improved);
+    assert!(examined.path().join("eval/lora-r8/verdict.json").is_file());
+
+    // A verdict about another candidate is refused, whatever it says.
+    repo.write(
+        "eval/verdict.json",
+        &signed_verdict(
+            &signer,
+            &format!("sha256:{}", "0".repeat(64)),
+            0.05,
+            "Promote",
+        ),
+    );
+    let refused = tempfile::tempdir().unwrap();
+    fork(trained.path(), refused.path()).unwrap();
+    let error = run(
+        &resolved(&repo, &recipe),
+        refused.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("does not verify"), "{error}");
 }

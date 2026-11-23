@@ -243,10 +243,13 @@ pub struct EvalResult {
     pub plan: Digest,
     /// Whether the plan is protected (sealed tasks, signed verdict).
     pub protected: bool,
-    /// The baseline arm.
-    pub baseline: ArmResult,
-    /// The candidate arm.
-    pub candidate: ArmResult,
+    /// The candidate evaluated (its training variant's name).
+    pub name: String,
+    /// The baseline arm, when this evaluation ran it (a development plan);
+    /// a protected plan's arms are the authority's.
+    pub baseline: Option<ArmResult>,
+    /// The candidate arm, likewise.
+    pub candidate: Option<ArmResult>,
     /// The decision under the plan's rule.
     pub decision: Decision,
     /// The rule's statistics (difference, interval, p-value), as computed.

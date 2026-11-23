@@ -5129,6 +5129,7 @@ name = "splinter-factory"
 version = "0.2.0"
 dependencies = [
  "atif",
+ "ed25519-dalek",
  "serde",
  "serde_json",
  "serde_yaml",

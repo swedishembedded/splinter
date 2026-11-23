@@ -19,8 +19,9 @@
 //! decision: { alpha: 0.05, min_difference: 0.0 }
 //! ```
 //!
-//! A `protected` plan names an evaluation authority instead of tasks: its
-//! tasks stay with the authority, which runs and signs the verdict.
+//! A protected plan names an evaluation authority (the examiner) instead of
+//! tasks: its sealed tasks stay with the authority, which examines the
+//! candidate and signs the verdict.
 
 use serde::{Deserialize, Serialize};
 
@@ -44,15 +45,17 @@ pub struct DecisionRule {
     pub comparisons: Option<u32>,
 }
 
-/// An evaluation authority, for a protected plan.
+/// An evaluation authority, for a protected plan: the task repository's
+/// examiner, which serves a candidate, examines it on sealed tasks it alone
+/// holds and signs its verdict.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Authority {
-    /// The command that runs the authority (argv).
+    /// The examiner's command (argv, run from the repository root), to which
+    /// `--candidate FILE --out FILE` is appended (`./bench examine
+    /// --collection ... --private ... --brain ... ...`).
     pub command: Vec<String>,
-    /// The sealed plan's identifier at the authority.
-    pub plan_id: String,
-    /// The authority's public key file, to check its signature.
+    /// The examiner's public key file, to check its verdict's signature.
     pub public_key: String,
 }
 

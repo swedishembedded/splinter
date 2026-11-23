@@ -5,16 +5,34 @@
   "type": "object",
   "properties": {
     "baseline": {
-      "description": "The baseline arm.",
-      "$ref": "#/$defs/ArmResult"
+      "description": "The baseline arm, when this evaluation ran it (a development plan);\na protected plan's arms are the authority's.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArmResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "candidate": {
-      "description": "The candidate arm.",
-      "$ref": "#/$defs/ArmResult"
+      "description": "The candidate arm, likewise.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArmResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "decision": {
       "description": "The decision under the plan's rule.",
       "$ref": "#/$defs/Decision"
+    },
+    "name": {
+      "description": "The candidate evaluated (its training variant's name).",
+      "type": "string"
     },
     "plan": {
       "description": "The plan's digest.",
@@ -45,8 +63,7 @@
     "schema",
     "plan",
     "protected",
-    "baseline",
-    "candidate",
+    "name",
     "decision"
   ],
   "$defs": {

@@ -69,7 +69,7 @@ pub(crate) fn produce(
     let mut best: Option<(f64, String)> = None;
     for key in &stage.depends_on {
         let result = result_of(&factory.view(key))?;
-        let name = result.candidate.arm.clone();
+        let name = result.name.clone();
         let candidate = candidate_of(&factory.view(&stage_key(StageKind::Training, &name)))?;
         let difference = result
             .statistics

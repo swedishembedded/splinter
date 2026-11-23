@@ -38,7 +38,7 @@ use splinter_core::digest::Digest;
 use splinter_core::factory::identity::{StageIdentity, StageKind};
 use splinter_core::factory::product::{ArmResult, Decision, EvalResult, TrialResult, EVAL_SCHEMA};
 use splinter_core::factory::task::TaskRef;
-use splinter_eval::promotion::{verify_signature, PublicKey};
+use splinter_eval::promotion::{verify, Pair, PublicKey, Role};
 use splinter_model::stats::one_sided_p;
 use splinter_store::factory::products::Staging;
 
@@ -361,13 +361,14 @@ pub(crate) fn produce(
         schema: EVAL_SCHEMA.into(),
         plan: plan_digest(factory, section)?,
         protected: false,
-        baseline: arm_result(
+        name: stage.name.clone(),
+        baseline: Some(arm_result(
             "baseline",
             &section.baseline.to_string(),
             &base_trials,
             base_product,
-        ),
-        candidate: arm_result(&stage.name, &served, &cand_trials, cand_product),
+        )),
+        candidate: Some(arm_result(&stage.name, &served, &cand_trials, cand_product)),
         decision,
         statistics,
         signature: None,
@@ -393,12 +394,16 @@ fn tasks_identity_id(
     .digest())
 }
 
-/// Hand the candidate to the evaluation authority and keep its signed
-/// verdict: `<command...> evaluate --plan <id> --candidate <candidate.json>
-/// --out <file>` writes an [`EvalResult`] signed as the examiner signs its
-/// verdicts (`signature: {alg, value}`, Ed25519 over the canonical bytes of
-/// the rest), which the plan's public key must verify. The signed document
-/// is kept verbatim as `verdict.json`.
+/// Hand the candidate to the examiner and keep its signed verdict. The
+/// examiner reads the candidate as it reads any (`adapter`, its
+/// `adapter_digest`, the builds that made it); Splinter appends
+/// `--candidate FILE --out FILE` to the plan's command. The verdict counts
+/// only when the promotion gate's check passes: the examiner's signature
+/// under the plan's public key, its schema, its own validity, that it is
+/// about this candidate against the base, and its level. The examiner's
+/// outcome decides: `Promote` is improved, `Reject` not improved, anything
+/// else inconclusive. The signed document is kept verbatim as
+/// `verdict.json`.
 fn protected(
     factory: &Factory<'_>,
     stage: &PlannedStage,
@@ -411,14 +416,31 @@ fn protected(
     let Some((program, args)) = authority.command.split_first() else {
         return Err(stage_error(&stage.key, "the authority's command is empty"));
     };
-    let candidate_file = staging.path().join("candidate.json");
-    write_json(&candidate_file, candidate)?;
-    let out = staging.path().join(RESULT_FILE);
+    let training = factory.view(&stage_key(StageKind::Training, &stage.name));
+    let adapter = candidate
+        .artifacts
+        .iter()
+        .find(|a| a.path.ends_with(".safetensors"))
+        .ok_or_else(|| {
+            stage_error(
+                &stage.key,
+                "the examiner examines adapters; the candidate has none",
+            )
+        })?;
+    let digest = adapter.digest.to_string();
+    let examined = json!({
+        "adapter": training.join(&adapter.path),
+        "adapter_digest": digest,
+        "series": candidate.name,
+        "step": 0,
+        "proposer_commit": Factory::implementation(""),
+        "brain_commit": candidate.trainer,
+    });
+    let candidate_file = staging.path().join("examined-candidate.json");
+    write_json(&candidate_file, &examined)?;
+    let out = staging.path().join("verdict.json");
     let status = Command::new(program)
         .args(args)
-        .arg("evaluate")
-        .arg("--plan")
-        .arg(&authority.plan_id)
         .arg("--candidate")
         .arg(&candidate_file)
         .arg("--out")
@@ -429,60 +451,80 @@ fn protected(
     if !status.success() {
         return Err(stage_error(
             &stage.key,
-            format!("the evaluation authority exited with {status}"),
+            format!("the examiner exited with {status}"),
         ));
     }
     let document: serde_json::Value = read_json(&out)?;
     let key = PublicKey::read(&factory.resolved.repository.join(&authority.public_key))
         .map_err(|e| stage_error(&stage.key, format!("{}: {e}", authority.public_key)))?;
-    verify_signature(&document, &key)
-        .map_err(|e| stage_error(&stage.key, format!("the authority's verdict: {e:?}")))?;
-    let signature = document
-        .pointer("/signature/value")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
-    let mut body = document.clone();
-    if let Some(object) = body.as_object_mut() {
-        object.remove("signature");
-    }
-    let mut result: EvalResult = serde_json::from_value(body)
-        .map_err(|e| stage_error(&stage.key, format!("the authority's verdict: {e}")))?;
-    if !result.protected {
-        return Err(stage_error(
+    let comparisons = plan
+        .decision
+        .comparisons
+        .unwrap_or(section.candidates.len() as u32)
+        .max(1);
+    let alpha = plan.decision.alpha / f64::from(comparisons);
+    let expected = Pair {
+        candidate: Some(digest),
+        predecessor: None,
+    };
+    let verified = verify(&document, &key, &expected, alpha, Role::Sealed).map_err(|e| {
+        stage_error(
             &stage.key,
-            "the authority's result is not a protected evaluation",
-        ));
-    }
-    result.signature = signature;
-    std::fs::rename(&out, staging.path().join("verdict.json")).map_err(io(&out))?;
-    let _ = (section, plan);
+            format!("the examiner's verdict does not verify: {e:?}"),
+        )
+    })?;
+    let decision = match document.get("verdict").and_then(serde_json::Value::as_str) {
+        Some("Promote") => Decision::Improved,
+        Some("Reject") => Decision::NotImproved,
+        _ => Decision::Inconclusive,
+    };
+    let result = EvalResult {
+        schema: EVAL_SCHEMA.into(),
+        plan: plan_digest(factory, section)?,
+        protected: true,
+        name: stage.name.clone(),
+        baseline: None,
+        candidate: None,
+        decision,
+        statistics: serde_json::to_value(verified.aggregate())
+            .map_err(|e| stage_error(&stage.key, e))?,
+        signature: document
+            .pointer("/signature/value")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
+    };
     write_json(&staging.path().join(RESULT_FILE), &result)?;
     std::fs::write(staging.path().join("report.md"), report(&result)).map_err(io(staging.path()))
 }
 
 /// The decision for a person.
 fn report(result: &EvalResult) -> String {
-    let rate = |a: &ArmResult| {
-        a.pass_rate
-            .map_or_else(|| "-".into(), |r| format!("{:.3}", r))
-    };
-    format!(
-        "# Evaluation of {}\n\n| arm | model | trials | counted | passed | pass rate |\n|---|---|---|---|---|---|\n\
-         | baseline | {} | {} | {} | {} | {} |\n| candidate | {} | {} | {} | {} | {} |\n\n**Decision: {:?}**\n\n```json\n{}\n```\n",
-        result.candidate.arm,
-        result.baseline.model,
-        result.baseline.trials,
-        result.baseline.counted,
-        result.baseline.passed,
-        rate(&result.baseline),
-        result.candidate.model,
-        result.candidate.trials,
-        result.candidate.counted,
-        result.candidate.passed,
-        rate(&result.candidate),
+    let mut out = format!("# Evaluation of {}\n\n", result.name);
+    if let (Some(baseline), Some(candidate)) = (&result.baseline, &result.candidate) {
+        out.push_str(
+            "| arm | model | trials | counted | passed | pass rate |\n|---|---|---|---|---|---|\n",
+        );
+        for (arm, a) in [("baseline", baseline), ("candidate", candidate)] {
+            let rate = a
+                .pass_rate
+                .map_or_else(|| "-".into(), |r| format!("{r:.3}"));
+            out.push_str(&format!(
+                "| {arm} | {} | {} | {} | {} | {rate} |\n",
+                a.model, a.trials, a.counted, a.passed
+            ));
+        }
+        out.push('\n');
+    } else {
+        out.push_str(
+            "A protected evaluation: the examiner's signed verdict is `verdict.json`.\n\n",
+        );
+    }
+    out.push_str(&format!(
+        "**Decision: {:?}**\n\n```json\n{}\n```\n",
         result.decision,
-        serde_json::to_string_pretty(&result.statistics).unwrap_or_default(),
-    )
+        serde_json::to_string_pretty(&result.statistics).unwrap_or_default()
+    ));
+    out
 }
 
 /// The evaluation result of a committed eval view.

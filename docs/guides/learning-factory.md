@@ -101,9 +101,23 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
 - **Evaluation.** A development plan runs a baseline arm (once, shared by every
   candidate) and a candidate arm under the same agent, arguments, environment,
   tasks, attempts and seeds, and decides by the exact one-sided paired sign test
-  at the plan's alpha divided among the candidates. A protected plan hands the
-  candidate to an evaluation authority and keeps its verdict only when the
-  authority's signature verifies.
+  at the plan's alpha divided among the candidates. A protected plan names the
+  task repository's examiner instead of tasks, whose sealed tasks never leave it:
+
+  ```yaml
+  schema: splinter.evalplan/v1
+  attempts: 1
+  seed: 7
+  decision: { alpha: 0.05 }
+  authority:
+    command: [./bench, examine, --collection, tasks/vim-sealed, --private, DIR,
+              --brain, BRAIN, --models-dir, DIR, --api-key-file, FILE]
+    public_key: config/verdict.pub
+  ```
+
+  Splinter appends `--candidate FILE --out FILE`, and keeps the examiner's
+  verdict only when its signature verifies under the public key and it is about
+  this candidate against the base at the plan's level.
 - **Release.** Records every decision; with `promote: true` it promotes the best
   improved candidate.
 
