@@ -350,7 +350,7 @@ impl<'a> Factory<'a> {
         let record =
             self.state
                 .upsert_pending(&self.fence, &id, key, &format!("{kind:?}"), unix_now())?;
-        if let Ok(manifest) = self.products.manifest(&id) {
+        if let Ok(manifest) = self.products.ensure_view(&id, &self.run.join(key)) {
             if record.state != StageState::Completed {
                 let running = self.to_running(&id, record.version, record.state)?;
                 self.state.transition(
@@ -568,8 +568,22 @@ pub fn verify(run: &Path) -> Result<Vec<String>, RunError> {
     let store = ProductStore::new(run, Box::new(SystemClock));
     let mut problems = Vec::new();
     for manifest in store.list()? {
-        if let Err(e) = store.verify_product(&manifest.stage, &run.join(&manifest.name)) {
-            problems.push(format!("{}: {e}", manifest.name));
+        // Every product's files must match their blobs; a view is checked
+        // against the product it shows (a stage key a fork reused holds
+        // several products, and its view shows one of them).
+        for file in &manifest.files {
+            if let Err(e) = store.verify(&file.digest) {
+                problems.push(format!("{} {}: {e}", manifest.name, file.path));
+            }
+        }
+        let view = run.join(&manifest.name);
+        let shown: Option<ProductManifest> = std::fs::read(view.join("manifest.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        if shown.as_ref().is_some_and(|m| m.stage == manifest.stage) {
+            if let Err(e) = store.verify_product(&manifest.stage, &view) {
+                problems.push(format!("{}: {e}", manifest.name));
+            }
         }
     }
     Ok(problems)

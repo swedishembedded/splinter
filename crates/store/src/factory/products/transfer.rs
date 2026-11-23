@@ -88,4 +88,30 @@ impl ProductStore {
         let _ = fs::remove_file(pending);
         Ok(manifest)
     }
+
+    /// Makes the view at `view` show the committed product of `stage_id`:
+    /// left alone when it already does, materialised from the blobs
+    /// otherwise (a view another product of the same stage key last took,
+    /// as a fork of a run that holds both leaves it).
+    ///
+    /// # Errors
+    /// No such product, or the view cannot be written.
+    pub fn ensure_view(
+        &self,
+        stage_id: &Digest,
+        view: &Path,
+    ) -> Result<ProductManifest, ProductError> {
+        let manifest = self.manifest(stage_id)?;
+        // The view names the product it shows in its own manifest; reading
+        // it is enough here (`verify_product` re-hashes every file).
+        let shown = fs::read(view.join(super::VIEW_MANIFEST))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<ProductManifest>(&bytes).ok());
+        if shown.as_ref() == Some(&manifest) {
+            return Ok(manifest);
+        }
+        self.relative_view(view)?;
+        self.materialise_view(view, &manifest)?;
+        Ok(manifest)
+    }
 }

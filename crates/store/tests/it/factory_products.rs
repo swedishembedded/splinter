@@ -181,3 +181,29 @@ fn a_product_imported_into_another_run_is_the_same_product_and_is_listed() {
     // Importing again changes nothing.
     assert_eq!(target.import(&source, &id, &view).unwrap(), published);
 }
+
+#[test]
+fn a_view_another_product_holds_is_made_this_products_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let view = dir.path().join("datasets/sft");
+    let (old, new) = (stage("old"), stage("new"));
+    let staging = stage_output(&store, &[("train.jsonl", "old\n")]);
+    store.publish(&old, "datasets/sft", staging, &view).unwrap();
+    let staging = stage_output(&store, &[("train.jsonl", "new\n")]);
+    store.publish(&new, "datasets/sft", staging, &view).unwrap();
+    assert_eq!(
+        fs::read_to_string(view.join("train.jsonl")).unwrap(),
+        "new\n"
+    );
+
+    // The old product is reused: its view must show it, not the newer one.
+    store.ensure_view(&old, &view).unwrap();
+    assert_eq!(
+        fs::read_to_string(view.join("train.jsonl")).unwrap(),
+        "old\n"
+    );
+    store.verify_product(&old, &view).unwrap();
+    // A view that already shows the product is left as it is.
+    store.ensure_view(&old, &view).unwrap();
+}

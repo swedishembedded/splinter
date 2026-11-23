@@ -680,3 +680,39 @@ fn a_dataset_for_a_model_that_does_not_reason_carries_no_reasoning_and_the_train
     );
     assert!(trainer.thinking.lock().unwrap().iter().any(|t| *t));
 }
+
+#[test]
+fn a_fork_of_a_run_that_holds_two_products_of_a_stage_shows_the_one_it_reuses() {
+    let repo = Repo::new();
+    let before = RECIPE.split("training:").next().unwrap().to_owned();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let trainer = FakeTrainer::default();
+    let first = tempfile::tempdir().unwrap();
+    run(&resolved(&repo, &before), first.path(), &backend, &trainer).unwrap();
+    // The same run directory gains a second dataset product (a fork into it
+    // of a changed recipe), and its view now shows that one.
+    let changed = before.replace(
+        "target: \"brain:Qwen/Qwen3-4B\", seed: 13",
+        "target: \"brain:Qwen/Qwen3-4B\", thinking: true, seed: 13",
+    );
+    let second = tempfile::tempdir().unwrap();
+    fork(first.path(), second.path()).unwrap();
+    run(
+        &resolved(&repo, &changed),
+        second.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    fork(second.path(), first.path()).unwrap();
+    // The first recipe forked again reuses its own dataset, and shows it.
+    let third = tempfile::tempdir().unwrap();
+    fork(first.path(), third.path()).unwrap();
+    run(&resolved(&repo, &before), third.path(), &backend, &trainer).unwrap();
+    let train = std::fs::read_to_string(third.path().join("datasets/sft/train.jsonl")).unwrap();
+    assert!(
+        !train.contains("reasoning_content"),
+        "the view shows the reused product, not the other one"
+    );
+    assert!(verify(third.path()).unwrap().is_empty());
+}
