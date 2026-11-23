@@ -95,7 +95,7 @@ $(TEST_CRATE_TARGETS): test/crate/%:
 
 ## test/package - the specs of the install and release publishing scripts against scratch directories, a fake make and a fake gh (bats; no build, seconds)
 test/package:
-	bats scripts/package/install-deb.bats scripts/package/publish-deb.bats
+	bats scripts/package/install-deb.bats scripts/package/install-worker.bats scripts/package/publish-deb.bats
 
 ## test/worker - the Harbor worker's own tests: Harbor jobs in the proot sandbox against stub models, no network (needs `make worker/install` and sven on PATH)
 test/worker:
@@ -412,9 +412,14 @@ package:
 ##   unpacks it under PREFIX (default ~/.local), no sudo. Under `sudo make install`:
 ##   dpkg -i of the package already built, with nothing rebuilt (run it once as
 ##   yourself first). As root with no sudo (a container): builds it, then dpkg -i.
+##   Then the learning factory's Harbor worker, in its own virtual environment under
+##   PREFIX (default /usr/local as root, ~/.local otherwise), linked as
+##   PREFIX/bin/splinter-harbor-worker.
 install:
 	@bash scripts/package/install-deb.sh --deb-dir target/debian --version $(VERSION) \
 		--binary target/release/splinter --make "$(MAKE)" $(if $(PREFIX),--prefix "$(PREFIX)")
+	@bash scripts/package/install-worker.sh \
+		--prefix "$(or $(PREFIX),$(if $(filter 0,$(shell id -u)),/usr/local,$(HOME)/.local))"
 
 ## package/deb - default: package/deb/release (output in target/debian/)
 package/deb: package/deb/release
