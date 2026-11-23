@@ -22,6 +22,25 @@ splinter verify runs/vim-hosted-sft
 splinter report runs/vim-hosted-sft
 ```
 
+## Starting from a template
+
+`splinter templates` lists the task repositories Splinter can write as a
+starting point, each working as written: its recipes, the collection, tasks,
+environment and plans they name. `splinter init --template NAME DIR` writes
+one into a directory and writes over no file; it refuses, naming the files,
+before writing any.
+
+| Template | What its recipe does |
+|---|---|
+| `agent-sft` | a model learns a task collection from its own verified attempts |
+| `knowledge-learning` | a model learns what documents say from closed-book tasks generated from them |
+| `generations` | a generation of a model, promoted only when it improves, transfers and retains |
+
+```sh
+splinter init --template agent-sft my-repo
+cd my-repo && splinter validate recipes/agent-sft.yaml
+```
+
 ## What a run needs on this machine
 
 - **The execution worker.** `make worker/install` in Splinter's checkout installs

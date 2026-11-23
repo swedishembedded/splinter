@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# A model learns a task collection from its own verified attempts: it attempts the
+# training tasks, each verified success becomes a supervised record, one LoRA is trained,
+# and the candidate is compared with the base on held-out tasks.
+#   splinter run recipes/agent-sft.yaml --out runs/agent-sft
+schema: splinter.recipe/v2
+name: agent-sft
+inputs:
+  tasks: { kind: files, path: collections/tasks.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+stages:
+  - { id: train-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: train } }
+  - { id: held-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: eval } }
+  - id: attempts
+    uses: attempt.collect
+    inputs: { tasks: $stages.train-tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/default.yaml, attempts: 4, seed: 1 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.attempts.attempts] }
+    with: { target: student, seed: 2 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 200 }, seed: 3 }
+  - id: eval
+    uses: evaluation
+    inputs: { candidate: $stages.lora.model, tasks: $stages.held-tasks.tasks }
+    with: { plan: eval/held.yaml, agent: sven, baseline: student }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval.evaluation] }
+    with: { promote: false }

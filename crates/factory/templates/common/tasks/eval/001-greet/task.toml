@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+[task]
+name = "example/001-greet"
+description = "Create greet.txt in the working directory holding the word hi."
+
+[agent]
+timeout_sec = 300.0
+
+[verifier]
+timeout_sec = 60.0
+
+[metadata]
+bench_family = "files"

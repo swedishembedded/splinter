@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# The task collection: tasks/SPLIT/ID, each a Harbor task folder.
+schema: splinter.collection/v1
+name: tasks
+root: tasks

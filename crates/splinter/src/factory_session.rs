@@ -16,6 +16,7 @@ use serde::Serialize;
 use splinter_sdk::factory::backend::HarborWorker;
 use splinter_sdk::factory::resolution::Resolved;
 use splinter_sdk::factory::run::{self, Factory, RunError, RunManifest, Services, REPORT_FILE};
+use splinter_sdk::factory::templates;
 use splinter_sdk::factory::training::BrainTrainer;
 use splinter_sdk::factory::{
     host_variable, resolve_recipe, resolve_run, trainer, worker, HostModels,
@@ -23,7 +24,7 @@ use splinter_sdk::factory::{
 use splinter_sdk::{Config, Error};
 
 use crate::cli::{
-    Command, EvalArgs, ExportArgs, ForkArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
+    Command, EvalArgs, ExportArgs, ForkArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
     RunStatusArgs, VerifyArgs,
 };
 use crate::output::{emit, Report};
@@ -42,6 +43,11 @@ pub fn route(
 ) -> Result<Result<Exit, Error>, Box<Command>> {
     Ok(match command {
         Command::Status(RunStatusArgs { run: Some(run) }) => status(json, &run),
+        Command::Init(args) => init(json, &args),
+        Command::Templates => {
+            emit(json, &Templates(templates::TEMPLATES));
+            Ok(Exit::Ok)
+        }
         Command::Validate(args) => plan(config, json, &args, false),
         Command::Plan(args) => plan(config, json, &args, true),
         Command::Generate(args) => generate(config, &args.collection),
@@ -73,6 +79,71 @@ pub fn route(
         )),
         other => return Err(Box::new(other)),
     })
+}
+
+/// What `templates` shows.
+struct Templates(&'static [templates::Template]);
+
+impl Serialize for Templates {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for t in self.0 {
+            seq.serialize_element(&serde_json::json!({ "name": t.name, "summary": t.summary }))?;
+        }
+        seq.end()
+    }
+}
+
+impl Report for Templates {
+    fn human(&self) -> String {
+        self.0
+            .iter()
+            .map(|t| format!("{:<20} {}\n", t.name, t.summary))
+            .collect()
+    }
+}
+
+/// What `init` wrote.
+#[derive(Serialize)]
+struct Initialised {
+    template: String,
+    dir: PathBuf,
+    files: Vec<PathBuf>,
+}
+
+impl Report for Initialised {
+    fn human(&self) -> String {
+        let recipes: Vec<String> = self
+            .files
+            .iter()
+            .filter_map(|f| f.strip_prefix(&self.dir).ok())
+            .filter(|f| f.starts_with("recipes"))
+            .map(|f| format!("  splinter validate {}\n", f.display()))
+            .collect();
+        format!(
+            "{}: wrote {} files of the {} template; its models are reached through the \
+             connections of connections.yaml there or ~/.config/splinter/connections.yaml. \
+             From there:\n{}",
+            self.dir.display(),
+            self.files.len(),
+            self.template,
+            recipes.concat()
+        )
+    }
+}
+
+fn init(json: bool, args: &InitArgs) -> Result<Exit, Error> {
+    let files = templates::init(&args.template, &args.dir).map_err(refused)?;
+    emit(
+        json,
+        &Initialised {
+            template: args.template.clone(),
+            dir: args.dir.clone(),
+            files,
+        },
+    );
+    Ok(Exit::Ok)
 }
 
 /// Whether `path` is a factory run directory.

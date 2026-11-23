@@ -270,7 +270,9 @@ impl Session {
                 let indexed = splinter_sdk::factory_index::index_run(ctx, &args.run)?;
                 emit(json, &crate::factory_session::Indexed(indexed));
             }
-            Command::Validate(_)
+            Command::Init(_)
+            | Command::Templates
+            | Command::Validate(_)
             | Command::Plan(_)
             | Command::Generate(_)
             | Command::Run(_)

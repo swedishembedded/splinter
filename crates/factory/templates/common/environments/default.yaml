@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# Where an agent works a task: the task's own image, the network limited to the model
+# gateway, the sandbox the machine's strongest.
+schema: splinter.environment/v1
+sandbox:
+  resources: { cpus: 2, memory_gb: 4, timeout: 10m }
+network: { mode: model-gateway-only }

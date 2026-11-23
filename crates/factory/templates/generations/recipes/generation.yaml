@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# One generation of a model: the champion attempts the training tasks, a teacher works
+# what it left unsolved, a LoRA trains on every verified success, and the candidate
+# replaces the champion only when it improves on held-out tasks of its kind (target),
+# carries that to tasks of another kind (transfer) and keeps what it could do
+# (retention). The next generation is a fork of this run with the champion named:
+#   splinter run recipes/generation.yaml --out runs/g1
+#   (edit `champion:` below to "champion:runs/g1", and the baselines to champion)
+#   splinter fork runs/g1 --recipe recipes/generation.yaml --out runs/g2
+schema: splinter.recipe/v2
+name: generation
+inputs:
+  tasks: { kind: files, path: collections/tasks.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - { id: train-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: train } }
+  - { id: target-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: eval } }
+  - { id: transfer-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: transfer } }
+  - { id: retention-tasks, uses: tasks.pin, inputs: { collection: $inputs.tasks }, with: { split: retention } }
+  - id: own
+    uses: attempt.collect
+    inputs: { tasks: $stages.train-tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/default.yaml, attempts: 4, seed: 1 }
+  - id: taught
+    uses: attempt.collect
+    inputs: { tasks: $stages.train-tasks.tasks, unsolved_by: [$stages.own.attempts] }
+    with: { agent: sven, model: teacher, environment: environments/default.yaml, attempts: 4, seed: 2 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.own.attempts, $stages.taught.attempts] }
+    with: { target: student, validation: { group_by: task, percent: 10 }, seed: 3 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 200 }, seed: 4 }
+  - id: eval-target
+    uses: evaluation
+    inputs: { candidate: $stages.lora.model, tasks: $stages.target-tasks.tasks }
+    with: { plan: eval/held.yaml, agent: sven, baseline: student, purpose: target }
+  - id: eval-transfer
+    uses: evaluation
+    inputs: { candidate: $stages.lora.model, tasks: $stages.transfer-tasks.tasks }
+    with: { plan: eval/held.yaml, agent: sven, baseline: student, purpose: transfer }
+  - id: eval-retention
+    uses: evaluation
+    inputs: { candidate: $stages.lora.model, tasks: $stages.retention-tasks.tasks }
+    with: { plan: eval/held.yaml, agent: sven, baseline: student, purpose: retention }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-target.evaluation, $stages.eval-transfer.evaluation,
+                            $stages.eval-retention.evaluation] }
+    with: { promote: true }

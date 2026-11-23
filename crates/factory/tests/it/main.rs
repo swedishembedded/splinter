@@ -31,4 +31,5 @@ mod qualify;
 mod repo;
 mod resolve;
 mod reuse;
+mod templates;
 mod text_dataset;

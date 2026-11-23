@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# A model learns what a body of documents says: a teacher proposes closed-book tasks from
+# each document, code admits only those whose evidence quotes the document verbatim, the
+# student answers each one several times in process, every answer is graded by the task
+# kind's verifiers, and a LoRA trains on the passed answers.
+#   splinter run recipes/knowledge-learning.yaml --out runs/knowledge
+schema: splinter.recipe/v2
+name: knowledge-learning
+inputs:
+  documents: { kind: files, path: documents }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - id: generated
+    uses: task.generate
+    inputs: { documents: [$inputs.documents] }
+    with: { kinds: [recall], model: teacher }
+  - id: answered
+    uses: answer.collect
+    foreach: $stages.generated.tasks
+    inputs: { task: $item }
+    with: { model: student, attempts: 4 }
+  - id: sft
+    uses: dataset.project
+    inputs: { answers: [$stages.answered.answers] }
+    with: { target: student, validation: { group_by: task, percent: 10 }, seed: 1 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 200 }, seed: 2 }

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+# Written by `splinter init`; yours to change.
+# How a candidate is compared with its baseline on the tasks it is given: the same agent,
+# attempts and seeds for both, decided by a paired sign test.
+schema: splinter.evalplan/v1
+environment: environments/default.yaml
+attempts: 4
+seed: 4
+decision: { alpha: 0.05 }

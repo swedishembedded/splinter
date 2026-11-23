@@ -80,6 +80,11 @@ pub enum Command {
     /// Show the policy in use, recent runs and what the stores hold; with a
     /// factory run directory, the run's stages and slots.
     Status(RunStatusArgs),
+    /// Write a template, a task repository that works as written, into a
+    /// directory; writes over no file.
+    Init(InitArgs),
+    /// List the templates `init` writes.
+    Templates,
     /// Check a factory recipe and everything it names, reporting every
     /// problem at once; runs nothing.
     Validate(RecipeArgs),
@@ -668,7 +673,8 @@ pub use eval::{
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
-    ExportArgs, ForkArgs, GenerateArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs,
+    ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
+    RunDirArgs,
 };
 pub use gate::GateArgs;
 pub use global::Global;

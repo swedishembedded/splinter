@@ -85,6 +85,8 @@ Every command takes these.
 - [splinter corrections](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [splinter ask](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [splinter status](#splinter-status) - Show the policy in use, recent runs and what the stores hold
+- [splinter init](#splinter-init) - Write a template, a task repository that works as written, into a directory
+- [splinter templates](#splinter-templates) - List the templates `init` writes
 - [splinter validate](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
 - [splinter plan](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
 - [splinter generate](#splinter-generate) - Write a factory collection's task directories with the command its file names (the task repository's own compiler)
@@ -232,6 +234,8 @@ Subcommands:
 - [`corrections`](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [`ask`](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [`status`](#splinter-status) - Show the policy in use, recent runs and what the stores hold
+- [`init`](#splinter-init) - Write a template, a task repository that works as written, into a directory
+- [`templates`](#splinter-templates) - List the templates `init` writes
 - [`validate`](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
 - [`plan`](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
 - [`generate`](#splinter-generate) - Write a factory collection's task directories with the command its file names (the task repository's own compiler)
@@ -492,6 +496,30 @@ splinter status [OPTIONS] [RUN]
 Arguments:
 
 - `<RUN>`: A factory run directory; none shows the policy.
+
+### splinter init
+
+Write a template, a task repository that works as written, into a directory; writes over no file
+
+```text
+splinter init [OPTIONS] --template <NAME> [DIR]
+```
+
+Arguments:
+
+- `<DIR>`: The directory to write it into; created when missing. Default: `.`.
+
+Options:
+
+- `--template <NAME>` (required): The template (`splinter templates` lists them)
+
+### splinter templates
+
+List the templates `init` writes
+
+```text
+splinter templates [OPTIONS]
+```
 
 ### splinter validate
 

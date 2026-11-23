@@ -56,5 +56,6 @@ pub mod rlvr_op;
 pub mod run;
 mod stage_checks;
 pub mod task_ops;
+pub mod templates;
 pub mod training;
 pub mod tree;

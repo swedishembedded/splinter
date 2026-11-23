@@ -22,6 +22,17 @@ pub struct RecipeArgs {
     pub recipe: PathBuf,
 }
 
+/// `init`.
+#[derive(Debug, Args)]
+pub struct InitArgs {
+    /// The template (`splinter templates` lists them).
+    #[arg(long, value_name = "NAME")]
+    pub template: String,
+    /// The directory to write it into; created when missing.
+    #[arg(value_name = "DIR", default_value = ".")]
+    pub dir: PathBuf,
+}
+
 /// `run`.
 #[derive(Debug, Args)]
 pub struct RunArgs {
