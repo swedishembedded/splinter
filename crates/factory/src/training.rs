@@ -203,8 +203,9 @@ impl Trainer for BrainTrainer {
         .map_err(error)?;
         (0..lines.len())
             .map(|line| {
+                // The report numbers lines from 1, as a file's lines are.
                 report
-                    .tokens_at(line)
+                    .tokens_at(line + 1)
                     .map(|t| t as u64)
                     .ok_or_else(|| TrainError(format!("brain gave no length for record {line}")))
             })

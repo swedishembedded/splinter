@@ -155,3 +155,27 @@ fn a_variants_parameters_are_resolved_with_the_trainers_defaults_and_refused_ear
         "an unsupported method"
     );
 }
+
+#[test]
+fn every_record_of_a_batch_has_a_length_the_first_included() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("artifacts");
+    std::fs::create_dir_all(&store).unwrap();
+    let service = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")])
+        .with_training(JobScript::over(store.clone()));
+    let endpoints = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap());
+    let trainer = BrainTrainer::new(endpoints, dir.path().join("models"));
+    let base: ModelRef = "brain:Qwen/Toy".parse().unwrap();
+    let line = json!({"messages": [
+        {"role": "user", "content": "edit", "train": false},
+        {"role": "assistant", "content": "done", "train": true}
+    ], "tools": []})
+    .to_string();
+    let lengths = trainer
+        .measure(&base, &[line.clone(), line.clone(), line])
+        .unwrap();
+    assert_eq!(lengths.len(), 3);
+    assert!(lengths.iter().all(|tokens| *tokens > 0), "{lengths:?}");
+}
