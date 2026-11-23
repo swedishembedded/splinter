@@ -236,6 +236,14 @@ impl Trainer for FakeTrainer {
         "fake-trainer 1".into()
     }
 
+    fn resolve(
+        &self,
+        _: &str,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, TrainError> {
+        Ok(params.clone())
+    }
+
     fn measure(&self, _: &ModelRef, lines: &[String]) -> Result<Vec<u64>, TrainError> {
         Ok(lines.iter().map(|l| l.len() as u64 / 4).collect())
     }

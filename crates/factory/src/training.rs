@@ -75,6 +75,14 @@ pub trait Trainer: Send + Sync {
     /// The trainer's identity, part of every training stage's.
     fn identity(&self) -> String;
 
+    /// A variant's parameters as this trainer will train them: validated,
+    /// with every default the trainer would apply written in, so a change of
+    /// a default is a change of every stage identity it affects.
+    ///
+    /// # Errors
+    /// The method or a parameter is refused.
+    fn resolve(&self, method: &str, params: &Value) -> Result<Value, TrainError>;
+
     /// The length in the target's tokens of each line of a chat dataset.
     ///
     /// # Errors
@@ -159,6 +167,30 @@ impl Trainer for BrainTrainer {
         "brain served-train".into()
     }
 
+    fn resolve(&self, method: &str, params: &Value) -> Result<Value, TrainError> {
+        if method != "lora" {
+            return Err(TrainError(format!(
+                "brain trainer: method {method} is not supported here (lora)"
+            )));
+        }
+        let mut lora: LoraParams = serde_json::from_value(params.clone())
+            .map_err(|e| TrainError(format!("lora params: {e}")))?;
+        lora.alpha.get_or_insert(2.0 * lora.rank as f32);
+        let precision = match &lora.base_precision {
+            Some(text) => text
+                .parse::<BasePrecision>()
+                .map_err(|e| TrainError(format!("lora params: base_precision: {e}")))?,
+            None => BasePrecision::default(),
+        };
+        lora.base_precision = Some(
+            serde_json::to_value(precision)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default(),
+        );
+        serde_json::to_value(&lora).map_err(error)
+    }
+
     fn measure(&self, target: &ModelRef, lines: &[String]) -> Result<Vec<u64>, TrainError> {
         let dir = tempfile::tempdir().map_err(error)?;
         let path = dir.path().join("measure.jsonl");
@@ -180,13 +212,8 @@ impl Trainer for BrainTrainer {
     }
 
     fn train(&self, request: &TrainRequest<'_>) -> Result<Trained, TrainError> {
-        if request.method != "lora" {
-            return Err(TrainError(format!(
-                "brain trainer: method {} is not supported here (lora)",
-                request.method
-            )));
-        }
-        let params: LoraParams = serde_json::from_value(request.params.clone())
+        let resolved = self.resolve(request.method, request.params)?;
+        let params: LoraParams = serde_json::from_value(resolved)
             .map_err(|e| TrainError(format!("lora params: {e}")))?;
         let validation_empty = std::fs::metadata(request.validation)
             .map(|m| m.len() == 0)

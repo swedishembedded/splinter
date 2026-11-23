@@ -77,7 +77,9 @@ pub(crate) fn identity(
     let key = dataset_key(factory, stage)?;
     let inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
     let parameters = json!({
-        "engine": training.engine, "base": training.base, "method": variant.method, "params": variant.params,
+        "engine": training.engine, "base": training.base, "method": variant.method,
+        // As the trainer will train them: a changed default is a new candidate.
+        "params": trainer(factory, stage)?.resolve(&variant.method, &variant.params).map_err(|e| stage_error(&stage.key, e))?,
     });
     Ok(super::identity_of(
         StageKind::Training,

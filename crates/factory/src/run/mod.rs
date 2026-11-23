@@ -234,6 +234,15 @@ impl<'a> Factory<'a> {
             }
             Err(e) => return Err(io(&lock_path)(e)),
         }
+        // A variant the trainer would refuse is refused before any rollout
+        // spends anything.
+        if let (Some(training), Some(trainer)) = (&resolved.recipe.training, services.trainer) {
+            for variant in &training.variants {
+                trainer
+                    .resolve(&variant.method, &variant.params)
+                    .map_err(|e| stage_error(&format!("training/{}", variant.name), e))?;
+            }
+        }
         let state = RunState::open(run)?;
         let fence = match state.acquire(owner, LEASE_SECONDS, unix_now()) {
             Err(RunStateError::LeaseHeld { owner: holder, .. }) if exited_here(owner, &holder) => {

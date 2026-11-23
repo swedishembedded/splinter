@@ -129,3 +129,29 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         "the refused request reached no job"
     );
 }
+
+#[test]
+fn a_variants_parameters_are_resolved_with_the_trainers_defaults_and_refused_early() {
+    let endpoints =
+        BrainEndpoints::new(vec!["http://127.0.0.1:9/v1".into()], SCRIPTED_KEY).unwrap();
+    let trainer = BrainTrainer::new(endpoints, std::path::PathBuf::from("models"));
+    let resolved = trainer
+        .resolve("lora", &json!({"rank": 8, "steps": 10}))
+        .unwrap();
+    assert_eq!(resolved["alpha"], 16.0, "alpha defaults to twice the rank");
+    assert_eq!(
+        resolved["base_precision"], "fp32",
+        "brain's default tier, named"
+    );
+    assert_eq!(resolved["grad_accum"], 1);
+    assert!(
+        trainer.resolve("lora", &json!({"rank": 8})).is_err(),
+        "steps is required"
+    );
+    assert!(
+        trainer
+            .resolve("dpo", &json!({"rank": 8, "steps": 1}))
+            .is_err(),
+        "an unsupported method"
+    );
+}
