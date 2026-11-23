@@ -29,7 +29,10 @@
 //!    never completed a model turn.
 //! 6. A last model request that failed with a 5xx, or that the endpoint
 //!    refused (401, 403, 404: the run named a model or key it does not
-//!    serve), is a model error.
+//!    serve), is a model error; so are requests the endpoint rejected
+//!    (4xx) of which none was answered: the endpoint does not take what the
+//!    run's agent sends, and the agent never had a model turn. Once one was
+//!    answered, a rejected request is the agent's own doing.
 //! 7. An exception the backend recorded is mapped by its type (time limits,
 //!    sandbox, verifier, model API, budget, unsupported capability); a
 //!    non-zero agent exit or a safety refusal stays graded when the verifier
@@ -589,6 +592,30 @@ pub fn classify(
                 )),
             );
         }
+    }
+    let rejected: Vec<&ModelRequest> = evidence
+        .requests
+        .iter()
+        .filter(|r| r.status.is_some_and(|s| (400..499).contains(&s)))
+        .collect();
+    if !rejected.is_empty() && !statuses.iter().any(|s| (200..300).contains(s)) {
+        let error = rejected
+            .iter()
+            .find_map(|r| r.error.as_deref())
+            .unwrap_or("");
+        return (
+            TrialStatus::ModelError,
+            Some(Cause::new(
+                "endpoint_rejected",
+                format!(
+                    "none of the trial's {} model requests was answered and the endpoint rejected {} of them \
+                     (HTTP 4xx), so the agent never completed a model turn{}",
+                    statuses.len(),
+                    rejected.len(),
+                    detail(error)
+                ),
+            )),
+        );
     }
     if let Some(exception) = result.get("exception_info").filter(|e| present(Some(e))) {
         let text = |key: &str| match exception.get(key) {

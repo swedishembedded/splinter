@@ -155,3 +155,42 @@ fn a_run_budget_is_a_counted_fail_and_a_wall_clock_limit_is_the_infrastructures(
     );
     assert!(wall.status.is_retryable());
 }
+
+#[test]
+fn an_endpoint_that_answered_no_request_is_the_infrastructures_not_the_agents_zero() {
+    let cases = cases();
+    let failed = cases
+        .iter()
+        .find(|c| c["name"] == "quit_after_one_turn")
+        .expect("the case");
+    let (mut evidence, policy) = evidence(failed);
+    let rejected = |status| ModelRequest {
+        status: Some(status),
+        error: Some("the anthropic-beta header is not supported on this API".into()),
+        ..ModelRequest::default()
+    };
+    evidence.requests = vec![rejected(400), rejected(400), rejected(400)];
+    let graded = grade(&evidence, &policy);
+    assert_eq!(
+        (graded.status, graded.counted, graded.passed),
+        (TrialStatus::ModelError, false, None)
+    );
+    let cause = graded.cause.expect("a cause");
+    assert_eq!(cause.code, "endpoint_rejected");
+    assert!(
+        cause.message.contains("anthropic-beta"),
+        "{}",
+        cause.message
+    );
+    assert!(graded.status.is_retryable());
+
+    // Once the model answered, a rejected request is the agent's own doing.
+    evidence.requests.insert(
+        0,
+        ModelRequest {
+            status: Some(200),
+            ..ModelRequest::default()
+        },
+    );
+    assert_eq!(grade(&evidence, &policy).status, TrialStatus::Graded);
+}
