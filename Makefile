@@ -80,7 +80,6 @@ test: deps/lua-dialects
 	$(CARGO) test $(PROFILE) --workspace -- --test-threads=$(TEST_THREADS)
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
-	python3 scripts/campaigns/flywheel/test_loop.py
 	python3 -I scripts/cluster/test_rank_env.py
 
 ## test/crate - lists the per-package test targets; tests nothing
@@ -515,22 +514,6 @@ deps/tlaplus:
 deps/lock:
 	bash scripts/pin-lock.sh $(SVEN_DIR) $(BRAIN_DIR)
 
-## campaign - lists the campaign targets; runs nothing
-campaign:
-	@bash scripts/make-help.sh campaign
-
-## campaign/flywheel - lists the improvement-loop campaign targets; runs nothing
-campaign/flywheel:
-	@bash scripts/make-help.sh campaign/flywheel
-
-## campaign/flywheel/run - run improvement-loop generations from where they stand (CONFIG=campaign.toml, GENERATIONS=N; see scripts/campaigns/flywheel/loop.py)
-campaign/flywheel/run:
-	python3 scripts/campaigns/flywheel/loop.py --config $(CONFIG) --generations $(or $(GENERATIONS),1)
-
-## campaign/flywheel/status - print each generation's finished steps and decision (CONFIG=campaign.toml)
-campaign/flywheel/status:
-	python3 scripts/campaigns/flywheel/loop.py --config $(CONFIG) --status
-
 ## qualify - lists the qualification targets; runs nothing
 qualify:
 	@bash scripts/make-help.sh qualify
@@ -565,7 +548,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

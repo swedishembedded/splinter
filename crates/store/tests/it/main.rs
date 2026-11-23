@@ -9,7 +9,6 @@
 
 mod artifacts;
 mod bundle;
-mod campaign;
 mod claim_store;
 mod documents;
 mod experience_store;

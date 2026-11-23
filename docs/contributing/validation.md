@@ -70,11 +70,7 @@ of the package) or an integration test binary; filter a substring of the test na
 | Held-out splits | algorithmic | a group (task, family) is held out whole wherever its samples sit; seeded, stratified, reproducible | `splinter-data/lib/holdout` | per-PR | |
 | Exam seal | algorithmic | an attempt or action touching a reserved family is refused, and a build lists what it trained on | `splinter-pipelines/it/dataset_seal` | per-PR | |
 | Promotion gate | algorithmic | promoted only when the dev gain's two-sided 95% family interval is above zero over enough families, retention's one-sided bound is above the margin and a fresh sealed slice verifies | `splinter-eval/it/promotion_gate` `splinter-pipelines/lib/promotion::` | per-PR | |
-| Campaign dev gate | algorithmic | the greedy gate advances on a net dev gain and rolls back on none or on a retention loss past its margin, reporting significance at the alpha it may spend; the evidence gate advances only when its e-process crosses the round's level | `splinter-eval/lib/campaign::gate` `splinter-eval/it/evidence_gate` | per-PR | |
-| Problem-state priority | algorithmic | `b / (N + 1)` over the pending candidates of open problems with `b > 0`, `N` the problem's attempts; ties to the higher belief, then fewer attempts, then the ids; a known-answer order on constructed states and on the 2026-11-21 example | `splinter-eval/lib/campaign::problems` `splinter-pipelines/it/campaign::problems` | per-PR | `problem-priority-without-attempts`, `problem-priority-attempts-unshifted` |
-| Problem-state belief update | algorithmic | supported adds `belief_up` (at most 1) and adopts, falsified takes `belief_down` (at least 0), inconclusive and invalid leave the belief; every verdict counts one attempt; one verdict per experiment; a refused event changes nothing; a replay gives the same digest and a redelivered event records nothing | `splinter-eval/lib/campaign::problems` `splinter-pipelines/it/campaign::problems` | per-PR | `problem-falsified-raises-belief`, `problem-inconclusive-as-falsified` |
-| Problem-state verdicts | algorithmic | an effect against its problem's target `d`: supported when the interval is above 0, the difference at least `d` and the Holm two-sided p below alpha; falsified when the upper end is below `d`; inconclusive otherwise; invalid with no finite effect. The gate: promoted is supported, an unaccepted verdict invalid, a dev interval below `d` or retention wholly past the margin falsified; every recorded verdict of the 2026-11-21 example agrees with the rule | `splinter-eval/lib/campaign::problems` `splinter-pipelines/it/campaign::problems` | per-PR | `problem-inconclusive-effect-falsified` |
-| Single-variable and firewall checks | algorithmic | configurations flattened to dotted leaves (an array one leaf, a missing leaf `null`); an arm passes when it changes something and only under the declared variable (`train.ranking` is not under `train.rank`); an engineering arm only under the engineering paths, which may not reach the base, rollout, curation, training, practice material and profile or the examiner; a gate's verdict counts only for a single-variable arm | `splinter-eval/lib/campaign::problems` `splinter-pipelines/it/campaign::problems` | per-PR | `problem-variable-prefix-match` |
+| Dev-validation gate | algorithmic | the greedy gate advances on a net dev gain and rolls back on none or on a retention loss past its margin, reporting significance at the alpha it may spend; the evidence gate advances only when its e-process crosses the round's level | `splinter-eval/lib/campaign::gate` `splinter-eval/it/evidence_gate` | per-PR | |
 | Solve concurrency | algorithmic | a remote model is asked up to its width at once, a served one as wide as its slots; one experience per attempt in task order (read with a barrier, no clock) | `splinter-pipelines/it/solve_concurrency` | per-PR | |
 | Learning methods | learning | each method moves a held-out score on a toy model | `make test/methods` | integration | |
 
@@ -85,15 +81,12 @@ of the package) or an integration test binary; filter a substring of the test na
 - The improvement experiment's samples arm counts any of its graded attempts, exact pass@k only when all `k`
   attempts were graded; an ungraded attempt makes it any-of-fewer. `experiences compare-arms` reports the unbiased
   estimator for any `k` up to the attempts.
-- Rationalisation: the user's rule that a kept trace is rejected only when it holds the actual answer before it was
-  observed (no word lists) is not what the filters do; they also reject on a list of leak terms and require a first
-  read before any write and a sufficiency rerun.
-- Results computed outside Splinter (the paired task bootstraps, sign tests and pass@k tables of campaign ledgers
+- Results computed outside Splinter (the paired task bootstraps, sign tests and pass@k tables of experiment ledgers
   produced by analysis scripts before `experiences compare-arms`) are not proven by this map.
 
 ## Comparing arms
 
-Report a campaign's arms with `experiences compare-arms`, never with a script of its own: it computes every number
+Report an experiment's arms with `experiences compare-arms`, never with a script of its own: it computes every number
 with the statistics this map proves.
 
 ```bash

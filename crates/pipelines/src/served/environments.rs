@@ -24,9 +24,22 @@
 //!   stopped, its candidate is not adopted, and the environment is
 //!   quarantined: no later arm draws from it.
 
-use splinter_store::campaign::RewardSource;
+use serde::{Deserialize, Serialize};
+use splinter_core::verifiability::VerifierClass;
 
 use super::types::ServedError;
+
+/// Where the rewards of a run came from: one per environment it drew tasks
+/// from, so a verdict can say how far its numbers deserve trust.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RewardSource {
+    /// The environment.
+    pub environment: String,
+    /// How its rewards are established.
+    pub class: VerifierClass,
+    /// The verifier that produced them, with its version.
+    pub verifier: String,
+}
 
 /// The environment behind each task of a campaign.
 pub trait EnvironmentLabels {

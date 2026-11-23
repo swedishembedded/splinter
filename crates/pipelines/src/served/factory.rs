@@ -33,10 +33,9 @@ use splinter_knowledge::factory::artifact::{Instance, SolverTools};
 use splinter_knowledge::factory::host::{Host, Verdict};
 use splinter_knowledge::factory::plugins::{PROGRAM_OUTPUT_LUA, PROGRAM_OUTPUT_PYTHON};
 use splinter_knowledge::factory::store::EnvironmentStore;
-use splinter_store::campaign::RewardSource;
 
 use super::brain::{Graded, TaskFamily};
-use super::environments::EnvironmentLabels;
+use super::environments::{EnvironmentLabels, RewardSource};
 use super::types::ServedError;
 
 /// The file the solver of a plugin writes its answer to, for the plugins the

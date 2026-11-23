@@ -27,7 +27,7 @@ mod types;
 pub use collector::{
     Answered, Attempt, CallFailure, PolicyModels, ServedCollector, ServedTrainer, ServedValidator,
 };
-pub use environments::EnvironmentLabels;
+pub use environments::{EnvironmentLabels, RewardSource};
 pub use types::{
     AllFailHandler, CollectRequest, PolicyRef, Rollout, RolloutCollector, RolloutGroup,
     RolloutTrace, ServedError, TraceSequence, TrainReport, TrainRequest, Trained, Trainer,

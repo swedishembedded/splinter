@@ -66,13 +66,6 @@ written first, then one commit makes it official, so a crash leaves at most an
 unrecorded file that `state maintain --collect` removes. `<state>/work` holds
 scratch that exists only while a command runs.
 
-A continuous campaign (the campaign controller, `splinter_sdk::campaign`) keeps its
-state and its experiment ledger in one append-only file, `<state>/campaigns/<name>.pack`:
-a line per state, a small head line naming the current state, a line per ledger entry.
-It is a single file however many arms the campaign runs, because the project disk's
-file quota, not its size, is what a long run exhausts; saving a state is a
-compare-and-swap on the head, so a second controller on the same campaign is refused.
-
 `state status` reports what the database holds and what was written
 off: `{"state", "storage": {"segments", "blob_packs", "index_runs", "pins",
 "history", "artifacts", "losses"}, "losses", "pins"}`. A dataset keeps the

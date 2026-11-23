@@ -37,8 +37,7 @@
 //! append-only annotations beside them, and named sets of experience ids;
 //! [`decision`] is the rule that turns an experience's verdicts into one
 //! decision. The sources, tasks, experiences and annotations themselves are
-//! `splinter-core`'s vocabulary. [`campaign`] is a continuous campaign's
-//! resumable state and its experiment ledger; [`stage_ledger`] a run
+//! `splinter-core`'s vocabulary. [`stage_ledger`] is a run
 //! directory's record of which stages are done under which inputs. [`factory`]
 //! is the learning factory's durable state, independent of the experience
 //! database: an immutable content-addressed product store and the controller's
@@ -49,7 +48,6 @@
 pub mod address;
 pub mod artifacts;
 pub mod bundle;
-pub mod campaign;
 pub mod claims;
 pub mod decision;
 pub mod documents;

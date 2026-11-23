@@ -40,9 +40,9 @@
 //! * [`promotion`] - the one promotion gate: a candidate replaces its
 //!   predecessor only on the examiner's signed aggregates, verified in this
 //!   process (a dev gain, retention non-inferior, a fresh sealed slice).
-//! * [`campaign`] - the pure decisions of a continuous learning campaign:
-//!   per-task pass rates, dynamic sampling, step signals, power-first arm
-//!   planning and the plateau switch.
+//! * [`campaign`] - the pure decisions of a continuous learning run:
+//!   per-task pass rates, dynamic sampling, the learning signal, the
+//!   dev-validation and evidence gates, and power-first planning.
 //! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
 //!   a teacher's answer to it was verified, and whether that makes it worth
 //!   training on.
