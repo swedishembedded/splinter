@@ -16,6 +16,8 @@ splinter-harbor-worker run --specs SPECS.jsonl --tasks TASK_ROOT --out OUT_DIR \
 splinter-harbor-worker reconcile --out OUT_DIR
 splinter-harbor-worker play --spec SPEC.json --tasks TASK_ROOT --out OUT_DIR \
     [--files FILES_ROOT] [--image-cache DIR] [--continue TRIAL_DIR]
+splinter-harbor-worker import --pass PASS --tasks TASK_ROOT --task-list TASKS.jsonl \
+    --job JOB_DIR [--job JOB_DIR ...] --out OUT_DIR
 ```
 
 `run` exits 0 when every attempt has a report (a reward-0 trial or a model error is still a report), 1 when the worker
@@ -53,6 +55,22 @@ splinter-harbor-worker play --spec spec.json --tasks tasks --out out/play-2 --co
   attempt, trajectory digest). The old trial is only read. The workspace starts fresh from the task: the conversation
   continues, the files the earlier session changed do not come with it. Sven drops the human marks of the turns it reloads;
   the worker restores them (`continued_from.marks_restored`).
+
+## Import: trials of Harbor jobs run elsewhere
+
+`import` runs nothing. It reports the finished trials of existing Harbor jobs as attempts of the tasks
+`TASKS.jsonl` names (one JSON object with an `id`, a directory under `TASK_ROOT`, per line), for a recipe's
+`imports` (`docs/guides/learning-factory.md`). A trial is matched to its task by Harbor's own content digest of the
+task directory: the `task.digest` of the trial's `lock.json` (`Packager.compute_content_hash`), else, for a job of a
+Harbor that wrote no lock, the `task_checksum` of its `result.json` (`dirhash`). So the task directory must be the one
+the job ran, byte for byte; a trial of a task that changed since, or of a task not listed, is refused, never guessed.
+So is a trial Harbor never finished.
+
+An accepted trial is copied to `OUT_DIR/harbor/<job index>/<trial>` and reported by the same code that reports a trial
+`run` finished (the leak audit included), with no sandbox of its own. A task's trials fill its slots `0, 1, ...` in the
+order the jobs are given and, within a job, by trial name, so the reports are a function of the jobs and tasks alone.
+`OUT_DIR` must be new or empty; `OUT_DIR/refused.jsonl` lists every refused trial as `{job, trial, reason}`. Exit 0
+(a refusal is a line, not a failure), 2 for refused arguments.
 
 ## Output
 

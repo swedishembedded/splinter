@@ -5,7 +5,7 @@
 # tasks in reproducible sandboxes for its clients. If your team needs expertise
 # in agent execution infrastructure then you can procure our services by
 # sending an email to info@swedishembedded.com.
-"""``splinter-harbor-worker run|reconcile|play``."""
+"""``splinter-harbor-worker run|reconcile|play|import``."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from splinter_harbor_worker.errors import WorkerError
+from splinter_harbor_worker.importer import import_jobs
 from splinter_harbor_worker.play import play
 from splinter_harbor_worker.runner import DEFAULT_CONCURRENCY, reconcile, run
 
@@ -62,6 +63,19 @@ def _parser() -> argparse.ArgumentParser:
     reconcile_parser = commands.add_parser(
         "reconcile", help="after a crash, write the reports of the trials Harbor finished; runs nothing")
     reconcile_parser.add_argument("--out", type=Path, required=True, metavar="OUT_DIR")
+
+    import_parser = commands.add_parser(
+        "import", help="report the trials of Harbor jobs run elsewhere as attempts of the tasks given; runs nothing")
+    import_parser.add_argument("--pass", dest="pass_", required=True, metavar="PASS",
+                               help="the pass whose slots the trials fill")
+    import_parser.add_argument("--tasks", type=Path, required=True, metavar="TASK_ROOT",
+                               help="the directory the task ids are relative to")
+    import_parser.add_argument("--task-list", type=Path, required=True, metavar="TASKS.jsonl",
+                               help="the tasks a trial may be of, one JSON object with an id per line")
+    import_parser.add_argument("--job", type=Path, action="append", required=True, metavar="JOB_DIR",
+                               help="a Harbor job directory; repeat for more, in order")
+    import_parser.add_argument("--out", type=Path, required=True, metavar="OUT_DIR",
+                               help="a new directory: harbor/<job>/<trial>, attempts/, refused.jsonl")
     return parser
 
 
@@ -74,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "play":
             return play(arguments.spec, arguments.tasks, arguments.out, files_root=arguments.files,
                         image_cache=arguments.image_cache, continue_from=arguments.continue_from)
+        if arguments.command == "import":
+            return import_jobs(arguments.pass_, arguments.tasks, arguments.task_list, arguments.job, arguments.out)
         return reconcile(arguments.out)
     except WorkerError as exc:
         print(f"splinter-harbor-worker: {exc}", file=sys.stderr)
