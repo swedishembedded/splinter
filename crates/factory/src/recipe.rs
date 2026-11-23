@@ -38,6 +38,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use splinter_core::factory::trial::{RunBudget, TimeoutPolicy};
 
+pub use crate::ops::{Hint, ValidationSplit};
+
 /// The schema every recipe names.
 pub const RECIPE_SCHEMA: &str = "splinter.factory/v1";
 
@@ -196,14 +198,6 @@ pub struct RolloutPass {
     pub hint: Option<Hint>,
 }
 
-/// What a hinted pass shows the model beside the task.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Hint {
-    /// The task's reference solution (`solution/solve.sh`).
-    Solution,
-}
-
 fn one() -> u32 {
     1
 }
@@ -254,21 +248,6 @@ fn verified_success() -> String {
 }
 fn native_sft() -> String {
     "native-sft".into()
-}
-
-/// How validation records are held out.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ValidationSplit {
-    /// Group records by this before splitting (`task`, `task_family`).
-    #[serde(default = "by_task")]
-    pub group_by: String,
-    /// The fraction of groups held out, in percent.
-    pub percent: u32,
-}
-
-fn by_task() -> String {
-    "task".into()
 }
 
 /// One training variant.

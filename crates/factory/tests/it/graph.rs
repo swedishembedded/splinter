@@ -271,3 +271,29 @@ fn a_file_of_another_schema_is_named_as_what_it_is() {
         "{refused}"
     );
 }
+
+#[test]
+fn the_task_repositorys_recipes_compile_against_the_built_in_operations() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/fixtures/v2");
+    let registry = splinter_factory::ops::registry();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let plan = compile(&text, &registry, &no_files)
+            .unwrap_or_else(|e| panic!("{}: {}", path.display(), e.0.join("\n")));
+        assert!(
+            plan.stages.iter().all(|s| s.operation != "recipe"),
+            "{}",
+            path.display()
+        );
+    }
+    // Every built-in contract is well formed.
+    for name in registry.names() {
+        let descriptor = registry.get(name).unwrap().descriptor();
+        assert!(
+            descriptor.problems().is_empty(),
+            "{name}: {:?}",
+            descriptor.problems()
+        );
+    }
+}

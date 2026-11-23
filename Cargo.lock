@@ -5130,6 +5130,7 @@ version = "0.2.0"
 dependencies = [
  "atif",
  "ed25519-dalek",
+ "schemars",
  "serde",
  "serde_json",
  "serde_yaml",

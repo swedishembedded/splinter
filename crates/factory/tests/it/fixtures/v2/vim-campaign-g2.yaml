@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Generation 2: every stage of generation 1 unchanged (a fork reuses them), and the
+# champion generation 1 left in use attempts what no stage solved; the candidate, trained
+# from the base on every generation's data, must beat the champion.
+schema: splinter.recipe/v2
+name: vim-campaign-g2
+inputs:
+  course: { kind: files, path: collections/vim-headless-mastery.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+  champion: "champion:runs/vim-campaign-g1"
+stages:
+  - id: tasks
+    uses: tasks.pin
+    inputs: { collection: $inputs.course }
+    with: { split: train }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/vim/environment.yaml,
+            attempts: 4, concurrency: 8, seed: 1 }
+  - id: hosted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts] }
+    with: { agent: sven, model: teacher, system_prompt: prompts/narrate-before-each-call.md,
+            environment: environments/vim/environment.yaml, attempts: 4, concurrency: 8, seed: 2 }
+  - id: hinted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts, $stages.hosted.attempts] }
+    with: { agent: sven, model: student, environment: environments/vim/environment.yaml,
+            hint: solution, attempts: 2, concurrency: 8, seed: 3 }
+  - id: g2
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks,
+              unsolved_by: [$stages.local.attempts, $stages.hosted.attempts, $stages.hinted.attempts] }
+    with: { agent: sven, model: champion, environment: environments/vim/environment.yaml,
+            attempts: 4, concurrency: 8, seed: 6 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts, $stages.hosted.attempts, $stages.hinted.attempts, $stages.g2.attempts] }
+    with: { projection: native-sft, target: student, max_block: 16384,
+            validation: { group_by: task, percent: 10 }, seed: 4 }
+  - id: lora-r16
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 500 }, seed: 5 }
+  - id: eval-r16
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model }
+    with: { plan: eval/vim-dev.yaml, agent: sven, baseline: champion, comparisons: 1 }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-r16.evaluation] }
+    with: { promote: true }
+outputs:
+  dataset: $stages.sft.dataset
+  release: $stages.release.release

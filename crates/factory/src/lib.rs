@@ -17,6 +17,7 @@
 //!   pinned in a lock.
 //! * [`graph`] - a `splinter.recipe/v2` recipe compiled into a typed graph
 //!   of operations.
+//! * [`ops`] - the built-in operations a v2 recipe uses.
 //! * [`plan`] - the graph of stages.
 //! * [`run`] - the controller over one run directory, and every stage.
 //! * [`backend`] and [`training`] - the seams to the execution worker and
@@ -37,6 +38,7 @@ pub mod environment;
 pub mod eval_plan;
 pub mod graph;
 pub mod hint;
+pub mod ops;
 pub mod plan;
 pub mod recipe;
 pub mod resolve;

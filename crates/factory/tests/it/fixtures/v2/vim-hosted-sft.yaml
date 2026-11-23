@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Teacher rollouts on the hosted model, a second pass on what the first left unsolved,
+# sessions people play (`splinter play`), and a native-sft dataset of every verified success.
+schema: splinter.recipe/v2
+name: vim-hosted-sft
+inputs:
+  course: { kind: files, path: collections/vim-headless-mastery.yaml }
+models:
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+  student: "brain:Qwen/Qwen3-4B"
+stages:
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: train } }
+  - id: hosted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, args: [--temperature, "0.7", --top-p, "0.8"],
+            system_prompt: prompts/narrate-before-each-call.md, model: teacher,
+            environment: environments/vim/environment.yaml, attempts: 4, concurrency: 8, seed: 20261122 }
+  - id: hosted-retry
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.hosted.attempts] }
+    with: { agent: sven, args: [--temperature, "0.7", --top-p, "0.8"],
+            system_prompt: prompts/narrate-before-each-call.md, model: teacher,
+            environment: environments/vim/environment.yaml, attempts: 4, concurrency: 8, seed: 20261123 }
+  - id: guided
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: teacher, environment: environments/vim/environment.yaml,
+            interactive: true, seed: 20261124 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.hosted.attempts, $stages.hosted-retry.attempts, $stages.guided.attempts] }
+    with: { projection: native-sft, target: student, validation: { group_by: task, percent: 10 }, seed: 17925836 }
+outputs:
+  dataset: $stages.sft.dataset

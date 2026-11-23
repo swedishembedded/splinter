@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: LicenseRef-Proprietary
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The whole factory on the vim course: the student's own attempts, then a hosted teacher
+# on what it left unsolved; a native-sft dataset of every verified success; two LoRA
+# candidates trained by brain; each evaluated against the base on the eval split.
+# Nothing is promoted (an experiment).
+schema: splinter.recipe/v2
+name: vim-mastery
+inputs:
+  course: { kind: files, path: collections/vim-headless-mastery.yaml }
+models:
+  student: "brain:Qwen/Qwen3-4B"
+  teacher: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - id: tasks
+    uses: tasks.pin
+    inputs: { collection: $inputs.course }
+    with: { split: train }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/vim/environment.yaml,
+            attempts: 4, concurrency: 8, seed: 1 }
+  - id: hosted
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.local.attempts] }
+    with: { agent: sven, model: teacher, system_prompt: prompts/narrate-before-each-call.md,
+            environment: environments/vim/environment.yaml, attempts: 4, concurrency: 8, seed: 2 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts, $stages.hosted.attempts] }
+    with: { projection: native-sft, target: student, max_block: 16384,
+            validation: { group_by: task, percent: 10 }, seed: 4 }
+  - id: lora-r16
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 16, steps: 500 }, seed: 5 }
+  - id: lora-r32
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset }
+    with: { base: student, method: lora, params: { rank: 32, steps: 500 }, seed: 5 }
+  - id: eval-r16
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r16.model }
+    with: { plan: eval/vim-dev.yaml, agent: sven, baseline: student, comparisons: 2 }
+  - id: eval-r32
+    uses: evaluation
+    inputs: { candidate: $stages.lora-r32.model }
+    with: { plan: eval/vim-dev.yaml, agent: sven, baseline: student, comparisons: 2 }
+  - id: release
+    uses: promotion
+    inputs: { evaluations: [$stages.eval-r16.evaluation, $stages.eval-r32.evaluation] }
+    with: { promote: false }
+outputs:
+  dataset: $stages.sft.dataset
+  release: $stages.release.release
