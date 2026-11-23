@@ -31,8 +31,8 @@ Invariants (each enforced by a test or a dependency check):
     training controller, dataset builder, intervention path or release gate.
 11. A task defines success, a harness organises the agent's work, an independent
     verifier decides; harness gates are agent feedback, never scoring evidence.
-12. Sandboxing adapts and is recorded; untrusted generated code requires strong
-    isolation.
+12. Sandboxing adapts and is recorded; the least isolation is limiting the files and
+    network a sandbox reaches; strong isolation only where an environment demands it.
 
 ## Verified starting point (2026-11-23)
 
@@ -115,6 +115,10 @@ outputs: { sft: $stages.book.sft }
   plan serves execution, `splinter plan`, `inspect` and reproducibility checks.
 - Model roles bind `connection:model` references (and `champion:RUN`); the compiler
   pins them; a stage names a role, never a raw model.
+- In v2 each candidate's evaluation is a stage of its own, so the significance level's
+  split among candidates is stated (`comparisons`), no longer inferred from one eval
+  section; the baseline arm several evaluations share is one product because its
+  identity is the same (plan, agent, baseline, seeds), with no special case.
 - `splinter.factory/v1` is replaced outright: today's six sections become stages
   (`tasks.pin`, `attempt.collect`, `dataset.project`, `model.train`, `evaluation`,
   `promotion`), the task repository's recipes are rewritten, v1 is deleted.
@@ -134,8 +138,8 @@ outputs: { sft: $stages.book.sft }
   through `crates/sandbox`). Exactly-once *committed publication* per logical item;
   side effects are idempotent by identity, not claimed exactly-once.
 - **Sandboxing (done, see below):** requirements, not providers; the strongest the
-  machine has; recorded per trial; `require_private_proc` / `isolation: strong` for
-  untrusted generated code.
+  machine has; recorded per trial; reads, writes and the network limited at least;
+  `isolation: strong` where an environment demands process isolation.
 
 ### Agents and harnesses
 
@@ -230,9 +234,13 @@ now and live on a GPU host later.
 
 - 2026-11-23: `learn` and `practice` are deleted as verbs; their capabilities ship as
   operators and `splinter init` templates (no aliases).
-- 2026-11-23: untrusted generated code (model-written environments, verifiers, tasks)
-  requires strong isolation and is refused without it; every other execution adapts
-  to the strongest sandbox available and records it.
+- 2026-11-23: every execution adapts to the strongest sandbox available and records
+  it; where the host is itself an isolating container, limiting what the sandbox can
+  read and write is enough, generated code included: `confined` (reads limited to the
+  system, the task's image and its mounts; writes and the network confined) is
+  sufficient, and strong isolation is required only where an environment asks for
+  it (`isolation: strong`). (Superseded the same day: generated code requiring strong
+  isolation.)
 - 2026-11-23: `splinter.recipe/v2` replaces `splinter.factory/v1` outright.
 - 2026-11-23: live qualification uses cheap hosted models; Brain is validated against
   its scripted service until a GPU host is available.
@@ -245,6 +253,13 @@ now and live on a GPU host later.
   (`drop_headers`).
 
 ## Open
+
+- The task repository's user documentation still describes the retired `bench run`
+  workflow: the `tasks/sven-smoke/*` and `tasks/goalbench` READMEs,
+  `docs/running-benchmarks.md`, `docs/swarm.md`, `docs/mining-tasks.md`,
+  `environments/{workspace-tools,registers,compiled}/README.md`, and comments in
+  `benchlib/{packed,gatewaystate,run,withheld,task,export}.py`. Each is rewritten to
+  its recipe and `splinter run` when its family gets one (U6).
 
 - Whether `acquire` (`learn --source`) becomes operators in U6 or later.
 - Process cleanup without a pid namespace (two `process_runner` tests fail on such

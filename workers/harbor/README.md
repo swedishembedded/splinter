@@ -91,7 +91,8 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
   and `isolation`, probed once per job: a reachable Docker daemon, user namespaces, Landlock, proot), or a named one,
   checked the same way. `docker` is Harbor's own. `userns`, `confined` and `proot` run the task's own image
   (`docker_image` or `environment/Dockerfile`) from the image cache; `confined` is proot wrapped in `splinter-confine`
-  (`SPLINTER_CONFINE_BIN`, else on `PATH`): writes only to the sandbox's tree and writable binds, read-only binds
+  (`SPLINTER_CONFINE_BIN`, else on `PATH`): reads only the host's system directories, the sandbox's tree and its binds
+  (no home, workspace or scratch of the host's), writes only to the tree and writable binds, read-only binds
   read-only, the network as asked (a gateway allowance is TCP to its port only; no UDP); `proot` alone works where
   nothing else does, with an open network (`PROOT_NO_SECCOMP=1`, a translation self-check before every trial). The
   resolved provider is written into the kept `specs.jsonl`, and every report carries `sandbox` (provider and the

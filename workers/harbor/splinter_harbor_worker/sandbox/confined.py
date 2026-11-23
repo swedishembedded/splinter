@@ -12,14 +12,18 @@ For hosts that give neither user namespaces nor a container daemon (a hardened c
 ``proot`` does there, wrapped in ``splinter-confine`` (Splinter's launcher; Landlock and a seccomp filter, no
 privilege), which confines ``proot`` and everything it traces:
 
-* Filesystem writes go only to the sandbox's own image tree, its writable binds (the workspace, ``/logs``), proot's
-  own scratch directory and the terminal and null devices. Read-only binds are read-only. The host is readable.
+* Filesystem: reads reach only the host's system directories (``SYSTEM_READ``: the programs and libraries ``proot``
+  itself runs from), ``/proc`` and ``/dev``, the sandbox's own image tree and the binds the task declares - no home
+  directory, no workspace, no other trial, no scratch of the host's, whatever ``proot`` translates. Writes go only to
+  the image tree, the writable binds (the workspace, ``/logs``), proot's own scratch directory and the terminal and
+  null devices. Read-only binds are read-only.
 * Network: ``no-network`` leaves no internet socket at all; an allowlist (the model gateway) becomes TCP ``connect``
   to the allowed ports only, on any address, and no UDP or IPv6; ``public`` is the host's network, its loopback
   included (the namespace provider keeps a public task off the host's loopback; this one cannot).
 
-What it does not give: process isolation (the host's processes are visible, as under plain proot) and read
-confinement. ``GUARANTEES`` names what it enforces, and the worker records it with every trial.
+What it does not give: process isolation (the host's processes are visible, as under plain proot, though Landlock
+denies reading another process's memory or environment). ``GUARANTEES`` names what it enforces, and the worker records
+it with every trial.
 """
 
 from __future__ import annotations
@@ -40,7 +44,11 @@ from splinter_harbor_worker.sandbox.userns import UserNamespaceEnvironment
 CONFINE_BIN_ENV = "SPLINTER_CONFINE_BIN"
 # Device nodes a command writes to under any sandbox.
 _WRITABLE_DEVICES = ("/dev/null", "/dev/zero", "/dev/full", "/dev/tty", "/dev/pts", "/dev/ptmx", "/dev/shm")
-GUARANTEES = ("filesystem-writes", "read-only-mounts", "network-policy")
+GUARANTEES = ("filesystem-reads", "filesystem-writes", "read-only-mounts", "network-policy")
+# What of the host a confined command may read beyond its own tree and binds: the programs, libraries and system
+# configuration proot runs from, and the kernel's views it needs.
+SYSTEM_READ = ("/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/proc", "/dev",
+               "/sys/devices/system/cpu")
 
 
 def confine_binary() -> str | None:
@@ -57,6 +65,17 @@ def kernel_confines() -> dict:
         return {}
     result = subprocess.run([binary, "--probe"], capture_output=True, text=True, check=False, timeout=10)
     return json.loads(result.stdout) if result.returncode == 0 else {}
+
+
+def confinement_args(image_root: Path, scratch: Path, binds: list[tuple[str, str, bool]], proot: str) -> list[str]:
+    """``splinter-confine``'s filesystem arguments for one command: what it may read (``SYSTEM_READ``, proot's own
+    directory, the read-only binds) and write (the image tree, proot's scratch, the writable binds, the devices)."""
+    readable = [*SYSTEM_READ, str(Path(proot).resolve().parent)]
+    readable += [host for host, _, read_only in binds if read_only]
+    writable = [str(image_root), str(scratch), *_WRITABLE_DEVICES]
+    writable += [host for host, _, read_only in binds if not read_only]
+    return [*(arg for path in readable for arg in ("--read-only", path)),
+            *(arg for path in writable for arg in ("--read-write", path))]
 
 
 class ConfinedEnvironment(ProotEnvironment):
@@ -93,10 +112,6 @@ class ConfinedEnvironment(ProotEnvironment):
         argv, env = super()._argv(spec)
         scratch = self._sandbox / "proot-tmp"
         scratch.mkdir(parents=True, exist_ok=True)
-        writable = [str(self._image_root), str(scratch), *_WRITABLE_DEVICES]
-        writable += [host for host, _, read_only in spec["binds"] if not read_only]
-        confine = [self._confine, "--read-only", "/"]
-        for path in writable:
-            confine += ["--read-write", path]
-        confine += ["--network", self._network_flag(), "--"]
+        confine = [self._confine, *confinement_args(self._image_root, scratch, spec["binds"], self._proot),
+                   "--network", self._network_flag(), "--"]
         return [*confine, *argv], {**env, "PROOT_TMP_DIR": str(scratch)}

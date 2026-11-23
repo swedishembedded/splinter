@@ -24,6 +24,7 @@ import subprocess
 from functools import cache
 
 from splinter_harbor_worker.errors import UsageError
+from splinter_harbor_worker.sandbox.confined import GUARANTEES as CONFINED_GUARANTEES
 from splinter_harbor_worker.sandbox.confined import confine_binary, kernel_confines
 from splinter_harbor_worker.spec import SandboxSpec
 
@@ -31,7 +32,7 @@ STRENGTH = ("docker", "userns", "confined", "proot")
 GUARANTEES = {
     "docker": ("process-isolation", "filesystem-isolation", "network-policy", "read-only-mounts", "resource-limits"),
     "userns": ("process-isolation", "filesystem-isolation", "network-policy", "read-only-mounts"),
-    "confined": ("filesystem-writes", "network-policy", "read-only-mounts"),
+    "confined": CONFINED_GUARANTEES,
     "proot": (),
 }
 ISOLATION = {"strong": ("docker", "userns"), "confined": ("docker", "userns", "confined"), "any": STRENGTH}

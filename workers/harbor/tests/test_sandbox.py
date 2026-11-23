@@ -101,3 +101,16 @@ def test_a_task_that_imports_a_host_variable_is_refused(tmp_path) -> None:
         ProotEnvironment(environment_dir=tmp_path / "environment", environment_name="t", session_id="s",
                          trial_paths=trial, task_env_config=EnvironmentConfig(docker_image="x", network_mode="public"),
                          network_policy=NetworkPolicy(network_mode="public"), images=str(tmp_path / "cache"))
+
+
+def test_a_confined_command_reads_only_the_system_its_tree_and_its_binds(tmp_path) -> None:
+    from splinter_harbor_worker.sandbox.confined import SYSTEM_READ, confinement_args
+
+    image, scratch = tmp_path / "image", tmp_path / "proot-tmp"
+    binds = [("/srv/kb", "/kb", True), (str(tmp_path / "logs"), "/logs", False)]
+    args = confinement_args(image, scratch, binds, "/usr/bin/proot")
+    reads = [args[i + 1] for i, a in enumerate(args) if a == "--read-only"]
+    writes = [args[i + 1] for i, a in enumerate(args) if a == "--read-write"]
+    assert "/" not in reads and not any(p in reads for p in ("/home", "/root", "/tmp", "/data", "/var"))
+    assert set(SYSTEM_READ) <= set(reads) and "/srv/kb" in reads
+    assert {str(image), str(scratch), str(tmp_path / "logs")} <= set(writes) and "/srv/kb" not in writes

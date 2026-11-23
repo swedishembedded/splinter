@@ -208,12 +208,18 @@ def test_codex_speaks_the_responses_protocol_through_the_gateway(tmp_path, monke
     assert (agent / "agents.md").read_text() == "Be brief.\n"
 
 
-# The stand-in claude, which also tries the model server directly, past the gateway: the confinement must stop it.
+# The stand-in claude, which also tries the model server directly, past the gateway, and reads a file of the host
+# outside the sandbox (a credential in the invoking user's home): the confinement must stop both.
 FAKE_CLAUDE_BYPASS = FAKE_CLAUDE.replace(
     "echo expected > /app/answer.txt",
     "direct=${DIRECT#http://}; direct=${direct%%/*}\n"
     "if (exec 4<>/dev/tcp/${direct%%:*}/${direct##*:}) 2>/dev/null; then echo reached > /logs/agent/direct.txt;"
     " else echo refused > /logs/agent/direct.txt; fi\n"
+    "secret=refused\n"
+    "for path in \"$HOST_FILE\" \"/proc/1/root$HOST_FILE\" \"/proc/$PPID/root$HOST_FILE\"; do\n"
+    "  if (exec 5<\"$path\") 2>/dev/null; then secret=\"read $path\"; fi\n"
+    "done\n"
+    "echo \"$secret\" > /logs/agent/secret.txt\n"
     "echo expected > /app/answer.txt",
 )
 
@@ -224,19 +230,25 @@ def test_a_confined_agent_reaches_its_model_only_through_the_gateway(tmp_path, m
     path.parent.mkdir()
     path.write_text(FAKE_CLAUDE_BYPASS)
     path.chmod(0o755)
+    secret = tmp_path / "home" / ".config" / "sven" / "remote.yaml"
+    secret.parent.mkdir(parents=True)
+    secret.write_text("token: host-only-secret\n")
     spec = make_spec(TASK, agent="claude-code", provider="confined", network="model-gateway-only",
-                     model=model(stub_model), env={"DIRECT": {"literal": stub_model.base_url}})
+                     model=model(stub_model), env={"DIRECT": {"literal": stub_model.base_url},
+                                                   "HOST_FILE": {"literal": str(secret)}})
     code, out = run_one(tmp_path, spec, monkeypatch, local_images,
                         env={"SPLINTER_CLAUDE_BIN": str(path), "STUB_TOKEN": SECRET})
     assert code == 0
     report = load_report(out)
     validator.validate(report)
-    assert report["sandbox"] == {"provider": "confined",
-                                 "guarantees": ["filesystem-writes", "network-policy", "read-only-mounts"]}
+    from splinter_harbor_worker.sandbox.confined import GUARANTEES
+    assert report["sandbox"] == {"provider": "confined", "guarantees": list(GUARANTEES)}
+    assert "filesystem-reads" in GUARANTEES
     assert [r["status"] for r in report["evidence"]["requests"]] == [200], "the gateway is reachable"
     assert report["evidence"]["result"]["verifier_result"]["rewards"] == {"reward": 1.0}
     agent = out / report["native_dir"] / "agent"
     assert (agent / "direct.txt").read_text().strip() == "refused", "the model server is not, past the gateway"
+    assert (agent / "secret.txt").read_text().strip() == "refused", "nor a file of the host outside the sandbox"
 
 
 def test_auto_runs_a_trial_on_the_strongest_sandbox_a_daemonless_host_has_and_records_it(
