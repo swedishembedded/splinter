@@ -205,7 +205,7 @@ provider: store it once with `sven auth set openrouter` (or the provider's id).
 
 Splinter reaches brain only through its API. A local model (`local:...`, `policy:...`) is never loaded in
 the process: it is requested from a `brain serve --openai` by the id that server serves it under, and the
-attempts of `practice`, `learn`, `generation run`, `solve` and the release gate run against it at once,
+attempts of `practice`, `learn`, `solve` and the release gate run against it at once,
 which brain's continuous batching decodes together.
 
 Without flags, Splinter starts such a server for the length of the command: the `brain` on `PATH` (or
@@ -244,7 +244,7 @@ against its champion needs.
 
 ### Training on a brain endpoint
 
-With endpoints, `train` and the training stage of `learn`, `practice` and `generation run` do not load the
+With endpoints, `train` and the training stage of `learn` and `practice` do not load the
 base in the process either: a supervised fine-tune and a policy-gradient run (self-distillation with
 teacher contexts included) are jobs of the brain service, which schedules them on the cards it serves
 from, taking them from idle serving replicas and giving them back.

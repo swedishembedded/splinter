@@ -28,12 +28,12 @@ PLAN = HERE / "plan.toml"
 # The matrix and the ablations the roadmap's final qualification names.
 MATRIX = {
     "builds", "tests", "isolation", "failed-candidate-never-champion", "autonomous-curriculum",
-    "intervention-choice", "three-generations", "sft-beats-frozen-control",
+    "intervention-choice", "sft-beats-frozen-control",
     "negative-control-shows-no-gain", "harness-optimisation-helps", "reproducible-conclusions",
     "final-exam-independent-of-selection",
 }
 ABLATIONS = {
-    "ablation-no-replay", "ablation-no-harness-optimisation",
+    "ablation-no-harness-optimisation",
     "ablation-harness-optimisation-without-training", "ablation-decision-assistance-off",
     "ablation-search-off", "ablation-retrieval-off",
 }

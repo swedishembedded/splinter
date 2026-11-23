@@ -155,10 +155,6 @@ pub enum Command {
     /// way was measured to do, net of what it costs: more samples, another
     /// episode protocol, a trained candidate, or no change.
     Improve(ImproveArgs),
-    /// Generations of a coding policy, each held to what the ones before it
-    /// had: run one, or show the ledger and the full retention matrix.
-    #[command(subcommand)]
-    Generation(GenerationCommand),
     /// Take in recorded agent sessions, secrets removed.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -649,7 +645,6 @@ mod exam;
 mod experiences;
 mod factory;
 mod gate;
-mod generation;
 mod global;
 mod goal;
 mod harbor;
@@ -686,7 +681,6 @@ pub use factory::{
     ExportArgs, ForkArgs, GenerateArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs,
 };
 pub use gate::GateArgs;
-pub use generation::GenerationCommand;
 pub use global::Global;
 pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};

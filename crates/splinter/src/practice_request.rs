@@ -98,10 +98,7 @@ fn replay_policy(
              replays no earlier record: drop --replay"
         ))),
         (true, None) => Ok(ReplayPolicy::None),
-        (false, replay) => Ok(replay
-            .map(ReplayArg::policy)
-            .transpose()?
-            .unwrap_or_default()),
+        (false, replay) => Ok(replay.map(ReplayArg::policy).unwrap_or_default()),
     }
 }
 

@@ -7,27 +7,21 @@
 // should be improved before spending a training budget, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! `improve` and `generation`: choosing how to improve an agent, and
-//! generations of a coding policy.
+//! `improve`: choosing how to improve an agent.
 
 use std::fmt::Write as _;
 
 use serde::Serialize;
-use splinter_sdk::generations::{
-    run_generation, series, GenerationRequest, Limits, Outcome, ReplayChoice, SeriesReport,
-};
 use splinter_sdk::improve::{
     fixed_comparison, improve, parse_experiment, FixedComparison, ImprovementReport, SolveArms,
 };
 use splinter_sdk::measure::intervention::Decision;
-use splinter_sdk::practice::PracticeObjective;
 use splinter_sdk::runs::Recorded;
 use splinter_sdk::tasks::resolve_set;
 use splinter_sdk::{Context, Error};
 
-use crate::cli::{GenerationCommand, ImproveArgs, ReplayArg};
+use crate::cli::ImproveArgs;
 use crate::output::{emit, Report};
-use crate::practice_request::practice_request;
 use crate::session::Exit;
 
 /// What `improve` reports over one or more experiments.
@@ -121,177 +115,4 @@ pub fn improve_command(ctx: &Context, json: bool, args: ImproveArgs) -> Result<E
         .then(|| fixed_comparison(&experiments.iter().map(|e| &e.report).collect::<Vec<_>>()));
     emit(json, &ImproveOutput { experiments, fixed });
     Ok(Exit::Ok)
-}
-
-impl Report for SeriesReport {
-    fn human(&self) -> String {
-        let mut out = format!(
-            "{}: {} generation(s), {} accepted\n",
-            self.experiment,
-            self.ledger.len(),
-            self.accepted
-        );
-        for entry in &self.ledger {
-            let how = match &entry.outcome {
-                Outcome::Accepted { release } => format!("accepted as {release}"),
-                Outcome::Rejected { reasons } => format!("rejected: {}", reasons.join("; ")),
-                Outcome::Stopped { reason } => format!("stopped: {reason}"),
-            };
-            let _ = writeln!(out, "  generation {}  {how}", entry.generation);
-        }
-        match (&self.matrix, &self.matrix_unavailable) {
-            (Some(matrix), _) => {
-                let _ = writeln!(
-                    out,
-                    "matrix of {} generation(s) over {} task(s)",
-                    matrix.matrix.generations(),
-                    matrix.matrix.tasks().len()
-                );
-            }
-            (None, Some(why)) => {
-                let _ = writeln!(out, "no matrix: {why}");
-            }
-            (None, None) => {}
-        }
-        out
-    }
-}
-
-impl Report for splinter_sdk::generations::GenerationReport {
-    fn human(&self) -> String {
-        let record = &self.record;
-        let how = match &record.outcome {
-            Outcome::Accepted { release } => format!("accepted as {release}"),
-            Outcome::Rejected { reasons } => format!("rejected: {}", reasons.join("; ")),
-            Outcome::Stopped { reason } => format!("stopped: {reason}"),
-        };
-        format!(
-            "generation {} of {}: {how}\n",
-            record.generation, record.experiment
-        )
-    }
-}
-
-/// How a generation carries the earlier experience, given the `--replay`
-/// policy named, whether it rebuilds from the base and the objective it
-/// trains by. A rollout objective continues the champion's adapter on its own
-/// rollouts and replays nothing, so a replay named beside it is refused
-/// instead of dropped.
-fn replay_choice(
-    replay: Option<ReplayArg>,
-    rebuild: bool,
-    objective: PracticeObjective,
-) -> Result<ReplayChoice, Error> {
-    if objective.learns_from_groups() {
-        return match (replay, rebuild) {
-            (None, false) => Ok(ReplayChoice::None),
-            _ => Err(Error::Refused(format!(
-                "--objective {objective} trains the champion's adapter on its own rollouts \
-                 and replays no earlier record: drop --replay and --rebuild"
-            ))),
-        };
-    }
-    if rebuild {
-        return Ok(ReplayChoice::RebuildFromBase);
-    }
-    Ok(match replay {
-        None | Some(ReplayArg::Uniform) => ReplayChoice::Uniform,
-        Some(ReplayArg::None) => ReplayChoice::None,
-        Some(ReplayArg::Balanced) => ReplayChoice::CapabilityBalanced,
-        Some(ReplayArg::FailureTargeted) => ReplayChoice::FailureTargeted,
-        Some(ReplayArg::LearningProgress) => ReplayChoice::LearningProgress,
-    })
-}
-
-/// Runs a `generation` command.
-pub fn generation_command(
-    splinter: &splinter_sdk::Splinter,
-    ctx: &Context,
-    json: bool,
-    command: GenerationCommand,
-) -> Result<Exit, Error> {
-    match command {
-        GenerationCommand::Run(args) => {
-            let mut practice = args.practice;
-            let replay =
-                replay_choice(practice.replay.take(), practice.rebuild, practice.objective)?;
-            practice.rebuild = false;
-            let defaults = Limits::default();
-            let request = GenerationRequest {
-                experiment: args.experiment,
-                practice: practice_request(practice)?,
-                replay,
-                limits: Limits {
-                    max_family_drop: args.max_family_drop.unwrap_or(defaults.max_family_drop),
-                    max_mean_drop: args.max_mean_drop.unwrap_or(defaults.max_mean_drop),
-                    min_new_gain: args.min_new_gain.unwrap_or(defaults.min_new_gain),
-                },
-            };
-            let ran = run_generation(
-                ctx,
-                &request,
-                splinter.trainer(),
-                &splinter_sdk::agent::CancelToken::new(),
-            )?;
-            emit(json, &ran);
-            Ok(
-                if matches!(ran.report.record.outcome, Outcome::Accepted { .. }) {
-                    Exit::Ok
-                } else {
-                    Exit::Failed
-                },
-            )
-        }
-        GenerationCommand::Matrix { experiment, alias } => {
-            let shown = series(
-                ctx,
-                &experiment,
-                &alias,
-                splinter_sdk::measure::gate::AgenticConfig::default(),
-                &splinter_sdk::agent::CancelToken::new(),
-            )?;
-            emit(json, &shown);
-            Ok(Exit::Ok)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn imitation_keeps_its_replay_choices() {
-        let imitate = PracticeObjective::SftStep;
-        assert_eq!(
-            replay_choice(None, false, imitate).unwrap(),
-            ReplayChoice::Uniform
-        );
-        assert_eq!(
-            replay_choice(Some(ReplayArg::Balanced), false, imitate).unwrap(),
-            ReplayChoice::CapabilityBalanced
-        );
-        assert_eq!(
-            replay_choice(None, true, imitate).unwrap(),
-            ReplayChoice::RebuildFromBase
-        );
-    }
-
-    #[test]
-    fn a_rollout_objective_replays_nothing_and_refuses_a_replay_it_would_drop() {
-        for objective in [
-            PracticeObjective::PolicyGradient,
-            PracticeObjective::SelfDistill,
-        ] {
-            assert_eq!(
-                replay_choice(None, false, objective).unwrap(),
-                ReplayChoice::None
-            );
-            for (replay, rebuild) in [(Some(ReplayArg::Uniform), false), (None, true)] {
-                assert!(replay_choice(replay, rebuild, objective)
-                    .unwrap_err()
-                    .is_refusal());
-            }
-        }
-    }
 }

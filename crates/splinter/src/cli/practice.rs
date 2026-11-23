@@ -323,33 +323,16 @@ pub enum ReplayArg {
     Uniform,
     /// The same number of records of each capability.
     Balanced,
-    /// Records of the capabilities the champion fails most, in proportion
-    /// (`generation run` only: it measures the failures first).
-    FailureTargeted,
-    /// Records of the generations whose exam pass rate is still moving
-    /// across releases, in proportion (`generation run` only: it reads the
-    /// panel's history).
-    LearningProgress,
 }
 
 impl ReplayArg {
-    /// The policy it names, for a `practice`, which cannot measure the
-    /// champion's failures.
-    pub fn policy(self) -> Result<ReplayPolicy, splinter_sdk::Error> {
+    /// The policy it names.
+    #[must_use]
+    pub fn policy(self) -> ReplayPolicy {
         match self {
-            Self::None => Ok(ReplayPolicy::None),
-            Self::Uniform => Ok(ReplayPolicy::Uniform),
-            Self::Balanced => Ok(ReplayPolicy::CapabilityBalanced),
-            Self::FailureTargeted => Err(splinter_sdk::Error::Refused(
-                "failure-targeted replay weighs the champion's failures, which `generation run` \
-                 measures first: use it there"
-                    .into(),
-            )),
-            Self::LearningProgress => Err(splinter_sdk::Error::Refused(
-                "learning-progress replay weighs how each earlier exam's pass rate moved across \
-                 releases, which `generation run` has measured: use it there"
-                    .into(),
-            )),
+            Self::None => ReplayPolicy::None,
+            Self::Uniform => ReplayPolicy::Uniform,
+            Self::Balanced => ReplayPolicy::CapabilityBalanced,
         }
     }
 }

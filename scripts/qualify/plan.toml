@@ -33,10 +33,7 @@ card = ""            # the GPU reservation helper; a check that needs a card is 
 manual = ""          # a documented domain: a URL or a path
 objective = ""
 experiments = ""     # improvement experiments, one file per failure cluster
-repo_g1 = ""         # the repositories of three generations, in order
-repo_g2 = ""
-repo_g3 = ""
-generation_plan = "" # the experiment plan: families per generation, the sealed exam
+experiment_plan = "" # the experiment plan: families per generation, the sealed exam
 
 # --- the matrix ---------------------------------------------------------------
 
@@ -106,33 +103,6 @@ op = "=="
 value = true
 
 [[check]]
-id = "three-generations"
-title = "Three generations are accepted and what each held, the later ones kept"
-command = [
-  "sh", "-ec",
-  """
-  g() { {splinter} --json --state {state}/generations --device {device} --backend {backend} generation run "$1" --experiment qualify --plan {generation_plan} --generation "$2" >/dev/null; }
-  g {repo_g1} 1; g {repo_g2} 2; g {repo_g3} 3
-  {splinter} --json --state {state}/generations generation matrix --experiment qualify
-  """,
-]
-card_gb = 80
-timeout_s = 172800
-metric = "matrix.metrics.acc.value"
-[[check.assert]]
-path = "accepted"
-op = ">="
-value = 3
-[[check.assert]]
-path = "matrix.metrics.bwt.value"
-op = ">="
-value = -0.05
-[[check.assert]]
-path = "matrix.metrics.forgetting.value"
-op = "<="
-value = 0.05
-
-[[check]]
 id = "sft-beats-frozen-control"
 title = "The trained agent beats the frozen control on protected tasks (registered arm A2 against A0)"
 result = "{results}/a2-against-a0.json"
@@ -176,7 +146,7 @@ value = 0.05
 [[check]]
 id = "final-exam-independent-of-selection"
 title = "The final exam shares no family with anything trained on or used to select"
-command = ["{splinter}", "--json", "experiment", "check", "{generation_plan}"]
+command = ["{splinter}", "--json", "experiment", "check", "{experiment_plan}"]
 [[check.assert]]
 path = "sealed"
 op = "exists"
@@ -184,22 +154,6 @@ op = "exists"
 # --- the mandatory ablations -------------------------------------------------
 # Each removes one thing from the full system and states the effect on the
 # metric of the check it is of: the measured difference is the finding.
-
-[[ablation]]
-id = "ablation-no-replay"
-title = "No replay: three generations trained on their new records alone"
-of = "three-generations"
-command = [
-  "sh", "-ec",
-  """
-  g() { {splinter} --json --state {state}/ablation-no-replay --device {device} --backend {backend} generation run "$1" --experiment qualify --replay none --plan {generation_plan} --generation "$2" >/dev/null; }
-  g {repo_g1} 1; g {repo_g2} 2; g {repo_g3} 3
-  {splinter} --json --state {state}/ablation-no-replay generation matrix --experiment qualify
-  """,
-]
-card_gb = 80
-timeout_s = 172800
-metric = "matrix.metrics.acc.value"
 
 [[ablation]]
 id = "ablation-no-harness-optimisation"

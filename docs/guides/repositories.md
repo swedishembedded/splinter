@@ -159,16 +159,16 @@ path in what a tool returned, hidden content and the state root still fail it.
 
 ## Running a repository's attempts on a brain endpoint
 
-`practice`, `learn`, `solve`, `generation run` and the release gate attempt tasks as agents, each
+`practice`, `learn`, `solve` and the release gate attempt tasks as agents, each
 attempt a conversation of many requests. With `--brain-endpoint` the policy is served by brain and up
 to `--attempt-concurrency` attempts run at once against it, each with the seed it has when run one
 after another, so the experiences recorded are the same ones, in the order of the tasks and attempts
-(see "Serving models from a brain endpoint" in the configuration page). `generation run` against a
+(see "Serving models from a brain endpoint" in the configuration page). `practice` against a
 Qwen3.8 policy:
 
 ```text
 splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY --attempt-concurrency 48 \
-         --policy-base Qwen/Qwen3.8-27B-FP8 generation run REPO --experiment NAME
+         --policy-base Qwen/Qwen3.8-27B-FP8 practice REPO
 ```
 
 The gate's candidate must be served too: start the endpoint with `--adapter-manifest FILE` and give
@@ -240,30 +240,15 @@ keeps its request and so its address.
 
 ## Generations of a coding policy
 
-`splinter generation run REPO --experiment NAME --plan PLAN.toml --generation N` measures the
-champion on every protected task (the exam of every earlier generation), runs `practice` to a
-candidate, measures both on the protected tasks and the new exam at equal settings, rejects the
-candidate when a protected family falls by more than `--max-family-drop`, the mean falls by more
-than `--max-mean-drop` or it gains no more than `--min-new-gain` on the new exam, and otherwise
-releases it through the gate. Every generation, accepted or not, is in the experiment's ledger.
-`--replay none|uniform|balanced|failure-targeted|learning-progress` and `--rebuild` choose how the earlier
-experience is carried forward under `--objective sft-step`; a rollout objective (`policy-gradient`,
-`self-distill`) replays nothing, records `none` in the ledger, and refuses both flags. The protected
-families, the exam reservation and the retention and regression limits apply to every objective. `splinter generation matrix --experiment NAME` prints the ledger
-and the full retention matrix of the lineage: the base as generation 0 and every generation on
-every protected task, with ACC, BWT, forgetting, forward transfer and learning gain.
-
-`--replay learning-progress` weights the replay by how fast the policy's pass rate on each earlier
-generation's exam has been moving across the releases that were the champion (the panel
-measurements of the ledger and of this generation), with the learning-progress signal described
-below (`--lp-window`, `--lp-novelty`, `--lp-explore`; a panel measurement records no device time,
-so the cost divisor is neutral). Each earlier generation's training families take the weight of
-that generation's exam, and none gets less than the exploration share divided by the number of
-generations. The recorded `replay_policy` carries the weights.
+A generation of a coding policy is one `practice` run (above) whose champion is the previous generation's model. The
+learning factory runs a series of them as forked recipe runs that name the previous generation's model as their
+`champion:`; see `docs/guides/learning-factory.md`. `--replay none|uniform|balanced` and `--rebuild` choose how the
+earlier experience is carried forward under `--objective sft-step`; a rollout objective (`policy-gradient`,
+`self-distill`) replays nothing and refuses both flags.
 
 ## Which tasks a budget reaches first
 
-`practice` and `generation run` go through the admitted tasks in the order they were admitted
+`practice` goes through the admitted tasks in the order they were admitted
 and stop at `--budget`. `--curriculum learning-progress` or `--curriculum gain-ranked` puts them
 in the order of how fast the policy is still improving, per GPU second, on each family (the file a
 fault was seeded in), in a `schedule` stage between `reserve` and `solve`; the solve and teach

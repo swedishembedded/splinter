@@ -35,9 +35,6 @@
 //!   becomes a skill graph, probes, a measured baseline, training rounds on the
 //!   skill expected to benefit most, and an assessment on probes that decided
 //!   nothing.
-//! * [`generations`] - generations of a coding policy: the protected panel,
-//!   the full retention matrix, replay policies, and one generation decided
-//!   on retention and regression limits before the gate.
 //! * [`goal`] - goal-directed learning: probe the participant, find its
 //!   gaps, choose the raw material expected to close them under a budget
 //!   with a reason for every section, learn it, probe again; and the
@@ -107,7 +104,6 @@ pub mod experiences;
 pub mod experiment;
 pub mod factory_index;
 pub mod family;
-pub mod generations;
 pub mod goal;
 pub mod graded;
 pub mod grouping;

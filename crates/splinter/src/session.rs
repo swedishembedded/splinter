@@ -246,14 +246,6 @@ impl Session {
             Command::Improve(args) => {
                 return crate::improve_session::improve_command(ctx, json, args)
             }
-            Command::Generation(command) => {
-                return crate::improve_session::generation_command(
-                    &self.splinter,
-                    ctx,
-                    json,
-                    command,
-                )
-            }
             Command::Practice(args) => {
                 let release_asked = !args.no_release;
                 let practiced = self.splinter.practice(&practice_request(*args)?)?;
