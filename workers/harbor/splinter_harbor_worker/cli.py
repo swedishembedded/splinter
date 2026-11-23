@@ -17,8 +17,16 @@ from splinter_harbor_worker.errors import WorkerError
 from splinter_harbor_worker.runner import DEFAULT_CONCURRENCY, reconcile, run
 
 
+def _version() -> str:
+    from importlib.metadata import version
+
+    return f"splinter-harbor-worker {version('splinter-harbor-worker')} (harbor {version('harbor')})"
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="splinter-harbor-worker", description=__doc__)
+    # The controller names its rollouts' implementation by this line: the worker's and Harbor's versions.
+    parser.add_argument("--version", action="version", version=_version())
     commands = parser.add_subparsers(dest="command", required=True)
 
     run_parser = commands.add_parser(
