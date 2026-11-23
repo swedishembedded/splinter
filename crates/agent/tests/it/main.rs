@@ -17,7 +17,6 @@ mod claims;
 mod claude_code;
 mod converse;
 mod converse_tasks;
-mod flywheel;
 mod guided_generation;
 mod harness_edit;
 mod harness_work;

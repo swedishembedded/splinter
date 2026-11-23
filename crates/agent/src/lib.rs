@@ -54,8 +54,6 @@
 //! * [`policy_endpoint`] - an OpenAI-compatible endpoint answered by a
 //!   program, keeping every request it was sent: a scripted policy behind
 //!   real sven, or a recording proxy in front of a served model.
-//! * [`flywheel`] - the flywheel harnesses (invent, validate) run as `sven
-//!   harness run` subprocesses, and what their runs left on disk read back.
 //! * [`runner`] - one contract (prepare, run, cancel, collect) for every agent
 //!   runtime that works on a repository task, and an episode record of one
 //!   shape whichever runtime produced it: sven's worker, and Claude Code,
@@ -77,7 +75,6 @@ pub mod converse;
 pub mod correction;
 pub mod critic;
 pub mod demonstration;
-pub mod flywheel;
 pub mod fork_at;
 pub mod forms;
 pub mod harness_call;
