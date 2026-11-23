@@ -134,8 +134,9 @@ fn final_answers_distinct_calls_and_a_cap_leave_the_least_reasoned_distinct_pass
         final_answer: true,
         distinct_calls: true,
         per_task: Some(2),
+        ignore_call_arguments: Vec::new(),
     };
-    let projection = build(curation);
+    let projection = build(curation.clone());
     assert_eq!(kept(&projection), ["answer p2", "answer p3", "answer q1"]);
     assert_eq!(projection.count(Exclusion::NoFinalAnswer), 1, "p5");
     assert_eq!(
@@ -159,6 +160,7 @@ fn each_curation_applies_alone() {
             final_answer,
             distinct_calls,
             per_task,
+            ignore_call_arguments: Vec::new(),
         });
         (projection.records.len(), kept(&projection))
     };
@@ -172,4 +174,75 @@ fn each_curation_applies_alone() {
     let (n, names) = only(false, false, Some(1));
     assert_eq!(n, 2);
     assert!(names.contains(&"answer q1".to_string()), "{names:?}");
+}
+
+/// A pass of `task` that runs `command` and says why in the call's `intent`.
+fn attempt_saying(task: &str, name: &str, command: &str, intent: &str) -> Experience {
+    let instruction = format!("Do {task}.");
+    let task = common::task("workspace-change", &instruction, vec![]);
+    let steps = vec![
+        user(1, &instruction),
+        call(
+            2,
+            "c0",
+            "shell",
+            json!({ "command": command, "intent": intent }),
+            "ok",
+        ),
+        say(3, &format!("answer {name}")),
+    ];
+    experience(
+        &task,
+        trajectory(steps),
+        Some(&format!("answer {name}")),
+        &format!("2026-11-21T02:00:{:02}.000Z", name.len() + command.len()),
+    )
+}
+
+fn say_corpus() -> Corpus {
+    let mut corpus = Corpus::new();
+    for exp in [
+        attempt_saying("c", "s1", "vim -c wq", "Save the file"),
+        attempt_saying("c", "s2", "vim -c wq", "Write and quit"),
+        attempt_saying("c", "s3", "vim -c x", "Save the file"),
+    ] {
+        let pass = verdict(&exp, Outcome::Pass, Strength::Executable);
+        corpus.insert(exp, vec![pass]).unwrap();
+    }
+    corpus
+}
+
+fn build_saying(curation: PassCuration) -> Projection {
+    SftStep::new(Strength::Executable)
+        .packed(true)
+        .pass_curation(curation)
+        .project(&say_corpus())
+        .unwrap()
+}
+
+#[test]
+fn the_text_a_call_says_about_itself_makes_no_alternative_solution() {
+    let compared = |ignore: &[&str]| {
+        build_saying(PassCuration {
+            distinct_calls: true,
+            ignore_call_arguments: ignore.iter().map(ToString::to_string).collect(),
+            ..PassCuration::default()
+        })
+    };
+    // Compared whole, two runs that made the same call and worded their
+    // intent differently are two demonstrations.
+    assert_eq!(compared(&[]).records.len(), 3);
+    // Compared by what the calls ask for, they are one: the third pass made a
+    // different call and stays.
+    let by_call = compared(&["intent"]);
+    assert_eq!(by_call.records.len(), 2);
+    assert_eq!(by_call.count(Exclusion::DuplicatePass), 1);
+    assert_eq!(
+        by_call
+            .pass_curation
+            .as_ref()
+            .map(|c| c.ignore_call_arguments.clone()),
+        Some(vec!["intent".to_string()]),
+        "the manifest records what was ignored"
+    );
 }

@@ -384,12 +384,15 @@ fn a_build_curates_passes_by_final_answer_distinct_calls_and_a_cap_per_task() {
         "sft-step",
         "--final-answer-only",
         "--distinct-calls",
+        "--ignore-call-argument",
+        "intent",
         "--max-passes-per-task",
         "3",
     ]) else {
         panic!("dataset build");
     };
     assert!(build.final_answer_only && build.distinct_calls);
+    assert_eq!(build.ignore_call_argument, ["intent"]);
     assert_eq!(build.max_passes_per_task, Some(3));
     let Command::Dataset(DatasetCommand::Build(plain)) =
         command(&["dataset", "build", "ab12", "--view", "sft-step"])
@@ -398,6 +401,17 @@ fn a_build_curates_passes_by_final_answer_distinct_calls_and_a_cap_per_task() {
     };
     assert!(!plain.final_answer_only && !plain.distinct_calls);
     assert_eq!(plain.max_passes_per_task, None, "no cap unless asked");
+    assert!(
+        parse(&[
+            "dataset",
+            "build",
+            "ab12",
+            "--ignore-call-argument",
+            "intent"
+        ])
+        .is_err(),
+        "ignoring an argument only means something when calls are compared"
+    );
     assert!(
         parse(&["dataset", "build", "ab12", "--max-passes-per-task", "0"]).is_err(),
         "a cap of zero would keep nothing"

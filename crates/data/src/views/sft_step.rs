@@ -281,7 +281,7 @@ impl View for SftStep {
         projection.outcome_verified_only = self.control == Control::OutcomeVerified;
         projection.curation = self.rendering.history.recorded();
         let left_out = if self.pass_curation.curates() {
-            projection.pass_curation = Some(self.pass_curation);
+            projection.pass_curation = Some(self.pass_curation.clone());
             let passes: Vec<Pass<'_>> = corpus
                 .entries()
                 .iter()

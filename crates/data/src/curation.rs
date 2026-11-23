@@ -119,7 +119,7 @@ pub struct Curation {
 /// demonstrations: in this order, a pass without a final answer is left out,
 /// passes that made the same tool calls are one demonstration, and at most a
 /// number of passes per task are kept. The default curates nothing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PassCuration {
     /// Leave out a pass whose last agent step calls a tool or says nothing:
     /// it teaches acting without concluding
@@ -136,6 +136,13 @@ pub struct PassCuration {
     /// action first ([`Exclusion::OverTaskCap`](crate::Exclusion::OverTaskCap)).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_task: Option<usize>,
+    /// Arguments that are left out when two passes' tool calls are compared
+    /// for `distinct_calls`: the free text a call carries beside what it does
+    /// (a stated intent or rationale), which differs between two runs that
+    /// made the same calls. A call is what it was asked to do, not what the
+    /// model said about it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignore_call_arguments: Vec<String>,
 }
 
 /// One pass the curation weighs.
@@ -176,7 +183,7 @@ fn message_text(body: &atif::MessageBody) -> String {
         .join("\n")
 }
 
-fn profile(trajectory: &atif::Trajectory) -> Profile {
+fn profile(trajectory: &atif::Trajectory, ignore: &[String]) -> Profile {
     let agent: Vec<&atif::TraceStep> = trajectory
         .steps
         .iter()
@@ -186,9 +193,13 @@ fn profile(trajectory: &atif::Trajectory) -> Profile {
         .iter()
         .flat_map(|s| s.tool_calls.iter().flatten())
         .map(|c| {
-            let arguments = splinter_core::digest::canonical_json(&c.arguments)
+            let mut kept = c.arguments.clone();
+            if let Some(object) = kept.as_object_mut() {
+                object.retain(|name, _| !ignore.contains(name));
+            }
+            let arguments = splinter_core::digest::canonical_json(&kept)
                 .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-                .unwrap_or_else(|_| c.arguments.to_string());
+                .unwrap_or_else(|_| kept.to_string());
             (c.function_name.clone(), spaced(&arguments))
         })
         .collect();
@@ -230,7 +241,7 @@ impl PassCuration {
         let mut by_task: std::collections::BTreeMap<&str, Vec<(&Pass<'_>, Profile)>> =
             std::collections::BTreeMap::new();
         for pass in passes {
-            let profile = profile(pass.trajectory);
+            let profile = profile(pass.trajectory, &self.ignore_call_arguments);
             if self.final_answer && !profile.final_answer {
                 out.insert(pass.id.clone(), Exclusion::NoFinalAnswer);
                 continue;

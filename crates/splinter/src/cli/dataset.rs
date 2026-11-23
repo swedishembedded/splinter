@@ -244,6 +244,12 @@ pub struct BuildArgs {
     /// `duplicate_pass`. Applied after --final-answer-only.
     #[arg(long)]
     pub distinct_calls: bool,
+    /// For --distinct-calls: an argument name left out when two passes' tool
+    /// calls are compared (repeatable), the free text a call carries beside
+    /// what it does, such as a stated `intent`, which differs between two runs
+    /// that made the same calls. The manifest records the names.
+    #[arg(long, value_name = "NAME", requires = "distinct_calls")]
+    pub ignore_call_argument: Vec<String>,
     /// For the sft-step view: keep at most N passes of each task, the least
     /// reasoning per action first; the rest are counted as `over_task_cap`.
     /// Applied after --distinct-calls. The manifest records the curation.

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (dataset build: `--ignore-call-argument`)
+- `dataset build --distinct-calls --ignore-call-argument NAME` leaves an argument out when two passes' tool calls are compared. The `vim-vim` tool's free-text `intent` made two runs that sent the same commands two demonstrations (4 duplicate records in the published vim set under whole-argument comparison, 13 with `intent` ignored). `PassCuration` carries `ignore_call_arguments` and the manifest records it.
+
 ### Changed (an evaluation counts the trials that never finished)
 - An evaluation arm reports `pass_rate_of_trials` beside `pass_rate`: passed over every trial, a trial that timed out on every retry in the denominator as not passed. The rate over counted trials alone drops exactly the trials a looping policy loses. The report shows both. The paired decision is `Inconclusive` whenever a slot of either arm never counted (`statistics.unpaired_slots`, `incomplete`), where it used to be decided on the slots that finished.
 

@@ -726,7 +726,7 @@ fn manifest(projection: &Projection, format: Format, dataset: &Digest) -> Manife
         terms: projection.terms.clone(),
         split: projection.split_policy(),
         curation: projection.curation.clone(),
-        pass_curation: projection.pass_curation,
+        pass_curation: projection.pass_curation.clone(),
         overlong: projection.overlong,
         partial_credit: projection.partial_credit.clone(),
         pairing: projection.pairing.clone(),

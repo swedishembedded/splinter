@@ -175,6 +175,12 @@ an earlier call of its trajectory with the same result is context and not an
 action to learn (counted as `repeated_action`), so the tail of a loop is
 shown to what follows and never trained.
 
+Passes of one task are alternative solutions only when their tool calls differ. `--distinct-calls` keeps one
+of the passes whose calls (name and arguments, whitespace normalised) are the same, and
+`--ignore-call-argument NAME` (repeatable) leaves an argument out of that comparison: the free text a
+call carries beside what it does, such as a stated `intent`, differs between two runs that made the same calls
+and is no second solution. The manifest records the names.
+
 The sft-step view does not teach reading the repository's history. An action whose tool call
 walks or shows commits (`git log`, `rev-list`, `reflog`, `show`, `blame`, `cat-file`, `fsck`, a
 commit before `HEAD` such as `HEAD~1`) or reads git's storage (`.git/objects`, `.git/refs`,
