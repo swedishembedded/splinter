@@ -19,9 +19,10 @@ use splinter_expdb::model::Entity;
 
 use crate::error::StoreError;
 use crate::workspace::{content_id, put_spilling, Workspace};
+use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::experience::Span;
-use splinter_core::source::{CapturedSource, Source, SourceId};
+use splinter_core::source::{CapturedSource, PartContent, Source, SourceId};
 
 const SOURCE: &str = "source";
 
@@ -79,6 +80,38 @@ impl SourceStore {
             .map(|_| ())
         })?;
         Ok(source.id.clone())
+    }
+
+    /// Copies the source `id` of `other`, with its content, into this
+    /// store, under the same id and capture time: a source is addressed by
+    /// its origin, parts and terms, so the copy is the same source.
+    pub fn copy_from(&self, other: &SourceStore, id: &SourceId) -> Result<SourceId, StoreError> {
+        let source = other.get_source(id)?;
+        let mut parts = Vec::with_capacity(source.parts.len());
+        for part in &source.parts {
+            parts.push(PartContent {
+                name: part.name.clone(),
+                media_type: part.media_type.clone(),
+                bytes: other.read_blob(&part.content)?,
+            });
+        }
+        let mut captured = CapturedSource::new(
+            source.origin.clone(),
+            parts,
+            &FixedClock::new(&source.captured_at),
+        )?;
+        if let Some(terms) = source.terms.clone() {
+            captured = captured.with_terms(terms)?;
+        }
+        let copied = self.put_source(&captured)?;
+        if copied != *id {
+            return Err(StoreError::Altered {
+                what: format!("source {id} copied"),
+                expected: id.0.clone(),
+                found: copied.0,
+            });
+        }
+        Ok(copied)
     }
 
     /// Whether the store holds `id` (without verifying it).

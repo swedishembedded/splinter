@@ -244,3 +244,25 @@ fn a_part_name_appears_once() {
     );
     assert!(matches!(twice, Err(SourceError::DuplicatePart(_))));
 }
+
+#[test]
+fn a_source_copied_between_stores_keeps_its_address_capture_time_and_content() {
+    let (from, into) = (Scratch::new("copy-from"), Scratch::new("copy-into"));
+    let id = from
+        .store()
+        .put_source(&repository("2026-01-02T03:04:05.000Z", "notes"))
+        .unwrap();
+    let copied = into.store().copy_from(&from.store(), &id).unwrap();
+    assert_eq!(copied, id);
+    let (a, b) = (
+        from.store().get_source(&id).unwrap(),
+        into.store().get_source(&id).unwrap(),
+    );
+    assert_eq!(a, b, "the same record, its capture time included");
+    assert_eq!(
+        into.store().read_part(&id, "notes.txt").unwrap(),
+        b"notes".to_vec()
+    );
+    // Copying again finds it there.
+    assert_eq!(into.store().copy_from(&from.store(), &id).unwrap(), id);
+}

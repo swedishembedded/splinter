@@ -25,6 +25,17 @@
 //!   with `reward` and `group`); a group whose attempts all earned the same
 //!   says nothing and is left out.
 //!
+//! * `retrieval` ([`Retrieval`]): each passed experience's question and
+//!   the source passage its evidence names, with the passages other
+//!   experiences rest on as negatives (contrastive triples).
+//!
+//! The corpus is the trials of the `attempts` sources and the experiences
+//! `answer.collect` made in process (`answers`: each item's
+//! `experience-N.json` with its `verdicts-N.json`), whose items' source
+//! stores (`sources/`) are merged into one for the views that read
+//! evidence. A view admits what code decided, a formal comparison or an
+//! executed check, never a judge's opinion.
+//!
 //! Every trial that did not become an experience is listed in
 //! `excluded.jsonl` with why; what a view left out is counted by its reason
 //! in `dataset.json`. Validation holds out whole groups as SFT does; a record
@@ -34,10 +45,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::json;
+use splinter_core::annotation::Annotation;
 use splinter_core::annotation::Strength;
+use splinter_core::experience::{Experience, ExperienceId};
+use splinter_core::factory::items::{ItemIndex, ITEMS_FILE};
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
-use splinter_data::{Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, View};
+use splinter_data::{
+    Corpus, Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, Retrieval, View,
+};
 use splinter_store::factory::products::Staging;
+use splinter_store::sources::SourceStore;
+use splinter_store::workspace::Workspace;
+use splinter_store::StateRoot;
 
 use super::super::corpus::corpus_of;
 use super::super::rollout::trials_of;
@@ -45,10 +64,15 @@ use super::super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use super::{file_ref, group_of, held_out, Accepted, Dataset, Excluded, DATASET_FILE};
 use crate::plan::PlannedStage;
 
-/// The view `dataset`'s objective is projected by.
-fn view_of(dataset: &Dataset) -> Result<(Box<dyn View>, Objective), String> {
-    // A trial's grade is the executable verifier's verdict.
-    let strength = Strength::Executable;
+/// The view `dataset`'s objective is projected by, reading evidence in
+/// `sources`.
+fn view_of<'s>(
+    dataset: &Dataset,
+    sources: &'s SourceStore,
+) -> Result<(Box<dyn View + 's>, Objective), String> {
+    // What code decided: a trial's executed check, an answer's formal
+    // comparison; never a judge's opinion.
+    let strength = Strength::Formal;
     match dataset.objective.as_str() {
         "preference" => {
             let mut view = Preference::new(strength);
@@ -61,6 +85,10 @@ fn view_of(dataset: &Dataset) -> Result<(Box<dyn View>, Objective), String> {
         "policy-gradient" => Ok((
             Box::new(PolicyGradient::new(strength)),
             Objective::PolicyGradient,
+        )),
+        "retrieval" => Ok((
+            Box::new(Retrieval::new(strength, sources)),
+            Objective::Contrastive,
         )),
         other => Err(format!("objective {other} has no view here")),
     }
@@ -109,6 +137,78 @@ fn supervised(record: &Record) -> usize {
     }
 }
 
+/// Where an experience of the corpus came from.
+struct Member {
+    /// The stage that holds it.
+    source: String,
+    /// The trial's slot, or the answer's item and attempt.
+    name: String,
+    /// The task it attempted: what it is held out with.
+    task: String,
+    agent: String,
+    model: Option<String>,
+    guided: bool,
+}
+
+fn read_json<T: serde::de::DeserializeOwned>(path: &std::path::Path) -> Result<T, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Adds the experiences of the `answer.collect` product `source` at `view`
+/// to `corpus`, each with its verdicts, and copies its items' sources into
+/// `store`. How many experiences it held.
+fn add_answers(
+    source: &str,
+    view: &std::path::Path,
+    corpus: &mut Corpus,
+    members: &mut BTreeMap<ExperienceId, Member>,
+    store: &SourceStore,
+) -> Result<usize, String> {
+    let index: ItemIndex = read_json(&view.join(ITEMS_FILE))?;
+    let mut held = 0;
+    for item in &index.items {
+        let dir = view.join(&item.path);
+        let sources = dir.join("sources");
+        if sources.is_dir() {
+            let theirs = SourceStore::new(&Workspace::at(&StateRoot::new(sources)));
+            for id in theirs.list().map_err(|e| e.to_string())? {
+                store.copy_from(&theirs, &id).map_err(|e| e.to_string())?;
+                corpus.add_source(id);
+            }
+        }
+        for attempt in 0.. {
+            let path = dir.join(format!("experience-{attempt}.json"));
+            if !path.is_file() {
+                break;
+            }
+            let experience: Experience = read_json(&path)?;
+            let notes: Vec<Annotation> = read_json(&dir.join(format!("verdicts-{attempt}.json")))?;
+            let id = experience.id().map_err(|e| e.to_string())?;
+            held += 1;
+            if members.contains_key(&id) {
+                continue;
+            }
+            let model = Some(experience.provenance.solver.clone());
+            corpus
+                .insert(experience, notes)
+                .map_err(|e| e.to_string())?;
+            members.insert(
+                id,
+                Member {
+                    source: source.to_owned(),
+                    name: format!("{}#{attempt}", item.id),
+                    task: item.id.clone(),
+                    agent: crate::task_ops::ANSWER.into(),
+                    model,
+                    guided: false,
+                },
+            );
+        }
+    }
+    Ok(held)
+}
+
 pub(super) fn produce(
     factory: &Factory<'_>,
     stage: &PlannedStage,
@@ -116,7 +216,9 @@ pub(super) fn produce(
     dataset: &Dataset,
 ) -> Result<(), RunError> {
     let fail = |why: String| stage_error(&stage.key, why);
-    let (view, objective) = view_of(dataset).map_err(fail)?;
+    let state = tempfile::tempdir().map_err(io(staging.path()))?;
+    let store = SourceStore::new(&Workspace::at(&StateRoot::new(state.path().to_path_buf())));
+    let (view, objective) = view_of(dataset, &store).map_err(fail)?;
     let mut held = Vec::new();
     let mut sources = Vec::new();
     for source in &dataset.sources {
@@ -125,8 +227,40 @@ pub(super) fn produce(
         let trials = trials_of(&at)?;
         held.push((source.clone(), at, trials));
     }
-    let raw: usize = held.iter().map(|(_, _, t)| t.len()).sum();
-    let trials = corpus_of(&held).map_err(fail)?;
+    let mut raw: usize = held.iter().map(|(_, _, t)| t.len()).sum();
+    let mut trials = corpus_of(&held).map_err(fail)?;
+    let mut members: BTreeMap<ExperienceId, Member> = trials
+        .trials
+        .iter()
+        .map(|(id, (source, trial))| {
+            let agent = format!(
+                "{}{} {}",
+                if trial.guided { "guided " } else { "" },
+                trial.agent.name,
+                trial.agent.version.as_deref().unwrap_or("?")
+            );
+            let member = Member {
+                source: source.clone(),
+                name: trial.slot.to_string(),
+                task: trial.task.clone(),
+                agent,
+                model: trial.model.clone(),
+                guided: trial.guided,
+            };
+            (id.clone(), member)
+        })
+        .collect();
+    for source in &dataset.answers {
+        sources.push(factory.product(source)?.1.digest());
+        raw += add_answers(
+            source,
+            &factory.view(source),
+            &mut trials.corpus,
+            &mut members,
+            &store,
+        )
+        .map_err(fail)?;
+    }
     let mut projection = view
         .project(&trials.corpus)
         .map_err(|e| fail(e.to_string()))?;
@@ -150,24 +284,25 @@ pub(super) fn produce(
     }
     if projection.records.is_empty() {
         return Err(fail(format!(
-            "no record of {raw} trials; the {} view left out {:?}",
+            "no record of {raw} attempts; the {} view left out {:?}",
             view.name(),
             projection.excluded
         )));
     }
-    // Each record's trials, in the order the record names their experiences.
-    let of = |record: &Record| -> Vec<&(String, splinter_core::factory::product::TrialResult)> {
+    // Each record's attempts, in the order the record names their
+    // experiences.
+    let of = |record: &Record| -> Vec<&Member> {
         record
             .metadata
             .experiences
             .iter()
-            .filter_map(|id| trials.trials.get(id))
+            .filter_map(|id| members.get(id))
             .collect()
     };
     let group = |record: &Record| {
         of(record)
             .first()
-            .map(|(_, trial)| group_of(factory, dataset, &trial.task))
+            .map(|member| group_of(factory, dataset, &member.task))
             .unwrap_or_default()
     };
     let groups: BTreeSet<String> = projection.records.iter().map(group).collect();
@@ -195,30 +330,25 @@ pub(super) fn produce(
         let index = lines.len();
         lines.push(line);
         let made_of = of(record);
-        for (source, trial) in &made_of {
+        for member in &made_of {
             sides
-                .entry(group_of(factory, dataset, &trial.task))
+                .entry(group_of(factory, dataset, &member.task))
                 .or_default()
                 .insert(split);
             accepted.push(Accepted {
-                pass: source.clone(),
-                slot: trial.slot.to_string(),
-                task: trial.task.clone(),
-                agent: format!(
-                    "{}{} {}",
-                    if trial.guided { "guided " } else { "" },
-                    trial.agent.name,
-                    trial.agent.version.as_deref().unwrap_or("?")
-                ),
-                model: trial.model.clone(),
+                pass: member.source.clone(),
+                slot: member.name.clone(),
+                task: member.task.clone(),
+                agent: member.agent.clone(),
+                model: member.model.clone(),
                 actions: supervised(record),
                 split: split.into(),
-                guided: trial.guided,
+                guided: member.guided,
             });
         }
         let named: Vec<_> = made_of
             .iter()
-            .map(|(source, trial)| json!({ "pass": source, "slot": trial.slot.to_string(), "task": trial.task }))
+            .map(|m| json!({ "pass": m.source, "slot": m.name, "task": m.task }))
             .collect();
         supervision.push(json!({ "split": split, "line": index, "trials": named }));
     }
@@ -256,12 +386,12 @@ pub(super) fn produce(
     }
     let waterfall = vec![
         WaterfallStep {
-            step: "raw_trials".into(),
+            step: "attempts".into(),
             remaining: raw as u64,
         },
         WaterfallStep {
             step: "experiences".into(),
-            remaining: trials.trials.len() as u64,
+            remaining: members.len() as u64,
         },
         WaterfallStep {
             step: "records".into(),

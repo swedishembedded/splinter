@@ -31,7 +31,8 @@
 //!   grades only where one is given, and none is here; a kind solved in a
 //!   workspace, or graded by a check whose evidence or runtime is not
 //!   there, is rejected by name. The item holds each attempt's
-//!   `experience-N.json` and `verdicts-N.json`.
+//!   `experience-N.json` and `verdicts-N.json`, and the task's `sources/`,
+//!   so the answers carry the evidence they were graded against.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -480,6 +481,11 @@ impl Execute for Answer {
         .map_err(|e| e.to_string())?;
         let stored = dir.join(SOURCES_DIR);
         let sources = stored.is_dir().then(|| source_store(&stored));
+        if stored.is_dir() {
+            // The answers keep the evidence they are graded against.
+            crate::tree::link_tree(&stored, &call.out.join(SOURCES_DIR))
+                .map_err(|e| e.to_string())?;
+        }
         let scratch = tempfile::tempdir().map_err(|e| e.to_string())?;
         let grading = match grading(&task, sources.as_ref(), scratch.path()) {
             Ok(grading) => grading,

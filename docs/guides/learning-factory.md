@@ -101,7 +101,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional) | `attempts` |
 | `attempt.import` | `tasks`, `jobs` (Harbor job directories, recipe inputs) | `attempts` |
 | `dataset.import` | `records` (a recipe input) | `dataset` |
-| `dataset.project` | `attempts` (one or more) | `dataset` |
+| `dataset.project` | `attempts`, `answers` (one or more of either) | `dataset` |
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `dataset.text` | `documents` (a recipe input) | `dataset` |
 | `model.train` | `dataset` | `model` |
@@ -504,7 +504,11 @@ compiles its collection evaluates on the same compiled tasks:
   their conversations part: the shared prompt is never trained on
   (`preference: { pairs_per_task: N }` bounds a task's pairs, drawn by the
   seed). A feedback record (KTO) is one verified attempt's continuation,
-  desirable when it passed. A policy-gradient record is an action of a graded attempt carrying
+  desirable when it passed. `objective: retrieval` makes contrastive triples:
+  a passed experience's question, the source passage its evidence names, and
+  the passages other experiences rest on as negatives. These objectives also
+  read `answers`: the experiences `answer.collect` made in process, each with
+  its verdicts and the sources its evidence is in. A policy-gradient record is an action of a graded attempt carrying
   the attempt's reward and its group; a group whose attempts all earned the
   same is left out. Hinted, continued and harnessed attempts are refused: they
   would teach what the target is never shown. `model.train` trains SFT

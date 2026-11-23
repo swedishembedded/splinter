@@ -280,3 +280,56 @@ fn fixed_code_is_graded_by_running_its_checks_in_its_runtime() {
         "fail"
     );
 }
+
+/// The in-process answers are experiences like any attempt's: projected by
+/// the same views, a passed answer's task gives a retrieval record of its
+/// question and the passage of the letter it rests on.
+#[test]
+fn answered_tasks_give_a_retrieval_dataset_of_the_passages_they_rest_on() {
+    // seed: a dataset stage states its seed; one record has no split to draw.
+    let recipe = ADVISED.to_owned()
+        + "  - id: retrieval
+    uses: dataset.project
+    inputs: { answers: [$stages.answered.answers] }
+    with: { objective: retrieval, target: student, seed: 13 }
+";
+    let repo = Repo::new();
+    repo.write("letters/letter.md", LETTER);
+    let question = "I am nineteen and have finished my first year at college, but I find my mornings slip away in idleness; what would you advise me to do about my habits?";
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": question,
+        "reference": ADVICE,
+        "evidence": [{ "section": 2, "quote": ADVICE }],
+    }]});
+    let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let classroom = Classroom {
+        teacher: Arc::new(Answering(Mutex::new(proposal.to_string()))),
+        student: Arc::new(Answering(Mutex::new(format!(
+            "As I wrote to you: \"{ADVICE}\""
+        )))),
+    };
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: Some(&classroom),
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let text = std::fs::read_to_string(dir.path().join("retrieval/train.jsonl")).unwrap();
+    let records: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(records.len(), 1, "{text}");
+    let record = records[0].to_string();
+    assert!(record.contains("mornings slip away"), "{record}");
+    assert!(
+        record.contains("fix a habit of study every morning"),
+        "{record}"
+    );
+}

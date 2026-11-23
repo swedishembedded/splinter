@@ -111,6 +111,8 @@ pub struct Excluded {
 struct Dataset {
     name: String,
     sources: Vec<String>,
+    /// `answer.collect` products, projected by a view's objective.
+    answers: Vec<String>,
     objective: String,
     admission: String,
     projection: String,
@@ -138,6 +140,11 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         name: stage.key.clone(),
         sources: stage
             .sources("attempts")
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        answers: stage
+            .sources("answers")
             .into_iter()
             .map(str::to_owned)
             .collect(),
@@ -184,7 +191,7 @@ pub(crate) fn identity(
         ));
     }
     let mut inputs = Vec::new();
-    for source in &dataset.sources {
+    for source in dataset.sources.iter().chain(&dataset.answers) {
         inputs.push((source.clone(), factory.product(source)?.1.digest()));
     }
     let trainer = factory

@@ -104,8 +104,15 @@ pub(crate) fn projection_problems(
     compiled: &CompiledPlan,
 ) -> Vec<String> {
     let mut out = Vec::new();
-    if stage.sources("attempts").is_empty() {
-        out.push("projects no attempts".to_owned());
+    let answers = !stage.sources("answers").is_empty();
+    if stage.sources("attempts").is_empty() && !answers {
+        out.push("projects no attempts and no answers".to_owned());
+    }
+    if answers && params.objective == "sft" {
+        out.push(
+            "an SFT dataset projects attempts; answers are projected by a view's objective"
+                .to_owned(),
+        );
     }
     if params.validation.as_ref().is_some_and(|v| v.percent >= 100) {
         out.push("holds out every record for validation".to_owned());

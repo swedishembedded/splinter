@@ -14,7 +14,7 @@
 //! | `attempt.collect` | `tasks`, `unsolved_by`, `solved_by` (attempts, optional, many), `briefs` (optional) | `attempts` |
 //! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
 //! | `dataset.import` | `records` (files) | `dataset` |
-//! | `dataset.project` | `attempts` (many) | `dataset` |
+//! | `dataset.project` | `attempts`, `answers` (many, optional) | `dataset` |
 //! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 //! | `dataset.text` | `documents` (files) | `dataset` |
 //! | `model.train` | `dataset` | `model` |
@@ -245,7 +245,13 @@ pub struct ValidationSplit {
 }
 
 /// The objectives `dataset.project` projects attempts for.
-pub const OBJECTIVES: &[&str] = &["sft", "preference", "feedback", "policy-gradient"];
+pub const OBJECTIVES: &[&str] = &[
+    "sft",
+    "preference",
+    "feedback",
+    "policy-gradient",
+    "retrieval",
+];
 
 /// How a preference dataset pairs attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -261,7 +267,8 @@ pub struct PreferenceOptions {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectParams {
-    /// The objective (`sft`, `preference`, `feedback`, `policy-gradient`).
+    /// The objective (`sft`, `preference`, `feedback`, `policy-gradient`,
+    /// `retrieval`).
     #[serde(default = "sft")]
     pub objective: String,
     /// The admission rule of an SFT dataset.
@@ -530,11 +537,19 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<ProjectParams> {
             name: names::PROJECT,
-            summary: "project attempts into training records",
-            inputs: vec![Port {
-                many: true,
-                ..port("attempts", ArtifactKind::Attempts)
-            }],
+            summary: "project attempts, or answers made in process, into training records",
+            inputs: vec![
+                Port {
+                    many: true,
+                    optional: true,
+                    ..port("attempts", ArtifactKind::Attempts)
+                },
+                Port {
+                    many: true,
+                    optional: true,
+                    ..port("answers", ArtifactKind::Files)
+                },
+            ],
             output: port("dataset", ArtifactKind::Dataset),
             reproducibility: Reproducibility::Seeded,
             isolation: Isolation::Any,
