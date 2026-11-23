@@ -13,7 +13,8 @@
 //! directory on shared storage only ever holds a stage's single archive.
 //!
 //! It is one private directory (mode 700) per process, under a memory-backed
-//! file system by default, created when the run opens and removed when it
+//! file system by default (when that file system lets programs run: agent
+//! workspaces run their helpers, and a container may mount it `noexec`), created when the run opens and removed when it
 //! ends, a panic's unwinding included. Nothing in it is needed to resume: a
 //! run killed outright leaves its archives, which hold every finished
 //! episode, and the next run unpacks what it needs into its own scratch.
@@ -34,14 +35,11 @@ pub struct Scratch {
 
 impl Scratch {
     /// Where scratch goes when none is named: the memory-backed file system
-    /// when the machine has one, else `scratch` in the run directory.
+    /// when the machine has one that lets programs run, else `scratch` in
+    /// the run directory.
     #[must_use]
     pub fn default_root(run_dir: &Path) -> PathBuf {
-        if Path::new(MEMORY).is_dir() {
-            PathBuf::from(MEMORY)
-        } else {
-            run_dir.join("scratch")
-        }
+        memory_root().unwrap_or_else(|| run_dir.join("scratch"))
     }
 
     /// A new private scratch directory under `root` for the run in
@@ -89,6 +87,32 @@ impl Scratch {
     }
 }
 
+/// The memory-backed file system, when the machine has one that lets
+/// programs run.
+#[must_use]
+pub fn memory_root() -> Option<PathBuf> {
+    let mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
+    let memory = Path::new(MEMORY);
+    (memory.is_dir() && runs_programs(&mounts, memory)).then(|| memory.to_path_buf())
+}
+
+/// Whether the file system `path` is on lets programs run, as `mounts` (the
+/// text of `/proc/mounts`) says: the mount whose point is the longest
+/// prefix of `path` is not `noexec`. Without a mount table, it is assumed
+/// to.
+fn runs_programs(mounts: &str, path: &Path) -> bool {
+    mounts
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let point = fields.nth(1)?;
+            let options = fields.nth(1)?;
+            path.starts_with(point).then_some((point.len(), options))
+        })
+        .max_by_key(|(len, _)| *len)
+        .is_none_or(|(_, options)| !options.split(',').any(|o| o == "noexec"))
+}
+
 impl Drop for Scratch {
     fn drop(&mut self) {
         // Best effort: what is left behind is in memory, and the next run
@@ -100,6 +124,17 @@ impl Drop for Scratch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scratch_goes_only_where_programs_may_run() {
+        let mounts = "overlay / overlay rw,relatime 0 0\n\
+                      shm /dev/shm tmpfs rw,nosuid,nodev,noexec,relatime 0 0\n";
+        assert!(!runs_programs(mounts, Path::new("/dev/shm")));
+        assert!(runs_programs(mounts, Path::new("/tmp")));
+        let open = "shm /dev/shm tmpfs rw,nosuid,nodev,relatime 0 0\n";
+        assert!(runs_programs(open, Path::new("/dev/shm")));
+        assert!(runs_programs("", Path::new("/dev/shm")), "no mount table");
+    }
 
     #[test]
     fn scratch_is_private_and_gone_when_the_run_ends() {

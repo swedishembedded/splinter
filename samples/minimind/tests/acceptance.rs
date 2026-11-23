@@ -24,12 +24,7 @@ use splinter_sdk::store::stage_ledger::{Commit, StageLedger};
 /// A directory for one spec, in memory when the machine has a memory-backed
 /// file system, removed when the spec ends, a failing one included.
 fn temp() -> tempfile::TempDir {
-    let memory = Path::new("/dev/shm");
-    let root = if memory.is_dir() {
-        memory.to_path_buf()
-    } else {
-        std::env::temp_dir()
-    };
+    let root = splinter_minimind::scratch::memory_root().unwrap_or_else(std::env::temp_dir);
     tempfile::Builder::new()
         .prefix("minimind-spec-")
         .tempdir_in(root)
