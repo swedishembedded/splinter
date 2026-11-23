@@ -35,13 +35,10 @@ use splinter_eval::verifiers::calibration::{
     calibrate, CalibratedJudge, Calibration, DEFAULT_MIN_PRECISION,
 };
 use splinter_eval::verifiers::consistency::AgreementVerifier;
-use splinter_eval::verifiers::executable::ExecutableVerifier;
-use splinter_eval::verifiers::grounding::{GroundingPolicy, GroundingVerifier};
-use splinter_eval::verifiers::mutation::{MutationPolicy, MutationValidatedVerifier};
+use splinter_eval::verifiers::grounding::GroundingVerifier;
 use splinter_eval::verifiers::normalise::Normalisation;
-use splinter_eval::verifiers::quotation::{QuotationPolicy, QuotationVerifier, StoredEvidence};
 use splinter_eval::verifiers::{verify_and_annotate, Strongest, Verifier};
-use splinter_knowledge::tasks::verifiers::plain_verifier;
+use splinter_knowledge::tasks::verifiers::{evidence_verifier, plain_verifier, runtime_verifier};
 use splinter_knowledge::tasks::{Catalogue, VerifierKind};
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_model::Sampling;
@@ -50,30 +47,6 @@ use splinter_store::experiences::SetId;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
-
-/// The producer of the quotation verifier's verdicts.
-pub const QUOTATION_PRODUCER: &str = "splinter-lab/quotation";
-
-/// The quotation verifier's version: bumped with its policy or the way it
-/// reads a quotation.
-pub const QUOTATION_VERSION: &str = "1";
-
-/// The fewest words a quoted passage runs to count as a claim to a passage.
-pub const QUOTATION_MIN_WORDS: usize = 8;
-
-/// The share of the reference advice an answer must reproduce.
-pub const QUOTATION_MIN_RECALL: f64 = 0.5;
-
-/// Who the grounding verdicts name as their producer.
-pub const GROUNDING_PRODUCER: &str = "splinter-lab/grounding";
-
-/// The version of the grounding check; a changed check carries a new one.
-pub const GROUNDING_VERSION: &str = "1";
-
-/// The proper names a dialogue may state that nothing in its source grounds:
-/// the check cannot tell a form of address or a common name from a person,
-/// and one stray name is not the invented specifics it exists to refuse.
-pub const GROUNDING_MAX_NAMES: usize = 1;
 
 /// How long a judge may take over one answer.
 pub const DEFAULT_JUDGE_DEADLINE: Duration = Duration::from_secs(120);
@@ -388,17 +361,7 @@ pub(crate) fn store_calibration(
 
 /// The grounding check as every grade of a dialogue or an exam applies it.
 pub(crate) fn grounding_verifier(ctx: &Context) -> GroundingVerifier {
-    GroundingVerifier::new(
-        Producer {
-            name: GROUNDING_PRODUCER.into(),
-            version: GROUNDING_VERSION.into(),
-        },
-        Box::new(StoredEvidence::new(ctx.sources())),
-        GroundingPolicy {
-            max_ungrounded_names: GROUNDING_MAX_NAMES,
-            min_quote_words: QUOTATION_MIN_WORDS,
-        },
-    )
+    splinter_knowledge::tasks::verifiers::grounding_verifier(ctx.sources())
 }
 
 /// The verifiers that grade answers to `task`: its kind's, in the
@@ -447,12 +410,9 @@ pub(crate) fn verifiers_for(
             | VerifierKind::Speech
             | VerifierKind::FinalNumber
             | VerifierKind::LineCount => {}
-            VerifierKind::Executable => {
-                verifiers.push(Box::new(ExecutableVerifier::new(runtimes())));
+            VerifierKind::Executable | VerifierKind::MutationValidated => {
+                verifiers.extend(runtime_verifier(*verifier, runtimes()));
             }
-            VerifierKind::MutationValidated => verifiers.push(Box::new(
-                MutationValidatedVerifier::new(runtimes(), MutationPolicy::default()),
-            )),
             VerifierKind::Workspace => {
                 verifiers.extend(crate::workspace_verify::verifiers(ctx, task)?);
             }
@@ -460,18 +420,9 @@ pub(crate) fn verifiers_for(
                 pool.to_vec(),
                 Normalisation::LENIENT,
             ))),
-            VerifierKind::Quotation => verifiers.push(Box::new(QuotationVerifier::new(
-                Producer {
-                    name: QUOTATION_PRODUCER.into(),
-                    version: QUOTATION_VERSION.into(),
-                },
-                Box::new(StoredEvidence::new(ctx.sources())),
-                QuotationPolicy {
-                    min_words: QUOTATION_MIN_WORDS,
-                    min_reference_recall: QUOTATION_MIN_RECALL,
-                },
-            ))),
-            VerifierKind::Grounding => verifiers.push(Box::new(grounding_verifier(ctx))),
+            VerifierKind::Quotation | VerifierKind::Grounding => {
+                verifiers.extend(evidence_verifier(*verifier, &ctx.sources()));
+            }
             VerifierKind::Judged => {
                 if let Some(judge) = judge {
                     verifiers.push(judge.verifier(ctx)?);
