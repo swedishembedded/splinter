@@ -45,6 +45,7 @@ pub mod grants;
 pub mod graph;
 pub mod harness_op;
 pub mod hint;
+pub mod knowledge_ops;
 pub mod ops;
 pub mod plan;
 pub mod recipe;

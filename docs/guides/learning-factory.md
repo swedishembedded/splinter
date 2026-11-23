@@ -109,6 +109,8 @@ outputs: { dataset: $stages.sft.dataset }
 | `agent` | `input` (files, one or more) | `output` |
 | `harness` | `input` (files, any number) | `output` |
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
+| `source.ingest` | `documents` (files) | `sections` |
+| `knowledge.admit` | `sections`, `proposals` | `knowledge` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -278,6 +280,33 @@ as an attempt stage's `harness:`.
     foreach: $inputs.notes
     inputs: { input: $item }
     with: { harness: harnesses/summary.yaml, model: writer }
+```
+
+## Knowledge from documents
+
+`source.ingest` splits each document of its input into sections (at headings
+for Markdown, at blank lines otherwise), one item per section holding its
+`text.md` and `source.json` (the document, its title, the section's number and
+byte range, the document's digest). An `agent` stage over the sections proposes
+typed knowledge, each object with the quote it rests on
+(`{ "objects": [{ "id", "kind", "document", "quote", "data" }] }`), and
+`knowledge.admit` keeps only what the sections state: an object stands when its
+quote is in its section verbatim, its data has its kind's keys, its numbers and
+values are in its quote (a fact's key in the quote's own words, `attribute |
+entity`); conflicts are flagged, amendments resolved, every refusal kept with its
+reason, in the pack `pack.json`.
+
+```yaml
+  - { id: sections, uses: source.ingest, inputs: { documents: $inputs.docs } }
+  - id: proposed
+    uses: agent
+    foreach: $stages.sections.sections
+    inputs: { input: $item }
+    with: { instruction: prompts/extract.md, output_schema: schemas/objects.json, model: teacher }
+  - id: knowledge
+    uses: knowledge.admit
+    inputs: { sections: $stages.sections.sections, proposals: $stages.proposed.output }
+    with: { pack: shop-policy }
 ```
 
 ## The task repository's own operators

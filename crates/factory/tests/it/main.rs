@@ -22,6 +22,7 @@ mod harness_pass;
 mod hinted;
 mod import;
 mod interventions;
+mod knowledge;
 mod native;
 mod repo;
 mod resolve;

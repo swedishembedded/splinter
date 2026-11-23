@@ -5144,6 +5144,7 @@ dependencies = [
  "splinter-core",
  "splinter-data",
  "splinter-eval",
+ "splinter-knowledge",
  "splinter-model",
  "splinter-sandbox",
  "splinter-store",

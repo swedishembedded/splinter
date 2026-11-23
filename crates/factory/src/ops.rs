@@ -385,6 +385,8 @@ pub fn registry() -> Registry {
         .with(crate::agent_op::Agent)
         .with(crate::failures_op::Failures)
         .with(crate::harness_op::HarnessOp)
+        .with(crate::knowledge_ops::Ingest)
+        .with(crate::knowledge_ops::Admit)
         .with(Builtin::<PinParams> {
             name: names::PIN,
             summary: "pin a collection's tasks (one split) into the run",
