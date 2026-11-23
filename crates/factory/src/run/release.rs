@@ -15,17 +15,29 @@
 //! candidate. With `promote: false` the run is an experiment: nothing is
 //! promoted whatever the verdicts.
 //!
-//! The product holds `release.json`.
+//! The release also names the champion the run leaves in use, which a
+//! later generation's recipe names `champion:RUN` ([`crate::champion`]):
+//! the promoted candidate; else the evaluation's baseline, kept (a champion
+//! baseline stays the champion). A trained champion's adapter is copied
+//! into the product, so the record is whole without the run's other
+//! products.
+//!
+//! The product holds `release.json` and the champion's adapter.
+
+use std::path::PathBuf;
 
 use serde_json::json;
+use splinter_core::digest::Digest;
 use splinter_core::factory::identity::{StageIdentity, StageKind};
 use splinter_core::factory::product::Decision;
 use splinter_store::factory::products::Staging;
 
 use super::eval::result_of;
 use super::training::candidate_of;
-use super::{write_json, Factory, RunError};
+use super::{io, stage_error, write_json, Factory, RunError};
+use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE};
 use crate::plan::{stage_key, PlannedStage};
+use crate::recipe::ModelRef;
 
 /// The release decision in a release product.
 pub const RELEASE_FILE: &str = "release.json";
@@ -44,10 +56,11 @@ pub(crate) fn identity(
         .release
         .as_ref()
         .is_some_and(|r| r.promote);
+    let kept = kept_champion(factory, &stage.key)?;
     Ok(super::identity_of(
         StageKind::Release,
         &stage.name,
-        json!({ "promote": promote }),
+        json!({ "promote": promote, "kept": kept.0, "kept_digest": kept.1.map(|c| c.digest) }),
         inputs,
         "",
         None,
@@ -94,8 +107,80 @@ pub(crate) fn produce(
     } else {
         None
     };
+    let champion = match &promoted {
+        Some(name) => {
+            let view = factory.view(&stage_key(StageKind::Training, name));
+            let candidate = candidate_of(&view)?;
+            let adapter = candidate
+                .artifacts
+                .iter()
+                .find(|a| a.path.ends_with(".safetensors"))
+                .map(|a| (view.join(&a.path), a.digest.clone()));
+            let base = super::eval::training_base(factory, &stage.key)?.clone();
+            champion_record(staging, base, adapter, Some(name.clone()))?
+        }
+        None => match kept_champion(factory, &stage.key)? {
+            (_, Some(kept)) => champion_record(
+                staging,
+                kept.record.base.clone(),
+                kept.adapter.clone().zip(kept.record.adapter_digest.clone()),
+                kept.record.candidate.clone(),
+            )?,
+            (base, None) => champion_record(staging, base, None, None)?,
+        },
+    };
     write_json(
         &staging.path().join(RELEASE_FILE),
-        &json!({ "schema": "splinter.release/1", "promote": promote, "promoted": promoted, "candidates": candidates }),
+        &json!({
+            "schema": "splinter.release/1", "promote": promote, "promoted": promoted,
+            "candidates": candidates, "champion": champion,
+        }),
     )
+}
+
+/// The model the run keeps when it promotes nothing: the evaluation's
+/// baseline (a champion, resolved), else the base its variants train from.
+fn kept_champion(
+    factory: &Factory<'_>,
+    key: &str,
+) -> Result<(ModelRef, Option<Champion>), RunError> {
+    let recipe = &factory.resolved.recipe;
+    let model = match (&recipe.eval, &recipe.training) {
+        (Some(eval), _) => eval.baseline.clone(),
+        (None, Some(training)) => training.base.clone(),
+        (None, None) => {
+            return Err(stage_error(
+                key,
+                "a release decides about trained candidates",
+            ))
+        }
+    };
+    let champion = factory.resolved.champions.get(&model.to_string()).cloned();
+    Ok((model, champion))
+}
+
+/// A champion record, its adapter copied into the release product.
+fn champion_record(
+    staging: &Staging,
+    base: ModelRef,
+    adapter: Option<(PathBuf, Digest)>,
+    candidate: Option<String>,
+) -> Result<ChampionRecord, RunError> {
+    let (adapter, adapter_digest) = match adapter {
+        Some((source, digest)) => {
+            let target = staging.path().join(ADAPTER_FILE);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).map_err(io(parent))?;
+            }
+            std::fs::copy(&source, &target).map_err(io(&source))?;
+            (Some(ADAPTER_FILE.to_owned()), Some(digest))
+        }
+        None => (None, None),
+    };
+    Ok(ChampionRecord {
+        base,
+        adapter,
+        adapter_digest,
+        candidate,
+    })
 }

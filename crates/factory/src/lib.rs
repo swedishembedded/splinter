@@ -19,11 +19,14 @@
 //! * [`run`] - the controller over one run directory, and every stage.
 //! * [`backend`] and [`training`] - the seams to the execution worker and
 //!   the training engine.
+//! * [`champion`] - the model a finished run leaves in use, as a later
+//!   recipe's `champion:RUN`.
 //! * [`tree`] - the digest of a directory tree.
 
 #![warn(missing_docs)]
 
 pub mod backend;
+pub mod champion;
 pub mod collection;
 pub mod connections;
 pub mod environment;

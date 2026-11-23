@@ -122,7 +122,7 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   verdict only when its signature verifies under the public key and it is about
   this candidate against the base at the plan's level.
 - **Release.** Records every decision; with `promote: true` it promotes the best
-  improved candidate.
+  improved candidate. It names the champion the run leaves in use (below).
 
 ## Changing an experiment
 
@@ -133,6 +133,38 @@ recipe and fork the run: every product the change leaves alone is reused.
 splinter fork runs/vim-mastery --recipe recipes/vim-mastery-r32.yaml --out runs/vim-mastery-r32
 splinter eval runs/vim-mastery --plan eval/vim-sealed.yaml --out runs/vim-mastery-sealed
 ```
+
+## Generations
+
+A campaign of generations is a chain of forked runs, each held to the champion
+before it. A run's release names the champion it leaves in use: the candidate
+it promoted, else the model it was measured against. A trained champion's
+adapter is kept in the release product. The next generation's recipe is the
+last one with one more pass, in which the champion attempts what no earlier
+pass solved, and with the champion as the baseline to beat:
+
+```yaml
+rollouts:
+  # ... every pass of the generation before, unchanged, so the fork reuses them ...
+  - { name: g2, agent: sven, model: "champion:runs/vim-g1",
+      environment: environments/vim/environment.yaml,
+      tasks: { unsolved_by: [local, hosted] }, attempts: 4, seed: 21 }
+dataset: { name: sft, sources: [local, hosted, g2], target: "brain:Qwen/Qwen3-4B", seed: 3 }
+eval: { plan: eval/vim-dev.yaml, agent: sven, baseline: "champion:runs/vim-g1", candidates: [lora-r16] }
+release: { promote: true }
+```
+
+```sh
+splinter fork runs/vim-g1 --recipe recipes/vim-g2.yaml --out runs/vim-g2
+```
+
+`champion:RUN` names the run directory, relative to the task repository or
+absolute. The champion is served from its base and adapter wherever an agent's
+model goes, and it is never trained from: every variant trains from the base
+model on the data of every generation so far. A protected plan hands the
+champion to its examiner as the predecessor (`--predecessor FILE`), and keeps
+the verdict only when it is about that predecessor. A changed champion is a
+changed input like any other.
 
 `splinter index RUN` files a run's trials in the experience database, an
 optional index across runs (each trial an experience with the factory's grade as

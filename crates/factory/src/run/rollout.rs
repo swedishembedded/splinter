@@ -59,8 +59,9 @@ use splinter_store::factory::runstate::{AttemptRecord, AttemptState, SlotState};
 
 use super::{io, read_lines, stage_error, write_lines, Factory, RunError};
 use crate::backend::Batch;
+use crate::champion::{Champion, CHAMPION};
 use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::RolloutPass;
+use crate::recipe::{ModelRef, RolloutPass};
 use crate::tree::{link_tree, tree_digest};
 
 /// The trials of a rollout product.
@@ -102,8 +103,55 @@ pub(crate) struct Arm<'r> {
     pub tasks: Vec<&'r TaskRef>,
     /// The directory the task ids are relative to (a tasks product view).
     pub task_root: PathBuf,
-    /// The model.
+    /// The model, as the arm's identity sees it: a champion by its digest.
     pub model: Option<ModelBinding>,
+    /// The champion the model is, served when the arm runs.
+    pub champion: Option<Champion>,
+}
+
+/// The binding a stage's identity sees for `model`, and the champion it is:
+/// a connection's model as named; a champion as its base's connection and
+/// its digest, since the id it is served under is the server's to choose.
+pub(crate) fn binding_of(
+    factory: &Factory<'_>,
+    key: &str,
+    model: &ModelRef,
+) -> Result<(ModelBinding, Option<Champion>), RunError> {
+    let Some(champion) = factory.resolved.champions.get(&model.to_string()) else {
+        let binding = factory
+            .resolved
+            .connections
+            .bind(model)
+            .map_err(|e| stage_error(key, e))?;
+        return Ok((binding, None));
+    };
+    let mut binding = factory
+        .resolved
+        .connections
+        .bind(&champion.record.base)
+        .map_err(|e| stage_error(key, e))?;
+    // By content, not by where its run is: the same champion is the same input.
+    binding.model = format!("{CHAMPION}@{}", champion.digest.hex());
+    Ok((binding, Some(champion.clone())))
+}
+
+/// The binding an arm's agent is given: a champion served from its base and
+/// adapter through the trainer.
+fn served(factory: &Factory<'_>, arm: &Arm<'_>) -> Result<Option<ModelBinding>, RunError> {
+    let (Some(champion), Some(binding)) = (&arm.champion, &arm.model) else {
+        return Ok(arm.model.clone());
+    };
+    let trainer = factory
+        .services
+        .trainer
+        .ok_or_else(|| stage_error(&arm.key, "a champion is served through the trainer"))?;
+    let id = trainer
+        .serve(&champion.record.base, champion.adapter.as_deref())
+        .map_err(|e| stage_error(&arm.key, e))?;
+    Ok(Some(ModelBinding {
+        model: id,
+        ..binding.clone()
+    }))
 }
 
 /// A file pinned by its SHA-256, which the worker checks before it runs.
@@ -237,12 +285,13 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
             .filter(|t| wanted.contains(t.id.as_str()))
             .collect()
     };
-    let model = pass
-        .model
-        .as_ref()
-        .map(|m| factory.resolved.connections.bind(m))
-        .transpose()
-        .map_err(|e| stage_error(&stage.key, e))?;
+    let (model, champion) = match &pass.model {
+        Some(m) => {
+            let (binding, champion) = binding_of(factory, &stage.key, m)?;
+            (Some(binding), champion)
+        }
+        None => (None, None),
+    };
     Ok(Arm {
         name: pass.name.clone(),
         key: stage.key.clone(),
@@ -250,6 +299,7 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
         tasks: selected,
         task_root: factory.view("tasks"),
         model,
+        champion,
     })
 }
 
@@ -300,6 +350,8 @@ pub(crate) struct Running<'a, 'r> {
     pub(crate) arm: &'a Arm<'r>,
     pub(crate) work: PathBuf,
     tasks: BTreeMap<String, &'r TaskRef>,
+    /// The model the agent is given (a champion, served).
+    model: Option<ModelBinding>,
     agent: AgentInvocation,
     sandbox: SandboxSpec,
     policy: GradingPolicy,
@@ -318,6 +370,7 @@ impl<'a, 'r> Running<'a, 'r> {
             arm,
             work,
             tasks: arm.tasks.iter().map(|t| (t.id.clone(), *t)).collect(),
+            model: served(factory, arm)?,
             agent: arm.invocation(factory)?,
             sandbox,
             policy: GradingPolicy {
@@ -338,7 +391,7 @@ impl Running<'_, '_> {
             task: task.clone(),
             task_dir: task.id.clone(),
             agent: self.agent.clone(),
-            model: self.arm.model.clone(),
+            model: self.model.clone(),
             sandbox: self.sandbox.clone(),
             seed: digest_of(&(self.arm.pass.seed, &slot.task, slot.slot, attempt)).leading_u64(),
             budget: self.arm.pass.budget,
@@ -386,7 +439,7 @@ impl Running<'_, '_> {
                 version: report.agent_version.clone(),
                 invocation: digest_of(&self.agent),
             },
-            model: self.arm.model.as_ref().map(ModelBinding::reference),
+            model: self.model.as_ref().map(ModelBinding::reference),
             grade: grade(&report.evidence, &self.policy),
             trace: report.trace.as_deref().map(pinned).transpose()?,
             native_dir: format!("{prefix}/{}", report.native_dir),

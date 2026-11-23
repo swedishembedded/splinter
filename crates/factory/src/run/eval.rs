@@ -47,7 +47,7 @@ use super::training::candidate_of;
 use super::{io, read_json, stage_error, write_json, Factory, RunError};
 use crate::eval_plan::EvalPlan;
 use crate::plan::{stage_key, PlannedStage};
-use crate::recipe::{EvalSection, RolloutPass, TaskSelector};
+use crate::recipe::{EvalSection, ModelRef, RolloutPass, TaskSelector};
 use crate::tree::link_tree;
 
 /// The evaluation result in an eval product.
@@ -136,7 +136,7 @@ pub(crate) fn identity(
         .unwrap_or(section.candidates.len() as u32);
     let parameters = json!({
         "plan": plan_digest(factory, section)?, "agent": section.agent, "args": section.args,
-        "baseline": section.baseline, "comparisons": comparisons,
+        "baseline": super::rollout::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
     });
     let backend = if plan.protected() {
         String::new()
@@ -296,11 +296,8 @@ pub(crate) fn produce(
         .manifest(&tasks_identity_id(factory, section, plan)?)?
         .digest();
     let selected = tasks(factory, plan)?;
-    let base_binding = factory
-        .resolved
-        .connections
-        .bind(&section.baseline)
-        .map_err(|e| stage_error(&stage.key, e))?;
+    let (base_binding, champion) =
+        super::rollout::binding_of(factory, &stage.key, &section.baseline)?;
     let comparisons = plan
         .decision
         .comparisons
@@ -312,7 +309,8 @@ pub(crate) fn produce(
         pass: arm_pass(section, plan, "eval-baseline")?,
         tasks: selected.clone(),
         task_root: task_root.clone(),
-        model: Some(base_binding.clone()),
+        model: Some(base_binding),
+        champion,
     };
     let (base_trials, base_product) = arm_trials(
         factory,
@@ -327,10 +325,17 @@ pub(crate) fn produce(
         .iter()
         .find(|a| a.path.ends_with(".safetensors"))
         .map(|a| factory.view(&training_key).join(&a.path));
+    // A candidate is served from the base it was trained from, which is the
+    // baseline unless the baseline is a champion.
+    let base = &training_base(factory, &stage.key)?;
     let served = trainer
-        .serve(&section.baseline, adapter.as_deref())
+        .serve(base, adapter.as_deref())
         .map_err(|e| stage_error(&stage.key, e))?;
-    let mut binding = base_binding;
+    let mut binding = factory
+        .resolved
+        .connections
+        .bind(base)
+        .map_err(|e| stage_error(&stage.key, e))?;
     binding.model = served.clone();
     let name = format!("eval-{}", stage.name);
     let key = format!("eval/_arms/{}", stage.name);
@@ -341,6 +346,7 @@ pub(crate) fn produce(
         tasks: selected,
         task_root,
         model: Some(binding),
+        champion: None,
     };
     let inputs = vec![
         ("tasks".into(), tasks_digest),
@@ -375,6 +381,20 @@ pub(crate) fn produce(
     };
     write_json(&staging.path().join(RESULT_FILE), &result)?;
     std::fs::write(staging.path().join("report.md"), report(&result)).map_err(io(staging.path()))
+}
+
+/// The base model the recipe's variants train from.
+pub(crate) fn training_base<'r>(
+    factory: &'r Factory<'_>,
+    key: &str,
+) -> Result<&'r ModelRef, RunError> {
+    factory
+        .resolved
+        .recipe
+        .training
+        .as_ref()
+        .map(|t| &t.base)
+        .ok_or_else(|| stage_error(key, "an evaluation judges trained candidates"))
 }
 
 fn tasks_identity_id(
@@ -438,11 +458,35 @@ fn protected(
     });
     let candidate_file = staging.path().join("examined-candidate.json");
     write_json(&candidate_file, &examined)?;
+    // A champion baseline with an adapter is the examiner's predecessor; the
+    // base model as it is otherwise.
+    let champion = factory
+        .resolved
+        .champions
+        .get(&section.baseline.to_string())
+        .filter(|c| c.adapter.is_some());
+    let mut command = Command::new(program);
+    command.args(args).arg("--candidate").arg(&candidate_file);
+    let mut predecessor_digest = None;
+    if let Some(champion) = champion {
+        let file = staging.path().join("examined-predecessor.json");
+        let digest = champion
+            .record
+            .adapter_digest
+            .as_ref()
+            .map(ToString::to_string);
+        write_json(
+            &file,
+            &json!({
+                "adapter": champion.adapter, "adapter_digest": digest,
+                "series": champion.record.candidate, "step": 0,
+            }),
+        )?;
+        command.arg("--predecessor").arg(&file);
+        predecessor_digest = digest;
+    }
     let out = staging.path().join("verdict.json");
-    let status = Command::new(program)
-        .args(args)
-        .arg("--candidate")
-        .arg(&candidate_file)
+    let status = command
         .arg("--out")
         .arg(&out)
         .current_dir(&factory.resolved.repository)
@@ -465,7 +509,7 @@ fn protected(
     let alpha = plan.decision.alpha / f64::from(comparisons);
     let expected = Pair {
         candidate: Some(digest),
-        predecessor: None,
+        predecessor: predecessor_digest,
     };
     let verified = verify(&document, &key, &expected, alpha, Role::Sealed).map_err(|e| {
         stage_error(

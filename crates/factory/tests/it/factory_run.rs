@@ -519,9 +519,10 @@ fn a_portable_dataset_is_built_from_the_trajectories_alone() {
 
 /// The verdict the examiner signs: about `candidate` against the base, at
 /// `alpha`, with `outcome`.
-fn signed_verdict(
+pub(crate) fn signed_verdict(
     signer: &ed25519_dalek::SigningKey,
     candidate: &str,
+    predecessor: Option<&str>,
     alpha: f64,
     outcome: &str,
 ) -> String {
@@ -529,7 +530,7 @@ fn signed_verdict(
     let mut doc = serde_json::json!({
         "schema": "bench.examination/2", "valid": true, "invalid_reasons": [], "integrity_flags": [],
         "verdict": outcome, "alpha": alpha,
-        "candidate": {"adapter_digest": candidate}, "predecessor": {"adapter_digest": null},
+        "candidate": {"adapter_digest": candidate}, "predecessor": {"adapter_digest": predecessor},
         "collection": {"name": "vim-sealed", "exam_sha256": "e".repeat(64), "sealed": true, "items": 40},
         "paired_gain": {"mean": 0.1, "interval": [0.02, 0.18], "one_sided_lower": 0.03, "families": 8},
     });
@@ -584,7 +585,7 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
     repo.write("eval/examiner.pub", &public);
     repo.write(
         "eval/verdict.json",
-        &signed_verdict(&signer, &digest, 0.05, "Promote"),
+        &signed_verdict(&signer, &digest, None, 0.05, "Promote"),
     );
     repo.write(
         "eval/examine.sh",
@@ -624,6 +625,7 @@ fn a_protected_plan_keeps_the_examiners_verdict_only_when_it_verifies() {
         &signed_verdict(
             &signer,
             &format!("sha256:{}", "0".repeat(64)),
+            None,
             0.05,
             "Promote",
         ),

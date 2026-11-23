@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::{digest_of, Digest};
 use splinter_core::factory::task::{plain_relative, TaskCollection, TaskRef};
 
+use crate::champion::{self, Champion};
 use crate::collection::{self, LoadedCollection};
 use crate::connections::Connections;
 use crate::environment::Environment;
@@ -63,6 +64,8 @@ pub struct Resolved {
     pub environments: BTreeMap<String, Environment>,
     /// The evaluation plan and its own collection, when the recipe has one.
     pub eval: Option<(EvalPlan, Option<LoadedCollection>)>,
+    /// The champions the recipe's models name, by reference.
+    pub champions: BTreeMap<String, Champion>,
     /// The connections.
     pub connections: Connections,
     /// The lock.
@@ -144,9 +147,29 @@ pub fn resolve(
     models.extend(recipe.dataset.iter().map(|d| d.target.clone()));
     models.extend(recipe.training.iter().map(|t| t.base.clone()));
     models.extend(recipe.eval.iter().map(|e| e.baseline.clone()));
+    let mut champions = BTreeMap::new();
     for model in &models {
-        if let Err(e) = connections.bind(model) {
+        if champion::is_champion(model) {
+            match champion::load(repository, model) {
+                Ok(found) => {
+                    if let Err(e) = connections.bind(&found.record.base) {
+                        problems.push(format!("{model}: {e}"));
+                    }
+                    files.insert(model.to_string(), found.digest.clone());
+                    champions.insert(model.to_string(), found);
+                }
+                Err(e) => problems.push(e),
+            }
+        } else if let Err(e) = connections.bind(model) {
             problems.push(e.to_string());
+        }
+    }
+    let trained_from = recipe.training.iter().map(|t| &t.base);
+    for model in trained_from.chain(recipe.dataset.iter().map(|d| &d.target)) {
+        if champion::is_champion(model) {
+            problems.push(format!(
+                "{model}: a champion is served, never trained from: a variant trains from a base model, which is also its dataset's target"
+            ));
         }
     }
     let loaded = match collection::load(repository, &recipe.tasks.collection) {
@@ -240,6 +263,7 @@ pub fn resolve(
         collection: loaded,
         environments,
         eval,
+        champions,
         connections,
         lock,
         plan,
