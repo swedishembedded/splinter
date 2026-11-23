@@ -13,11 +13,8 @@
 //!   questions about each task's fact and stores what code admits as a task
 //!   set of its own, each member recording the task it is a variant of; a
 //!   task that cannot be varied is counted.
-//! * A variant is never trained on: it is in no task set `learn` solves,
-//!   nothing it asks reaches the dataset, and an experience of one is
-//!   refused when a dataset is built.
-//! * `learn` writes the variants of the tasks kept for training, and the
-//!   gate measures the candidate on those of the tasks it trained on.
+//! * A variant is never trained on: nothing it asks reaches the dataset,
+//!   and an experience of one is refused when a dataset is built.
 //!
 //! The policy is scripted and training is a test double.
 
@@ -26,29 +23,21 @@
 
 use crate::common;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use common::gate::{gate_context, Brain, FakeTrainer, ANCHOR};
-use common::manual::{
-    manual_policy, write_sheets, BAUD_QUESTION, BAUD_VARIANTS, IDLE_QUESTION, IDLE_VARIANTS, MANUAL,
-};
+use common::manual::{manual_policy, BAUD_QUESTION, BAUD_VARIANTS, IDLE_VARIANTS, MANUAL};
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
-use splinter_model::train::{Trained, TrainedPreference};
-use splinter_orchestrator::{Context, OrchestratorError};
+use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
-use splinter_pipelines::learn::{learn, LearnRequest, Learned, STAGES};
-use splinter_pipelines::release::arm;
 use splinter_pipelines::solving::{harness_protocol, solve_set};
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation};
-use splinter_pipelines::train::{TrainPlan, Trainer};
 use splinter_pipelines::variants::{generate_variants, VariantsRequest};
 use splinter_pipelines::verify::{verify_set, Grading};
-use splinter_store::runs::read_run;
 use splinter_store::tasks::{TaskEntry, TaskSet};
 
 /// A context whose policy is the manual's, and the tasks `tasks` writes
@@ -79,7 +68,6 @@ fn manual_tasks(test: &str) -> (Scratch, Context, splinter_pipelines::tasks::Tas
             denoise_seed: Some(Seed::new(1)),
             deadline: None,
             cancel: CancelToken::new(),
-            harness: None,
         },
     )
     .unwrap();
@@ -287,128 +275,6 @@ fn a_variant_never_enters_a_training_dataset() {
     .unwrap_err();
     assert!(refused.is_refusal(), "{refused}");
     assert!(refused.to_string().contains("variant"), "{refused}");
-}
-
-/// Trains the fixtures' fake adapter and serves its candidate as the model
-/// that learned the manual: it answers the baud rate and the idle current
-/// however they are asked.
-struct Student {
-    learned: Scripted,
-    handed: Mutex<Vec<String>>,
-}
-
-impl Trainer for Student {
-    fn train(
-        &self,
-        ctx: &Context,
-        plan: &TrainPlan,
-        cancel: &CancelToken,
-    ) -> Result<Trained, OrchestratorError> {
-        for dataset in &plan.datasets {
-            self.handed
-                .lock()
-                .unwrap()
-                .push(std::fs::read_to_string(&dataset.path).unwrap());
-        }
-        let trained = FakeTrainer::knowing(&[ANCHOR]).train(ctx, plan, cancel)?;
-        ctx.add_model(
-            arm(ctx.config(), Some(&trained.adapter)),
-            Model::new(Arc::new(self.learned.clone()), "scripted/learned"),
-        );
-        Ok(trained)
-    }
-
-    fn train_preference(
-        &self,
-        _ctx: &Context,
-        _plan: &TrainPlan,
-        _cancel: &CancelToken,
-    ) -> Result<TrainedPreference, OrchestratorError> {
-        panic!("learn trains chat datasets only")
-    }
-}
-
-#[test]
-fn learn_measures_the_candidate_on_variants_of_what_it_trained_on() {
-    let (scratch, ctx) = gate_context("learn-variants", Brain::Missing);
-    ctx.add_model(
-        ModelRef::policy_default(),
-        Model::new(Arc::new(manual_policy()), common::POLICY),
-    );
-    // Two independent source texts, so one can be held out whole: the
-    // candidate trains on one sheet's task and is measured on the other's.
-    let sheets = write_sheets(&scratch.0);
-    let student = Student {
-        learned: Scripted::new(|prompt| {
-            if prompt.contains("baud") {
-                "115200 baud".into()
-            } else if prompt.contains("idle") {
-                "40 mA".into()
-            } else {
-                "I do not know.".into()
-            }
-        }),
-        handed: Mutex::new(Vec::new()),
-    };
-
-    let Learned::Ran(run) = learn(
-        &ctx,
-        &LearnRequest {
-            sources: sheets,
-            no_frontier: true,
-            ..LearnRequest::default()
-        },
-        &student,
-    )
-    .unwrap() else {
-        panic!("a learn that is not a dry run runs");
-    };
-    let report = &run.report;
-    assert_eq!(report.stopped, None, "{report:#?}");
-
-    // The stage sits between the tasks being kept and the training set
-    // being selected, and is part of the plan.
-    let stages: Vec<String> = read_run(ctx.workspace(), &run.run)
-        .unwrap()
-        .stages
-        .into_iter()
-        .map(|s| s.stage)
-        .collect();
-    let at = |name: &str| stages.iter().position(|s| s == name).unwrap();
-    assert!(
-        at("teach") < at("variants") && at("variants") < at("select"),
-        "{stages:?}"
-    );
-    assert!(STAGES.contains(&"variants"));
-    let variants = report.variants.as_ref().unwrap();
-    assert_eq!((variants.tasks, variants.variants), (2, 6), "{variants:#?}");
-
-    // Nothing a variant asks is a training record, and the tasks solved
-    // are not the variants.
-    let trained = student.handed.lock().unwrap().join("\n");
-    assert!(trained.contains(BAUD_QUESTION) || trained.contains(IDLE_QUESTION));
-    for wording in BAUD_VARIANTS.iter().chain(&IDLE_VARIANTS) {
-        assert!(!trained.contains(wording), "{wording}");
-    }
-    let solved_tasks = ctx
-        .tasks()
-        .get_set(&report.tasks.as_ref().unwrap().task_set)
-        .unwrap();
-    assert!(solved_tasks.members.iter().all(|m| m.variant_of.is_none()));
-
-    // The gate measured the candidate on the variants of the one task it
-    // trained on, and said how many.
-    let gate = &report.release.as_ref().unwrap().gate;
-    let improvement = gate.improvement.measured.as_ref().unwrap();
-    let measured = improvement.variants.as_ref().unwrap();
-    assert_eq!(measured.tasks, 3, "{improvement:#?}");
-    assert!(measured.excluded.is_empty(), "{improvement:#?}");
-    assert_eq!(
-        improvement.suite.tasks,
-        3 + 1,
-        "the variants and the held-out record"
-    );
-    assert_eq!(improvement.comparison.candidate_wins, 4, "{improvement:#?}");
 }
 
 /// A task some set lists as an original is one: an older store that

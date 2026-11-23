@@ -77,12 +77,6 @@ pub fn trained(ctx: &Context) -> Result<BTreeSet<String>, OrchestratorError> {
     recorded(ctx, TRAINED, TRAINED_POINTER)
 }
 
-/// The seed the reserved families were chosen by; `None` when no run has
-/// reserved any yet.
-pub fn reserved_seed(ctx: &Context) -> Result<Option<Seed>, OrchestratorError> {
-    Ok(stored(ctx, RESERVED, RESERVED_POINTER)?.map(|record| Seed::new(record.seed.unwrap_or(0))))
-}
-
 /// Remembers `added` as reserved, chosen by `seed`, on top of those already.
 pub fn remember_reserved(
     ctx: &Context,

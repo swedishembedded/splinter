@@ -11,7 +11,7 @@
 use std::time::Duration;
 
 use clap::Args;
-use splinter_sdk::practice::DEFAULT_MAX_CORRECTIONS;
+use splinter_sdk::curriculum::corrections::DEFAULT_MAX_CORRECTIONS;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
 use super::{budget, model_ref, positive_count};

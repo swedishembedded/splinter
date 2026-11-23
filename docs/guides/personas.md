@@ -4,37 +4,30 @@
 # Learn how a person thinks
 
 Use this guide to train the policy on a body of one person's writing so that it answers
-as they would, on matters the writing never covered. Point `learn` at a directory:
-Splinter surveys it, a planner model chooses what to teach from a menu, and code holds
-each choice to the sources. The `jefferson`, `adams` and `synthetic-author` samples
-measure what this teaches ([examples](../examples/index.md)).
+as they would, on matters the writing never covered. Generate tasks from a directory of
+their writing with kinds that teach how they judge, build the dataset, train and release,
+one command per stage ([Learn from documents](documents.md) lists them). The `jefferson`,
+`adams` and `synthetic-author` samples measure what this teaches
+([examples](../examples/index.md)).
 
 What it does not show: a model that speaks like a writer is not a model that is right.
 Correctness is graded against the writer's text; voice is scored separately, and the
 exam reports both. See [limitations](../concepts/limitations.md).
 
-## Plan from a sentence or a directory
-
+## Choose the kinds
 
 ```bash
-splinter "Learn to think like Thomas Jefferson based on the materials he has written in directory ./jefferson"
+splinter source add ./jefferson
+splinter tasks generate $SOURCE --kinds advise,converse,explain
 ```
 
-With no `--kinds`, `learn` plans. After the sources are captured it surveys
-them by code (how many parts and sections, how many sections read as advice,
-a few excerpts) and shows the survey and the goal to a planner model (the
-model `--planner` names, else the configured assistant, else the generator).
-The planner chooses from a menu of task kinds, whether to distil, and who the
-learner is becoming; code holds the choice to the survey, so a plan cannot
-teach advice the sources do not hold, and a plan that names a person while the
-sources hold advice or judgment must choose a kind that teaches how they judge
-(`advise`, `converse`), facts alone being no way to think like someone. The
-person becomes the policy's system prompt, in training and afterwards, and the
-teacher's answers and the student's attempts are written under it too, so what
-the records teach was said as the person they open with. A plan that breaks a rule is sent back
-once with the rule it broke and then refused: a run that cannot be planned
-says so, and no default replaces its plan. The survey and the plan are in the
-report, and naming `--kinds` as well is refused: one of the two decides.
+A task kind is chosen from a menu; facts alone are no way to think like someone, so
+a person whose sources hold advice or judgment is taught with the kinds that teach how
+they judge (`advise`, `converse`). The person becomes the policy's system prompt, in
+training and afterwards (`dataset build --system-prompt`, `--writer`), and the teacher's
+answers and the student's attempts are written under it too (`solve --frontier` takes the
+prompt from the policy's own), so what the records teach was said as the person they open
+with.
 
 The `advise` kind is what teaches a person's own advice. Its task is a
 predicament put to the writer, addressed to the writer (so it names no
@@ -66,30 +59,9 @@ or asks it to confirm it; it brings its own case or objection. One dialogue in
 eight ends by asking for a specific the exchange has not given, so that the
 student also sees the writer decline to invent one.
 
-## Retrieved passages and abstention
-
-`--with-passages SHARE` trains a share of the records with retrieved passages of
-the sources in the prompt, as `ask --retrieve` gives them, four to a record and
-the passage the task was written from among them for four in five, the answer
-unchanged. A policy trained only closed-book cannot tell the passage that holds
-the answer from one that merely resembles the question: measured, passages helped
-where retrieval found the evidence and hurt exactly as much where it did not.
-Each passage is shown under its part and section, so an answer can name where it
-stands. `--abstain SHARE` makes that share of *all* the dialogue records
-abstentions (so at most `--with-passages`): the base model, as the writer, says
-in two to four sentences that the writings before them do not establish an
-answer - two thirds of them for a question whose evidence retrieval missed, a
-third for a question that lies beyond the writings (about what came after the
-writer's lifetime), asked of the passages retrieved for it - admitted only
-when the reply is brief, in the first person and states no number the question
-and the passages do not hold. An abstention is made from a dialogue record and
-keeps its experience and family, so it is held out and trained with them; a
-record no admissible abstention is written for keeps its answer. About a tenth
-of the data is the working figure; abstentions are never the majority.
-
 ## The author stage and the voice view
 
-The `author` stage teaches the writer's own voice. For the kinds whose
+Teaching the writer's own voice is a stage of its own. For the kinds whose
 reference is a passage the writer wrote (`advise`, `converse`), the task's
 message was written for that passage, so the passage itself, word for word, is
 the answer to train on - instruction backtranslation: it has the writer's
@@ -128,11 +100,9 @@ four, are the passage's own; a chunk with no admitted description keeps the open
 Descriptions are kept per generator under the state's `work/describe`, so a second build
 reuses them.
 A record names the part it prints and no experience, so a dataset shows what is
-the writer's and what a model wrote. A run with a persona trains on the
-writer's text by default: `--voice SHARE` is the share of the training tokens it
-makes (seven tenths; `--voice 0` turns it off), the chunks chosen as an even
-spread over the whole of the sources in a stable order that does not follow
-their names, and the training is sized by all its examples. Such a record is
+the writer's and what a model wrote. A dataset built with `--writer` projects the
+writer's text, chosen as an even spread over the whole of the sources in a stable order that
+does not follow their names, and the training is sized by all its examples. Such a record is
 held out with the family of the letter it prints: the families held out are
 decided by the records that can be examined - those projected from a task or an
 experience - and a record of the writer's text goes where its family goes,
@@ -146,7 +116,7 @@ tokens are.
 
 ## Rehearsal
 
-A run with a persona also rehearses the base (the `rehearse` stage). A
+Rehearse the base when you train on a persona (`rehearse`). A
 fine-tune on one person's answers erodes the base's general behaviour before
 it forgets a fact: under the plain assistant prompt it answers a sum at length
 and gets it wrong, or answers in a paragraph where a word was asked, which is
@@ -166,10 +136,8 @@ its words inside a longer prompt), is ever in the set: every anchor
 instruction is held against each task by the generator's own near-duplicate
 rule before it is stored, since a candidate rehearsed on an anchor task would
 pass the anchor check by having trained on it; the gate's leakage check reads
-the rehearsed records too. `--rehearsal SHARE` is the share of the training
-draws the rehearsed records take (a quarter by default for a run with a
-persona; `--rehearsal 0` turns it off, and a run without a persona rehearses
-nothing unless asked), the set sized so that a rehearsed record is drawn about
+the rehearsed records too. `train --rehearsal-share` is the share of the training
+draws the rehearsed records take, the set sized so that a rehearsed record is drawn about
 as often as a dialogue answer; a tenth of its records (the monitoring share)
 join the monitoring set instead, so the step the run carries is the one that
 keeps the base's answers as well as it fits the new ones. `rehearse --records
@@ -179,10 +147,9 @@ answers, into a training run.
 
 ## Bounded generation and held-out groups
 
-Task generation is bounded by the budget and spread over the sources: each
+Task generation is spread over the sources: each
 text part is shown through at most four evenly spaced windows of sections,
-parts are visited in a stable order that does not follow their names, and the
-budget stops generation inside a part. A held-out split never divides texts
+parts are visited in a stable order that does not follow their names. A held-out split never divides texts
 that print the same passage (two editions of a letter, a letter one edition
 prints inside its neighbour, a passage reused deep inside a longer text):
 records name the group of overlapping source text they came from - texts that
@@ -196,9 +163,3 @@ within a quarter of the records.
 A group is named by the least content digest of the texts in it, found over
 every text part of the sources, so two datasets built from the same sources
 name a family the same and are split together as one.
-
-`--distill` skips the policy's own attempts: the teacher answers every task
-open-book and the policy is trained on its verified answers, with no
-frontier and no critique. It is for a policy that cannot answer a task
-closed-book at all, where its attempts are the most expensive part of a run
-and teach nothing. A plan can choose it too.

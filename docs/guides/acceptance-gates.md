@@ -72,9 +72,3 @@ cargo run --release -p splinter-campaign-lua --bin lineage -- --help
 
 Only drawn dev programs are graded, and the proposer is steered by the champion's results on spent programs alone.
 The rounds journal records each round's e-value, level, budget left, exposure and the programs it spent.
-
-**Harness optimisation** (`splinter harness optimise`): `--gate evidence --gate-eps EPS --gate-q Q --gate-beta BETA`
-adds the evidence gate over the paired tasks beside the promotion rule (which always decides the gain, not
-exam-verified); every evaluation is a round of one
-budget planned over `--evaluations`, its level taken before its arm runs. A family that got worse still rejects the
-candidate. The frozen task set is reused by every evaluation, so from the second on every task counts as reused.

@@ -22,9 +22,9 @@ mod common;
 
 use std::collections::BTreeSet;
 
-use common::gate::{put_base, FakeTrainer};
+use common::gate::put_base;
 use common::repo::{project, Agent};
-use common::{config, Scratch};
+use common::{config, workspace_tasks, Scratch};
 use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::family::{members, touches};
@@ -32,8 +32,6 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_knowledge::tasks::workspace::CombinePlan;
 use splinter_orchestrator::Context;
-use splinter_pipelines::curriculum::frontier::PassAtK;
-use splinter_pipelines::practice::{practice, PracticeRequest};
 use splinter_pipelines::tasks::combine::{combine, CombineRequest};
 use splinter_store::tasks::TaskSetId;
 
@@ -50,26 +48,13 @@ fn context(test: &str) -> (Scratch, Context) {
     (scratch, ctx)
 }
 
-/// A practised repository: its admitted set and the families its exam holds.
+/// A repository made into tasks: its admitted set and the families its exam holds.
 fn practised(test: &str) -> (Scratch, Context, TaskSetId, BTreeSet<String>) {
     let (scratch, ctx) = context(test);
     let repo = scratch.0.join("repo");
     project(&repo, &[]);
-    let request = PracticeRequest {
-        repository: repo,
-        revision: "HEAD".into(),
-        max_tasks: Some(32),
-        mutants_per_file: Some(1),
-        exam_families: Some(2),
-        pass_at_k: PassAtK::new(2, None, None),
-        no_release: true,
-        ..PracticeRequest::default()
-    };
-    let report = practice(&ctx, &request, &FakeTrainer::knowing(&[]))
-        .unwrap()
-        .report;
-    let exam = report.reserve.unwrap().families.into_iter().collect();
-    (scratch, ctx, report.tasks.unwrap().task_set.unwrap(), exam)
+    let (set, exam) = workspace_tasks::practised(&ctx, &repo, 2);
+    (scratch, ctx, set, exam)
 }
 
 fn request(set: &TaskSetId) -> CombineRequest {

@@ -42,7 +42,6 @@ fn config() -> Config {
         assistant_model: None,
         judge_model: None,
         bf16_base: false,
-        default_budget: None,
         remote_concurrency: 4,
         brain: None,
         brain_device: None,

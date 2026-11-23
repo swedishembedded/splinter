@@ -10,7 +10,7 @@ none of them is a claim that the loop makes a model generally better (see [limit
 | Example | The question it asks |
 |---|---|
 | [First run](../../examples/first-run/README.md) | Can a 0.6B model be taught a one-page manual for a device that does not exist? The walk-through is [your first learning run](../getting-started/first-learning-run.md). |
-| [Repository task families](../../tasks/README.md) | The frozen catalog of eight projects `splinter practice` learns from their own tests, and the hidden-world tasks. |
+| [Repository task families](../../tasks/README.md) | The frozen catalog of eight projects learned from their own tests, and the hidden-world tasks. |
 | [absorb](../../samples/absorb/README.md) | Can a model be corrected by its user in conversation? |
 | [absorb-story](../../samples/absorb-story/README.md) | What does the nightly loop keep, replace and drop in the situations it will meet? |
 | [generations](../../samples/generations/README.md) | Does a policy go on learning when each generation is taken into the weights? |

@@ -8,7 +8,7 @@
 
 //! The stages and the pipelines: what each command does, composed from the
 //! lower crates. One module per pipeline stage, each reading and writing the
-//! content-addressed stores under the state root, and `learn` composing
+//! content-addressed stores under the state root, and `absorb` composing
 //! them as a pipeline the orchestrator's engine runs. What a run is carried
 //! out with - the configuration, the runtime and context, the roles, the
 //! recorded run - is `splinter-orchestrator`'s.
@@ -29,12 +29,7 @@
 //!   [`judge`] - a judge's calibration.
 //! * [`curriculum`] - budget spent where learning happens: pass@k frontier
 //!   selection, concept mastery across releases, concepts the gate saw
-//!   forgotten queued for new tasks, and diversity quotas on a training
-//!   set.
-//! * [`acquire`] - `learn "<objective>" --source <url|path>`: documentation
-//!   becomes a skill graph, probes, a measured baseline, training rounds on the
-//!   skill expected to benefit most, and an assessment on probes that decided
-//!   nothing.
+//!   forgotten queued for new tasks.
 //! * [`goal`] - goal-directed learning: probe the participant, find its
 //!   gaps, choose the raw material expected to close them under a budget
 //!   with a reason for every section, learn it, probe again; and the
@@ -50,10 +45,8 @@
 //! * [`release`] - the gate a candidate passes to become the policy, the
 //!   immutable releases and the aliases pointing at them, and rollback;
 //!   [`eval`] - one model graded on the gate's suites.
-//! * [`learn`] - every stage above, as one run; [`absorb`] - the sessions a
-//!   person held with an agent, taught the same way; [`practice`] - a
-//!   repository's tests made into tasks an agent solves in copies of its
-//!   tree, trained on what its own checks confirm.
+//! * [`absorb`] - the sessions a person held with an agent, taught with the
+//!   stages above as one run.
 //! * [`runs`] - every command's run record, and cancelling one.
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`serving`] - the brain servers kept for other programs until interrupted;
@@ -70,11 +63,9 @@
 
 pub mod absorb;
 pub mod abstain;
-pub mod acquire;
 pub mod arm_compare;
 pub mod ask;
 mod attempt_store;
-pub mod author;
 pub mod bench;
 mod block;
 pub use splinter_model::server as brain_server;
@@ -108,19 +99,16 @@ pub mod goal;
 pub mod graded;
 pub mod grouping;
 pub mod harbor;
-pub mod harness_opt;
 pub mod history;
 pub mod hub;
 pub mod improve;
 pub mod index;
 pub mod judge;
 pub mod judging;
-pub mod learn;
 pub mod lineage;
 pub mod objects;
-pub mod plan;
+pub mod policy_used;
 pub mod powered;
-pub mod practice;
 pub mod preflight;
 mod promotion;
 pub mod raft;
@@ -144,8 +132,8 @@ pub mod status;
 pub mod tasks;
 pub mod timeline;
 pub mod train;
-pub mod validate;
 pub mod variants;
 pub mod verify;
+mod workspace_held;
 mod workspace_solve;
 mod workspace_verify;

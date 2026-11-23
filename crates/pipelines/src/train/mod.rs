@@ -59,13 +59,12 @@ mod monitoring;
 mod pairs;
 mod policy_gradient;
 
-mod supervised;
-pub(crate) use policy_gradient::check_settings as check_policy_gradient_settings;
 mod recipe;
 mod records;
 mod rehearsal;
 mod seeds;
 pub mod sizing;
+mod supervised;
 mod tuning;
 
 pub use candidate::{

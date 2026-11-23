@@ -66,7 +66,6 @@ fn run(
             denoise_seed: None,
             deadline,
             cancel: CancelToken::new(),
-            harness: None,
         },
     )
     .unwrap()

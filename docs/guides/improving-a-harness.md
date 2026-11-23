@@ -12,43 +12,28 @@ as experiences, so `verify` grades them and `experiences compare` sets them
 against another arm exactly as it does for the agent loop. The document may
 declare an input `task` (a string) to receive the task's instruction.
 
-`harness optimise` automates the comparison across many candidates. The search seed has no default, because the same seed draws the same candidates and so reproduces a search:
+The `harness-search` template automates the comparison across many candidates:
 
 ```sh
-splinter harness optimise TASKSET-ID --baseline harness.yaml --space space.yaml \
-    --evaluations 12 --attempts 2 --strategy annealing --search-seed 7
+splinter init --template harness-search my-repo
+cd my-repo
+splinter validate recipes/harness-search.yaml
+splinter run recipes/harness-search.yaml --out runs/harness-search
 ```
+
+Its `harness.search` stage runs the baseline harness (`harness/baseline.yaml`) on the
+pinned tasks as an arm of its own, then each of its candidates: one mutation of the baseline
+(`strategy: best-of-n`) or of the best found so far (`hill-climb`), drawn by the recipe's seed
+from the mutation space (`harness/space.yaml`) and kept only when sven's compiler accepts it.
 
 The space lists knobs, each a `path` into the document and the `choices` it may
 take (`[execution, limits, model_turns]` with `[4, 6, 8]`, or a task's prompt,
-`[workflow, "0", task]`, with alternatives; a number, quoted, indexes a list); a candidate is the baseline with a few knobs changed. The search
-is sven's (best-of-N or simulated annealing) and follows the share of tasks the
-candidate solved, which guides and never decides. Each candidate is run on the
-whole task set, its attempts verified by the tasks' own verifiers, and compared
-with the baseline's attempts, a family counted once. A candidate is promoted
-only by the one promotion rule (the paired gain's two-sided 95% interval,
-resampling families, above 0 over at least six families; the frozen task set is
-also the retention suite)
-and only if no family got worse and at least `--min-paired` tasks have a verdict
-in both arms. No examiner draws a sealed slice for a harness, so every decision
-is recorded as not exam-verified, with why. One that regressed a family, or lost
-ground, is rejected whatever its totals, and one that merely did not regress is
-inconclusive. The first evaluation is the
-baseline against its own arm, a replicate that shows how far two identical runs
-differ. A promotion stores the candidate document with its evidence and the
-experience sets behind it and moves the `harness/champion` pointer, whose
-history is the lineage of champions. `--search-seed` has no default: the same
-seed draws the same candidates. `--gate evidence` with `--gate-eps`, `--gate-q` and `--gate-beta` adds the evidence
-gate beside the promotion rule, which holds the share of promoted-worse candidates to a budget over the search's
-evaluations; see [Choose an acceptance gate](acceptance-gates.md).
-
-`--proposer model --proposer-model REF` has a model propose the candidates instead of
-the mutation space: it is shown the parent document and how that document did when
-last evaluated, and answers with edits (a path into the YAML and the value to set).
-An edit counts only once the document it makes compiles under sven's compiler; a reply
-that does not compile is sent back with the compiler's message, up to
-`--proposer-repairs`, and a proposal never fixed is replaced by a mutation of `--space`
-when there is one (counted in the report) and stops the run when there is not.
-`--parallel N` evaluates N candidates at once (best-of-N only; annealing's next
-candidate depends on the last): each is a whole arm, so the model server sees N arms'
-attempts together on top of `--remote-concurrency`.
+`[workflow, "0", task]`, with alternatives; a number, quoted, indexes a list); a candidate is the
+baseline with a few knobs changed. Each candidate runs as an arm with the same agent, model,
+environment, attempts and attempt seeds, and is compared with the baseline by the evaluation's
+paired sign test at `alpha`. The product holds `harness.yaml` (the winner, else the baseline), each
+candidate under `candidates/` and `search.json` with every candidate's decision; every arm is a
+committed product, so a stopped search resumes without running one again. The [learning
+factory](learning-factory.md#searching-for-a-harness) describes the stage's parameters. How a decision
+is made, and the choice between acceptance gates, is in [Choose an acceptance
+gate](acceptance-gates.md).

@@ -20,7 +20,7 @@ inventing them.
 The corpus is primary documents. Biographies are context, never evidence of
 what he believed.
 
-## Splinter alone, from one sentence
+## Splinter alone
 
 The same corpus is what Splinter learns from on its own, the way it learns
 Jefferson: this sample supplies the materials, an anchor suite and an
@@ -40,9 +40,9 @@ splinter-adams materials --resources RESOURCES --out ./materials
 #    and the arithmetic and format-following a persona fine-tune erodes first.
 splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
 
-# 3. Splinter does the rest, under the roles the configuration names.
-splinter --assistant-model local:Qwen/Qwen3-8B --bf16-base --default-budget 8h \
-  "Learn to think like Samuel Adams based on the materials he has written in directory ./materials"
+# 3. Splinter's stages do the rest, one command each, under the roles the
+#    configuration names.
+splinter --assistant-model local:Qwen/Qwen3-8B --bf16-base source add ./materials --usage-policy research_only
 
 # 4. The independent check: the frozen questions, asked of the base and of the
 #    adapter Splinter released, under the prompt Splinter trained it under.
@@ -147,7 +147,7 @@ splinter-adams report --before RUN/base-exam.jsonl --after RUN/tuned-exam.jsonl
 ```
 
 `exam` asks under the sample's own persona unless `--persona NAME` (the prompt
-Splinter trains a policy to be NAME under, for an adapter a `learn` produced)
+Splinter trains a policy to be NAME under, for an adapter Splinter trained)
 or `--system TEXT` says otherwise.
 
 The helper stages need a model served by `brain serve --api-key-file KEY`

@@ -20,8 +20,7 @@ establishes that an answer is right or only refutes it: grounding (every
 number, name and quotation is in the source) is a constraint, whose fail
 refutes whatever else says and whose pass decides nothing, so an answer that
 invents nothing but says nothing right passes no check. A kind no other
-verifier can pass - a conversation - is decided by a judge, and a `learn` on it
-names one (`--judge`, else `--judge-model`, else the assistant). The
+verifier can pass - a conversation - is decided by a judge, which `verify --judge` names (else `--judge-model`, else the assistant). The
 judge is another model than the teacher, the generator and the policy; it is
 measured before any verdict counts, on controls made from the tasks' own
 references (each task's reference is the right answer to it, and a task of

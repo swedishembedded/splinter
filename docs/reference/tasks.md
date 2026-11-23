@@ -44,7 +44,7 @@ earlier releases; a teacher's open-book solve and a retry helped by a
 critique are not counted. When the release gate's retention check fails
 on an earlier release's suite, the concepts of the tasks the candidate
 forgot are queued under `<state>/curriculum/queue/` (the `release` report lists
-them), and the next `learn` generates new tasks from their sections.
+them).
 
 ## Variants
 
@@ -163,6 +163,6 @@ outside any function are counted in the report's `scope`.
 
 ## Repository families
 
-Eight small original projects, each learned by `splinter practice` from its own tests, are
+Eight small original projects, each learned from its own tests (the `repository-practice` recipe), are
 catalogued in `tasks/catalog.toml`. Their layout, how the admitted task sets are regenerated and
 the funnel counts are in [Task families](../../tasks/README.md).

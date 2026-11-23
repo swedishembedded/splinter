@@ -15,7 +15,7 @@ use splinter_core::rng::Seed;
 use splinter_knowledge::tasks::{CallOutcome, CallRecord};
 use splinter_store::tasks::TaskSetId;
 
-use super::{reason_name, InventReport};
+use super::reason_name;
 
 /// Admitted and rejected proposals of one kind.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -102,8 +102,6 @@ pub struct TasksGenerated {
     pub calls: Vec<CallNote>,
     /// Single sections generated from, beside the sources' parts.
     pub sections: usize,
-    /// What the invent harness yielded, when it wrote the tasks.
-    pub invent: Option<InventReport>,
     /// Why generation stopped before every part was covered, if it did.
     pub stopped: Option<String>,
     /// The kinds generation gave up on and why: asked for until their

@@ -18,7 +18,7 @@ is printed with its numbers, and a check that could not be measured fails.
 Improvement and retention carry the one promotion decision
 (`splinter_eval::promotion`): on the examiner's signed verdicts when the
 caller holds them (exam-verified), else on the gate's own suites, where no
-sealed slice applies (a release from `learn`, whose exam the learner made
+sealed slice applies (a release from `release`, whose exam the learner made
 itself). That decision is recorded as `promotion` in the report and in the
 release manifest's gate (`rule`: `examined`, or `not_exam_verified` with
 `why`; `exam_verified`; typed `reasons`), and `release` prints it:
@@ -39,7 +39,7 @@ the data has them, within a quarter of it, so that an interval over families
 can show a gain) are few, and questions about other facts cannot
 improve for a campaign that teaches facts. So the suite is completed with the stored
 variants of the tasks the candidate's trained-on records were projected
-from (`learn` writes them; `tasks variants` writes them for any task
+from (`tasks variants` writes them for any task
 set). A variant of a task that was held out measures nothing the
 candidate learned and is not used. A variant whose wording the candidate
 trained on - the same question, a near duplicate, or its words inside a
@@ -66,7 +66,7 @@ budget) are printed again with the verdict and carried in the JSON report
 
 ### Repository candidates
 
-A candidate trained by `practice` is gated on a different suite than a
+A candidate trained on a repository's tasks is gated on a different suite than a
 candidate trained on documents: the champion and the candidate attempt, as
 agents in copies of the tree, the tasks of the exam that candidate's run set
 apart before any attempt (every earlier release is held to the exam of the run

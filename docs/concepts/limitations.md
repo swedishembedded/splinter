@@ -45,9 +45,6 @@ program's behavior or by the project's own samples; where a limit has a flag or 
   in the first-run example that was not enough to write usable questions or to solve a fill-in task
   (see [your first learning run](../getting-started/first-learning-run.md)). Naming stronger models
   costs GPU memory and time, or money and a network opt-in for a `remote:` model.
-- `--budget` bounds a run's wall-clock time, and generation stops early to leave time to train. A
-  run over a few percent of a large corpus is reported as such, with what covering the rest would
-  take; it is not a run over the corpus.
 - Local models share the device. A task is failed after `--solve-deadline` seconds on the wall
   clock, so raise it when many tasks share one served model and a task would otherwise fail for
   waiting in the queue.

@@ -9,12 +9,10 @@
 # The E3 plan over the eight repository families: three generations of two
 # families each, then a final exam on two families nothing was ever trained on.
 # `splinter experiment check tasks/e3-plan.toml` validates it against
-# tasks/catalog.toml; `splinter practice --plan tasks/e3-plan.toml
-# --generation N` refuses a repository the plan does not allow in that
-# generation, and refuses a sealed one always.
+# tasks/catalog.toml, and records the sealed families by tree id.
 #
 # Each generation trains on its families' training files and is examined on
-# their reserved exam files (`practice` reserves those inside each family).
+# their reserved exam files (a practice run reserves those inside each family).
 # `retention` names the earlier families whose reserved exam files the
 # generation is held to. `sealed` is the final exam: whole families that no
 # stage of any generation may read.

@@ -503,7 +503,6 @@ fn teach_records(
             pass_curation: Default::default(),
             base: None,
         },
-        None,
     )?;
     let mut records: HashMap<ClaimId, Vec<Record>> = HashMap::new();
     for mut record in projection.records {

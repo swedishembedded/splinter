@@ -39,7 +39,7 @@ and starts nothing twice. What each call returns is the durable job record
 
 ## What a caller works with
 
-- **The commands**, one module each, with their requests and reports: `learn`, `practice`, `ask`, `sources`,
+- **The commands**, one module each, with their requests and reports: `ask`, `sources`,
   `sessions`, `claims`, `absorb`, `tasks`, `timeline`, `solving`, `verify`, `critique`, `datasets`, `train`,
   `release`, `eval`, `lineage`, `status`, `doctor`, `state`, `router`, `served` (rollouts over a served
   policy) and the rest. `absorb::consolidate` takes a

@@ -16,7 +16,7 @@
 //! a brief reply is, states no number the question and the passages do not
 //! hold, and speaks as the person and not as an assistant; the model is sent
 //! back to correct one that is not, and a record it cannot satisfy keeps its
-//! answer ([`crate::raft::with_passages`]).
+//! answer.
 
 use std::collections::BTreeSet;
 use std::time::Instant;

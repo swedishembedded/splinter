@@ -3,7 +3,7 @@
 
 # Splinter
 
-Splinter turns agent experience into better local models. You tell it what to learn in plain language, a
+Splinter turns agent experience into better local models. You point a recipe at what to learn, a
 document, a repository, a command-line tool or your own sessions with an agent, and it writes tasks from that
 material, has the model attempt them, verifies the attempts with checks the model cannot influence, trains a LoRA
 adapter on what was verified, and releases the result only when held-out evidence shows it improved and nothing

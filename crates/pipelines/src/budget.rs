@@ -6,78 +6,81 @@
 // open-ended learning job into a bounded one, you can procure our services by
 // sending an email to info@swedishembedded.com.
 
-//! How a run's budget is shared between its stages.
-//!
-//! A `learn` run has one wall-clock budget. Generating tasks is open-ended -
-//! there is always another window of text to write tasks from - so left alone
-//! it spends the whole budget and nothing is solved, taught or trained. Each
-//! of the open-ended stages therefore gets a deadline of its own, a share of
-//! the budget counted from the run's start, and the stages after them are
-//! guaranteed what is left: training and the exam run on the last fifth.
-//!
-//! When a share of the training examples is the writer's own text (the
-//! `voice` view), which costs no model's time to make, training has that
-//! much more to do: the tail grows by it ([`StageDeadlines::sharing`]) -
-//! half the examples from the writer's text doubles it, to two fifths - and
-//! the open-ended stages give up their share in proportion, never below
-//! what [`MAX_TAIL_SHARE`] leaves them.
+//! A wall-clock budget as a command line names it.
 
-use std::time::Instant;
+use std::time::Duration;
 
-/// Generating tasks stops at this share of the budget.
-pub const TASKS_SHARE: f64 = 0.30;
+use splinter_orchestrator::error::OrchestratorError;
 
-/// The student's own attempts stop at this share.
-pub const ATTEMPTS_SHARE: f64 = 0.50;
-
-/// The teacher's answers stop at this share; what remains is for training,
-/// the exam and the release gate.
-pub const TEACH_SHARE: f64 = 0.80;
-
-/// The share of the budget training, the exam and the gate keep when every
-/// example is model-made: what is left after [`TEACH_SHARE`].
-pub const TAIL_SHARE: f64 = 1.0 - TEACH_SHARE;
-
-/// The most of the budget the tail may grow to, whatever share of the
-/// examples is the writer's text: the open-ended stages keep the rest.
-pub const MAX_TAIL_SHARE: f64 = 0.80;
-
-/// The deadlines of the open-ended stages of one run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StageDeadlines {
-    /// No task is generated after this.
-    pub tasks: Option<Instant>,
-    /// The student makes no attempt after this.
-    pub attempts: Option<Instant>,
-    /// The teacher answers nothing after this.
-    pub teach: Option<Instant>,
+/// A duration as a `--budget` flag takes it: whole units of `s`, `m` and
+/// `h`, alone or combined largest first (`30m`, `1h30m`), or bare
+/// seconds.
+pub fn parse_budget(text: &str) -> Result<Duration, OrchestratorError> {
+    let refuse = |why: &str| {
+        OrchestratorError::Refused(format!(
+            "{text:?} is not a duration ({why}): e.g. 30m, 2h, 1h30m; units h, m and s"
+        ))
+    };
+    if text.is_empty() {
+        return Err(refuse("it is empty"));
+    }
+    if let Ok(seconds) = text.parse::<u64>() {
+        return positive(Duration::from_secs(seconds)).ok_or_else(|| refuse("it is zero"));
+    }
+    let mut total: u64 = 0;
+    let mut number = String::new();
+    let mut last_unit = u64::MAX;
+    for c in text.chars() {
+        if c.is_ascii_digit() {
+            number.push(c);
+            continue;
+        }
+        let unit = match c {
+            'h' => 3600,
+            'm' => 60,
+            's' => 1,
+            _ => return Err(refuse("units are h, m and s")),
+        };
+        if number.is_empty() {
+            return Err(refuse("a unit needs a number before it"));
+        }
+        if unit >= last_unit {
+            return Err(refuse("units go largest first, each once"));
+        }
+        let value: u64 = number
+            .parse()
+            .map_err(|_| refuse("the number is too large"))?;
+        total = value
+            .checked_mul(unit)
+            .and_then(|v| total.checked_add(v))
+            .ok_or_else(|| refuse("it is too long"))?;
+        number.clear();
+        last_unit = unit;
+    }
+    if !number.is_empty() {
+        return Err(refuse("a number needs a unit after it"));
+    }
+    positive(Duration::from_secs(total)).ok_or_else(|| refuse("it is zero"))
 }
 
-impl StageDeadlines {
-    /// The deadlines of a run that starts at `start` and ends at `end`, every
-    /// example model-made; none when the run has no budget.
-    #[must_use]
-    pub fn of(start: Instant, end: Option<Instant>) -> Self {
-        Self::sharing(start, end, 0.0)
-    }
+fn positive(duration: Duration) -> Option<Duration> {
+    (!duration.is_zero()).then_some(duration)
+}
 
-    /// [`StageDeadlines::of`] for a run in which `voice_share` of the
-    /// training examples (in `[0, 1)`) is the writer's own text: the tail
-    /// grows to `TAIL_SHARE / (1 - voice_share)`, at most
-    /// [`MAX_TAIL_SHARE`], and the open-ended stages' shares shrink in
-    /// proportion.
-    #[must_use]
-    pub fn sharing(start: Instant, end: Option<Instant>, voice_share: f64) -> Self {
-        let tail = (TAIL_SHARE / (1.0 - voice_share.clamp(0.0, 1.0)).max(f64::MIN_POSITIVE))
-            .min(MAX_TAIL_SHARE);
-        let scale = (1.0 - tail) / (1.0 - TAIL_SHARE);
-        let at = |share: f64| {
-            end.map(|end| start + end.saturating_duration_since(start).mul_f64(share * scale))
-        };
-        Self {
-            tasks: at(TASKS_SHARE),
-            attempts: at(ATTEMPTS_SHARE),
-            teach: at(TEACH_SHARE),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_budget_is_whole_units_largest_first() {
+        let secs = |text: &str| parse_budget(text).ok().map(|d| d.as_secs());
+        assert_eq!(secs("90"), Some(90));
+        assert_eq!(secs("90s"), Some(90));
+        assert_eq!(secs("30m"), Some(1800));
+        assert_eq!(secs("1h30m"), Some(5400));
+        assert_eq!(secs("2h5s"), Some(7205));
+        for refused in ["", "0", "0s", "m", "1.5h", "30m1h", "5x", "10mm", "3m3m"] {
+            assert!(parse_budget(refused).is_err(), "{refused}");
         }
     }
 }

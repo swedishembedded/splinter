@@ -46,7 +46,7 @@ use crate::absorb::dataset::{assemble, Assembled};
 use crate::absorb::generation::{records_of, replay_budget, retention_sample, Generation};
 use crate::absorb::kit::{ClaimKit, Live};
 use crate::absorb::sealed::SealedProbes;
-use crate::learn::records_at_share;
+use crate::rehearsal::records_at_share;
 use crate::rehearsal::{rehearse_on, RehearseRequest, Rehearsed};
 use crate::release::arm_on;
 use crate::train::{

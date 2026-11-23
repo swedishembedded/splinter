@@ -27,11 +27,10 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use splinter_core::experience::PrivilegedKind;
-use splinter_eval::competence::outcome_of;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 
 use crate::curriculum::{queue, release_of_label};
-use crate::learn::PolicyUsed;
+use crate::policy_used::PolicyUsed;
 use splinter_core::model_ref::POLICY_DEFAULT;
 use splinter_core::release::ReleaseId;
 use splinter_orchestrator::context::Context;
@@ -57,10 +56,6 @@ pub struct ReleaseMastery {
     pub rate: Option<f64>,
     /// When the first of all its attempts under this release was recorded.
     pub since: String,
-    /// Device-busy seconds the window's attempts took, when
-    /// [`mastery_costed`] was asked and every one of them recorded it.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gpu_seconds: Option<f64>,
 }
 
 /// One concept's mastery, release by release.
@@ -89,9 +84,8 @@ pub struct MasteryReport {
     pub queued: usize,
 }
 
-/// One decided attempt: when it was recorded, whether it passed, and the
-/// device seconds it took when they were asked for and recorded.
-type Decided = (String, bool, Option<f64>);
+/// One decided attempt: when it was recorded and whether it passed.
+type Decided = (String, bool);
 
 /// Every concept the policy's recorded solves exercise, with its mastery
 /// under each release, concepts in order; `current` is the release the
@@ -101,25 +95,13 @@ pub fn mastery(
     current: Option<&ReleaseId>,
     window: usize,
 ) -> Result<Vec<ConceptMastery>, OrchestratorError> {
-    gather(ctx, current, window, false)
-}
-
-/// [`mastery`] with each release's [`ReleaseMastery::gpu_seconds`], which
-/// reads every attempt's report: what the learning-progress curriculum
-/// divides by, and too slow for a status line.
-pub fn mastery_costed(
-    ctx: &Context,
-    current: Option<&ReleaseId>,
-    window: usize,
-) -> Result<Vec<ConceptMastery>, OrchestratorError> {
-    gather(ctx, current, window, true)
+    gather(ctx, current, window)
 }
 
 fn gather(
     ctx: &Context,
     current: Option<&ReleaseId>,
     window: usize,
-    costed: bool,
 ) -> Result<Vec<ConceptMastery>, OrchestratorError> {
     let store = ctx.experiences();
     let mut resolver = ConceptResolver::new(ctx.sources());
@@ -147,47 +129,29 @@ fn gather(
         let Some(decision) = decisions.get(&id) else {
             continue;
         };
-        let gpu_seconds = if costed {
-            let notes = store.annotations(&id)?;
-            outcome_of(&experience, &notes.annotations)
-                .map_err(|e| OrchestratorError::Refused(format!("experience {id}: {e}")))?
-                .gpu_seconds
-        } else {
-            None
-        };
         for concept in resolver.concepts(&experience.to_task())? {
             attempts
                 .entry((concept, release.clone()))
                 .or_default()
-                .push((
-                    experience.provenance.created_at.clone(),
-                    decision.passed,
-                    gpu_seconds,
-                ));
+                .push((experience.provenance.created_at.clone(), decision.passed));
         }
     }
     let mut concepts: BTreeMap<Concept, Vec<ReleaseMastery>> = BTreeMap::new();
     for ((concept, release), mut recorded) in attempts {
-        recorded.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
+        recorded.sort();
         let since = recorded
             .first()
-            .map(|(at, _, _)| at.clone())
+            .map(|(at, _)| at.clone())
             .unwrap_or_default();
         let newest = &recorded[recorded.len().saturating_sub(window)..];
-        let passes = newest.iter().filter(|(_, passed, _)| *passed).count();
+        let passes = newest.iter().filter(|(_, passed)| *passed).count();
         let graded = newest.len();
-        let gpu_seconds = newest
-            .iter()
-            .map(|(_, _, gpu)| *gpu)
-            .sum::<Option<f64>>()
-            .filter(|_| costed);
         concepts.entry(concept).or_default().push(ReleaseMastery {
             release,
             graded,
             passes,
             rate: (graded > 0).then(|| passes as f64 / graded as f64),
             since,
-            gpu_seconds,
         });
     }
     Ok(concepts

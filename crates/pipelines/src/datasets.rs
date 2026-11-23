@@ -45,8 +45,6 @@ use crate::bench::practice_material::PracticeFacts;
 use crate::describe::{describe, Described};
 use crate::exam_seal;
 use crate::grouping::{assign_draws, assign_groups, part_families};
-use crate::raft::{with_passages, Abstainer, PassageShare};
-use crate::retrieval::Retrieval as PassageSearch;
 use crate::variants::refuse_variants;
 use splinter_eval::campaign::learning_signal::{
     Attempt as SignalAttempt, SignalReport, TaskSignal,
@@ -138,31 +136,10 @@ impl From<StoredDataset> for Built {
     }
 }
 
-/// Passages to put in the prompt of a share of the records: what is retrieved
-/// from, and how much of the dataset gets them ([`crate::raft`]).
-pub struct Passages<'a> {
-    /// The passages of the sources, searched.
-    pub retrieval: &'a PassageSearch<'a>,
-    /// Which records get them, and what each teaches.
-    pub share: PassageShare,
-    /// Writes the abstentions the share asks for, when it asks for any.
-    pub abstainer: Option<&'a dyn Abstainer>,
-}
-
 /// Projects `request.sets` through `request.view` and stores the dataset.
 pub fn build(ctx: &Context, request: &BuildRequest) -> Result<Built, OrchestratorError> {
-    build_with(ctx, request, None)
-}
-
-/// [`build`], a share of the records given retrieved passages in their
-/// prompt when `passages` says so.
-pub fn build_with(
-    ctx: &Context,
-    request: &BuildRequest,
-    passages: Option<&Passages<'_>>,
-) -> Result<Built, OrchestratorError> {
     let facts = practice_facts(request)?;
-    let (projection, described) = project_sealed(ctx, request, passages, &facts)?;
+    let (projection, described) = project_sealed(ctx, request, &facts)?;
     let stored = store_dataset(ctx, &projection, request.export_only)?;
     Ok(Built {
         described,
@@ -172,26 +149,23 @@ pub fn build_with(
     })
 }
 
-/// The projection [`build_with`] stores, and how a described voice dataset's
+/// The projection [`build`] stores, and how a described voice dataset's
 /// passages were described: for a caller that adds to the records before
 /// they are stored.
 pub fn project_with(
     ctx: &Context,
     request: &BuildRequest,
-    passages: Option<&Passages<'_>>,
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
-    project_sealed(ctx, request, passages, &practice_facts(request)?)
+    project_sealed(ctx, request, &practice_facts(request)?)
 }
 
 /// [`project_with`], with the facts of the request's practice material read.
 fn project_sealed(
     ctx: &Context,
     request: &BuildRequest,
-    passages: Option<&Passages<'_>>,
     facts: &PracticeFacts,
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
-    let (projection, described, corpus) =
-        project_without(ctx, request, passages, &BTreeSet::new(), facts)?;
+    let (projection, described, corpus) = project_without(ctx, request, &BTreeSet::new(), facts)?;
     crate::sealed::admit_corpus(ctx, &corpus)?;
     exam_seal::seal(ctx, &corpus, &projection)?;
     Ok((projection, described))
@@ -207,11 +181,10 @@ pub fn build_dropping_leaks(
     request: &BuildRequest,
 ) -> Result<Built, OrchestratorError> {
     let facts = practice_facts(request)?;
-    let (first, _, corpus) = project_without(ctx, request, None, &BTreeSet::new(), &facts)?;
+    let (first, _, corpus) = project_without(ctx, request, &BTreeSet::new(), &facts)?;
     let dropped = exam_seal::leaks(ctx, &corpus, &first)?;
     let leaving: BTreeSet<ExperienceId> = dropped.iter().map(|l| l.experience.clone()).collect();
-    let (mut projection, described, corpus) =
-        project_without(ctx, request, None, &leaving, &facts)?;
+    let (mut projection, described, corpus) = project_without(ctx, request, &leaving, &facts)?;
     if !leaving.is_empty() {
         projection
             .excluded
@@ -234,7 +207,6 @@ pub fn build_dropping_leaks(
 fn project_without(
     ctx: &Context,
     request: &BuildRequest,
-    passages: Option<&Passages<'_>>,
     left_out: &BTreeSet<ExperienceId>,
     facts: &PracticeFacts,
 ) -> Result<(Projection, Option<Described>, Corpus), OrchestratorError> {
@@ -470,15 +442,6 @@ fn project_without(
             request.base.is_some(),
         )?;
     }
-    if let Some(passages) = passages {
-        projection = with_passages(
-            ctx,
-            projection,
-            &passages.share,
-            passages.retrieval,
-            passages.abstainer,
-        )?;
-    }
     assign_groups(ctx, &corpus, &mut projection)?;
     let projection = assign_draws(&corpus, projection, request.split_seed);
     Ok((projection, described, corpus))
@@ -680,41 +643,6 @@ pub fn examples_in(path: &Path) -> std::io::Result<usize> {
         };
     }
     Ok(examples)
-}
-
-/// The tokens of the supervised answers of the chat dataset at `path`, as the
-/// brain service's trainer counts them for the policy base (each answer with
-/// the end of its turn); characters at the fallback ratio when no service can
-/// be asked.
-///
-/// # Errors
-/// The file cannot be read, or the service refused the dataset.
-pub fn supervised_tokens_in(ctx: &Context, path: &Path) -> std::io::Result<usize> {
-    let failed = |e: splinter_model::PolicyError| std::io::Error::other(e.to_string());
-    if let Ok(brain) = ctx.brain() {
-        let base = splinter_model::selection::local_model_name(&ctx.config().policy_base);
-        let mut spec = splinter_model::served_train::CheckSpec::chat(&base, false, false);
-        spec.per_record = false;
-        let report =
-            splinter_model::served_train::check_dataset(&brain, path, &spec).map_err(failed)?;
-        report.refuse_invalid(path).map_err(failed)?;
-        return Ok(usize::try_from(report.supervised_tokens.total).unwrap_or(usize::MAX));
-    }
-    let text = std::fs::read_to_string(path)?;
-    let mut total = 0;
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        let record: serde_json::Value = serde_json::from_str(line)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let answers = record
-            .get("messages")
-            .and_then(serde_json::Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter(|m| m.get("train") == Some(&serde_json::Value::Bool(true)))
-            .filter_map(|m| m.get("content").and_then(serde_json::Value::as_str));
-        total += answers.map(splinter_data::chars_as_tokens).sum::<usize>();
-    }
-    Ok(total)
 }
 
 #[cfg(test)]

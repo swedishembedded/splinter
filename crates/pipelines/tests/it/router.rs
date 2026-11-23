@@ -21,9 +21,9 @@ use splinter_pipelines::router::{interpret, interpret_with, Intent, Routed};
 /// The classification the scripted policy gives each sentence.
 fn classifier() -> Scripted {
     Scripted::new(|prompt| {
-        let reply = if prompt.contains("learn ./docs") {
+        let reply = if prompt.contains("absorb ./docs") {
             json!({ "candidates": [{
-                "intent": { "verb": "learn", "sources": ["./docs"] },
+                "intent": { "verb": "absorb", "sessions": ["./docs"] },
                 "confidence": 0.94
             }]})
         } else if prompt.contains("what does X do?") {
@@ -34,13 +34,13 @@ fn classifier() -> Scripted {
         } else if prompt.contains("the docs thing") {
             // Both confident, too close to tell apart.
             json!({ "candidates": [
-                { "intent": { "verb": "learn", "sources": ["./docs"] }, "confidence": 0.85 },
+                { "intent": { "verb": "absorb", "sessions": ["./docs"] }, "confidence": 0.85 },
                 { "intent": { "verb": "add_source", "target": "./docs" }, "confidence": 0.8 }
             ]})
         } else if prompt.contains("maybe the docs") {
             // One reading, not confident enough.
             json!({ "candidates": [
-                { "intent": { "verb": "learn", "sources": ["./docs"] }, "confidence": 0.5 }
+                { "intent": { "verb": "absorb", "sessions": ["./docs"] }, "confidence": 0.5 }
             ]})
         } else if prompt.contains("ask the big remote model") {
             json!({ "candidates": [{
@@ -57,15 +57,14 @@ fn classifier() -> Scripted {
                 "intent": { "verb": "explain", "question": "the flags" },
                 "confidence": 0.9
             }]})
-        } else if prompt.contains("materials she wrote")
-            || prompt.contains("from her letters in ./nowhere")
+        } else if prompt.contains("sessions she recorded")
+            || prompt.contains("from her sessions in ./nowhere")
         {
             // The model garbles the path it was given.
             json!({ "candidates": [{
                 "intent": {
-                    "verb": "learn",
-                    "sources": ["./typo/ada/letters"],
-                    "goal": "think like Ada Lovelace"
+                    "verb": "absorb",
+                    "sessions": ["./typo/ada/letters"]
                 },
                 "confidence": 0.93
             }]})
@@ -84,19 +83,16 @@ fn classifier() -> Scripted {
 #[test]
 fn a_confident_reading_runs_as_its_command() {
     let (_scratch, ctx) = scratch_context("front-door-run", classifier(), false);
-    let Routed::Execute(intent) = interpret(&ctx, "learn ./docs").unwrap() else {
-        panic!("a confident learn runs");
+    let Routed::Execute(intent) = interpret(&ctx, "absorb ./docs").unwrap() else {
+        panic!("a confident absorb runs");
     };
     assert_eq!(
         intent,
-        Intent::Learn {
-            sources: vec!["./docs".into()],
-            goal: None,
-            base: None,
-            adapter: None,
+        Intent::Absorb {
+            sessions: vec!["./docs".into()],
         }
     );
-    assert_eq!(intent.command_line(), ["learn", "./docs"]);
+    assert_eq!(intent.command_line(), ["absorb", "./docs"]);
 
     let Routed::Execute(intent) = interpret(&ctx, "what does X do?").unwrap() else {
         panic!("a confident question is asked");
@@ -111,7 +107,7 @@ fn an_ambiguous_reading_is_a_question_not_an_action() {
         panic!("two close readings are a question");
     };
     assert_eq!(question.candidates.len(), 2);
-    assert_eq!(question.candidates[0].command, ["learn", "./docs"]);
+    assert_eq!(question.candidates[0].command, ["absorb", "./docs"]);
     assert_eq!(question.candidates[1].command, ["source", "add", "./docs"]);
 
     let Routed::Clarify(question) = interpret(&ctx, "maybe the docs").unwrap() else {
@@ -156,15 +152,10 @@ fn a_destructive_reading_is_confirmed_not_run() {
 fn the_policy_is_shown_the_classification_schema() {
     let policy = classifier();
     let (_scratch, ctx) = scratch_context("front-door-schema", policy.clone(), false);
-    interpret(&ctx, "learn ./docs").unwrap();
+    interpret(&ctx, "absorb ./docs").unwrap();
     let prompts = policy.prompts.lock().unwrap();
     // Names only the schema carries: the verbs, as the reply must spell them.
-    for name in [
-        "add_source",
-        "list_sources",
-        "cancel_run",
-        "cmd:<tool> --help",
-    ] {
+    for name in ["add_source", "list_sources", "cancel_run", "cmd:<command>"] {
         assert!(
             prompts[0].contains(name),
             "{name} is not shown: {}",
@@ -195,15 +186,13 @@ fn a_path_the_model_garbled_is_corrected_from_the_sentence() {
     let letters = scratch.0.join("ada-letters");
     std::fs::create_dir_all(&letters).unwrap();
     let sentence = format!(
-        "Learn to think like Ada based on the materials she wrote in directory {}.",
+        "Learn from the sessions she recorded in directory {}.",
         letters.display()
     );
-    let Routed::Execute(Intent::Learn { sources, goal, .. }) = interpret(&ctx, &sentence).unwrap()
-    else {
-        panic!("a confident learn runs");
+    let Routed::Execute(Intent::Absorb { sessions }) = interpret(&ctx, &sentence).unwrap() else {
+        panic!("a confident absorb runs");
     };
-    assert_eq!(sources, [letters.display().to_string()]);
-    assert_eq!(goal.as_deref(), Some("think like Ada Lovelace"));
+    assert_eq!(sessions, [letters.display().to_string()]);
 }
 
 #[test]
@@ -211,28 +200,13 @@ fn a_source_that_exists_or_is_not_a_path_is_left_as_the_model_wrote_it() {
     let (scratch, ctx) = scratch_context("front-door-path-kept", classifier(), false);
     // The model's path is wrong and the sentence names no path that exists:
     // nothing is invented, so the run is refused later where the path is read.
-    let Routed::Execute(Intent::Learn { sources, .. }) = interpret(
-        &ctx,
-        "Learn to think like Ada from her letters in ./nowhere/at/all",
-    )
-    .unwrap() else {
-        panic!("a confident learn runs");
+    let Routed::Execute(Intent::Absorb { sessions }) =
+        interpret(&ctx, "Learn from her sessions in ./nowhere/at/all").unwrap()
+    else {
+        panic!("a confident absorb runs");
     };
-    assert_eq!(sources, ["./typo/ada/letters"]);
+    assert_eq!(sessions, ["./typo/ada/letters"]);
     drop(scratch);
-}
-
-#[test]
-fn the_policy_is_shown_how_a_persona_sentence_is_read() {
-    let policy = classifier();
-    let (_scratch, ctx) = scratch_context("front-door-persona", policy.clone(), false);
-    interpret(&ctx, "learn ./docs").unwrap();
-    let prompts = policy.prompts.lock().unwrap();
-    assert!(
-        prompts[0].contains("think like"),
-        "a sentence naming a person to think like is shown as a learn: {}",
-        prompts[0]
-    );
 }
 
 /// The front door can be given a stronger model than the policy to read a
@@ -257,7 +231,7 @@ fn a_model_named_in_the_configuration_reads_the_sentence_instead_of_the_policy()
                 "scripted/reader",
             ),
         );
-    let Routed::Execute(_) = interpret(&ctx, "learn ./docs").unwrap() else {
+    let Routed::Execute(_) = interpret(&ctx, "absorb ./docs").unwrap() else {
         panic!("the reader's confident reading runs");
     };
     assert!(
@@ -273,7 +247,7 @@ fn a_front_door_model_that_is_no_model_reference_is_refused_by_name() {
     let mut settings = config(&scratch);
     settings.front_door_model = Some("not a reference".into());
     let ctx = splinter_orchestrator::Context::new(settings, false).unwrap();
-    let error = interpret(&ctx, "learn ./docs").err().unwrap();
+    let error = interpret(&ctx, "absorb ./docs").err().unwrap();
     assert!(error.is_refusal(), "{error}");
     assert!(error.to_string().contains("not a reference"), "{error}");
 }
@@ -348,41 +322,4 @@ fn sessions_are_absorbed_and_no_sessions_are_a_question() {
     };
     assert_eq!(intent.command_line(), ["absorb", "./today", "./monday"]);
     assert!(matches!(route(&reading(vec![]), false), Routed::Clarify(_)));
-}
-
-#[test]
-fn a_learn_that_names_a_base_and_an_adapter_runs_as_a_learn_with_both() {
-    let intent = Intent::Learn {
-        sources: vec!["./jefferson".into()],
-        goal: Some("think and act like Thomas Jefferson".into()),
-        base: Some("Qwen/Qwen3-8B".into()),
-        adapter: Some("jefferson".into()),
-    };
-    assert_eq!(
-        intent.command_line(),
-        [
-            "learn",
-            "./jefferson",
-            "--goal",
-            "think and act like Thomas Jefferson",
-            "--base",
-            "Qwen/Qwen3-8B",
-            "--adapter",
-            "jefferson"
-        ]
-    );
-    let read: Intent = serde_json::from_str(
-        r#"{"verb": "learn", "sources": ["./jefferson"], "adapter": "jefferson"}"#,
-    )
-    .unwrap();
-    assert_eq!(
-        read,
-        Intent::Learn {
-            sources: vec!["./jefferson".into()],
-            goal: None,
-            base: None,
-            adapter: Some("jefferson".into()),
-        },
-        "a reading that names neither leaves them out"
-    );
 }

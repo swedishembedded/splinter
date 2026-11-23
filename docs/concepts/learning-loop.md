@@ -36,11 +36,11 @@ answers.
 ## Where the training budget goes
 
 Budget goes where learning happens: before a task's attempts become
-training data, `learn` measures the policy's pass@k on it closed-book.
+training data, `solve --frontier` measures the policy's pass@k on it closed-book.
 A task it never solves is solved once more by a teacher - the same
 policy unless `--teacher` names another model - shown the source
 sections the task is grounded in; the teacher's answer, once the task's
-verifiers pass it, is what the policy learns a new fact from. `learn`
+verifiers pass it, is what the policy learns a new fact from. `solve --frontier`
 keeps the tasks the policy fails at least sometimes and has a verified
 answer to - its own or the teacher's - and drops those it always solves
 (nothing to learn) and those nobody answered verifiably (nothing to learn

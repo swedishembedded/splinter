@@ -107,7 +107,6 @@ pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::
         assistant_model: None,
         judge_model: None,
         bf16_base: false,
-        default_budget: None,
         remote_concurrency: 4,
         brain: None,
         brain_device: None,

@@ -41,7 +41,7 @@ use splinter_orchestrator::generation::GenerationMark;
 use splinter_orchestrator::releases::StoredRelease;
 
 use super::kit::{ClaimKit, Live};
-use crate::learn::records_at_share;
+use crate::rehearsal::records_at_share;
 use std::collections::BTreeMap;
 
 /// The fewest live-claim records that make retraining the adapter from the

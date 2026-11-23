@@ -13,8 +13,7 @@ persona-chat chat  --model Qwen/Qwen3-8B+maren [--tools tools.json | --options a
 persona-chat batch --model Qwen/Qwen3-8B+maren --prompts questions.jsonl [--tools tools.json] --trace trace.jsonl
 ```
 
-`--model` is a name in the model store, `+` an adapter trained on it (the one
-`splinter learn --adapter maren` published), or any reference the other
+`--model` is a name in the model store, `+` an adapter of that name in the model store trained on it, or any reference the other
 commands take (`local:...`, `remote:...`, with `--allow-remote`). Add `@16384`
 to limit the context to what fits the card.
 

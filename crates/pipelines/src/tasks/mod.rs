@@ -61,9 +61,6 @@ pub const SECTIONS_PER_REQUEST: usize = 3;
 /// it reaches.
 pub const MAX_WINDOWS_PER_PART: usize = 4;
 
-/// The task kinds `learn` generates when none are named.
-pub const DEFAULT_LEARN_KINDS: &[&str] = &["recall"];
-
 /// The kinds a command may name for a model to write tasks of: the built-in
 /// catalogue's that a model proposes, and `denoise`. A kind built by code
 /// from a repository (`workspace-change`) is made by `practice` and is not
@@ -141,27 +138,20 @@ pub struct Generation<'a> {
     pub deadline: Option<Instant>,
     /// Stops generation.
     pub cancel: CancelToken,
-    /// The flywheel harnesses that invent tasks in place of the model
-    /// kinds'; `None` asks the generator model in one typed call.
-    pub harness: Option<&'a TaskHarness>,
 }
 
 mod batch;
 pub mod check_requests;
 pub mod combine;
 pub mod drills;
-mod harness;
 pub mod pick;
 mod report;
-
-use harness::Inventor;
 
 use batch::{Batch, Provenance};
 pub use batch::{
     MAX_CORRECTIONS, MIN_ADMISSION_RATE, MIN_PROPOSALS_BEFORE_GIVING_UP,
     MIN_REFUSALS_BEFORE_CORRECTING,
 };
-pub use harness::{InventReport, InventRunNote, RefusedDirectory, TaskHarness};
 pub use report::{CallNote, KindTally, RejectionNote, TasksGenerated};
 
 /// Generates tasks of `request.kinds` from `request.sources` and stores
@@ -184,17 +174,11 @@ pub fn generate(
     } else {
         None
     };
-    // The invent harness writes the tasks the model kinds would be asked
-    // for, so a generator model is asked for none.
-    let generator = if model_kinds.is_empty() || request.harness.is_some() {
+    let generator = if model_kinds.is_empty() {
         None
     } else {
         Some(model_generator(ctx, request, &model_kinds)?)
     };
-    let mut inventor = request
-        .harness
-        .map(|harness| Inventor::new(ctx, harness, request.goal, &request.cancel))
-        .transpose()?;
     let mut batch = Batch {
         written: request.written.to_vec(),
         deadline: request.deadline,
@@ -238,10 +222,6 @@ pub fn generate(
             if let Some(generator) = &generator {
                 let text = load_text(ctx, request, source_id, &part.name)?;
                 generate_part(ctx, generator, &text, &model_kinds, &mut batch)?;
-            }
-            if let Some(inventor) = &mut inventor {
-                let text = load_text(ctx, request, source_id, &part.name)?;
-                inventor.part(ctx, &text, &mut batch)?;
             }
             if batch.expired {
                 stopped = Some("the budget was spent inside a part".into());
@@ -307,7 +287,6 @@ pub fn generate(
         rejections: batch.rejections,
         calls: batch.calls,
         sections,
-        invent: inventor.map(Inventor::into_report),
         stopped,
         dropped: batch.dropped,
     })
@@ -590,19 +569,12 @@ fn set_name(request: &Generation<'_>) -> String {
     } else {
         format!(" and {} queued section(s)", request.sections.len())
     };
-    let mut name = match request.harness {
-        Some(harness) => format!(
-            "invented tasks from {} source(s){sections} by {}",
-            request.sources.len(),
-            harness.model
-        ),
-        None => format!(
-            "{} tasks from {} source(s){sections} by {}",
-            request.kinds.join("+"),
-            request.sources.len(),
-            request.generator
-        ),
-    };
+    let mut name = format!(
+        "{} tasks from {} source(s){sections} by {}",
+        request.kinds.join("+"),
+        request.sources.len(),
+        request.generator
+    );
     if let Some(author) = request.author {
         name.push_str(&format!(" by {author}"));
     }

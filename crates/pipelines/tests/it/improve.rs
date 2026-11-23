@@ -27,9 +27,9 @@
 
 use crate::common;
 
-use common::gate::{put_base, FakeTrainer};
+use common::gate::put_base;
 use common::repo::{project, Mender};
-use common::{config, Scratch};
+use common::{config, workspace_tasks, Scratch};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
 use splinter_core::clock::FixedClock;
@@ -43,7 +43,6 @@ use splinter_pipelines::improve::{
     fixed_comparison, improve, ArmRunner, Evaluation, ImprovementExperiment, InterventionSpec,
     Measured, ProtocolSpec, SolveArms,
 };
-use splinter_pipelines::practice::{practice, PracticeRequest};
 use splinter_store::runs::{read_run, RunStatus};
 use splinter_store::tasks::TaskSetId;
 
@@ -240,23 +239,7 @@ fn context(test: &str) -> (Scratch, Context) {
 fn some_tasks(ctx: &Context, scratch: &Scratch) -> TaskSetId {
     let repo = scratch.0.join("repo");
     project(&repo, &[]);
-    let recorded = practice(
-        ctx,
-        &PracticeRequest {
-            repository: repo,
-            revision: "HEAD".into(),
-            max_tasks: Some(32),
-            mutants_per_file: Some(1),
-            exam_families: Some(0),
-            pass_at_k: PassAtK::new(2, None, None),
-            budget: Some(std::time::Duration::from_secs(1)),
-            no_release: true,
-            ..PracticeRequest::default()
-        },
-        &FakeTrainer::knowing(&[]),
-    )
-    .unwrap();
-    recorded.report.tasks.unwrap().task_set.unwrap()
+    workspace_tasks::practised(ctx, &repo, 0).0
 }
 
 /// What an arm is worth in the world, as it is and not as measured: the gain

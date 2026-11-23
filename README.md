@@ -10,11 +10,11 @@
 It runs agents against real tasks, records what happened, verifies the
 outcomes, extracts training data from what was verified, trains a local
 model, and releases the result only when held-out evidence shows it improved.
-You tell it what to learn, in plain language:
+You start from a recipe that says what to learn, and ask in plain language:
 
 ```
-splinter "Learn all the facts about the STM32 reference manual from <path-to-manual>"
-splinter "Learn what we can do with brain command line options"
+splinter init --template knowledge-learning my-repo    # learn what your documents say
+splinter "Learn from my sessions in ~/sessions/today"
 splinter "Explain brain command line flags without interacting with brain"
 ```
 
@@ -52,7 +52,7 @@ installed.
 | A command-line tool | The tool's real output is captured as a source with provenance, then goes through the document path |
 | A repository | Faults seeded by code are kept as tasks only where the project's own tests catch them every time; the catching tests are hidden from the agent |
 | A person's own sessions with an agent | Secrets are removed; what the person taught is proposed by a model and admitted by code only on the person's exact words |
-| A person's writing | A planner chooses what to teach; answers are graded against the writer's own text |
+| A person's writing | Tasks that teach how they judge; answers are graded against the writer's own text |
 | Practice task folders (Harbor format) | Each task is attempted many times by the policy through sven in fresh workspaces and graded by its own tests outside the agent's reach; exam material is refused |
 
 ## What it produces
@@ -70,7 +70,7 @@ installed.
 make build && export PATH="$PWD/target/release:$PATH"
 splinter doctor                                       # can a run start here?
 splinter eval --suite anchor --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
-splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog"
+splinter source add examples/first-run/manual.md --usage-policy research_only   # then the stages, one command each
 splinter status
 splinter ask "At what baud rate does the QX-7 console run?"
 ```
@@ -96,15 +96,17 @@ The manual is in [`docs/`](docs/index.md) and published at https://swedishembedd
 Everything the command line does, a program can do through the `splinter-sdk` crate:
 
 ```rust
-use splinter_sdk::learn::LearnRequest;
+use splinter_sdk::ask::ask;
+use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::Splinter;
 
 let splinter = Splinter::from_env()?;
-let learned = splinter.learn(&LearnRequest {
-    sources: vec!["./manual.md".into()],
-    goal: Some("the console and power limits".into()),
-    ..LearnRequest::default()
-})?;
+let answer = ask(
+    &splinter.context(),
+    "What does the manual say about the watchdog?",
+    None,
+    &ModelRef::policy_default(),
+)?;
 ```
 
 ## Contributing

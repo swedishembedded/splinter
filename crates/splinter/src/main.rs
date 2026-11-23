@@ -11,8 +11,8 @@
 //! environment.
 //!
 //! Exit status: 0 on success; 1 when the work failed or did not get as far
-//! as asked (a `learn` that stopped before training or whose candidate was
-//! not released, a `release` the gate blocked, a run that failed) - a
+//! as asked (an `absorb` whose candidate was not released, a `release` the
+//! gate blocked, a run that failed) - a
 //! script must never read either as progress; 2 when the command was
 //! refused before anything ran (a usage error, an unknown id, a remote
 //! model without the opt-in); 3 when a sentence was not clear enough to
@@ -20,7 +20,6 @@
 
 mod absorb_output;
 mod absorb_session;
-mod acquire_output;
 mod arms_output;
 mod ask_session;
 mod baseline_report;
@@ -45,23 +44,18 @@ mod exam_session;
 mod experiment_output;
 mod factory_session;
 mod goal_session;
-mod harness_output;
-mod harness_session;
+mod harbor_output;
 mod hub_session;
 mod improve_session;
 mod jobs_session;
-mod learn_output;
-mod learn_request;
-mod learn_session;
 mod lineage_output;
 mod objects_output;
 mod output;
 mod panic_report;
-mod practice_output;
-mod practice_request;
 mod release_output;
 mod session;
 mod solve_session;
+mod stage_output;
 mod state_output;
 mod tasks_output;
 mod tasks_session;
@@ -114,7 +108,6 @@ fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
     config.assistant_model.clone_from(&global.assistant_model);
     config.judge_model.clone_from(&global.judge_model);
     config.front_door_model.clone_from(&global.front_door_model);
-    config.default_budget.clone_from(&global.default_budget);
     config.bf16_base = global.bf16_base;
     if let Some(n) = global.min_calibration_controls {
         config.min_calibration_controls = usize::try_from(n).unwrap_or(usize::MAX);

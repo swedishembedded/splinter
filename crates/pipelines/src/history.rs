@@ -21,7 +21,7 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::tasks::TaskSetId;
 
-use crate::practice::held::{held_tasks, keep_tasks};
+use crate::workspace_held::{held_tasks, keep_tasks};
 
 /// What a history run admitted and where it was stored.
 pub struct HistoryRun {

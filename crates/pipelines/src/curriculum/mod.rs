@@ -22,28 +22,18 @@
 //!   once more by a teacher, open-book, with the task's grounding material
 //!   shown; a verified teacher's answer is how the policy learns what it
 //!   does not know.
-//! * [`repository_teacher`] - the same for a change to a repository, which
-//!   has no passage to show: the task's reference change replayed as the
-//!   actions of an agent, or a stronger model solving it as an agent, either
-//!   graded by the workspace verifier like a student's attempt.
 //! * [`corrections`] - the attempts that failed or got stuck are continued
 //!   by a teacher from the state the student actually reached, verified with
 //!   the task's own hidden checks, and kept as training material in which
 //!   the student's prefix is context and the teacher's actions supervised.
 //! * [`capability`] - competence per capability of the examiner's taxonomy
-//!   (pass rates with intervals, failure classes), and the practice it
-//!   steers: tasks drawn by capability gap, transfer exercises requested for
-//!   the weakest capabilities.
-//! * [`signal`] - practice drawn by variance per cost: each task's shrunk
-//!   reward variance over the tokens an attempt costs, tasks whose attempts
-//!   all earn alike never drawn.
+//!   (pass rates with intervals, failure classes) and the capabilities
+//!   transfer exercises are requested for.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
 //! * [`queue`] - concepts the release gate saw forgotten (a retention suite
-//!   that dropped), queued for new tasks, which the next `learn` generates.
-//! * [`quota`] - a round's training set, near-duplicates removed with the
-//!   generator's own rule, capped per concept, task kind and verification
-//!   strength.
+//!   that dropped), queued for new tasks, which `status` and the release
+//!   report list.
 //!
 //! What a task exercises is [`splinter_knowledge::concepts`]' rule: the
 //! concepts it declares, else the (source, section) pairs its evidence
@@ -60,12 +50,7 @@ pub mod capability;
 pub mod corrections;
 pub mod frontier;
 pub mod mastery;
-pub mod progress;
 pub mod queue;
-pub mod quota;
-pub mod repository_teacher;
-pub mod schedule;
-pub mod signal;
 pub mod teacher;
 
 use splinter_core::digest::Digest;

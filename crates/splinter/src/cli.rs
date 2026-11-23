@@ -9,13 +9,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{ArgGroup, Args, Parser, Subcommand};
+use splinter_sdk::budget::parse_budget;
 use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
 use splinter_sdk::datasets::{
     parse_advantage, parse_reward_metric, parse_strength, parse_strip, AdvantageKind, StripPolicy,
     ViewName,
 };
 use splinter_sdk::eval::SuiteChoice;
-use splinter_sdk::learn::parse_budget;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
@@ -38,7 +38,7 @@ use splinter_sdk::vocabulary::terms::UsagePolicy;
                   what it makes under the state root by content address, so any stage can be \
                   rerun or inspected alone.\n\n\
                   Start here: `splinter doctor` says whether a run can start; \
-                  `splinter learn <SOURCE> --kinds <KINDS>` learns from a document; \
+                  `splinter init --template knowledge-learning` starts a run that learns from a document; \
                   `splinter status` shows what the policy is now; `splinter ask <QUESTION>` \
                   asks it. A worked example is examples/first-run."
 )]
@@ -58,18 +58,6 @@ pub struct Cli {
 /// The commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Learn from sources: capture them, generate tasks, solve, verify,
-    /// critique and retry failures, build an sft-final dataset, train a
-    /// candidate on it from the champion, and release it if it passes the
-    /// release gate.
-    Learn(Box<LearnArgs>),
-    /// Learn a repository from its own tests: take a revision of it, make
-    /// executable tasks of faults its tests catch, have the policy solve them
-    /// as an agent in copies of the tree, keep what hidden checks confirm
-    /// (reserving some files as an exam first, and refusing any attempt that
-    /// saw the hidden tests), train a candidate from the champion and
-    /// release it if it passes the release gate.
-    Practice(Box<PracticeArgs>),
     /// Continue the attempts that failed or got stuck of an existing
     /// experience set with a teacher, from the state the student actually
     /// reached, and keep the continuations the task's own hidden checks
@@ -172,11 +160,6 @@ pub enum Command {
     Tasks(TasksCommand),
     /// Solve every task of a task set, each in the environment it records.
     Solve(SolveArgs),
-    /// Improve a sven harness: candidates are run on a frozen task set,
-    /// verified, compared with the baseline, and promoted only on a verified
-    /// improvement with no regression.
-    #[command(subcommand)]
-    Harness(HarnessCommand),
     /// Check a factory run: every product against its blobs and its view;
     /// or append verdicts to an experience set (re-grades without
     /// re-running).
@@ -646,14 +629,11 @@ mod gate;
 mod global;
 mod goal;
 mod harbor;
-mod harness;
 mod hub;
 mod improve;
 mod invocations;
 mod jobs;
-mod learn;
 mod objects;
-mod practice;
 pub mod reference;
 mod review;
 mod state;
@@ -680,13 +660,10 @@ pub use gate::GateArgs;
 pub use global::Global;
 pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};
-pub use harness::{HarnessCommand, PromotionGateArg, ProposerArg, StrategyArg};
 pub use hub::{HubArgs, IngestHfArgs, PublishArgs};
 pub use improve::ImproveArgs;
 pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
-pub use learn::{LearnArgs, TaskHarnessArgs};
 pub use objects::ObjectsCommand;
-pub use practice::{PracticeArgs, ReplayArg};
 pub use reference::CliReferenceArgs;
 pub use review::{CritiqueArgs, VerifyArgs};
 pub use state::{RunsCommand, StateCommand};
@@ -694,7 +671,7 @@ pub use tasks::TasksCommand;
 use train::positive_count;
 
 /// A sampling temperature a provider accepts: 0 to 2.
-pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
+pub use train::{OptimiserArgs, RehearseArgs, TrainArgs};
 
 #[cfg(test)]
 mod factory_tests;

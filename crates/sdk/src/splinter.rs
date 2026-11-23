@@ -16,9 +16,6 @@ use crate::jobs::Jobs;
 use serde::Serialize;
 use splinter_orchestrator::runs::{record, Recorded, Recorder};
 use splinter_orchestrator::{Config, Context, OrchestratorError, Runtime};
-use splinter_pipelines::acquire::{acquire, AcquireReport, AcquireRequest};
-use splinter_pipelines::learn::{learn, LearnRequest, Learned};
-use splinter_pipelines::practice::{practice, PracticeReport, PracticeRequest};
 use splinter_pipelines::train::{BrainTrainer, Trainer};
 use splinter_sandbox::job::JobLauncher;
 
@@ -160,32 +157,5 @@ impl Splinter {
     ) -> Result<Recorded<R>, OrchestratorError> {
         let ctx = self.context();
         record(&ctx, command, arguments, |run| work(&ctx, run))
-    }
-
-    /// `learn`, training with this handle's trainer.
-    pub fn learn(&self, request: &LearnRequest) -> Result<Learned, OrchestratorError> {
-        learn(&self.context(), request, self.trainer())
-    }
-
-    /// `learn "<objective>" --source <url|path>`, training with this
-    /// handle's trainer: documentation made into a skill graph, probes, a
-    /// baseline, training rounds and an assessment on probes that decided
-    /// nothing.
-    pub fn acquire(
-        &self,
-        request: &AcquireRequest,
-    ) -> Result<Recorded<AcquireReport>, OrchestratorError> {
-        acquire(&self.context(), request, self.trainer())
-    }
-
-    /// `practice`, training with this handle's trainer: a revision of a
-    /// repository made into tasks, solved by the policy as an agent in
-    /// copies of its tree, trained on what its own checks confirm and
-    /// released if it passes the gate.
-    pub fn practice(
-        &self,
-        request: &PracticeRequest,
-    ) -> Result<Recorded<PracticeReport>, OrchestratorError> {
-        practice(&self.context(), request, self.trainer())
     }
 }

@@ -89,7 +89,7 @@ use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::runs::{record, Recorded};
 
 use crate::claims::{ClaimsExtracted, ClaimsGated, DEFAULT_EXTRACTION_PASSES};
-use crate::learn::PolicyUsed;
+use crate::policy_used::PolicyUsed;
 use crate::rehearsal::{Rehearsed, DEFAULT_REHEARSAL_SHARE};
 use crate::sessions::{SessionsIntake, DEFAULT_MAX_SESSION_BYTES};
 use crate::train::{Candidate, Trainer, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION};

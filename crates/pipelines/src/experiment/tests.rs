@@ -157,26 +157,6 @@ families = []
 }
 
 #[test]
-fn a_run_is_admitted_only_for_a_family_the_plan_allows_in_that_generation() {
-    let plan = ExperimentPlan::parse(GOOD, &catalog(&FAMILIES)).unwrap();
-    assert_eq!(plan.admit(1, "tree-a").unwrap(), "a");
-    assert_eq!(plan.admit(2, "tree-c").unwrap(), "c");
-    // Another generation's family, a sealed one, one outside the plan, and a
-    // generation the plan does not have are each refused with the reason.
-    for (generation, tree, why) in [
-        (2, "tree-a", "generation 1"),
-        (1, "tree-d", "sealed"),
-        (2, "tree-e", "sealed"),
-        (1, "tree-zz", "no family"),
-        (3, "tree-a", "has 2 generation"),
-        (0, "tree-a", "from 1"),
-    ] {
-        let refused = plan.admit(generation, tree).unwrap_err();
-        assert!(refused.to_string().contains(why), "{refused}");
-    }
-}
-
-#[test]
 fn the_plan_the_repository_ships_is_valid_against_its_catalog() {
     let tasks = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tasks");
     let plan = std::fs::read_to_string(tasks.join("e3-plan.toml")).unwrap();

@@ -4,23 +4,22 @@
 //! Fixtures the controller specs share: a scripted policy model that
 //! answers from the prompt it is sent, and a context over a scratch state
 //! root that serves it as `policy:default`; the release fixtures
-//! ([`gate`]), the manual `learn` learns from ([`manual`]) and the small
-//! repository `practice` works on with its scripted agents ([`repo`]) and
-//! the fake `sven` the flywheel harness specs run ([`fake_sven`]).
+//! ([`gate`]), the manual tasks are made from ([`manual`]) and the small
+//! repository workspace tasks are made from, with its scripted agents
+//! ([`repo`]).
 
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code, clippy::unwrap_used)]
 
 pub mod bench;
 pub mod fake_brain;
-pub mod fake_sven;
 pub mod gate;
 pub mod hub;
 pub mod manual;
 pub mod policy_gradient;
 pub mod repo;
 pub mod timeline;
-pub mod zork;
+pub mod workspace_tasks;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -128,7 +127,6 @@ pub fn config(scratch: &Scratch) -> Config {
         assistant_model: None,
         judge_model: None,
         bf16_base: false,
-        default_budget: None,
         remote_concurrency: 4,
         brain: None,
         brain_device: None,

@@ -6,7 +6,7 @@
 // expertise in adaptive curricula for agent training, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Competence per capability, and the practice it steers.
+//! Competence per capability.
 //!
 //! The examiner labels every task with the capability ids of its taxonomy;
 //! they reach this module as data (the practice manifest's and the export's
@@ -34,15 +34,6 @@
 //! for reasons a model can learn, weighs most; infrastructure failures weigh
 //! nothing, because they never enter `r`, `f` or `m`.
 //!
-//! **Selection.** A task weighs its band's factor (frontier and unmeasured 1,
-//! never solved [`CLIFF_WEIGHT`], retired 0) times the heaviest weight among
-//! its capabilities. A task whose every attempt so far was stopped by the
-//! infrastructure is never selected: its rate says nothing, and another
-//! attempt would only repeat the fault. The tasks are drawn without
-//! replacement in proportion to their weights from a recorded seed
-//! ([`super::progress::weighted_order`]), up to a budget; the same seed and
-//! history draw the same tasks.
-//!
 //! **Transfer.** The heaviest measured capabilities are the ones fresh
 //! exercises are requested for, from the examiner's practice generators
 //! (`bench task practice --capability`).
@@ -51,18 +42,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use splinter_core::outcome::FailureClass;
-use splinter_core::rng::Seed;
-use splinter_eval::campaign::pass_rate::{Band, BandCounts, PassRates};
+use splinter_eval::campaign::pass_rate::{BandCounts, PassRates};
 use splinter_eval::pilot::Share;
-
-use super::progress::weighted_order;
 
 /// The capability a task the examiner labelled with none counts under.
 pub const UNLABELLED: &str = "unlabelled";
-
-/// What a task never solved at the calibration depth weighs against one in
-/// the frontier band: it is revisited, rarely, in case the policy moved.
-pub const CLIFF_WEIGHT: f64 = 0.25;
 
 /// One attempt at a task, as competence counts it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -198,117 +182,4 @@ pub fn competence(attempts: &[Attempt], rates: &PassRates) -> Vec<CapabilityComp
             entry
         })
         .collect()
-}
-
-/// The weight of a capability nothing measured yet: the smoothed rate of no
-/// attempt is one half, and every other factor is one.
-pub const UNMEASURED_WEIGHT: f64 = 0.5;
-
-/// What a capability-driven selection decided, for the record.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Selection {
-    /// The tasks to practise, in the order drawn.
-    pub tasks: Vec<String>,
-    /// Each candidate task's weight; a task of weight zero is never drawn.
-    pub weights: BTreeMap<String, f64>,
-    /// Tasks left out because every attempt at them so far was stopped by
-    /// the infrastructure.
-    pub infrastructure: Vec<String>,
-    /// The capabilities fresh transfer exercises are requested for, heaviest
-    /// first.
-    pub transfer: Vec<String>,
-    /// The seed of the draw.
-    pub seed: Seed,
-}
-
-/// What [`select`] chooses from and by.
-#[derive(Clone, Copy, Debug)]
-pub struct SelectRequest<'a> {
-    /// The practice tasks, by name: the only tasks ever selected.
-    pub pool: &'a [String],
-    /// Each task's capability ids; a task absent counts as [`UNLABELLED`].
-    pub labels: &'a BTreeMap<String, Vec<String>>,
-    /// The campaign's per-task pass rates.
-    pub rates: &'a PassRates,
-    /// The competence the weights come from.
-    pub competence: &'a [CapabilityCompetence],
-    /// The most tasks selected; `None` selects every task of positive
-    /// weight.
-    pub budget: Option<usize>,
-    /// How many capabilities transfer exercises are requested for.
-    pub transfer: usize,
-    /// The seed of the draw.
-    pub seed: Seed,
-}
-
-/// The tasks of `request.pool` drawn by capability weight (module
-/// documentation).
-#[must_use]
-pub fn select(request: &SelectRequest<'_>) -> Selection {
-    let weight_of: BTreeMap<&str, f64> = request
-        .competence
-        .iter()
-        .map(|c| (c.capability.as_str(), c.weight))
-        .collect();
-    let unlabelled = vec![UNLABELLED.to_string()];
-    let mut weights = BTreeMap::new();
-    let mut infrastructure = Vec::new();
-    for task in request.pool {
-        let band = request.rates.band(task);
-        if band == Band::Unmeasured && request.rates.visits(task) > 0 {
-            infrastructure.push(task.clone());
-            continue;
-        }
-        let factor = match band {
-            Band::Retired => 0.0,
-            Band::Cliff => CLIFF_WEIGHT,
-            Band::Frontier | Band::Unmeasured => 1.0,
-        };
-        let capabilities = request
-            .labels
-            .get(task)
-            .filter(|ids| !ids.is_empty())
-            .unwrap_or(&unlabelled);
-        let heaviest = capabilities
-            .iter()
-            .map(|c| {
-                weight_of
-                    .get(c.as_str())
-                    .copied()
-                    .unwrap_or(UNMEASURED_WEIGHT)
-            })
-            .fold(0.0, f64::max);
-        weights.insert(task.clone(), factor * heaviest);
-    }
-    let mut tasks: Vec<String> = weighted_order(
-        weights
-            .iter()
-            .filter(|(_, w)| **w > 0.0)
-            .map(|(task, w)| (task, *w)),
-        request.seed,
-    );
-    if let Some(budget) = request.budget {
-        tasks.truncate(budget);
-    }
-    let mut measured: Vec<&CapabilityCompetence> = request
-        .competence
-        .iter()
-        .filter(|c| c.graded > 0 && c.capability != UNLABELLED)
-        .collect();
-    measured.sort_by(|a, b| {
-        b.weight
-            .total_cmp(&a.weight)
-            .then_with(|| a.capability.cmp(&b.capability))
-    });
-    Selection {
-        tasks,
-        weights,
-        infrastructure,
-        transfer: measured
-            .into_iter()
-            .take(request.transfer)
-            .map(|c| c.capability.clone())
-            .collect(),
-        seed: request.seed,
-    }
 }

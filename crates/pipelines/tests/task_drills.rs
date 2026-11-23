@@ -26,9 +26,9 @@ mod common;
 
 use std::collections::BTreeSet;
 
-use common::gate::{put_base, FakeTrainer};
+use common::gate::put_base;
 use common::repo::{git, project, write, Agent};
-use common::{config, Scratch};
+use common::{config, workspace_tasks, Scratch};
 use serde_json::json;
 use splinter_agent::solve::Model;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
@@ -39,11 +39,9 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_knowledge::tasks::workspace::DrillOrigin;
 use splinter_orchestrator::Context;
-use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
 use splinter_pipelines::exam_seal;
 use splinter_pipelines::harbor::export_harbor;
-use splinter_pipelines::practice::{practice, PracticeRequest};
 use splinter_pipelines::tasks::drills::{drills, DrillRequest, Drilled};
 use splinter_store::experiences::ExperienceSet;
 use splinter_store::tasks::TaskSetId;
@@ -61,26 +59,13 @@ fn context(test: &str) -> (Scratch, Context) {
     (scratch, ctx)
 }
 
-/// A practised repository: its admitted set and the files its exam holds.
+/// A repository made into tasks: its admitted set and the files its exam holds.
 fn practised(test: &str) -> (Scratch, Context, TaskSetId, BTreeSet<String>) {
     let (scratch, ctx) = context(test);
     let repo = scratch.0.join("repo");
     project(&repo, &[]);
-    let request = PracticeRequest {
-        repository: repo,
-        revision: "HEAD".into(),
-        max_tasks: Some(32),
-        mutants_per_file: Some(1),
-        exam_families: Some(2),
-        pass_at_k: PassAtK::new(2, None, None),
-        no_release: true,
-        ..PracticeRequest::default()
-    };
-    let report = practice(&ctx, &request, &FakeTrainer::knowing(&[]))
-        .unwrap()
-        .report;
-    let exam = report.reserve.unwrap().families.into_iter().collect();
-    (scratch, ctx, report.tasks.unwrap().task_set.unwrap(), exam)
+    let (set, exam) = workspace_tasks::practised(&ctx, &repo, 2);
+    (scratch, ctx, set, exam)
 }
 
 fn request(scratch: &Scratch, seed: u64) -> DrillRequest {

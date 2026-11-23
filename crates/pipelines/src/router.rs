@@ -59,23 +59,6 @@ pub const CLASSIFY_MAX_OUTPUT_TOKENS: u64 = 1024;
 #[schemars(crate = "splinter_agent::schemars")]
 #[serde(tag = "verb", rename_all = "snake_case")]
 pub enum Intent {
-    /// Learn from sources: files, directories, or `cmd:<command>` whose
-    /// output is captured; runs the whole pipeline.
-    Learn {
-        /// What to learn from, exactly as the sentence names it; a
-        /// command-line tool is learned from its help, `cmd:<tool> --help`.
-        sources: Vec<String>,
-        /// What the learner is after, if the sentence says.
-        #[serde(default)]
-        goal: Option<String>,
-        /// The checkpoint to train, when the sentence names a model.
-        #[serde(default)]
-        base: Option<String>,
-        /// The name of the adapter to train or continue, when the sentence
-        /// names one.
-        #[serde(default)]
-        adapter: Option<String>,
-    },
     /// Learn from the sessions the person held with their agent: files or
     /// directories of recorded sessions (`*.atif.json`); extracts what they
     /// taught, trains and releases the next model.
@@ -94,7 +77,7 @@ pub enum Intent {
     },
     /// Show the policy in use, recent runs and what the stores hold.
     Status,
-    /// Store a source without learning from it yet.
+    /// Store a source.
     AddSource {
         /// A file, a directory, or `cmd:<command>`.
         target: String,
@@ -143,26 +126,14 @@ nothing fits, and lower confidences when the sentence could mean several things.
 /// Sentences shown to the model with their classifications: a small
 /// model copies an example far more reliably than it reads a schema's
 /// references.
-const EXAMPLES: [(&str, &str); 6] = [
-    (
-        "Learn everything in the manual at ./manuals/pump.md",
-        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./manuals/pump.md"], "goal": "everything in the manual"}, "confidence": 0.9}]}"#,
-    ),
-    (
-        "Learn what the tar command line can do",
-        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["cmd:tar --help"], "goal": "what the tar command line can do"}, "confidence": 0.9}]}"#,
-    ),
-    (
-        "Learn to think like Ada Lovelace based on the letters she wrote in directory ./ada",
-        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think like Ada Lovelace"}, "confidence": 0.9}]}"#,
-    ),
-    (
-        "Learn to think and act like Ada Lovelace from ./ada on Qwen/Qwen3-8B as the adapter ada",
-        r#"{"candidates": [{"intent": {"verb": "learn", "sources": ["./ada"], "goal": "think and act like Ada Lovelace", "base": "Qwen/Qwen3-8B", "adapter": "ada"}, "confidence": 0.9}]}"#,
-    ),
+const EXAMPLES: [(&str, &str); 3] = [
     (
         "Learn from my sessions in ~/sessions/today",
         r#"{"candidates": [{"intent": {"verb": "absorb", "sessions": ["~/sessions/today"]}, "confidence": 0.9}]}"#,
+    ),
+    (
+        "Keep the file ./notes.md as a source",
+        r#"{"candidates": [{"intent": {"verb": "add_source", "target": "./notes.md"}, "confidence": 0.9}]}"#,
     ),
     (
         "Explain the tar flags from what you know",
@@ -172,7 +143,7 @@ const EXAMPLES: [(&str, &str); 6] = [
 
 /// Who the model is while it classifies.
 const ROLE: &str = "You route a person's sentence to the command of a learning system that \
-acquires knowledge from documents, repositories and command output.";
+acquires knowledge from documents, repositories, recorded sessions and command output.";
 
 /// What the front door does with a sentence.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -222,21 +193,6 @@ impl Intent {
     pub fn command_line(&self) -> Vec<String> {
         let words = |words: &[&str]| words.iter().map(|w| w.to_string()).collect::<Vec<_>>();
         match self {
-            Self::Learn {
-                sources,
-                goal,
-                base,
-                adapter,
-            } => {
-                let mut line = words(&["learn"]);
-                line.extend(sources.iter().cloned());
-                for (flag, value) in [("--goal", goal), ("--base", base), ("--adapter", adapter)] {
-                    if let Some(value) = value {
-                        line.extend([flag.to_string(), value.clone()]);
-                    }
-                }
-                line
-            }
             Self::Absorb { sessions } => {
                 let mut line = words(&["absorb"]);
                 line.extend(sessions.iter().cloned());
@@ -272,12 +228,6 @@ impl Intent {
             Self::CancelRun { .. } => Some("cancelling a run cannot be undone".into()),
             Self::AddSource { target } if runs_command(target) => {
                 Some("capturing a command runs it".into())
-            }
-            Self::Learn { sources, .. } if sources.iter().any(|s| runs_command(s)) => {
-                Some("learning from a command runs it".into())
-            }
-            Self::Learn { sources, .. } if sources.is_empty() => {
-                Some("the sentence names nothing to learn from".into())
             }
             Self::Absorb { sessions } if sessions.is_empty() => {
                 Some("the sentence names no sessions to learn from".into())
@@ -369,9 +319,9 @@ fn repair_paths(classification: &mut Classification, sentence: &str) {
     let wrong = |path: &str| !path.contains("://") && SourceTarget::from_learn_arg(path).is_err();
     for candidate in &mut classification.candidates {
         match &mut candidate.intent {
-            Intent::Learn { sources, .. } => {
-                for source in sources.iter_mut().filter(|s| wrong(s)) {
-                    source.clone_from(only);
+            Intent::Absorb { sessions } => {
+                for session in sessions.iter_mut().filter(|s| wrong(s)) {
+                    session.clone_from(only);
                 }
             }
             Intent::AddSource { target } if wrong(target) => target.clone_from(only),

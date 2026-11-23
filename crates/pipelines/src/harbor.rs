@@ -45,7 +45,7 @@ use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::TaskSetId;
 
-use crate::practice::{held_tasks, keep_tasks};
+use crate::workspace_held::{held_tasks, keep_tasks};
 
 /// The document class an imported task's origin is stored under.
 const ORIGIN: &str = "harbor_task";

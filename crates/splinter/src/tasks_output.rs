@@ -6,8 +6,10 @@
 
 use std::fmt::Write as _;
 
+use splinter_sdk::canaries::CanariesMade;
+use splinter_sdk::tasks::pick::Picked;
 use splinter_sdk::tasks::{duration_words, TasksGenerated};
-use splinter_sdk::validate::Validated;
+use splinter_sdk::variants::VariantsGenerated;
 
 use crate::output::{tally, Report};
 
@@ -52,27 +54,6 @@ impl Report for TasksGenerated {
             let detail: String = r.detail.chars().take(REJECTION_DETAIL_CHARS).collect();
             let _ = writeln!(out, "    {} {}: {}", r.kind, r.reason, detail.trim());
         }
-        if let Some(invent) = &self.invent {
-            let y = &invent.yielded;
-            let _ = writeln!(
-                out,
-                "  invent: {} run(s) logged {} admitted, {} rejected, {} duplicate, {} failed; {} committed task(s) refused here",
-                invent.runs.len(),
-                y.admitted,
-                y.rejected,
-                y.duplicate,
-                y.failed,
-                invent.refused.len()
-            );
-            for refused in invent.refused.iter().take(REJECTIONS_SHOWN) {
-                let _ = writeln!(
-                    out,
-                    "    {}: {}",
-                    refused.directory.display(),
-                    refused.reason
-                );
-            }
-        }
         if let Some(hint) = generator_hint(
             self.tasks,
             self.rejected.values().sum(),
@@ -104,38 +85,6 @@ const REJECTIONS_SHOWN: usize = 3;
 /// Characters of a rejection's detail shown.
 const REJECTION_DETAIL_CHARS: usize = 300;
 
-impl Report for Validated {
-    fn human(&self) -> String {
-        let mut out = format!(
-            "{} of {} passing attempt(s) kept; {} discarded by a validator, {} validator run(s) without a decision\n",
-            self.kept,
-            self.passing,
-            self.discarded.len(),
-            self.undecided.len()
-        );
-        for note in self.discarded.iter().take(REJECTIONS_SHOWN) {
-            let _ = writeln!(
-                out,
-                "  discarded {} ({}): {}",
-                note.experience,
-                note.focus,
-                note.reasons.join("; ")
-            );
-        }
-        for note in self.undecided.iter().take(REJECTIONS_SHOWN) {
-            let _ = writeln!(
-                out,
-                "  no decision for {} ({}): {}",
-                note.experience, note.focus, note.why
-            );
-        }
-        if let Some(why) = &self.stopped {
-            let _ = writeln!(out, "  stopped: {why}");
-        }
-        out
-    }
-}
-
 impl Report for splinter_sdk::tasks::drills::Drilled {
     fn human(&self) -> String {
         let mut out = format!(
@@ -163,6 +112,102 @@ impl Report for splinter_sdk::tasks::drills::Drilled {
         }
         if !self.unreadable.is_empty() {
             let _ = writeln!(out, "  unreadable  {}", self.unreadable.join(", "));
+        }
+        for (label, set) in [
+            ("set", &self.task_set),
+            ("exam", &self.exam_task_set),
+            ("training", &self.training_task_set),
+        ] {
+            if let Some(set) = set {
+                let _ = writeln!(out, "  {label:<9} {set}");
+            }
+        }
+        for (family, count) in &self.families {
+            let _ = writeln!(out, "  {count:>3}  {family}");
+        }
+        out
+    }
+}
+
+impl Report for VariantsGenerated {
+    fn human(&self) -> String {
+        let mut out = match &self.variant_set {
+            Some(set) => format!(
+                "task set {set}: {} variant(s) of {} task(s)\n",
+                self.variants, self.tasks
+            ),
+            None => format!("no variant admitted for {} task(s)\n", self.tasks),
+        };
+        if !self.ineligible.is_empty() {
+            let _ = writeln!(out, "  not varied: {}", tally(&self.ineligible));
+        }
+        if !self.rejected.is_empty() {
+            let _ = writeln!(out, "  rejected: {}", tally(&self.rejected));
+        }
+        if let Some(why) = &self.stopped {
+            let _ = writeln!(out, "  stopped: {why}");
+        }
+        out
+    }
+}
+
+impl Report for CanariesMade {
+    fn human(&self) -> String {
+        let mut out = match &self.canary_set {
+            Some(set) => format!(
+                "task set {set}: {} canar{}; hand it to the gate with `release --canaries {set}`\n",
+                self.canaries,
+                if self.canaries == 1 { "y" } else { "ies" }
+            ),
+            None => "no canary made: the set holds no workspace task with a check\n".into(),
+        };
+        if !self.skipped.is_empty() {
+            let _ = writeln!(out, "  left out: {}", tally(&self.skipped));
+        }
+        out
+    }
+}
+
+impl Report for splinter_sdk::tasks::check_requests::RequestsChecked {
+    fn human(&self) -> String {
+        format!(
+            "kept  {}  {} task(s)\ndropped  {} whose request states no returned value the fix restores, {} whose request states no error the fix restores\n",
+            self.kept, self.kept_tasks, self.unstated_return_value, self.unstated_raised_error,
+        )
+    }
+}
+
+impl Report for Picked {
+    fn human(&self) -> String {
+        format!(
+            "picked  {}  {} task(s) in {} family(ies)\nrest    {}  {} task(s) in {} family(ies)\n",
+            self.picked,
+            self.picked_tasks,
+            self.picked_families,
+            self.rest,
+            self.rest_tasks,
+            self.rest_families,
+        )
+    }
+}
+
+impl Report for splinter_sdk::tasks::combine::Combined {
+    fn human(&self) -> String {
+        use std::fmt::Write as _;
+
+        let mut out = format!(
+            "combined  {} task(s) of {} faults each (seed {}): {} of the exam's files, {} of \
+             training files\n  tried     {} combination(s), refused {}\n",
+            self.admitted,
+            self.faults,
+            self.seed.value(),
+            self.exam_tasks,
+            self.training_tasks,
+            self.attempted,
+            tally(&self.refused)
+        );
+        if !self.unusable.is_empty() {
+            let _ = writeln!(out, "  unusable  {}", tally(&self.unusable));
         }
         for (label, set) in [
             ("set", &self.task_set),

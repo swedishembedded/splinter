@@ -65,6 +65,18 @@ use splinter_orchestrator::error::OrchestratorError;
 /// every fourth draw holds the model to its base.
 pub const DEFAULT_REHEARSAL_SHARE: f64 = 0.25;
 
+/// How many records go beside `examples` so that they are `share` of all
+/// the examples: `examples * share / (1 - share)`, rounded up; none for a
+/// share of zero. What sizes the rehearsal set against the training
+/// records it rides beside.
+#[must_use]
+pub fn records_at_share(examples: usize, share: f64) -> usize {
+    if share <= 0.0 {
+        return 0;
+    }
+    (examples as f64 * share / (1.0 - share)).ceil() as usize
+}
+
 /// The share of a rehearsal set that is form tasks - sums and format
 /// requests, which a persona fine-tune erodes first and which code can
 /// grade - the rest general requests the base writes itself.
@@ -335,4 +347,18 @@ pub fn rehearse_on(
         dataset,
         stopped,
     })
+}
+
+#[cfg(test)]
+mod share_tests {
+    use super::records_at_share;
+
+    /// The rehearsal set is as many records as makes it the share asked.
+    #[test]
+    fn the_records_at_a_share_make_it_the_share_asked() {
+        assert_eq!(records_at_share(214, 0.5), 214);
+        assert_eq!(records_at_share(100, 0.25), 34);
+        assert_eq!(records_at_share(100, 0.0), 0);
+        assert_eq!(records_at_share(0, 0.5), 0);
+    }
 }

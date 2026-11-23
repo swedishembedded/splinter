@@ -53,7 +53,7 @@ use splinter_store::tasks::{TaskEntry, TaskSetId};
 use crate::attempt_store::store_attempt;
 use crate::curriculum::policy_label;
 use crate::dialogue::{teacher_instruction, Student, DIALOGUE_TURNS};
-use crate::learn::PolicyUsed;
+use crate::policy_used::PolicyUsed;
 use crate::tasks::remaining;
 use crate::workspace_solve::{attempt_seed, solve_attempt, solve_harness_attempt, WorkspaceInputs};
 use splinter_core::model_ref::ModelRef;

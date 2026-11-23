@@ -39,6 +39,7 @@ use common::gate::{gate_context, Brain, FakeTrainer, BASE_BYTES, NOW};
 use common::manual::{manual_policy, BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::Scratch;
 use splinter_agent::solve::Model;
+use splinter_agent::CancelToken;
 use splinter_core::clock::FixedClock;
 use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
@@ -52,13 +53,22 @@ use splinter_eval::gate::{Check, GateConfig, GateReport};
 use splinter_orchestrator::releases::{
     Provenance, ReleaseGate, ReleaseManifest, ReleasedArtifact, RELEASE_FORMAT,
 };
+use splinter_orchestrator::runs::record;
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::ask::ask;
-use splinter_pipelines::learn::{learn, LearnRequest, Learned};
+use splinter_pipelines::critique::{critique_set, CritiqueRequest, DEFAULT_RETRIES};
+use splinter_pipelines::datasets::BuildRequest;
+use splinter_pipelines::datasets::{build, ViewName, DEFAULT_MIN_STRENGTH};
 use splinter_pipelines::lineage::{
     lineage, Direction, Lineage, LineageRequest, NodeKind, Relation,
 };
-use splinter_pipelines::train::Candidate;
+use splinter_pipelines::solving::{harness_protocol, solve_set};
+use splinter_pipelines::sources::{self, SourceTarget};
+use splinter_pipelines::tasks::{generate, Generation};
+use splinter_pipelines::train::{
+    train_recorded, Candidate, TrainRequest, Tuning, DEFAULT_LORA_RANK, DEFAULT_REPLAY_FRACTION,
+};
+use splinter_pipelines::verify::{verify_set, Grading};
 
 /// What the learned fixture holds.
 struct Fixture {
@@ -68,35 +78,97 @@ struct Fixture {
     release: ReleaseId,
 }
 
-/// Learns the manual (released nothing), then writes a release of the
-/// learned candidate and points `default` at it.
+/// Takes the manual in as a source, makes tasks from it, has the policy
+/// solve and verify them, critiques and retries the failures, builds the
+/// training dataset from the passing attempts and trains a candidate on it
+/// (released nothing), then writes a release of the candidate and points
+/// `default` at it.
 fn learned(test: &str) -> (Scratch, Context, Fixture) {
     let (scratch, ctx) = gate_context(test, Brain::Missing);
+    let policy = ModelRef::policy_default();
     ctx.add_model(
-        ModelRef::policy_default(),
+        policy.clone(),
         Model::new(Arc::new(manual_policy()), common::POLICY),
     );
     let manual = scratch.0.join("manual.md");
     std::fs::write(&manual, MANUAL).unwrap();
-    let Learned::Ran(run) = learn(
+    let source = sources::add(
         &ctx,
-        &LearnRequest {
-            sources: vec![manual.display().to_string()],
-            no_release: true,
-            // The scripted policy answers each task the same way every
-            // time: keep every task.
-            no_frontier: true,
-            ..LearnRequest::default()
-        },
-        &FakeTrainer::knowing(&[]),
+        &SourceTarget::from_learn_arg(&manual.display().to_string()).unwrap(),
     )
-    .unwrap() else {
-        panic!("a learn that is not a dry run runs");
+    .unwrap()
+    .source
+    .id;
+    let kinds = ["recall".to_string()];
+    let generated = generate(
+        &ctx,
+        &Generation {
+            sources: std::slice::from_ref(&source),
+            sections: &[],
+            kinds: &kinds,
+            generator: &policy,
+            goal: None,
+            author: None,
+            written: &[],
+            denoise_seed: None,
+            deadline: None,
+            cancel: CancelToken::new(),
+        },
+    )
+    .unwrap();
+    let cancel = CancelToken::new();
+    let solved = solve_set(
+        &ctx,
+        &generated.task_set,
+        &policy,
+        None,
+        &cancel,
+        None,
+        harness_protocol(),
+    )
+    .unwrap();
+    verify_set(&ctx, &solved.experience_set, Grading::ActiveJudge, &cancel).unwrap();
+    // The scripted policy answers each task the same way every time: every
+    // task is kept, without a frontier measurement.
+    let critiqued = critique_set(
+        &ctx,
+        &CritiqueRequest {
+            set: &solved.experience_set,
+            critic: &policy,
+            solver: &policy,
+            retries: DEFAULT_RETRIES,
+            deadline: None,
+            cancel: cancel.clone(),
+        },
+    )
+    .unwrap();
+    let dataset = build(
+        &ctx,
+        &BuildRequest {
+            sets: vec![solved.experience_set.clone(), critiqued.revisions],
+            view: ViewName::SftFinal,
+            min_strength: Some(DEFAULT_MIN_STRENGTH),
+            ..common::bench::sft_request(solved.experience_set.clone())
+        },
+    )
+    .unwrap()
+    .dataset;
+    let request = TrainRequest {
+        datasets: vec![dataset.to_string()],
+        rehearsal: None,
+        from: policy,
+        replay_fraction: DEFAULT_REPLAY_FRACTION,
+        replay_policy: Default::default(),
+        steps: None,
+        rank: DEFAULT_LORA_RANK,
+        beta: None,
+        tuning: Tuning::default(),
     };
-    let report = run.report;
-    let source = report.sources[0].id.clone();
-    let dataset = report.dataset.unwrap().dataset;
-    let candidate = report.candidate.unwrap();
+    let candidate = record(&ctx, "train", &request, |run| {
+        train_recorded(&ctx, run, &request, &FakeTrainer::knowing(&[]))
+    })
+    .unwrap()
+    .report;
     let release = write_release(&ctx, &candidate);
     (
         scratch,

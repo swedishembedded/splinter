@@ -249,15 +249,6 @@ pub fn trusted_for(calibration: &Calibration, purpose: Use) -> bool {
     }
 }
 
-/// Whether only a judge can pass an answer to a task of `kind`
-/// ([`splinter_knowledge::tasks::TaskKind::needs_judge`]).
-#[must_use]
-pub fn kind_needs_judge(kind: &str) -> bool {
-    Catalogue::builtin()
-        .get(kind)
-        .is_some_and(|spec| spec.needs_judge())
-}
-
 /// Names `judge` as the judge this context grades with, after measuring it
 /// on controls made from the references of `tasks` ([`Judge::calibrated`]).
 /// A judge is another model than the ones whose work it grades:

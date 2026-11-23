@@ -190,16 +190,16 @@ fn a_build_splits_an_over_block_record_only_when_asked() {
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
 
-    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
+    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false)).unwrap();
     assert_eq!(unbounded.records.len(), 1, "one record per trajectory");
     let measure = measure(&ctx);
     let bound = measure(&unbounded.records[0]) - 1;
 
-    let (kept, _) = project_with(&ctx, &request(set.clone(), Some(bound), false), None).unwrap();
+    let (kept, _) = project_with(&ctx, &request(set.clone(), Some(bound), false)).unwrap();
     assert!(kept.records.is_empty(), "unasked, the record is left out");
     assert_eq!(kept.count(Exclusion::OverBlock), 1);
 
-    let (split, _) = project_with(&ctx, &request(set, Some(bound), true), None).unwrap();
+    let (split, _) = project_with(&ctx, &request(set, Some(bound), true)).unwrap();
     assert!(split.records.len() > 1, "asked, the record is split");
     assert_eq!(split.count(Exclusion::OverBlock), 0);
     for record in &split.records {
@@ -226,7 +226,7 @@ fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
 
-    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false), None).unwrap();
+    let (unbounded, _) = project_with(&ctx, &request(set.clone(), None, false)).unwrap();
     assert_eq!(unbounded.block_measure, None, "no bound, no measure");
     let record = &unbounded.records[0];
     let meter = RecordMeter::for_model(&brain, &base, false, unbounded.packed);
@@ -236,8 +236,7 @@ fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
     let floor = rendered - 1;
 
     // Left out at one token under the trainer's count, measured by the trainer.
-    let (left_out, _) =
-        project_with(&ctx, &request(set.clone(), Some(floor), false), None).unwrap();
+    let (left_out, _) = project_with(&ctx, &request(set.clone(), Some(floor), false)).unwrap();
     assert!(left_out.records.is_empty());
     assert_eq!(left_out.count(Exclusion::OverBlock), 1);
     assert_eq!(
@@ -249,12 +248,11 @@ fn a_build_bounds_records_by_the_count_the_trainer_checks_them_by() {
     );
 
     // Kept whole at the trainer's own count.
-    let (whole, _) =
-        project_with(&ctx, &request(set.clone(), Some(rendered), false), None).unwrap();
+    let (whole, _) = project_with(&ctx, &request(set.clone(), Some(rendered), false)).unwrap();
     assert_eq!(whole.records.len(), 1);
 
     // Split: every window passes the trainer's check at the same bound.
-    let (split, _) = project_with(&ctx, &request(set, Some(floor), true), None).unwrap();
+    let (split, _) = project_with(&ctx, &request(set, Some(floor), true)).unwrap();
     assert!(split.records.len() > 1, "asked, the record is split");
     let path = written(&scratch.0, &split);
     let overlong =
@@ -268,7 +266,7 @@ fn a_build_without_a_brain_service_says_it_measured_by_the_floor() {
     std::mem::forget(scratch);
     let experience = attempt(&ctx);
     let set = set_of(&ctx, &experience);
-    let (bounded, _) = project_with(&ctx, &request(set, Some(1_000_000), false), None).unwrap();
+    let (bounded, _) = project_with(&ctx, &request(set, Some(1_000_000), false)).unwrap();
     let Some(BlockMeasure::Floor { reason }) = bounded.block_measure else {
         panic!("no service counts: {:?}", bounded.block_measure);
     };
@@ -294,7 +292,7 @@ fn a_build_counts_records_for_the_base_the_training_starts_from() {
         }),
         ..request(set, Some(1_000_000), false)
     };
-    let (kept, _) = project_with(&ctx, &for_trained, None).unwrap();
+    let (kept, _) = project_with(&ctx, &for_trained).unwrap();
     assert_eq!(kept.records.len(), 1);
     assert_eq!(
         kept.block_measure,
@@ -369,7 +367,7 @@ fn a_record_the_trainer_refuses_is_left_out_at_build_under_its_own_reason() {
         base: Some(named_base(&scratch)),
         ..request(set, None, false)
     };
-    let (built, _) = project_with(&ctx, &named, None).unwrap();
+    let (built, _) = project_with(&ctx, &named).unwrap();
     assert!(
         built.records.is_empty(),
         "the refused record is not written"
@@ -400,7 +398,7 @@ fn a_build_that_names_its_base_is_refused_without_a_trainer_to_check_it() {
         base: Some(named_base(&scratch)),
         ..request(set, Some(1_000_000), false)
     };
-    let refused = project_with(&ctx, &named, None).unwrap_err().to_string();
+    let refused = project_with(&ctx, &named).unwrap_err().to_string();
     assert!(refused.contains("trainer"), "{refused}");
     std::mem::forget(scratch);
 }
@@ -422,6 +420,6 @@ fn a_build_that_names_its_base_is_refused_when_the_trainer_cannot_read_its_recor
         base: Some(named_base(&scratch)),
         ..request(set, Some(1_000_000), false)
     };
-    let refused = project_with(&ctx, &named, None).unwrap_err().to_string();
+    let refused = project_with(&ctx, &named).unwrap_err().to_string();
     assert!(refused.contains("trainer"), "{refused}");
 }

@@ -229,35 +229,6 @@ fn the_shipped_anchor_suite_freezes_into_the_suite_the_page_quotes() {
     assert_eq!(stdout.lines().next(), Some(quoted.as_str()), "{stdout}");
 }
 
-/// Step 5: `learn --dry-run` on the shipped manual plans the run, prints the
-/// stages the page quotes and writes nothing under the state directory.
-#[test]
-fn a_dry_run_on_the_shipped_manual_plans_and_writes_nothing() {
-    let home = Home::new("dry-run");
-    let command = page_command("--dry-run");
-    let (code, stdout, stderr) = home.run_page(&command, "");
-    assert_eq!(code, 0, "{stdout}\n{stderr}");
-    let stages = quoted_output("stages:");
-    assert!(
-        stdout.lines().any(|l| l == stages),
-        "{stages:?} is not in {stdout}"
-    );
-    assert!(
-        stdout.starts_with("dry run - nothing written under "),
-        "{stdout}"
-    );
-    assert!(
-        !home.0.join("state").exists() && !home.0.join(".splinter").exists(),
-        "a dry run writes nothing"
-    );
-
-    let (code, plan, stderr) = home.run_page(&command, "--json");
-    assert_eq!(code, 0, "{plan}\n{stderr}");
-    let plan: Value = serde_json::from_str(&plan).unwrap();
-    assert_eq!(plan["dry_run"], true);
-    assert_eq!(plan["kinds"], serde_json::json!(["denoise"]));
-}
-
 /// The help tells a newcomer where to start.
 #[test]
 fn the_help_says_where_to_start() {

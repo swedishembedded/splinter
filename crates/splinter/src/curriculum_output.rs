@@ -2,14 +2,12 @@
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
 //! What the curriculum prints as text: a pass@k measurement, the teacher's
-//! solves and the tasks kept, a training set's quotas, and the weakest
-//! concepts.
+//! solves and the tasks kept, and the weakest concepts.
 
 use std::fmt::Write as _;
 
 use splinter_sdk::curriculum::frontier::{Frontier, Measured};
 use splinter_sdk::curriculum::mastery::{MasteryReport, ReleaseMastery};
-use splinter_sdk::curriculum::quota::Selected;
 use splinter_sdk::curriculum::teacher::Taught;
 
 use crate::output::Report;
@@ -81,27 +79,6 @@ impl Report for Measured {
             self.teach.human(),
             self.frontier.human()
         )
-    }
-}
-
-impl Report for Selected {
-    fn human(&self) -> String {
-        let s = &self.selection;
-        let mut out = format!(
-            "{} of {} passing experience(s) kept in {}: {} repeat(s) dropped\n  quotas: concept \
-             {}, kind {}, strength {}\n",
-            s.selected.len(),
-            s.candidates,
-            self.experience_set,
-            s.duplicates,
-            self.quotas.max_concept_share,
-            self.quotas.max_kind_share,
-            self.quotas.max_strength_share
-        );
-        for (dimension, dropped) in &s.capped {
-            let _ = writeln!(out, "  capped by {dimension}: {dropped} dropped");
-        }
-        out
     }
 }
 

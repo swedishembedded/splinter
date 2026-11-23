@@ -5,12 +5,12 @@
 //! beyond its datasets, and how a rehearsal set is asked for.
 
 use clap::Args;
-use splinter_sdk::learn::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::measure::memorisation::MEMORISATION_GAP_RATIO;
 use splinter_sdk::model::policy_gradient::{
     Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, Reference,
 };
 use splinter_sdk::model::train::{BasePrecision, PairLoss};
+use splinter_sdk::rehearsal::DEFAULT_REHEARSAL_SHARE;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::train::{
     PairSettings, Recipe, Tuning, DEFAULT_DPO_BETA, DEFAULT_LEARNING_RATE,

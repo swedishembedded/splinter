@@ -9,12 +9,6 @@
 //! Spec: a sealed final-exam family is sealed in the state root, not only in
 //! the plan this run was given.
 //!
-//! * A plan that is validated or accepted writes its sealed families (their
-//!   ids and tree ids) to the state root.
-//! * From then on a run without a plan refuses the sealed repository before
-//!   it is taken in as a source, by its tree id and never by the name the
-//!   catalog happens to use now.
-//! * A family the plan did not seal is read as before.
 //! * Task admission refuses a task whose environment is a sealed family's
 //!   tree, whatever its family is called.
 
@@ -23,11 +17,10 @@
 
 use crate::common;
 
-use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
 
-use common::gate::{put_base, FakeTrainer};
+use common::gate::put_base;
 use common::repo::project;
 use common::{config, Scratch};
 use splinter_agent::solve::Model;
@@ -36,9 +29,7 @@ use splinter_core::experience::{Environment, Task};
 use splinter_core::kinds::WORKSPACE_CHANGE;
 use splinter_core::model_ref::ModelRef;
 use splinter_orchestrator::Context;
-use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::experiment::ExperimentPlan;
-use splinter_pipelines::practice::{practice, PlanSlot, PracticeRequest};
 use splinter_pipelines::sealed;
 use splinter_store::tasks::{TaskEntry, TaskSet};
 
@@ -56,19 +47,6 @@ fn context(test: &str) -> (Scratch, Context) {
         );
     put_base(&ctx);
     (scratch, ctx)
-}
-
-fn request(repo: &Path) -> PracticeRequest {
-    PracticeRequest {
-        repository: repo.to_path_buf(),
-        revision: "HEAD".into(),
-        max_tasks: Some(1),
-        mutants_per_file: Some(1),
-        exam_families: Some(0),
-        pass_at_k: PassAtK::new(2, None, None),
-        no_release: true,
-        ..PracticeRequest::default()
-    }
 }
 
 fn tree_of(repo: &Path) -> String {
@@ -99,114 +77,6 @@ fn plan_for(train: &Path, trained_as: &str, sealed: &Path, sealed_as: &str) -> E
          [sealed]\nfamilies = [\"{sealed_as}\"]\n"
     );
     ExperimentPlan::parse(&plan, &catalog).unwrap()
-}
-
-#[test]
-fn a_run_without_the_plan_cannot_read_a_sealed_family_once_the_seal_is_recorded() {
-    let (scratch, ctx) = context("sealed-no-plan");
-    let train = scratch.0.join("train");
-    let exam = scratch.0.join("exam");
-    project(&train, &[("train_only.py", "")]);
-    project(&exam, &[]);
-    sealed::record(&ctx, &plan_for(&train, "w", &exam, "y")).unwrap();
-    assert_eq!(
-        sealed::trees(&ctx).unwrap(),
-        BTreeSet::from([tree_of(&exam)])
-    );
-
-    // A run given no plan at all still refuses the exam's repository, before
-    // it is taken in as a source and before a task is made of it.
-    let refused = practice(&ctx, &request(&exam), &FakeTrainer::knowing(&[])).unwrap_err();
-    assert!(
-        refused.is_refusal()
-            && refused.to_string().contains("sealed")
-            && refused.to_string().contains("y"),
-        "{refused}"
-    );
-    assert!(
-        ctx.sources().list().unwrap().is_empty(),
-        "a sealed repository was taken in as a source"
-    );
-    assert!(
-        ctx.tasks().list().unwrap().is_empty(),
-        "a task was made of the sealed repository"
-    );
-}
-
-#[test]
-fn an_unsealed_family_is_unaffected_by_the_seal() {
-    let (scratch, ctx) = context("sealed-unaffected");
-    let train = scratch.0.join("train");
-    let exam = scratch.0.join("exam");
-    project(&train, &[("train_only.py", "")]);
-    project(&exam, &[]);
-    sealed::record(&ctx, &plan_for(&train, "w", &exam, "y")).unwrap();
-
-    let recorded = practice(&ctx, &request(&train), &FakeTrainer::knowing(&[])).unwrap();
-    assert!(
-        recorded
-            .report
-            .tasks
-            .as_ref()
-            .is_some_and(|t| t.admitted > 0),
-        "{:#?}",
-        recorded.report
-    );
-}
-
-#[test]
-fn renaming_a_family_does_not_open_it() {
-    let (scratch, ctx) = context("sealed-rename");
-    let train = scratch.0.join("train");
-    let exam = scratch.0.join("exam");
-    project(&train, &[("train_only.py", "")]);
-    project(&exam, &[]);
-    // The seal is recorded under the name the catalog uses today.
-    sealed::record(&ctx, &plan_for(&train, "w", &exam, "y")).unwrap();
-    // A later plan gives the same tree another name and trains it. The
-    // recorded seal is by tree, so the repository stays shut.
-    sealed::record(&ctx, &plan_for(&exam, "renamed", &train, "other")).unwrap();
-
-    let refused = practice(&ctx, &request(&exam), &FakeTrainer::knowing(&[])).unwrap_err();
-    assert!(
-        refused.is_refusal(),
-        "a renamed sealed family was opened: {refused}"
-    );
-    assert!(ctx.sources().list().unwrap().is_empty());
-}
-
-#[test]
-fn a_practice_given_a_plan_writes_its_seal_for_every_later_run() {
-    let (scratch, ctx) = context("sealed-accepted");
-    let train = scratch.0.join("train");
-    let exam = scratch.0.join("exam");
-    project(&train, &[("train_only.py", "")]);
-    project(&exam, &[]);
-    let plan = plan_for(&train, "w", &exam, "y");
-    assert_eq!(sealed::trees(&ctx).unwrap(), BTreeSet::new());
-
-    // Accepting the plan is the run that records it.
-    let accepted = practice(
-        &ctx,
-        &PracticeRequest {
-            experiment: Some(PlanSlot {
-                plan,
-                generation: 1,
-            }),
-            ..request(&train)
-        },
-        &FakeTrainer::knowing(&[]),
-    )
-    .unwrap();
-    assert!(accepted.report.tasks.is_some(), "{:#?}", accepted.report);
-    assert_eq!(
-        sealed::trees(&ctx).unwrap(),
-        BTreeSet::from([tree_of(&exam)])
-    );
-
-    // A later run without the plan still cannot read the exam.
-    let refused = practice(&ctx, &request(&exam), &FakeTrainer::knowing(&[])).unwrap_err();
-    assert!(refused.is_refusal(), "{refused}");
 }
 
 #[test]

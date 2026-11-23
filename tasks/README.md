@@ -55,8 +55,8 @@ involved.
 
 ## Repository families
 
-Eight small original projects, each learned by `splinter practice` from its own
-tests. They are listed in `catalog.toml` (id, language, domain, size, test
+Eight small original projects, each learned from its own
+tests (the `task.mutate` stage of the `repository-practice` recipe). They are listed in `catalog.toml` (id, language, domain, size, test
 count, content digest, files tasks may change); `python3 scripts/tasks/families.py
 check` verifies baselines (five identical green runs), conventions, a report
 under the generator's output cap, and that no two families define the same
@@ -78,21 +78,17 @@ test), because fault seeding reads only `python3 -m unittest` per test.
 
 ### Regenerating the admitted task set
 
-Fault generation is deterministic in the family tree and the flags; the seed
-only chooses which families an exam would reserve. No model is loaded:
-<!-- perf-number: a budget flag value, not a measurement -->
-`--budget 1s` stops the run after the reserve stage.
+Fault generation is deterministic in the family tree and the parameters; the seed
+only chooses which families an exam would reserve. No model is loaded: the family is made a
+git repository and the `task.mutate` stage of a recipe (see `splinter init --template
+repository-practice`) is run over its commit with `max_tasks` and `mutants_per_file` set.
 
 ```
 cp -r tasks/<family> $WORK/<family> && cd $WORK/<family>
 git init && git add -A && git commit -m base
-splinter practice $WORK/<family> --state $STATE -v --budget 1s --max-tasks 1000 \
-  --mutants-per-file N --no-release --exam-seed SEED \
-  --file <each file under test from catalog.toml> --test-command python3 -m unittest
 ```
 
-The `[tasks]` line of the output holds the admitted count and the refusals by
-reason. Funnel measured with the release binary of this tree. `caught` is candidates minus
+The stage's report holds the admitted count and the refusals by reason. Funnel measured with the release binary of this tree. `caught` is candidates minus
 faults that did not run (`broken_build`) minus faults no test noticed
 (`equivalent_mutant`); faults refused as `output_truncated` are inside it.
 
@@ -142,14 +138,11 @@ tree of a snapshot of its files), which is how a run is recognised as reading a 
 
 ```
 splinter experiment check tasks/e3-plan.toml
-splinter practice $WORK/<family> --plan tasks/e3-plan.toml --generation N ...
 ```
 
 `experiment check` refuses a plan whose played families (trained or sealed) share a domain,
 that schedules a sealed family in any generation's training or retention list, that trains a
-family twice, or whose retention names a family no earlier generation trained. `practice
---plan` refuses, before the repository is taken in as a source, a sealed family always and a
-family the plan does not train in that generation; it decides by the snapshot's tree id, so
-renaming a family opens nothing. Not enforced: a repository that is a copy of a sealed family
+family twice, or whose retention names a family no earlier generation trained. A valid plan
+records its sealed families by their snapshots' tree ids, so renaming a family opens nothing. Not enforced: a repository that is a copy of a sealed family
 with one file changed has another tree id; the plan seals the families as they are
 catalogued.

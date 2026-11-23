@@ -46,10 +46,7 @@ use crate::cli::{
 use crate::compare_session;
 use crate::conversation_dataset;
 use crate::exam_session;
-use crate::harness_session;
-use crate::learn_output;
 use crate::output::{self, emit, shell_words};
-use crate::practice_request::practice_request;
 use crate::solve_session;
 use crate::tasks_session;
 use crate::train_output::Trained;
@@ -97,7 +94,10 @@ impl Session {
                 if verbose {
                     eprintln!("[{stage}] {summary}");
                 } else {
-                    eprintln!("[{stage}] {}", learn_output::stage_line(stage, summary));
+                    eprintln!(
+                        "[{stage}] {}",
+                        crate::stage_output::stage_line(stage, summary)
+                    );
                 }
             }))
             .build()?;
@@ -240,21 +240,8 @@ impl Session {
             Err(other) => *other,
         };
         match command {
-            Command::Learn(args) => {
-                return crate::learn_session::learn_command(&self.splinter, ctx, json, *args)
-            }
             Command::Improve(args) => {
                 return crate::improve_session::improve_command(ctx, json, args)
-            }
-            Command::Practice(args) => {
-                let release_asked = !args.no_release;
-                let practiced = self.splinter.practice(&practice_request(*args)?)?;
-                emit(json, &practiced);
-                return Ok(if practiced.report.finished(release_asked) {
-                    Exit::Ok
-                } else {
-                    Exit::Failed
-                });
             }
             Command::Corrections(args) => {
                 return crate::corrections_session::corrections_command(ctx, json, *args);
@@ -331,7 +318,6 @@ impl Session {
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(command) => return tasks_session::tasks(ctx, json, command),
             Command::Solve(args) => return solve_session::solve(ctx, json, &args),
-            Command::Harness(command) => return harness_session::harness(ctx, json, command),
             Command::Verify(args) => {
                 let set = resolve_set(ctx, &args.experience_set)?;
                 let judge = args

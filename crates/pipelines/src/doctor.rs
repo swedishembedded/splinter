@@ -124,18 +124,6 @@ pub fn storage(ctx: &Context) -> Vec<Check> {
     checks
 }
 
-impl Check {
-    /// This failed check as one sentence for a refusal: what was found and
-    /// what to change.
-    #[must_use]
-    pub fn refusal(&self) -> String {
-        match &self.fix {
-            Some(fix) => format!("{}: {} ({fix})", self.name, self.detail),
-            None => format!("{}: {}", self.name, self.detail),
-        }
-    }
-}
-
 /// `path`, else its nearest ancestor that exists.
 fn nearest_existing(path: &Path) -> &Path {
     path.ancestors()

@@ -37,7 +37,8 @@ use super::{AbsorbRequest, Absorbed};
 use crate::claim_quality::load_subjects;
 use crate::claims::{gate as rule_claims, resolve_set, GateRequest};
 use crate::datasets::DEFAULT_MIN_STRENGTH;
-use crate::learn::{records_at_share, PolicyUsed};
+use crate::policy_used::PolicyUsed;
+use crate::rehearsal::records_at_share;
 use crate::rehearsal::{rehearse_on, RehearseRequest};
 use crate::release::arm_on;
 use crate::train::{

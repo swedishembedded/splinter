@@ -6,7 +6,7 @@
 // expertise in adaptive curricula for agent training, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Spec of competence per capability and the curriculum it steers:
+//! Spec of competence per capability:
 //!
 //! * the examiner's capability ids reach the competence from a real practice
 //!   manifest (`bench task practice` output), from the export's own labels,
@@ -14,11 +14,7 @@
 //!   relabelled staging matched by source digest;
 //! * each capability's pass rate carries a 95% interval, and an attempt the
 //!   infrastructure stopped is never a graded 0;
-//! * the selection prefers the capabilities the policy fails on the
-//!   frontier, never draws a retired task or one the infrastructure stopped
-//!   every time, and the same seed draws the same tasks;
-//! * nothing sealed is counted, and nothing outside the practice material is
-//!   ever selected.
+//! * nothing sealed is counted.
 
 #![allow(clippy::unwrap_used)]
 
@@ -28,12 +24,11 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 use splinter_core::outcome::FailureClass;
-use splinter_core::rng::Seed;
 use splinter_eval::campaign::pass_rate::PassRates;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::capabilities::{capability_report, CapabilityRequest};
 use splinter_pipelines::curriculum::capability::{
-    competence, select, Attempt, CapabilityCompetence, SelectRequest, UNLABELLED,
+    competence, Attempt, CapabilityCompetence, UNLABELLED,
 };
 
 use crate::common::bench::{export, Trial};
@@ -237,110 +232,8 @@ fn competence_has_an_interval_and_an_infrastructure_stop_is_never_a_zero() {
     assert_eq!(x.bands.unmeasured, 1, "task c has no graded attempt");
 }
 
-/// A pool where `weak` is failed half the time for the model's own reasons,
-/// `strong` is mastered, `hard` never solved, and one task of `weak` was
-/// only ever stopped by the infrastructure.
-fn pool() -> (Vec<String>, BTreeMap<String, Vec<String>>, Vec<Attempt>) {
-    let wrong = Some(FailureClass::WrongContent);
-    let mut attempts = Vec::new();
-    for task in ["w1", "w2"] {
-        for i in 0..8 {
-            attempts.push(attempt(
-                task,
-                "weak",
-                Some(i % 2 == 0),
-                (i % 2 == 1).then_some(wrong).flatten(),
-            ));
-        }
-    }
-    for task in ["s1", "s2"] {
-        attempts.extend((0..8).map(|_| attempt(task, "strong", Some(true), None)));
-    }
-    attempts.extend((0..8).map(|_| attempt("h1", "hard", Some(false), wrong)));
-    attempts.extend((0..4).map(|_| attempt("i1", "weak", None, Some(FailureClass::ModelServer))));
-    let names = ["w1", "w2", "w3", "s1", "s2", "h1", "i1"];
-    let labels = names
-        .iter()
-        .map(|t| {
-            let capability = match &t[..1] {
-                "w" | "i" => "weak",
-                "s" => "strong",
-                _ => "hard",
-            };
-            ((*t).to_string(), vec![capability.to_string()])
-        })
-        .collect();
-    (names.map(String::from).to_vec(), labels, attempts)
-}
-
 #[test]
-fn selection_prefers_the_frontier_capability_and_never_draws_retired_or_infrastructure_failed_tasks(
-) {
-    let (tasks, labels, attempts) = pool();
-    let rates = rates_of(&attempts);
-    let measured = competence(&attempts, &rates);
-    assert!(of(&measured, "weak").weight > of(&measured, "hard").weight);
-    assert!(of(&measured, "weak").weight > of(&measured, "strong").weight);
-    let request = |budget, seed| SelectRequest {
-        pool: &tasks,
-        labels: &labels,
-        rates: &rates,
-        competence: &measured,
-        budget,
-        transfer: 1,
-        seed: Seed::new(seed),
-    };
-    let seed = splinter_model::seed::draw().value();
-    let everything = select(&request(None, seed));
-    let mut drawn = everything.tasks.clone();
-    drawn.sort();
-    assert_eq!(
-        drawn,
-        ["h1", "w1", "w2", "w3"],
-        "retired s1, s2 and the stopped i1 never"
-    );
-    assert_eq!(everything.infrastructure, ["i1"]);
-    assert_eq!(everything.transfer, ["weak"]);
-    // Over many draws of two, the frontier capability's tasks come first far
-    // more often than the never-solved one's.
-    let (mut weak, mut hard) = (0, 0);
-    for offset in 0..400 {
-        for task in select(&request(Some(2), seed.wrapping_add(offset))).tasks {
-            match &task[..1] {
-                "w" => weak += 1,
-                "h" => hard += 1,
-                other => panic!("drew {other}"),
-            }
-        }
-    }
-    assert!(weak > 6 * hard, "weak {weak}, hard {hard}");
-}
-
-#[test]
-fn the_same_seed_draws_the_same_tasks() {
-    let (tasks, labels, attempts) = pool();
-    let rates = rates_of(&attempts);
-    let measured = competence(&attempts, &rates);
-    let draw = |seed| {
-        select(&SelectRequest {
-            pool: &tasks,
-            labels: &labels,
-            rates: &rates,
-            competence: &measured,
-            budget: Some(3),
-            transfer: 0,
-            seed: Seed::new(seed),
-        })
-    };
-    let seed = splinter_model::seed::draw().value();
-    assert_eq!(draw(seed), draw(seed));
-    let orders: std::collections::BTreeSet<Vec<String>> =
-        (0..32).map(|s| draw(seed.wrapping_add(s)).tasks).collect();
-    assert!(orders.len() > 1, "the seed decides the draw");
-}
-
-#[test]
-fn nothing_sealed_is_counted_and_nothing_outside_the_material_is_selected() {
+fn nothing_sealed_is_counted() {
     let scratch = Scratch::new("capabilities-sealed");
     let sealed = export(
         &scratch.0.join("sealed"),
@@ -357,26 +250,4 @@ fn nothing_sealed_is_counted_and_nothing_outside_the_material_is_selected() {
         .iter()
         .any(|r| r.reason.contains("sealed-export.json")));
     assert!(report.policies.iter().all(|p| p.trials == 0));
-
-    // History and labels name tasks the material does not hold: they are
-    // counted as competence, never drawn.
-    let (tasks, mut labels, mut attempts) = pool();
-    attempts.extend((0..8).map(|i| attempt("exam-item", "weak", Some(i < 4), None)));
-    labels.insert("exam-item".into(), vec!["weak".into()]);
-    let rates = rates_of(&attempts);
-    let measured = competence(&attempts, &rates);
-    let seed = splinter_model::seed::draw().value();
-    for offset in 0..64 {
-        let selection = select(&SelectRequest {
-            pool: &tasks,
-            labels: &labels,
-            rates: &rates,
-            competence: &measured,
-            budget: None,
-            transfer: 1,
-            seed: Seed::new(seed.wrapping_add(offset)),
-        });
-        assert!(selection.tasks.iter().all(|t| tasks.contains(t)));
-        assert!(!selection.weights.contains_key("exam-item"));
-    }
 }

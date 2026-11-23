@@ -44,7 +44,7 @@ use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
 use crate::curriculum::teacher::{teach, Taught, TeachRequest};
-use crate::learn::PolicyUsed;
+use crate::policy_used::PolicyUsed;
 use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
 use crate::verify::{verify_set, Grading, Verified};
 use splinter_core::model_ref::ModelRef;

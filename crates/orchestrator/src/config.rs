@@ -82,11 +82,6 @@ pub struct Config {
     /// Hold a base the policy trains at bf16: for a base too large for the
     /// card at fp32, which is a fact about the machine, not the run.
     pub bf16_base: bool,
-    /// How long a learning run may take when its command names no budget, as
-    /// `--budget` writes it (`6h`). Parsed where it is used, so a bad value
-    /// is refused by name when a run starts. A run on a corpus too large to
-    /// read has no end without one.
-    pub default_budget: Option<String>,
     /// How many requests to a model reached over an API may be in flight at
     /// once. A model run on this machine's device is asked one at a time.
     pub remote_concurrency: usize,
@@ -471,7 +466,6 @@ impl Config {
             assistant_model: None,
             judge_model: None,
             bf16_base: false,
-            default_budget: None,
             thinking: false,
             served_temperature: None,
             served_top_p: None,

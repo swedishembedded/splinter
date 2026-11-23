@@ -12,8 +12,8 @@
 //! A run starts by capturing the tracked files of the baseline revision as
 //! a snapshot (kept in Splinter's artifact store, identified by content).
 //! Every attempt is a worker in a fresh copy of that snapshot, and a
-//! candidate is judged by the workspace grading the `practice` pipeline
-//! uses: the snapshot laid out again, the candidate's patch applied, the
+//! candidate is judged by the workspace grading Splinter's repository
+//! tasks use: the snapshot laid out again, the candidate's patch applied, the
 //! protected paths fenced, the acceptance commands run in the sandbox. The
 //! repository the task names is read once and never written; the checks
 //! and the scripts they run are not in any tree a worker has.

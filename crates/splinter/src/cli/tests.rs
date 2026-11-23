@@ -31,7 +31,7 @@ fn the_help_names_the_first_commands_to_run_and_the_worked_example() {
     let help = Cli::command().render_long_help().to_string();
     for first in [
         "splinter doctor",
-        "splinter learn",
+        "splinter init",
         "splinter status",
         "splinter ask",
         "examples/first-run",
@@ -51,8 +51,11 @@ fn doctor_takes_no_arguments() {
 
 #[test]
 fn a_sentence_or_nothing_is_the_front_door() {
-    let cli = parse(&["learn the docs in ./docs"]).unwrap();
-    assert_eq!(cli.sentence.as_deref(), Some("learn the docs in ./docs"));
+    let cli = parse(&["summarise the docs in ./docs"]).unwrap();
+    assert_eq!(
+        cli.sentence.as_deref(),
+        Some("summarise the docs in ./docs")
+    );
     assert!(cli.command.is_none());
     let repl = parse(&[]).unwrap();
     assert!(repl.sentence.is_none() && repl.command.is_none());
@@ -66,27 +69,6 @@ fn a_sentence_or_nothing_is_the_front_door() {
 
 #[test]
 fn each_verb_takes_what_it_acts_on_as_positionals() {
-    let Command::Learn(learn) = command(&[
-        "learn",
-        "docs/",
-        "cmd:make --help",
-        "--goal",
-        "flags",
-        "--kinds",
-        "recall,denoise",
-        "--budget",
-        "1h30m",
-        "--dry-run",
-    ]) else {
-        panic!("learn");
-    };
-    assert_eq!(learn.sources, ["docs/", "cmd:make --help"]);
-    assert_eq!(learn.kinds, ["recall", "denoise"]);
-    assert_eq!(learn.budget, Some(Duration::from_secs(5400)));
-    assert!(learn.dry_run);
-    assert!(parse(&["learn"]).is_err(), "learn needs a source");
-    assert!(parse(&["learn", "x", "--budget", "soon"]).is_err());
-
     let Command::Ask(ask) = command(&["ask", "what does X do?", "--open-book", "ab12"]) else {
         panic!("ask");
     };
@@ -379,15 +361,6 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         "more than half monitored is refused"
     );
     assert!(parse(&["train", "d1", "--monitor-share", "0"]).is_err());
-    let Command::Learn(learn) =
-        command(&["learn", "docs", "--patience", "0", "--monitor-share", "0.5"])
-    else {
-        panic!("learn");
-    };
-    assert_eq!(
-        (learn.monitoring.patience, learn.monitoring.monitor_share),
-        (Some(0), Some(0.5))
-    );
     let Command::Exam(exam) = command(&["exam", "c1", "--judge", "local:Qwen/Qwen3-8B"]) else {
         panic!("exam");
     };
@@ -434,24 +407,6 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     };
     assert_eq!((created.families, created.not_trained_by.len()), (12, 2));
     assert_eq!(created.kinds, ["converse", "advise", "explain"]);
-    let Command::Learn(reserving) = command(&[
-        "learn",
-        "docs",
-        "--exam-families",
-        "0",
-        "--exam-tasks-per-family",
-        "50",
-    ]) else {
-        panic!("learn");
-    };
-    assert_eq!(
-        (reserving.exam_families, reserving.exam_tasks_per_family),
-        (Some(0), Some(50))
-    );
-    let Command::Learn(learn) = command(&["learn", "docs", "--no-release"]) else {
-        panic!("learn");
-    };
-    assert!(learn.no_release);
     assert!(matches!(
         command(&["runs", "cancel", "run-1"]),
         Command::Runs(RunsCommand::Cancel { .. })
@@ -567,36 +522,12 @@ fn pass_at_k_is_asked_for_where_it_is_measured() {
         parse(&["solve", "ab12", "--teacher", "local:./big"]).is_err(),
         "a teacher needs --frontier"
     );
-
-    let Command::Learn(learn) = command(&["learn", "docs", "--k", "6"]) else {
-        panic!("learn --k");
-    };
-    assert!(!learn.no_frontier, "the frontier is measured by default");
-    assert_eq!(learn.pass_at_k.pass_at_k().k, 6);
-    let Command::Learn(learn) = command(&["learn", "docs", "--no-frontier"]) else {
-        panic!("learn --no-frontier");
-    };
-    assert!(learn.no_frontier);
-    assert!(parse(&["learn", "docs", "--no-frontier", "--k", "6"]).is_err());
-    let Command::Learn(learn) = command(&["learn", "docs", "--teacher", "local:./big"]) else {
-        panic!("learn --teacher");
-    };
-    assert_eq!(learn.teacher, Some("local:./big".parse().unwrap()));
-    assert_eq!(
-        learn.generator, None,
-        "the policy writes the tasks by default"
-    );
-    let Command::Learn(learn) = command(&["learn", "docs", "--generator", "local:./big"]) else {
-        panic!("learn --generator");
-    };
-    assert_eq!(learn.generator, Some("local:./big".parse().unwrap()));
 }
 
 #[test]
 fn every_command_takes_the_global_flags() {
     for args in [
         &["status"][..],
-        &["learn", "docs"],
         &["ask", "q"],
         &["source", "list"],
         &["tasks", "list"],
@@ -655,6 +586,9 @@ fn the_old_commands_are_gone() {
         &["show", "--run", "r"],
         &["cancel", "--run", "r"],
         &["learn", "--run", "r"],
+        &["learn", "docs"],
+        &["practice", "."],
+        &["harness", "optimise", "ab12", "--baseline", "b.yaml"],
         &["train", "--dataset", "d.jsonl"],
         &["train", "ab12", "--replay", "cd34"],
         &["explore", "--file", "f.md", "--out", "o.jsonl"],
@@ -664,43 +598,6 @@ fn the_old_commands_are_gone() {
     ] {
         assert!(parse(removed).is_err(), "{removed:?} still parses");
     }
-}
-
-#[test]
-fn learn_can_distill_and_tune_the_training_it_runs() {
-    let Command::Learn(plain) = command(&["learn", "docs"]) else {
-        panic!("learn");
-    };
-    assert!(!plain.distill);
-    assert_eq!(
-        (plain.steps, plain.rank, plain.optimiser.lr),
-        (None, None, None)
-    );
-
-    let Command::Learn(tuned) = command(&[
-        "learn",
-        "docs",
-        "--distill",
-        "--steps",
-        "300",
-        "--rank",
-        "16",
-        "--lr",
-        "0.0002",
-    ]) else {
-        panic!("learn --distill");
-    };
-    assert!(tuned.distill);
-    assert_eq!((tuned.steps, tuned.rank), (Some(300), Some(16)));
-    assert_eq!(tuned.optimiser.lr, Some(0.0002));
-    assert!(
-        parse(&["learn", "docs", "--distill", "--k", "6"]).is_err(),
-        "distilling makes no attempts to measure pass@k over"
-    );
-    assert!(
-        parse(&["learn", "docs", "--steps", "0"]).is_err(),
-        "no steps is no training"
-    );
 }
 
 #[test]
@@ -754,47 +651,12 @@ fn a_rehearsal_is_built_by_its_own_verb_and_mixed_in_by_train() {
             "{bad}"
         );
     }
-    let Command::Learn(learn) = command(&["learn", "docs", "--rehearsal", "0"]) else {
-        panic!("learn");
-    };
-    assert_eq!(learn.rehearsal, Some(0.0), "0 turns it off");
-    assert!(parse(&["learn", "docs", "--rehearsal", "1"]).is_err());
 }
 
 mod absorb;
 mod env;
 mod flags;
-mod harness;
 mod jobs;
-mod learn;
 mod measure;
 mod rollouts;
 mod solve;
-
-#[test]
-fn an_acquisition_refuses_the_task_harness_it_does_not_run() {
-    // `--source` runs the acquisition rounds, which write tasks with the
-    // generator model; the harness flags were dropped without a word.
-    let harness = [
-        "--task-harness",
-        "h/invent",
-        "--solve-harness",
-        "h/solve",
-        "--sven",
-        "sven",
-        "--task-harness-endpoint",
-        "http://127.0.0.1:8788/v1",
-        "--task-harness-model",
-        "brain/m",
-    ];
-    let with = |lead: &[&str]| parse(&[lead, &harness[..]].concat());
-    command(
-        &["learn", "notes.md"]
-            .iter()
-            .copied()
-            .chain(harness)
-            .collect::<Vec<_>>(),
-    );
-    let refused = with(&["learn", "Lua", "--source", "m.html"]).unwrap_err();
-    assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
-}

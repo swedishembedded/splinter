@@ -181,44 +181,6 @@ impl Report for PoweredExam {
     }
 }
 
-/// One line for the exam stage of a `learn` that reserved its exam.
-pub fn powered_line(summary: &serde_json::Value) -> String {
-    let ran = &summary["ran"];
-    if ran.is_null() {
-        return format!("not run: {}", summary["not_run"].as_str().unwrap_or("?"));
-    }
-    let arms: Vec<String> = ran["arms"]
-        .as_array()
-        .map(|arms| {
-            arms.iter()
-                .map(|a| {
-                    format!(
-                        "{} {}/{}",
-                        a["arm"].as_str().unwrap_or("?"),
-                        a["right"],
-                        a["judged"]
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let first = ran["comparisons"].get(0).map_or(String::new(), |c| {
-        format!(
-            "; {} vs {}: p over tasks {:.4}, over families {:.4}",
-            c["first"].as_str().unwrap_or("?"),
-            c["second"].as_str().unwrap_or("?"),
-            c["p_tasks"].as_f64().unwrap_or(1.0),
-            c["p_families"].as_f64().unwrap_or(1.0)
-        )
-    });
-    format!(
-        "{} task(s) over {} family(ies): {}{first}",
-        ran["tasks"],
-        ran["families"],
-        arms.join(", ")
-    )
-}
-
 impl Report for crate::exam_session::PlannedExam {
     fn human(&self) -> String {
         let (p, r, s) = (&self.plan, &self.planned, &self.sign_test);
@@ -362,5 +324,106 @@ impl Report for crate::exam_session::Picked {
             let _ = writeln!(out, "adopted as candidate {adopted}");
         }
         out
+    }
+}
+
+/// What the exam found, on one line: the judge's standing, each arm's judged
+/// and grounded results, and the paired test.
+fn exam_line(summary: &serde_json::Value) -> String {
+    if let Some(why) = summary["not_run"].as_str() {
+        return format!("not run: {why}");
+    }
+    let ran = &summary["ran"];
+    let arm = |a: &serde_json::Value| {
+        format!(
+            "{}/{} judged right ({} unanswered), {}/{} invented a specific",
+            a["judged_right"], a["judged"], a["unanswered"], a["invented"], a["checked"]
+        )
+    };
+    let judge = &ran["judge"];
+    let trust = if judge["trusted"] == true {
+        "trusted"
+    } else {
+        "NOT trusted, so no claim"
+    };
+    let won = |t: &serde_json::Value, against: &str| {
+        t.as_object().map_or(String::new(), |t| {
+            format!(
+                "; the candidate won {} of {} discordant task(s) against {against}, p = {:.4}",
+                t["candidate_wins"],
+                t["discordant"],
+                t["p_value"].as_f64().unwrap_or(1.0)
+            )
+        })
+    };
+    let interval = ran["paired_interval"]
+        .as_object()
+        .map_or(String::new(), |i| {
+            format!(
+                " (gain per family {:.2}, interval {:.2} to {:.2})",
+                i["mean"].as_f64().unwrap_or(0.0),
+                i["low"].as_f64().unwrap_or(0.0),
+                i["high"].as_f64().unwrap_or(0.0)
+            )
+        });
+    let test = format!("{}{interval}", won(&ran["paired"], "the base"));
+    let prompted = ran["prompted"].as_object().map_or(String::new(), |_| {
+        format!(
+            "; base asked under the goal {}{}",
+            arm(&ran["prompted"]),
+            won(&ran["paired_vs_prompted"], "it")
+        )
+    });
+    let retrieval = ran["retrieval"].as_object().map_or(String::new(), |r| {
+        let wins = ran["paired_retrieval"].as_object().map_or(String::new(), |t| {
+            format!(
+                "; retrieval won {} of {} discordant task(s), p = {:.4}",
+                t["candidate_wins"],
+                t["discordant"],
+                t["p_value"].as_f64().unwrap_or(1.0)
+            )
+        });
+        let right = |found: bool, key: &str| {
+            r["by_task"].as_array().map_or(0, |tasks| {
+                tasks
+                    .iter()
+                    .filter(|t| t["evidence_found"] == found && t[key] == true)
+                    .count()
+            })
+        };
+        format!(
+            "; candidate with {} retrieved passage(s) {} (retrieval found the task's evidence for {}/{}; of those, right with the passages {} and alone {}; of the rest, with {} and alone {}){wins}",
+            r["passages"],
+            arm(&ran["retrieval"]["arm"]),
+            r["hits"],
+            r["tasks"],
+            right(true, "with_passages"),
+            right(true, "alone"),
+            right(false, "with_passages"),
+            right(false, "alone"),
+        )
+    });
+    let warnings: String = ran["training_warnings"]
+        .as_array()
+        .map(|w| {
+            w.iter()
+                .filter_map(|w| w.as_str())
+                .map(|w| format!("\nwarning: {w}"))
+                .collect()
+        })
+        .unwrap_or_default();
+    format!(
+        "{} task(s) from {} source family(ies), judge {} {trust}: base {}; candidate {}{test}{prompted}{retrieval}{warnings}",
+        ran["tasks"],
+        ran["families"],
+        judge["judge"].as_str().unwrap_or("?"),
+        arm(&ran["base"]),
+        arm(&ran["candidate"]),
+    )
+}
+
+impl Report for splinter_sdk::exam::Exam {
+    fn human(&self) -> String {
+        exam_line(&serde_json::to_value(self).unwrap_or(serde_json::Value::Null)) + "\n"
     }
 }

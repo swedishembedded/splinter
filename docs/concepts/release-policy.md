@@ -41,7 +41,7 @@ canaries) refuse beside the rule, never in its place.
 
 When the caller holds an examiner's signed verdicts on the candidate, the rule decides on them and
 a fresh sealed exam slice is part of the decision: the release is **exam-verified**. A release
-decided on Splinter's own suites, a release from `learn` among them, whose exam the learner made
+decided on Splinter's own suites, a release from `release` among them, whose exam the learner made
 itself, has no sealed slice: the same two rules decide, and the release record (and the `release`
 output) says **not exam-verified**, with why. It is never a silent bypass.
 

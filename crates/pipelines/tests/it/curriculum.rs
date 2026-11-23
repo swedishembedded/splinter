@@ -18,7 +18,6 @@
 //!   answer is verified (taught) and dropped otherwise (nothing to learn
 //!   from); the distribution is reported and the measurement recorded per
 //!   task.
-//! * `learn` measures the frontier by default.
 //! * Concept mastery is tallied per release from the policy's recorded
 //!   solves, and `status` lists the weakest concepts.
 //! * A retention suite the gate saw drop queues its forgotten concepts for
@@ -40,7 +39,6 @@ use std::sync::Arc;
 use common::gate::{
     anchor_file, candidate, decide, fact, gate_context, knower, released, Brain, ANCHOR,
 };
-use common::manual::{BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::{scratch_context, Scripted, POLICY};
 use serde_json::json;
 use splinter_agent::solve::Model;
@@ -49,17 +47,13 @@ use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
 use splinter_core::release::ReleaseId;
-use splinter_eval::gate::SuiteSummary;
-use splinter_eval::gate::{self, Check, GateConfig, GateReport};
-use splinter_eval::paired::PairedOutcome;
 use splinter_knowledge::concepts::Concept;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::{measure, MeasureRequest, PassAtK};
 use splinter_pipelines::curriculum::mastery::weakest;
-use splinter_pipelines::curriculum::queue::{enqueue_retention, pending};
+use splinter_pipelines::curriculum::queue::pending;
 use splinter_pipelines::curriculum::BASE_POLICY;
 use splinter_pipelines::graded::Verdict;
-use splinter_pipelines::learn::{learn, LearnRequest, Learned};
 use splinter_pipelines::release::anchor;
 use splinter_pipelines::solving::{harness_protocol, solve_set, Solved};
 use splinter_pipelines::status::status;
@@ -341,157 +335,6 @@ fn pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt() {
         .is_refusal(),
         "k = 1 cannot find a task sometimes solved"
     );
-}
-
-/// The manual's policy, knowing the baud rate every other time it is asked
-/// and never the idle current.
-fn unsure_manual_policy() -> Scripted {
-    let asked = Arc::new(AtomicUsize::new(0));
-    Scripted::new(move |prompt| {
-        if prompt.contains("You write training tasks") {
-            json!({ "tasks": [
-                {
-                    "instruction": BAUD_QUESTION,
-                    "subject": "Frobnicator",
-                    "reference": "115200 baud",
-                    "evidence": [{ "section": 1, "quote": BAUD_QUOTE }]
-                },
-                {
-                    "instruction": "How much current does the Frobnicator draw when idle?",
-                    "subject": "Frobnicator",
-                    "reference": "40 mA",
-                    "evidence": [{ "section": 2, "quote": "40 mA when idle" }]
-                }
-            ]})
-            .to_string()
-        } else if prompt.contains("You are reviewing an attempt") {
-            "The baud rate is wrong.".into()
-        } else if prompt.contains("baud rate") {
-            let n = asked.fetch_add(1, Ordering::SeqCst);
-            if n.is_multiple_of(2) {
-                "115200 baud"
-            } else {
-                "9600 baud"
-            }
-            .into()
-        } else {
-            "12 mA".into()
-        }
-    })
-}
-
-#[test]
-fn learn_keeps_the_frontier_by_default_and_generates_for_queued_concepts() {
-    let (scratch, ctx) = scratch_context("curriculum-learn", unsure_manual_policy(), false);
-    let manual = scratch.0.join("manual.md");
-    std::fs::write(&manual, MANUAL).unwrap();
-    let request = LearnRequest {
-        sources: vec![manual.display().to_string()],
-        no_release: true,
-        ..LearnRequest::default()
-    };
-    let trainer = common::gate::FakeTrainer::knowing(&[]);
-
-    let Learned::Ran(run) = learn(&ctx, &request, &trainer).unwrap() else {
-        panic!("a learn that is not a dry run runs");
-    };
-    let report = &run.report;
-    let solved = report.solve.as_ref().unwrap();
-    assert_eq!((solved.attempts, solved.solved), (4, 8), "{solved:#?}");
-    let frontier = report.frontier.as_ref().unwrap();
-    let d = frontier.distribution;
-    assert_eq!((d.always, d.never, d.frontier), (0, 1, 1), "{frontier:#?}");
-    let recorded: serde_json::Value = ctx
-        .workspace()
-        .get_document("frontier_measurement", &frontier.measurement)
-        .unwrap()
-        .unwrap();
-    let baud = recorded["tasks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|t| t["class"] == "frontier")
-        .unwrap();
-    let section = |concept: &serde_json::Value| concept["section"].as_u64();
-    assert_eq!(
-        baud["concepts"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(section)
-            .collect::<Vec<_>>(),
-        [Some(1)],
-        "the baud-rate task exercises the manual's console section"
-    );
-    let select = report.select.as_ref().unwrap();
-    assert_eq!(
-        select.selection.selected.len(),
-        1,
-        "the passing attempts of one task are one example: {select:#?}"
-    );
-    assert!(select.selection.duplicates >= 1, "{select:#?}");
-    let stages: Vec<String> = splinter_store::runs::read_run(ctx.workspace(), &run.run)
-        .unwrap()
-        .stages
-        .into_iter()
-        .map(|s| s.stage)
-        .collect();
-    assert!(
-        stages.iter().any(|s| s == "frontier") && stages.iter().any(|s| s == "select"),
-        "{stages:?}"
-    );
-
-    // The gate saw the baud-rate task forgotten: its concept is queued, and
-    // the next learn generates from its section and empties the queue.
-    let outcomes = vec![PairedOutcome {
-        item: baud["task"].as_str().unwrap().to_string(),
-        candidate: Some(false),
-        baseline: Some(true),
-        cluster: None,
-    }];
-    let suite = SuiteSummary {
-        name: "retention".into(),
-        tasks: 1,
-        excluded: Default::default(),
-    };
-    let earlier = ReleaseId(Digest::of(b"an earlier release"));
-    let report = GateReport::new(
-        GateConfig::default(),
-        Check::unmeasured("not asked"),
-        gate::retention(vec![(earlier, suite, outcomes)], 0.05),
-        Check::unmeasured("not asked"),
-        Check::unmeasured("not asked"),
-    );
-    let queued = enqueue_retention(&ctx, &report).unwrap();
-    let [Concept::Section(console)] = queued.as_slice() else {
-        panic!("one section concept: {queued:?}");
-    };
-    assert_eq!(console.section, 1);
-    let waiting = pending(&ctx).unwrap();
-    assert_eq!(waiting.len(), 1);
-    assert_eq!(waiting[0].sections, std::slice::from_ref(console));
-
-    let Learned::Ran(again) = learn(&ctx, &request, &trainer).unwrap() else {
-        panic!("a learn that is not a dry run runs");
-    };
-    let tasks = again.report.tasks.as_ref().unwrap();
-    assert_eq!(tasks.sections, 1, "{tasks:#?}");
-    assert!(pending(&ctx).unwrap().is_empty(), "the queue is drained");
-
-    // --no-frontier solves once and keeps every task.
-    let Learned::Ran(plain) = learn(
-        &ctx,
-        &LearnRequest {
-            no_frontier: true,
-            ..request.clone()
-        },
-        &trainer,
-    )
-    .unwrap() else {
-        panic!("a learn that is not a dry run runs");
-    };
-    assert!(plain.report.frontier.is_none());
-    assert_eq!(plain.report.solve.as_ref().unwrap().attempts, 1);
 }
 
 /// The fact tasks of `topics`, `n` each, as one set.

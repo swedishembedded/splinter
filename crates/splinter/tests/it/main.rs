@@ -15,4 +15,3 @@ mod jobs_cli;
 mod jobs_distributed_cli;
 mod jobs_slurm_cli;
 mod json_output;
-mod practice_cli;

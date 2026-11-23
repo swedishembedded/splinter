@@ -32,14 +32,13 @@ splinter-jefferson materials --resources RESOURCES --out ./materials
 #    and the arithmetic and format-following a persona fine-tune erodes first.
 splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
 
-# 3. Splinter does the rest. The roles are named by the configuration:
-#    the policy to train, the assistant that plans, writes, teaches and judges,
-#    and how long the run may take (a sentence names no budget).
-splinter --assistant-model local:Qwen/Qwen3-8B --bf16-base --default-budget 8h \
-  "Learn to think like Thomas Jefferson based on the materials he has written in directory ./materials"
+# 3. Splinter's stages do the rest, one command each, under the roles the
+#    configuration names: the policy to train and the assistant that writes,
+#    teaches and judges.
+splinter --assistant-model local:Qwen/Qwen3-8B --bf16-base source add ./materials --usage-policy research_only
 ```
 
-The `learn` report names each stage's result, including the exam: how often the
+The exam report names the result: how often the
 judge says the base's and the adapter's answers give what a held-out letter
 says, how often either states a number or name the letter does not hold, and a
 paired sign test of the two. The judge is calibrated on controls made from the

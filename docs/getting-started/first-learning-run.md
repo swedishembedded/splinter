@@ -8,20 +8,21 @@ result only if the evidence says so. The material is `examples/first-run/manual.
 device that does not exist (the Quillon QX-7), so no model can know its console speed, boot jumper,
 power limits or watchdog from training. Splinter reads the manual, writes grounded questions about it,
 has the model attempt them, trains an adapter on the verified answers, and releases it only if the
-release gate passes. You can then ask the model what the manual says and trace the answer back to the
+release gate passes. Each of those is a command of its own, run in turn here, and the same run is
+the `knowledge-learning` recipe of the [learning factory](../guides/learning-factory.md). You can then ask the model what the manual says and trace the answer back to the
 manual's bytes.
 
 Run every command from the repository root. Nothing here uses the network except fetching the model in step 1.
-Steps 2, 4 and 5 load no model; steps 3 and 6 onward load the policy model and want a GPU.
+Steps 2 and 4 load no model; steps 3 and 5 onward load the policy model and want a GPU.
 
 Add `--state /tmp/first-run` to every command to keep the walk-through out of your real state.
 
 ## What this page does and does not show
 
-Steps 1, 2 and 5 are checked by the test suite against the real program on every build: the output quoted there is
-what the command prints. The observations in step 6 were made on a GPU, one run per option, so they are a pilot and
+Steps 1 and 2 are checked by the test suite against the real program on every build: the output quoted there is
+what the command prints. The observations in step 5 were made on a GPU, one run per option, so they are a pilot and
 not a measurement. On this single page of material no run reached a trained candidate. The page ships no expected
-accuracy numbers and claims no improvement. Steps 3 and 7 to 11 show the program's report formats and what to do when
+accuracy numbers and claims no improvement. Steps 3 and 6 to 10 show the program's report formats and what to do when
 a run does produce a candidate (for example from several documents and a stronger teacher); those shapes were not
 recorded from a run on this material.
 
@@ -103,60 +104,55 @@ splinter source list
 ```
 
 `source add` captures the file, splits it into addressable parts and sections, and stores it under a content address. The same bytes are
-the same source, so capturing it again stores nothing new, and `learn` in step 6 reuses it. `--usage-policy` records the terms the content
+the same source, so capturing it again stores nothing new, and every later step reuses it. `--usage-policy` records the terms the content
 is under; without it the terms are unstated and a release stays restricted to local use.
 
-## 5. See the plan without running it
+## 5. Make tasks, solve them, train
 
 ```bash
-splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog" --kinds denoise --budget 40m --dry-run
+splinter tasks generate $SOURCE --kinds denoise
+splinter solve $TASKSET --frontier
+splinter dataset build $EXPERIENCE_SET --view sft-final
+splinter train $DATASET
 ```
 
-It prints the sources, the models that play each role and the stages, and writes nothing under the state directory. The stage line is
-the pipeline a `learn` runs:
-
-```text
-  stages:  policy -> sources -> tasks -> solve -> verify -> teach -> frontier -> variants -> critique -> select -> dataset -> train -> exam -> release
-```
-
-## 6. Learn
-
-```bash
-splinter learn examples/first-run/manual.md --goal "the QX-7 console, boot, power and watchdog" --kinds denoise --budget 40m
-```
-
-This is a real run on a GPU. It prints each stage as it finishes and opens its report with an `outcome` block that keeps five things apart: whether
-the run finished, whether a candidate was trained, what the release gate decided, whether a release was written, and whether `policy:default`
-moved. For a run that trained nothing it reads:
-
-```text
-outcome  run:      ran every stage it was asked to
-         training: no candidate was trained
-         gate:     not run
-         release:  none
-         policy:   policy:default unchanged
-```
-
-A run can train a candidate that the gate then blocks; that is a result, not a failure of the tool, and the policy stays as it was
-(`gate: blocked on improvement, ...`). The exit status is 0 only when a release was written.
+This is a real run on a GPU, one stage at a time; each prints its report, and the ids of what it stored
+are the next command's argument (`$SOURCE` is the id `source add` printed in step 4, then `$TASKSET`, `$EXPERIENCE_SET`, `$DATASET`).
+`tasks generate` writes grounded tasks from the manual; `--kinds denoise` builds fill-in-the-blank tasks from the
+manual's own text in code, with exact answers, so it needs no writer model. `solve --frontier` has the policy attempt
+each task k times, grades every attempt by the task kind's verifier, has a teacher solve open-book each task the
+policy never solved, and keeps the tasks worth training on. `dataset build` makes the training records and `train`
+trains a candidate adapter on them; it is not released.
 
 What the options did, as observed in one run each:
 
-- **Without `--kinds`** a planner model chooses the task kinds. On a one-page manual and a 0.6B policy it chose kinds the manual cannot support,
-  the plan failed its own checks and the run stopped with `no plan was made`. Name the kinds instead.
 - **`--kinds recall`** has a model write questions from the manual. The default setup uses the 0.6B policy as that writer, and both questions it proposed were
-  rejected by the admission rules (one never named its subject, one named something the manual does not contain), so no task was admitted and the
-  run stopped. The rules did their job: nothing that fails them is trained on. Name a stronger writer and teacher with `--generator` and `--teacher`.
+  rejected by the admission rules (one never named its subject, one named something the manual does not contain), so no task was admitted. The rules did their job: nothing that fails them is trained on. Name a stronger writer with `--generator`
+  and a stronger teacher with `--teacher` of `solve --frontier`.
   A model that brain has to place on the CPU backend (`brain doctor --model <it>` says so) is too slow to be usable: its requests timed out.
-- **`--kinds denoise`** builds fill-in-the-blank tasks from the manual's own text in code, with exact answers, so it needs no writer model. One short
-  document gave one task. The 0.6B policy answered it wrong on every attempt and so did the 0.6B teacher, so no task was worth training on; `learn`
-  stopped with `no candidate was trained`, the gate did not run and the policy was unchanged.
+- **`--kinds denoise`** gave one task from one short document. The 0.6B policy answered it wrong on every attempt and so did the 0.6B teacher, so no task was worth training on and
+  there was nothing to build a dataset from.
 
 To reach a trained candidate you need more material than one page (several documents give several tasks) and a teacher that can solve what the policy cannot.
 
+## 6. Run it as a recipe
+
+The same run, as a recipe of the learning factory, that you can read, change and rerun without repeating a finished stage:
+
+```bash
+splinter init --template knowledge-learning first-run-recipe
+cp examples/first-run/manual.md first-run-recipe/documents/
+cd first-run-recipe
+splinter validate recipes/knowledge-learning.yaml
+splinter run recipes/knowledge-learning.yaml --out runs/knowledge
+```
+
+The [learning factory](../guides/learning-factory.md) says what a run needs on the machine (the execution worker, the model connections)
+and what the recipe's stages do.
+
 ## 7. Inspect what the run made
 
-Whatever `learn` reported, these show what was stored and what happened:
+Whatever the stages reported, these show what was stored and what happened:
 
 ```bash
 splinter status
@@ -176,7 +172,7 @@ gave each. Ids are the full `blake3:<hex>`, the hex, or a unique prefix of at le
 
 ## 8. The dataset and the trained candidate
 
-When a candidate was trained, the `learn` report names it (`candidate <id> trained`) and the dataset it was trained on. Export the dataset to read its
+When a candidate was trained, `train` names it and the dataset it was trained on. Export the dataset to read its
 records and manifest:
 
 ```bash
@@ -185,8 +181,7 @@ splinter dataset export $DATASET --out /tmp/first-run-dataset
 
 The records are chat conversations whose supervised answer was verified; the student's prompt is the instruction alone, never the passage a teacher
 was shown. The manifest names where each record came from. See the [datasets reference](../reference/datasets.md). The candidate's training curve,
-the step it carries and any warnings are in the report; the gate repeats the warnings beside its verdicts. To stop at the candidate and decide later, run
-`learn` with `--no-release` and release it yourself in step 10.
+the step it carries and any warnings are in the report; the gate repeats the warnings beside its verdicts. `train` stops at the candidate, so you decide later and release it yourself in step 10.
 
 ## 9. Compare the candidate with the baseline
 
@@ -221,7 +216,7 @@ released <id>; default points at it
 ```
 
 or `not released: the gate blocked it`. Improvement and retention are decided by the one promotion rule (the dev gain's 95%
-interval above 0 over at least six families, retention's one-sided bound above -0.05); a release from `learn` has no examiner's sealed exam, so its
+interval above 0 over at least six families, retention's one-sided bound above -0.05); a release from `release` has no examiner's sealed exam, so its
 record says it is not exam-verified, and why. A release is immutable and carries every number the gate measured; `release list` shows each release with its parent
 and the aliases that point at it. The manifest `brain serve` follows is written to `<state>/serving/default.json`, and `splinter rollback default` points the
 alias back at the release it was trained from. See [Release, serve and roll back](../guides/releases.md) and [release policy](../concepts/release-policy.md).
@@ -252,8 +247,7 @@ grounded in, with those bytes quoted. See [provenance](../concepts/provenance.md
 |---|---|---|
 | `FAIL role:...` from `doctor` | The role's model is not on disk | `brain pull`, or name `--models-dir` or `--policy-base` |
 | `warn role:...` from `doctor` | The policy would teach, judge or write tasks for itself | `brain pull` a larger chat model, or name `--assistant-model` |
-| `no plan was made` | The planner chose kinds the sources cannot support | Name `--kinds` |
-| Every proposed task rejected | The writer model is too weak for the admission rules | Name `--generator` and `--teacher`; see [configuration](configuration.md) |
+| Every proposed task rejected | The writer model is too weak for the admission rules | Name `--generator`, and `--teacher` for `solve --frontier`; see [configuration](configuration.md) |
 | `no candidate was trained` | No task was both failed sometimes and solved with a verified answer | More material, or a teacher that can solve what the policy cannot |
 | `gate: blocked on ...` | A candidate was trained and the gate refused it | Read the failed check's numbers; the policy is unchanged |
 | Exit status 2 | Refused before anything ran: usage, an unknown id, a remote model without the opt-in | Read the message |

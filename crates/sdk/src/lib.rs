@@ -16,18 +16,19 @@
 //! [`Splinter::run`] is the one place that wrapping lives.
 //!
 //! ```no_run
-//! use splinter_sdk::learn::LearnRequest;
+//! use splinter_sdk::ask::ask;
+//! use splinter_sdk::vocabulary::model_ref::ModelRef;
 //! use splinter_sdk::Splinter;
 //!
 //! # fn main() -> Result<(), splinter_sdk::Error> {
 //! let splinter = Splinter::from_env()?;
-//! let request = LearnRequest {
-//!     sources: vec!["./manual.md".into()],
-//!     goal: Some("the console and power limits".into()),
-//!     ..LearnRequest::default()
-//! };
-//! let learned = splinter.learn(&request)?;
-//! # let _ = learned;
+//! let answer = ask(
+//!     &splinter.context(),
+//!     "What does the console print on boot?",
+//!     None,
+//!     &ModelRef::policy_default(),
+//! )?;
+//! # let _ = answer;
 //! # Ok(())
 //! # }
 //! ```
@@ -35,9 +36,9 @@
 //! # What a caller works with
 //!
 //! * The jobs a process submits to run outside it ([`jobs`]).
-//! * The commands, one module each - [`learn`], [`practice`], [`ask`],
+//! * The commands, one module each - [`ask`],
 //!   [`sources`], [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`],
-//!   [`solving`], [`verify`], [`validate`], [`critique`], [`datasets`],
+//!   [`solving`], [`verify`], [`critique`], [`datasets`],
 //!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`doctor`], [`state`],
 //!   [`router`], [`goal`] and the rest - with their requests and reports.
 //! * `absorb::consolidate` takes a generation of a policy's claims into the
@@ -78,13 +79,13 @@ pub use splinter_orchestrator::{
 
 // The commands.
 pub use splinter_pipelines::{
-    absorb, acquire, arm_compare, ask, bench, brain_server, budget, canaries, checkpoints,
-    claim_quality, claims, compare, conversation_policy_gradient, critique, curriculum, datasets,
+    absorb, arm_compare, ask, bench, brain_server, budget, canaries, checkpoints, claim_quality,
+    claims, compare, conversation_policy_gradient, critique, curriculum, datasets,
     decision_fixtures, describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences,
-    experiment, factory_index, goal, graded, harbor, harness_opt, history, hub, improve, judge,
-    learn, lineage, objects, plan, powered, practice, preflight, raft, rehearsal, release, rerank,
-    reserve, retrieval, router, sealed, served, serving, sessions, set_import, solving, sources,
-    state, status, tasks, timeline, train, validate, variants, verify,
+    experiment, factory_index, goal, graded, harbor, history, hub, improve, judge, lineage,
+    objects, policy_used, powered, preflight, raft, rehearsal, release, rerank, reserve, retrieval,
+    router, sealed, served, serving, sessions, set_import, solving, sources, state, status, tasks,
+    timeline, train, variants, verify,
 };
 
 // The layers, each under one name.

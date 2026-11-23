@@ -163,7 +163,6 @@ splinter jobs reconcile
 | `--assistant-model REF` | The stronger model that plans, writes tasks, teaches, judges and reads sentences when the command names none (default: none, the policy plays its roles; see [Roles](#roles)). |
 | `--judge-model REF` | The model that judges what only a judge can decide (default: the assistant). |
 | `--front-door-model REF` | The model that reads sentences (default: the assistant). |
-| `--default-budget DURATION` | How long a `learn` may take when it names no `--budget` (a sentence names none); unbounded when not given. |
 | `--thinking` | Lets local models reason before they answer. Off, a reasoning model is asked with its reasoning block closed, so every reply is the answer and comes at once; training renders its answers the same way. |
 | `--min-calibration-controls N` | The fewest controls a judge is measured on before its verdicts count (default 16). |
 | `--allow-remote` | Permits models reached over the network. |
@@ -171,7 +170,7 @@ splinter jobs reconcile
 | `--workspace-scratch DIR` | Where trees are laid out for repository tasks. |
 | `--cargo-home DIR` | A cargo home the commands of a Cargo project build offline from. |
 
-`--bf16-base` (on `learn`, `practice` and `absorb`) and `train --base-precision` hold a large policy's
+`--bf16-base` (on every command that trains) and `train --base-precision` hold a large policy's
 base at bf16 so it trains on one card. `train --base-precision` also takes `int8`, `nf4` and `fp8`
 (block-scaled E4M3, half of bf16: an fp8 checkpoint's own format, so nothing is requantised); brain refuses a
 tier the base cannot hold, naming the formats it can.
@@ -191,7 +190,7 @@ Every model is named the same way:
 
 A policy alias is resolved once per command, when it is first used: a
 run keeps the release it started with however the alias moves meanwhile,
-and records it (`learn`'s first stage, a candidate's `parent`).
+and records it (a candidate's `parent`).
 
 The policy's context is limited with the global `--policy-context-tokens N`
 (a policy too large for the card at its maximum), any other local model's by
@@ -205,7 +204,7 @@ provider: store it once with `sven auth set openrouter` (or the provider's id).
 
 Splinter reaches brain only through its API. A local model (`local:...`, `policy:...`) is never loaded in
 the process: it is requested from a `brain serve --openai` by the id that server serves it under, and the
-attempts of `practice`, `learn`, `solve` and the release gate run against it at once,
+attempts of `solve`, the repository-practice recipe and the release gate run against it at once,
 which brain's continuous batching decodes together.
 
 Without flags, Splinter starts such a server for the length of the command: the `brain` on `PATH` (or
@@ -244,7 +243,7 @@ against its champion needs.
 
 ### Training on a brain endpoint
 
-With endpoints, `train` and the training stage of `learn` and `practice` do not load the
+With endpoints, `train` and the training stages of `absorb` do not load the
 base in the process either: a supervised fine-tune and a policy-gradient run (self-distillation with
 teacher contexts included) are jobs of the brain service, which schedules them on the cards it serves
 from, taking them from idle serving replicas and giving them back.

@@ -3,7 +3,7 @@
 
 # Build datasets and train a candidate
 
-`learn` does everything below in one run. Use the individual commands to build a dataset
+Each command here is one stage of a learning run (the [learning factory](learning-factory.md) composes them as a recipe). Use them to build a dataset
 with a different view, to retrain on the same data with other settings, or to see what a
 stage produced. Datasets and their views are described in the [datasets
 reference](../reference/datasets.md); the [release gate](../concepts/release-policy.md)
@@ -25,7 +25,7 @@ the datasets and the adapter move through the artifact store `--brain-artifact-s
 
 Unless `--steps` is given a run's step budget
 is three passes over what it learned, within bounds, at one learning rate
-suited to a short LoRA run for `train` and `learn` alike (`--lr`, 2e-4),
+suited to a short LoRA run (`--lr`, 2e-4),
 a LoRA alpha of twice the rank (`--alpha`, so the update's scale does not
 change with the rank) and no weight decay (`--weight-decay`), all recorded
 in the candidate. Each pass takes every record once in a fresh order, a step
@@ -104,11 +104,6 @@ last and mean KL to the reference, the mean clip fraction and the mean ratio, an
 them as one line. brain also prints the step's KL, clip fraction and ratio on its step log line.
 The KL costs one forward pass over the dataset before the first step, none per step.
 
-`splinter practice` trains this way too with `--objective
-policy-gradient` or `self-distill`, from the k attempts of their own solve stage; see
-[Training objectives](repositories.md#training-objectives). They take the flags above except
-`--temperature`, which is the temperature of their pass@k attempts.
-
 ### Self-distillation on the cliff
 
 GRPO's advantage is zero where every attempt at a task failed, so the hardest tasks teach it
@@ -174,7 +169,7 @@ score is not judged. The verdict is reported only: it never stops or alters
 the run.
 `--keep-evaluations` also keeps the adapter of every evaluation with the
 candidate, and `splinter select CANDIDATE --exam-set DEV-SUITE` puts each of
-them to the dev suite (the families `learn --dev-families` reserves apart from
+them to the dev suite (the families `exam-set create --dev-families` reserves apart from
 the final test and from all training) and chooses one by a rule fixed in
 advance: an evaluation whose answers state what the source does not hold in
 more than 8% of the answers checked is out; of those left, the best share of
@@ -183,8 +178,7 @@ in the running; of those, the writer's own text of the dev families gets the
 lowest loss. Correctness decides, voice breaks the tie it cannot, and an
 evaluation that invents is never chosen for its voice. `--adopt` makes the
 chosen evaluation a candidate of its own (its held-out score is not carried
-over: it was measured of another adapter) to release; `learn --select-on-dev`
-does both in the run, between training and the exam.
+over: it was measured of another adapter) to release.
 
 ## Interrupting a run
 
@@ -207,8 +201,7 @@ run's seed (so the same seed replays the same records) that never includes
 what that release held out;
 replayed records are never held out, and take a quarter of the training
 draws however many there are, so a large replay cannot starve the new
-records. `--rehearsal DATASET-ID` mixes a rehearsal dataset (`rehearse`; see
-`learn`) in the same way at `--rehearsal-share` of the draws (default 0.25;
+records. `--rehearsal DATASET-ID` mixes a rehearsal dataset (`rehearse`) in the same way at `--rehearsal-share` of the draws (default 0.25;
 the replay's quarter and this share must leave the new records some draws),
 never held out, and puts `--monitor-share` of its records into the
 monitoring set beside the training families' records, so the step carried is
@@ -228,7 +221,7 @@ records its regime; the release gate grades either the same way.
 ## Seeds
 
 Every random choice a pipeline makes takes a seed the run states. The exam's
-families (`--exam-seed`, also on `exam-set create --seed` and, for `practice`,
+families (`exam-set create --seed` and,
 kept with the families so every later run reads it back and naming another is
 refused), the rehearsal's form tasks (`--rehearsal-seed`), the denoise tasks
 (`--denoise-seed`), the subjects of `--strip mix:F` (`--mix-seed`) and the

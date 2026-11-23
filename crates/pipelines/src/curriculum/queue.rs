@@ -13,13 +13,12 @@
 //! champion got right and the candidate got wrong is queued
 //! ([`enqueue_retention`]), with the source sections new tasks for it can
 //! be generated from: the sections the forgotten tasks' evidence falls in.
-//! The next `learn` generates tasks from every queued concept's sections
-//! beside its own sources ([`pending`]), and takes the concepts off the
-//! queue once its task set is stored ([`complete`]); a run that fails
-//! before that leaves them queued.
+//! [`pending`] lists them, for `status` and the release report; no command
+//! takes a concept off the queue now, and a `done` pointer is one that an
+//! earlier version of Splinter took off, which [`pending`] skips.
 //!
 //! Each queued concept is a pointer, `queue-<digest of the concept>`, to the
-//! document that holds its entry, or to `done` once it was taken off the queue:
+//! document that holds its entry, or to `done`:
 //! queuing a concept again merges the new sections and reasons into its entry
 //! and moves the pointer, so two processes queuing at once cannot lose one
 //! another's merge, and the history of a concept's queuing stays on record.
@@ -176,25 +175,4 @@ pub fn pending(ctx: &Context) -> Result<Vec<QueuedConcept>, OrchestratorError> {
     }
     queued.sort_by(|a, b| a.concept.cmp(&b.concept));
     Ok(queued)
-}
-
-/// Takes `done` off the queue.
-pub fn complete(ctx: &Context, done: &[QueuedConcept]) -> Result<(), OrchestratorError> {
-    for entry in done {
-        let pointer = pointer_of(&entry.concept)?;
-        let (from, _) = entry_of(ctx, &pointer)?;
-        if from.as_deref().is_some_and(|value| value != DONE) {
-            match ctx.workspace().move_pointer(
-                &pointer,
-                from.as_deref(),
-                DONE,
-                &ctx.clock().utc_now(),
-            ) {
-                // Queued again meanwhile: it stays queued.
-                Ok(_) | Err(StoreError::PointerConflict { .. }) => {}
-                Err(other) => return Err(other.into()),
-            }
-        }
-    }
-    Ok(())
 }

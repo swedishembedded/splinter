@@ -14,8 +14,8 @@ grammar in `src/cli.rs` and `src/cli/` so it cannot disagree with the program.
 
 ```bash
 splinter doctor                         # can a run start here?
-splinter learn ./manual.md              # sources to tasks to a candidate, gated, as one recorded run
-splinter "learn the manual in ./docs"   # the front door: a sentence becomes one of the commands
+splinter init --template knowledge-learning my-repo   # a recipe that learns what your documents say
+splinter "absorb the sessions in ./today"   # the front door: a sentence becomes one of the commands
 splinter ask "What does the manual say about the watchdog?"
 ```
 

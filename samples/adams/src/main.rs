@@ -420,7 +420,7 @@ fn exam_command(flags: &splinter_sdk::device::DeviceFlags, args: &[String]) -> a
 
 /// The system message an exam asks under, when not the sample's own persona:
 /// `--persona NAME` is the prompt Splinter trains a policy to be NAME under,
-/// for an adapter a `learn` produced; `--system TEXT` is any other.
+/// for an adapter Splinter trained; `--system TEXT` is any other.
 fn system_flag(args: &[String]) -> Option<String> {
     flag(args, "--persona")
         .map(|name| splinter_sdk::vocabulary::prompt::persona_prompt(&name))

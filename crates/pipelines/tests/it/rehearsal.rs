@@ -24,8 +24,6 @@
 //!   record what was rehearsed, and the leakage check reads it. A share
 //!   outside (0, 1), or one that with the replay leaves the new records
 //!   nothing, is refused before anything trains.
-//! * A `learn` with a persona rehearses by default; `--rehearsal 0` and a
-//!   run without a persona do not.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -34,7 +32,7 @@ use crate::common;
 
 use std::sync::Arc;
 
-use common::gate::{anchor_file, dataset, gate_context, put_base, Brain, FakeTrainer, ANCHOR};
+use common::gate::{anchor_file, dataset, gate_context, Brain, FakeTrainer, ANCHOR};
 use common::{Scratch, Scripted};
 use splinter_agent::solve::Model;
 use splinter_agent::CancelToken;
@@ -44,7 +42,6 @@ use splinter_knowledge::tasks::dedup::Seen;
 use splinter_knowledge::tasks::{DEFAULT_MAX_OVERLAP, DEFAULT_SHINGLE_WORDS};
 use splinter_orchestrator::runs::record;
 use splinter_orchestrator::{Context, OrchestratorError};
-use splinter_pipelines::learn::{learn, LearnRequest, Learned, DEFAULT_REHEARSAL_SHARE, STAGES};
 use splinter_pipelines::rehearsal::{rehearse, RehearseRequest, FORM_SHARE};
 use splinter_pipelines::release::{anchor, arm};
 use splinter_pipelines::train::{
@@ -382,49 +379,6 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
         );
         assert!(trainer.plans.lock().unwrap().is_empty());
     }
-}
-
-#[test]
-fn a_learn_with_a_persona_rehearses_by_default_and_not_when_told_not_to() {
-    let (scratch, ctx) = gate_context("rehearsal-learn-plan", Brain::Honest);
-    put_base(&ctx);
-    let manual = scratch.0.join("manual.md");
-    std::fs::write(&manual, common::manual::MANUAL).unwrap();
-    let stages = |persona: Option<&str>, rehearsal: Option<f64>| {
-        let learned = learn(
-            &ctx,
-            &LearnRequest {
-                sources: vec![manual.display().to_string()],
-                persona: persona.map(str::to_string),
-                rehearsal,
-                dry_run: true,
-                ..LearnRequest::default()
-            },
-            &FakeTrainer::knowing(&[]),
-        )
-        .unwrap();
-        let Learned::Planned(plan) = learned else {
-            panic!("a dry run plans");
-        };
-        plan.stages
-    };
-    assert!(STAGES.contains(&"rehearse"));
-    assert!(stages(Some("The Writer"), None).contains(&"rehearse"));
-    assert!(!stages(Some("The Writer"), Some(0.0)).contains(&"rehearse"));
-    assert!(!stages(None, None).contains(&"rehearse"));
-    assert!(stages(None, Some(DEFAULT_REHEARSAL_SHARE)).contains(&"rehearse"));
-    let refused = learn(
-        &ctx,
-        &LearnRequest {
-            sources: vec![manual.display().to_string()],
-            rehearsal: Some(1.0),
-            dry_run: true,
-            ..LearnRequest::default()
-        },
-        &FakeTrainer::knowing(&[]),
-    )
-    .unwrap_err();
-    assert!(refused.is_refusal() && refused.to_string().contains("rehearsal share"));
 }
 
 #[test]

@@ -124,7 +124,7 @@ pub fn train_command(brain: &splinter_sdk::model::BrainEndpoints, t: &Train) -> 
         train: &split.train,
         held_out: &split.held_out,
         // The sample's own fine-tune runs its steps as given, unwatched;
-        // `splinter learn` and `splinter train` monitor and select.
+        // `splinter train` monitors and selects.
         held_out_text: None,
         monitor: None,
         eval_every: 0,

@@ -3,7 +3,7 @@
 
 # Learn a repository from its own tests
 
-Use `splinter practice` to teach the policy a codebase. The project's own tests
+Use the `repository-practice` template to teach the policy a codebase. The project's own tests
 are the verifier: faults are seeded into the code, and a task exists only where the
 tests catch the fault every time. The agent works in a copy of the tree and is graded
 by tests it never sees.
@@ -12,75 +12,38 @@ The agent runs on [sven](https://swedishembedded.com/docs/sven); the commands it
 runs are bounded as described under [Confinement](#confinement). Read
 [limitations](../concepts/limitations.md) before pointing it at code you do not trust.
 
-
 ```bash
-splinter practice ./shop --rev v1.4
-splinter practice ./shop --rev HEAD --exam-families 2 --k 4 --no-release \
-    --test-command python3 -m pytest -x
+splinter init --template repository-practice my-repo
+cd my-repo
+splinter validate recipes/repository-practice.yaml
+splinter run recipes/repository-practice.yaml --out runs/practice
 ```
 
-`practice` learns a codebase from its own tests, as one recorded run. The
-repository is a git work tree or bare repository and `--rev` (default `HEAD`)
-any revision git resolves to a commit; the tracked files of that commit are
-archived as the snapshot every task is pinned to (a checked-out revision with
-uncommitted changes is refused unless `--allow-dirty`). Its stages, in
-order:
+`init` makes `project/` (a small example project with its tests) a git
+repository and names its commit in the recipe; point `repository` and `revision` at your
+own. The recipe's stages, in order:
 
 | Stage | What it does |
 |---|---|
-| `policy` | resolves `policy:default` once |
-| `snapshot` | archives the revision; the same tree is the same snapshot |
-| `profile` | finds how the tests are run (`python3 -m unittest` for a Python project with a `tests` directory, `cargo test --offline` for a Cargo project; `--test-command` and `--file` name them otherwise) and runs the suite twice on a clean copy: a red or flaky baseline stops the run |
-| `tasks` | seeds faults by code in the files under test and keeps a task only where the project's own tests catch it every time, the change reversed makes its check pass, and the catching tests live in files of their own, which are taken out of the tree the agent is given; a task the store already holds, or a request that repeats one made for the same file, is not made again, so a second run over the same snapshot ends here |
-| `reserve` | sets the exam's families aside (a family is the file a fault was seeded in) by a stable hash of their names, before any attempt; `--exam-families N` (default a quarter), and a family an earlier run reserved stays the exam |
-| `solve` | the policy attempts each remaining task `--k` times as an agent in its own copy of the tree, with sven's file, search and shell tools, up to `--follow-ups` more turns when the visible checks stay red and `--max-tool-calls` calls; each attempt draws from a seed that is a function of the task and the attempt |
-| `verify` | applies each patch to a clean copy, lays the hidden tests over it and runs the project's checks; an exposure audit fails any attempt whose trajectory names a hidden path, quotes the hidden tests or names the state root, whatever its patch did, and the stage counts those by kind |
-| `correction` | only with `--correction`: the attempts that failed or got stuck (a failed verdict, or an episode stopped for repeating a call or spending its calls) are continued by the teacher from the state the student actually reached: the student's recorded transcript is replayed into a fresh copy of the snapshot by sven's fork, which refuses unless every replayed observation, the workspace it reaches and the transcript hash match the recording, and the teacher then takes the next turn under the same system prompt, tools and remaining step budget. The continuation is graded by the same hidden checks and exposure audit as an attempt; only verified ones are trained on, with the student's prefix as context and the teacher's actions supervised. One correction per task, at most `--corrections` in a run |
-| `teach` | only with `--teacher`: each task no graded attempt solved is given to the teacher, which is `reference` (the task's own reference change, the inverse of the seeded fault, replayed as an agent's actions through sven's tools: read the file, edit it by the patch's hunks) or a model (`remote:`/`local:`) that solves the task as an agent. Either is graded by the same workspace verifier and exposure audit as the policy's attempts and never grades itself; the exam's tasks are never given to it. A demonstration names the file without searching for it |
-| `frontier` | keeps the tasks the policy solves sometimes (pass@k), and with a teacher the never-solved tasks whose demonstration was verified |
-| `dataset` | by `--objective` (below). For `sft-step`, the passing attempts, action by action, with the tools the agent was offered (an action a labeller marked good is also admitted from an experience nobody verified or whose verdict failed, unless `--control outcome-verified` is given; the manifest records it); `--max-block TOKENS` leaves out and counts records longer than the card fits, and `--split-over-block` splits such a record into windows that each fit instead, keeping every supervised action and repeating the instruction in each; the dataset is checked to hold no family of the exam |
-| `train` | a candidate from the champion; for `sft-step` with earlier releases' records replayed (`--replay none|uniform|balanced`; `--rebuild` trains a fresh adapter on the base from every earlier release's records and the new ones instead of continuing the champion); for the other objectives by brain's clipped policy gradient on the champion's adapter. `--base-precision fp32|bf16|int8|nf4|fp8` holds the frozen base as `train --base-precision` does |
-| `release` | the gate, over the exam this run reserved (`--no-release` stops at the candidate): the champion and the candidate attempt the exam's tasks as agents, under the bounds and seeds of `solve`, graded as `verify` grades; paired outcomes are resampled by family in the promotion rule (not exam-verified: the run made its own exam); each earlier release is held to the exam of its own run; the anchor suite is held (a frozen suite with no coding-agent task is decided on the tasks it holds, and the report says it holds none); the candidate is served by `brain serve --adapter-manifest` and must be graded as it was in-process on at least three quarters of a sample of the exam. A blocked candidate is not released and the run stops with the reason of each check that failed; `practice` gives the gate the bounds it solved under, and `splinter release` on such a candidate probes with the default ones |
+| `practised` (`task.mutate`) | seeds faults by code in the files under test of the revision's tree and keeps a task only where the project's own tests catch it every time, the change reversed makes its check pass, and the catching tests live in files of their own, which are taken out of the tree the agent is given; a family (the file a fault was seeded in) is trained on or examined, never both (`eval_percent`) |
+| `train-tasks`, `held-tasks` (`tasks.pin`) | pin the training split and the held-out split |
+| `attempts` (`attempt.collect`) | the policy attempts each training task as an agent in its own copy of the tree, with sven's file, search and shell tools, several times, each attempt drawing from a seed |
+| `sft` (`dataset.project`) | the passing attempts become a dataset |
+| `lora` (`model.train`) | a LoRA trained on them |
+| `eval` (`evaluation`) | the candidate and the baseline attempt the held-out tasks, paired, and compared by the evaluation's sign test |
+| `release` (`promotion`) | decides from the evaluations whether the candidate is promoted |
 
-### Training objectives
+[Learning factory](learning-factory.md) says what a run needs on the machine and what each
+operation takes. The recipe is yours to change: its models, the number of attempts, the
+size of the held-out split.
 
-`--objective sft-step|policy-gradient|self-distill` chooses what the run trains on; `sft-step`
-is the default and is what the stages above describe.
-
-- `policy-gradient` makes the `--k` attempts the solve stage made at a task a group, through
-  the canonical `policy-gradient` dataset view (the view `splinter dataset build` has): the
-  reward of an attempt is 1 for a verified pass and 0 otherwise, every action of every attempt
-  carries its attempt's reward and group and is weighed by the advantage brain computes over
-  the others of the group, and brain's clipped policy gradient
-  continues the champion's adapter with a KL penalty. It uses every graded attempt of the solve
-  stage, not the frontier's selection of tasks, so a task every attempt passed or every attempt
-  failed is a group of its own kind, counted and shown in the report's `rollouts` (graded,
-  all-pass, all-fail) and not dropped unseen; its rewards are all alike, so it trains nothing
-  under this objective. An attempt the exposure audit failed is left out whole, because its
-  conversation quotes what only the grader holds, and counted; a solve that the model server or
-  the environment cut short left no experience and is counted as not completed. The attempts
-  are on-policy by construction (the champion made them), and the importance ratio is taken at
-  the temperature they were sampled at, which is `--temperature` (the pass@k temperature, brain's
-  agent default when absent), never a separate setting that could disagree with it.
-- `self-distill` is the same, and also distils the groups whose attempts all failed (where the
-  advantage is zero) as `splinter dataset build --view policy-gradient --cliff-distill` does:
-  the attempt's own conversation, scored per token by the frozen model shown what the
-  workspace verifier recorded for that task (the hidden checks that failed, their exit status
-  and the tests seen to fail, and the task's reference change, which a repository task carries
-  on its record and every in-store attempt inherits). That text never enters the student's
-  messages. An attempt with none of it is left out and counted as `no_privileged_context` in the
-  dataset's exclusions.
-
-The clip, KL, reference, loss-aggregation, teacher-policy and advantage settings are
-`train`'s, with the same names and defaults (`--clip-eps`, `--kl-beta`, `--reference`,
-`--loss-agg`, `--teacher-policy`, `--advantage-bound`, `--sequence-advantage-cap`;
-[Training on rollouts](training.md#training-on-rollouts)). A rollout objective holds nothing
-out and monitors nothing, and replays nothing, so these are refused with it, before any
-attempt is made: `--teacher` and `--correction` (their demonstrations are imitated), `--rebuild`,
-`--replay` and the monitoring flags. The settings of the objective with `--objective sft-step`
-are refused too, so none is dropped. The exam reservation, the exposure audit and the release
-gate are the same for every objective; a release made by a rollout objective is not replayed
-into the supervised records of a later `sft-step` generation.
+A corpus of corrections can be built without solving again from an arm that
+already ran: `splinter corrections --attempts <EXPERIENCE-SET> --tasks
+<TASK-SET> --teacher <REF> [--max N]` continues the failed or stuck attempts
+of that set from the state the student actually reached, verifies every
+continuation with the task's own hidden checks and prints the id of the
+experience set holding the verified ones, which `splinter dataset build --view
+sft-step` and `splinter train` then take as any other set.
 
 Where no container is configured, the commands the agent works with run on
 the host, bounded but not isolated, and every environment record says
@@ -90,29 +53,7 @@ no network instead. `--cargo-home` gives the commands a
 cargo home to build offline from, and `--workspace-scratch` says where
 trees are laid out. An attempt whose trajectory shows the hidden tests,
 and an attempt the harness could not carry out, are set aside and counted in the
-gate's report; neither is in a denominator. A release moves the alias and
-rewrites `<state>/serving/<alias>.json`, the manifest `brain serve
---adapter-manifest` follows (a rollback repoints it); an alias at a full
-checkpoint has no adapter to name, so its manifest is withdrawn. A candidate the
-gate blocks, or cannot measure, is not released, and the run exits 1 with the
-reason. `--test-command` takes the rest of the command line, so it comes last.
-
-A corpus of corrections can be built without solving again from an arm that
-already ran: `splinter corrections --attempts <EXPERIENCE-SET> --tasks
-<TASK-SET> --teacher <REF> [--max N]` continues the failed or stuck attempts
-of that set, verifies every continuation and prints the id of the experience
-set holding the verified ones, which `splinter dataset build --view sft-step`
-and `splinter train` then take as any other set.
-
-A task the policy never solves is not dropped when a teacher is named (`splinter practice
---teacher reference`, or `--teacher remote:<provider>/<model>`): the task's own reference change
-is replayed as the actions of an agent through sven's real tools (read the file, edit it by the
-patch's hunks), or a stronger model solves it as an agent. Either is graded by the same
-workspace verifier and exposure audit as the policy's attempts and never grades itself, and the
-demonstration teaches what to do once the place is known, not how to find it. `--replay
-none|uniform|balanced` chooses what of the earlier releases' records is replayed, and
-`--rebuild` trains a fresh adapter on the base from all of them instead of continuing the
-champion.
+report; neither is in a denominator.
 
 ## Confinement
 
@@ -159,16 +100,15 @@ path in what a tool returned, hidden content and the state root still fail it.
 
 ## Running a repository's attempts on a brain endpoint
 
-`practice`, `learn`, `solve` and the release gate attempt tasks as agents, each
+`solve` and the release gate attempt tasks as agents, each
 attempt a conversation of many requests. With `--brain-endpoint` the policy is served by brain and up
 to `--attempt-concurrency` attempts run at once against it, each with the seed it has when run one
 after another, so the experiences recorded are the same ones, in the order of the tasks and attempts
-(see "Serving models from a brain endpoint" in the configuration page). `practice` against a
-Qwen3.8 policy:
+(see "Serving models from a brain endpoint" in the configuration page):
 
 ```text
 splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY --attempt-concurrency 48 \
-         --policy-base Qwen/Qwen3.8-27B-FP8 practice REPO
+         --policy-base Qwen/Qwen3.8-27B-FP8 solve TASKSET
 ```
 
 The gate's candidate must be served too: start the endpoint with `--adapter-manifest FILE` and give
@@ -229,54 +169,17 @@ or the error, or the exception, satisfies it), so `splinter tasks check-requests
 applies it to a task set that already exists: it writes the tasks that pass, unchanged and with
 the same ids, as a task set of their own and reports how many were dropped for each class.
 
-`practice --instruction-version 2` words the request of the tasks it generates afresh: it also
-lists the source files by directory (never a test, never a withheld file; at most 30 names,
-the rest counted), says that each symptom line is the name of a hidden test written as words,
-that the hidden tests are run on the final tree and the tests in the tree prove nothing about
-them, and that one fault causes all the symptoms. The generator seeds one fault per task, so a
-list of symptoms is one fault seen through several tests, and a test's name can describe less
-than it checks. Version 1, the default, words the request as before; a task already stored
-keeps its request and so its address.
-
 ## Generations of a coding policy
 
-A generation of a coding policy is one `practice` run (above) whose champion is the previous generation's model. The
-learning factory runs a series of them as forked recipe runs that name the previous generation's model as their
-`champion:`; see `docs/guides/learning-factory.md`. `--replay none|uniform|balanced` and `--rebuild` choose how the
-earlier experience is carried forward under `--objective sft-step`; a rollout objective (`policy-gradient`,
-`self-distill`) replays nothing and refuses both flags.
-
-## Which tasks a budget reaches first
-
-`practice` goes through the admitted tasks in the order they were admitted
-and stop at `--budget`. `--curriculum learning-progress` or `--curriculum gain-ranked` puts them
-in the order of how fast the policy is still improving, per GPU second, on each family (the file a
-fault was seeded in), in a `schedule` stage between `reserve` and `solve`; the solve and teach
-stages then reach those families first. The pass@k frontier still decides afterwards which
-solved tasks are kept for training.
-
-A family's learning progress is the absolute difference between its verified pass rate in the
-newest `--lp-window` releases and in the window before, read from the attempts the store already
-holds (the same history `status` shows as concept mastery). It is divided by the family's GPU
-seconds per attempt relative to the mean over families (a family with no recorded device time is
-priced at the mean, never at zero) and a novelty bonus (`--lp-novelty`, shrinking with attempts) is
-added, so a family nothing has attempted is not ignored. `learning-progress` draws every family
-once, without replacement and in proportion to that weight, from `--curriculum-seed` (drawn and
-recorded when absent), mixed with the uniform distribution by `--lp-explore` so no family gets less
-than that share divided by the number of families. `gain-ranked` takes the families heaviest
-first, with no draw. The report's `schedule` lists each family's progress, cost, novelty and
-weight, the order, and `informative`: how many families were measured under two or more
-releases. A family first met by this run has no history, so on a repository none of whose files an
-earlier release attempted `informative` is 0 and the order is the novelty-weighted draw; the
-signal discriminates from the second release a family is attempted under. The report's `yield`
-gives the device seconds of the solve and teach attempts against the tasks kept, so the
-strategies can be compared per GPU hour.
+A generation of a coding policy is one run of the `repository-practice` recipe whose champion is the previous
+generation's model. The learning factory runs a series of them as forked recipe runs that name the previous
+generation's model as their `champion:`; see `docs/guides/learning-factory.md`.
 
 ## Harder tasks: several faults at once
 
 A solver that fixes nearly every single-fault task of a repository needs harder tasks of the
 same kind to be measured against. `splinter tasks combine <TASKSET> --faults 3 --per-family 6`
-makes them from the admitted tasks of a practised snapshot: each seeds faults in three different
+makes them from the admitted tasks of a snapshot: each seeds faults in three different
 files at once, is graded by all of the hidden tests that catch them, and is admitted only after
 its tree fails the check, its reference change (the three reverse patches together) passes it on
 two runs, and no one fault's reverse patch passes it alone. Because the tasks are made by the
@@ -302,7 +205,7 @@ splinter tasks drills ./shop --rev v1.4 --for-tasks blake3:1ae0f1...
 The answer is what the pinned interpreter prints against the clean snapshot of the revision, so
 no model writes a task or its reference, and the inputs come from the repository's own tests
 (arguments only, never an assertion or an expected value). Drills are tagged with the file and
-function they exercise; the ones of a file the practice exam reserved are exam tasks and are
+function they exercise; the ones of a file the exam reserved are exam tasks and are
 never trained on. `--for-tasks` drills exactly the functions the reference changes of a set of
 repair tasks touch. [Tasks reference](../reference/tasks.md#comprehension-drills) has the rules,
 the refusal reasons and the export.

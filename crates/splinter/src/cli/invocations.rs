@@ -225,18 +225,18 @@ mod tests {
     fn a_command_the_grammar_accepts_passes_whatever_its_layout() {
         let page = "```bash\n\
             $ splinter doctor\n\
-            splinter learn ./manual.md --goal \"the QX-7 console\" \\\n    --kinds denoise --dry-run  # plan only\n\
-            splinter \"learn the manual in ./docs\"\n\
+            splinter tasks generate abcd --kinds denoise \\\n    --author \"Ada\"  # one source\n\
+            splinter \"absorb the sessions in ./docs\"\n\
             splinter status | jq .policy\n\
             splinter ask 'What is it?' --json > answer.json\n\
-            splinter learn --help\n\
+            splinter tasks generate --help\n\
             ```\n";
         assert_eq!(problems(page), Vec::<String>::new());
     }
 
     #[test]
     fn a_flag_or_command_the_program_does_not_have_names_its_file_and_line() {
-        let page = "intro\n\n```bash\nsplinter doctor\nsplinter learn m.md --no-such-flag\nsplinter frobnicate\nsplinter ask\n```\n";
+        let page = "intro\n\n```bash\nsplinter doctor\nsplinter tasks generate abcd --no-such-flag\nsplinter frobnicate\nsplinter ask\n```\n";
         let found = problems(page);
         assert_eq!(found.len(), 3, "{found:?}");
         assert!(found[0].starts_with("page.md:5: ") && found[0].contains("--no-such-flag"));

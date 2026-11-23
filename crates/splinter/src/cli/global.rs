@@ -85,10 +85,6 @@ pub struct Global {
     /// the assistant.
     #[arg(long, global = true, value_name = "REF")]
     pub front_door_model: Option<String>,
-    /// How long a learning run may take when its command names no --budget,
-    /// a sentence's run included (`6h`, `40m`); unbounded when not given.
-    #[arg(long, global = true, value_name = "DURATION")]
-    pub default_budget: Option<String>,
     /// The fewest controls a judge is measured on before its verdicts count.
     #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u64).range(1..),
         help = format!("The fewest controls a judge is measured on before its verdicts count \

@@ -347,7 +347,6 @@ impl Proposer {
                                     denoise_seed: None,
                                     deadline: None,
                                     cancel: CancelToken::new(),
-                                    harness: None,
                                 },
                             )
                         })

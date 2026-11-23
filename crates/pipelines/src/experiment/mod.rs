@@ -23,11 +23,9 @@
 //! * no two families that play a part (trained or sealed) share a domain, so
 //!   the final exam and the earlier generations ask about different things.
 //!
-//! At run time [`ExperimentPlan::admit`] decides whether a repository, known by
-//! the tree id of its snapshot, may be read by a training stage of a given
-//! generation: never a sealed family, never a family of another generation, and
-//! never one the plan does not name. It is the tree id and not the name the
-//! run was given that decides, so renaming a sealed family does not open it.
+//! The seal a plan writes ([`crate::sealed::record`]) names its sealed families
+//! by tree id, so it is the tree id and not the name a repository is given that
+//! decides, and renaming a sealed family does not open it.
 
 use std::collections::BTreeMap;
 
@@ -141,11 +139,6 @@ pub enum PlanError {
     #[error("the plan is not valid: {}", .0.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
     Invalid(Vec<Violation>),
 }
-
-/// Why a run was not admitted.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("{0}")]
-pub struct NotAdmitted(String);
 
 #[derive(Deserialize)]
 struct PlanFile {
@@ -345,51 +338,6 @@ impl ExperimentPlan {
         };
         Self::parse(&read(plan)?, &read(catalog)?)
             .map_err(|e| OrchestratorError::Refused(e.to_string()))
-    }
-
-    /// The family whose files have tree id `tree`.
-    fn family_with_tree(&self, tree: &str) -> Option<&FamilyRef> {
-        self.families.iter().find(|f| f.tree == tree)
-    }
-
-    /// The id of the family a training stage of `generation` (from 1) may read
-    /// when the repository's snapshot has tree id `tree`; refused when the
-    /// plan does not allow it.
-    pub fn admit(&self, generation: usize, tree: &str) -> Result<&str, NotAdmitted> {
-        let refuse = |why: String| Err(NotAdmitted(why));
-        if generation == 0 {
-            return refuse("generations count from 1".into());
-        }
-        let Some(own) = self.generations.get(generation - 1) else {
-            return refuse(format!(
-                "the plan has {} generation(s), not {generation}",
-                self.generations.len()
-            ));
-        };
-        let Some(family) = self.family_with_tree(tree) else {
-            return refuse(format!(
-                "no family of plan {} has tree {tree}: its repository is not one the plan names",
-                self.name
-            ));
-        };
-        if self.sealed.contains(&family.id) {
-            return refuse(format!(
-                "{} is sealed: it is the final exam, and no stage of any generation may read it",
-                family.id
-            ));
-        }
-        if !own.train.contains(&family.id) {
-            let home = self
-                .generations
-                .iter()
-                .position(|g| g.train.contains(&family.id))
-                .map_or_else(String::new, |i| format!("generation {}", i + 1));
-            return refuse(format!(
-                "{} is a family of {home}, and generation {generation} trains {:?}",
-                family.id, own.train
-            ));
-        }
-        Ok(&family.id)
     }
 }
 

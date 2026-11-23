@@ -21,7 +21,7 @@ is the supervision around the shared stages, and owns nothing they own:
 | the repository at the baseline | `capture_tree`: the tracked files of the revision, a snapshot in Splinter's artifact store |
 | the worker | `solve_in_workspace`: sven's file, search and shell tools in a fresh copy of the snapshot, the shell in the sandbox's container when there is one, the change read back from git as a patch, the failures of the checks the worker is shown put back as follow-up turns |
 | the judgement | `grade` (the workspace verifier's own): the snapshot laid out again, the patch applied, the protected paths fenced, the checks run in the sandbox with their process-group kill |
-| what the worker saw | the exposure audit `practice` runs over every trajectory |
+| what the worker saw | the exposure audit the workspace solve runs over every trajectory |
 | applying an accepted patch | the sandbox's `apply`, all or nothing |
 
 What the loop adds is the supervision: the contract, the append-only trace,
@@ -72,19 +72,20 @@ baseline with no uncommitted change to a tracked file.
 ## Where learning went
 
 The loop supervises one task; it does not train. Training from agent work is
-`splinter practice` (and the verbs it is made of), which solves tasks through
-the same worker, grades them with hidden material, writes the `sft-step`
-view of what its own checks confirmed, trains and releases through the gate:
+the `repository-practice` recipe of the learning factory (`splinter init --template
+repository-practice`) and the verbs it is made of, which solve tasks through
+the same worker, grade them with hidden material, write the `sft-step`
+view of what the checks confirmed, train and release through the gate:
 
 | The loop used to | Now |
 |---|---|
-| `dataset`: records from accepted runs | `splinter dataset build` with the `sft-step` view, from the experiences `practice` verified |
-| `train`: an adapter on those records | `splinter train` (and the training stage of `practice`) |
-| `models list`, `judge`, `current`, `rollback` | the release store: `splinter release` runs the gate over the exam `practice` reserved and moves the alias; `splinter rollback` moves it back |
+| `dataset`: records from accepted runs | `splinter dataset build` with the `sft-step` view, from the experiences `solve` verified |
+| `train`: an adapter on those records | `splinter train` (and the training stage of the recipe) |
+| `models list`, `judge`, `current`, `rollback` | the release store: `splinter release` runs the gate over the exam that was reserved and moves the alias; `splinter rollback` moves it back |
 
 `fixtures/families.py` renders the twelve seeded-bug families (`--seed N`, or one is
 drawn and printed; `fixture.json` in the output records it); they are
-imported as workspace tasks for `practice`, and `fixtures/eval-candidate.sh`
+imported as workspace tasks, and `fixtures/eval-candidate.sh`
 runs a model reference over a list of them as plain loop runs.
 
 ## What a run keeps (`~/.sven/loop/runs/<run>/`)

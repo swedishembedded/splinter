@@ -37,12 +37,11 @@ in the [evaluation reference](../reference/evaluation.md#suites).
 
 ## The exam
 
-The exam (`splinter exam CANDIDATE`, and the `exam` stage of `learn`) measures
+The exam (`splinter exam CANDIDATE`) measures
 what the release gate's code-only grading cannot: whether a candidate gives, in
 its own words, what a held-out task's reference says. It puts the same held-out
 tasks to what the candidate continues (its parent release, else the base) and
-to the candidate, closed-book. With `--prompt GOAL` (the `exam` stage of `learn`
-passes its goal) the base is asked once more under the goal as one added system
+to the candidate, closed-book. With `--prompt GOAL` the base is asked once more under the goal as one added system
 line, and the candidate is also compared with that: training is worth what it
 adds beyond telling the base what the goal is. With `--retrieve SOURCE-ID...` the candidate is
 also asked with the passages of those sources that bear on each task shown
@@ -72,11 +71,9 @@ that is not trusted can be seen failing.
 
 An exam of a few families cannot show a gain: the paired
 tests above rest on as many units of evidence as families, which is a handful.
-`learn --exam-families N` (fifty by default for a run with a persona, none
-otherwise; 0 reserves none; `--exam-tasks-per-family`, eight; and `--dev-families` and
-`--dev-tasks-per-family`, fifty of four, a dev suite on its own families for choosing a
-checkpoint) reserves the exam's families before anything is
-generated or built, after the plan. A family is a group of text parts that
+`exam-set create --families N` reserves the exam's families before anything is
+generated or built; `--tasks-per-family` and, for a dev suite on its own families for choosing a
+checkpoint, `--dev-families` and `--dev-tasks-per-family` size it. A family is a group of text parts that
 print the same text (the groups a split uses, named by the least content digest
 in them); a stable hash of the name chooses N of the examinable ones - long
 enough to write tasks from, not so long that reserving them costs the run its
@@ -91,7 +88,7 @@ frozen under `<state>/exams/<id>/` with a ledger that refuses a changed manifest
 the manifest carries the tasks and the text they were written from, so loading it in
 another state root installs the same exam there.
 `splinter exam-set create` makes such an exam from sources apart from any
-`learn`, clear of what the candidates named by `--not-trained-by` (and the
+training run, clear of what the candidates named by `--not-trained-by` (and the
 releases they continue) were trained on; `splinter exam CANDIDATE --exam-set`
 puts a candidate to it. Four arms answer each task - the base, the base under the
 prompt the candidate was trained under (the goal when it has none), the
@@ -110,8 +107,7 @@ answers of like length, the answers' lengths, the invented specifics, the number
 of discordant tasks and the smallest difference the exam's own spread over
 families could have shown at 80% power. The voice of each arm is also scored with
 no judge, by the likelihood it gives the writer's own text of the reserved
-families (brain's held-out scoring path). The `exam` stage of a `learn` that
-reserved its exam runs this exam.
+families (brain's held-out scoring path). `splinter exam CANDIDATE --exam-set` runs this exam.
 
 `splinter exam-set power` sizes an exam before it is paid for: it simulates the primary
 comparison's test (the family-clustered interval of the difference above zero) under an assumed
@@ -135,7 +131,7 @@ memory; nearest-passage similarity and an authorship embedding are not measured.
 ## Choose how to improve
 
 `splinter improve EXPERIMENT.toml...` measures each intervention an experiment names (more
-samples, another episode protocol, a candidate that `practice` or `train` kept, no change)
+samples, another episode protocol, a candidate that `train` kept, no change)
 against the incumbent on the same target tasks and chooses the one with the greatest net value:
 the lower confidence bound of the paired gain per family, times what a success is worth and how
 often it is used, less its one-time and per-use cost, or no change when none pays. Nothing is

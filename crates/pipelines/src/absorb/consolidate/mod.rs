@@ -61,7 +61,7 @@ use super::generation::{
 };
 use super::kit::{self, ClaimKit, Live};
 use super::sealed::SealedProbes;
-use crate::learn::PolicyUsed;
+use crate::policy_used::PolicyUsed;
 use crate::rehearsal::DEFAULT_REHEARSAL_SHARE;
 use crate::train::{record_seed, Trainer, Tuning, TRAIN_SEED};
 
