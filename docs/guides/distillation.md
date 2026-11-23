@@ -134,31 +134,18 @@ interrupted and resumed is in [Build datasets and train a candidate](training.md
 ### 5. Serve the adapter and measure it
 
 A brain started with `--serve-adapters DIR` serves every adapter file in `DIR` as a model of its own and lists it in
-`GET /v1/models`. To run the examiner's practice material under the candidate and under the base, use the same
-staged tasks and attempts for both:
+`GET /v1/models`. To measure the candidate and the base on the same tasks and attempts, run a recipe of the learning
+factory (`docs/guides/learning-factory.md`) that rolls out both models over the same collection, for example a forked
+run whose `champion:` is the base and whose model is the candidate (`$ADAPTER` is the file `train` or `ingest-hf`
+printed; `--brain-adapter-dir` writes it into the directory the server follows). Each run admits its graded trials as an
+experience set, and `experiences compare` pairs two sets task by task and counts each family once:
 
 ```bash
-splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key --brain-adapter-dir /srv/adapters \
-    tasks harbor practice "$PRACTICE" --policy "local:Qwen/Qwen3-4B+$ADAPTER" \
-    --bench "$BENCH" --sven-build "$SVEN" --attempts 4 --jobs 16
-splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
-    tasks harbor practice "$PRACTICE" --policy local:Qwen/Qwen3-4B \
-    --bench "$BENCH" --sven-build "$SVEN" --attempts 4 --jobs 16
 splinter experiences compare "$CANDIDATE_SET" "$BASE_SET"
 ```
 
-`$ADAPTER` is the file `train` (or `ingest-hf`) printed. `--brain-adapter-dir` writes it into the directory the
-server follows. Each practice run admits its graded trials as an experience set. Its seed, drawn and printed when `--seed` is not
-given, names the run: pass it again to find that run instead of starting another. `experiences compare` pairs the two
-sets task by task and counts each family once
-([practice material](bench-trials.md#practice-material-the-examiners-staged-train-side)). Practice material is train-side
-and measures fit, not generalisation. For a development measurement, run the eval side of a public collection with
-bench, under a profile whose model is the id the server lists for the adapter, and compare the two jobs:
-
-```text
-bench run tasks/support --set eval --profile candidate.toml --environment userns
-bench compare jobs/BASE jobs/CANDIDATE
-```
+Rollouts over the train side measure fit, not generalisation. For a development measurement, run the eval side of a
+public collection through a recipe's development plan, with the candidate served as a model of its own.
 
 ### 6. The sealed exam (examiner side)
 
@@ -179,52 +166,29 @@ spent by its first verdict, so draw a new exam for the next decision.
 
 ### 1. Draw practice tasks
 
-The examiner stages practice material from the train side of a collection only:
-
-```text
-bench task practice tasks/legal --count 120 --seed "$SEED" --environment userns \
-    --profile profiles/brain-27b-fp8.toml --out ~/practice
-```
-
-`--count N --seed S` draws N fresh train-side tasks from the collection's generator. `--rung R` draws at one rung of its
-difficulty ladder, and `--family F` (repeatable) draws only from some families. Without `--count`, the committed train
-side is staged. The output is `~/practice/legal/`, holding `practice.json` (the draw and every task's digest),
-`job.yaml` and `bench-run.json`.
+The examiner owns the train side of a collection, and a recipe names the collection a run draws its tasks from
+(`docs/guides/learning-factory.md`). Only the train side is ever drawn for practice; the eval side and sealed exams are
+never rolled out for training.
 
 ### 2. Run the teacher
 
-Serve the teacher on a brain endpoint and run the material under it. sven is the agent in every trial:
-
-```bash
-splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file brain.key \
-    tasks harbor practice ~/practice/legal --policy local:Qwen/Qwen3.8-27B-FP8 \
-    --bench "$BENCH" --sven-build "$SVEN" --attempts 1 --jobs 16
-```
-
-One command:
-
-- stages the material again under a profile that points at the teacher, and refuses to continue if any task digest
-  or the draw differs;
-- runs Harbor;
-- has the examiner export the graded trials (`bench export`, which writes learner-safe traces only);
-- admits them as `experiences ingest-bench` would.
-
-A rerun of a finished run runs nothing and admits nothing twice. To run Harbor yourself instead, use
-`harbor run -c ~/practice/legal/job.yaml`, then `bench export JOB --out EXPORT`, then
-`splinter experiences ingest-bench EXPORT`. Each trial gets a typed outcome, and an infrastructure failure is never a
-reward of 0. The details are in [Benchmark trials as training data](bench-trials.md).
+Serve the teacher on a brain endpoint and run a recipe whose rollout model is the teacher. sven is the agent in every
+trial, the task's own tests grade it, and the graded trials are admitted as experience. If the examiner graded the
+trials itself instead, ingest its export with `splinter experiences ingest-bench EXPORT`. Each trial gets a typed
+outcome, and an infrastructure failure is never a reward of 0. The details are in [Benchmark trials as training
+data](bench-trials.md).
 
 ### 3. Keep the verified passes only
 
 - The dataset admits only trials the examiner passed. A failed, ungraded or infrastructure-failed trial yields no
   record.
 - A trial the examiner's leak audit flagged (a security violation, such as reading history beyond `HEAD`) is never
-  exported, so it never becomes an experience. The practice report counts such a trial as `exposed`.
+  exported, so it never becomes an experience. The run's report counts such a trial as `exposed`.
 - An experience of an eval-side or sealed task is refused by every dataset build.
 - Reads of history that the audit allows can still teach probing, so choose `--repository-history` deliberately (see
   below).
 
-Then continue at step 2 of the first section, naming every practice run's experience set in one
+Then continue at step 2 of the first section, naming every run's experience set in one
 `dataset build`. To share the result, `splinter publish` writes the sets, the dataset, the candidate and its verdicts as
 one tagged revision of a private repository.
 

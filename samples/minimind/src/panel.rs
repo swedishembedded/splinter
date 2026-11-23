@@ -9,7 +9,7 @@
 //! What the terminal shows of a model's capability: after every probe a
 //! compact panel (passes by family, and a solved and a failed task with the
 //! tool calls the model made, the answer it wrote and the verdict), and at
-//! the end one table across the stages with the examination's tiers. Read
+//! the end one table across the stages. Read
 //! from ledger summaries alone, so a reused stage shows the same panel.
 
 use std::collections::BTreeMap;
@@ -208,28 +208,6 @@ fn find<'a>(commits: &'a [Commit], unit: &str) -> Option<&'a Commit> {
     commits.iter().rev().find(|c| c.unit == unit)
 }
 
-/// The exam pass rate of the model at `stage`, from whichever verdict
-/// examined it, by tier.
-fn exam_rates(commits: &[Commit], label: &str, stage: &str) -> BTreeMap<String, f64> {
-    let sides: &[(&str, &str)] = match stage {
-        "pretrained" => &[("scratch", "base")],
-        "sft" => &[("scratch", "candidate"), ("experience", "base")],
-        "improved" => &[("experience", "candidate")],
-        _ => &[],
-    };
-    for (pair, side) in sides {
-        if let Some(c) = find(commits, &format!("{label}/{pair}/verdict")) {
-            return c.summary["tiers"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .filter_map(|(tier, r)| Some((tier.clone(), r[*side].as_f64()?)))
-                .collect();
-        }
-    }
-    BTreeMap::new()
-}
-
 /// Training throughput of the stage that made the checkpoint at `stage`.
 fn training(commits: &[Commit], label: &str, stage: &str) -> String {
     let unit = match stage {
@@ -253,15 +231,15 @@ fn training(commits: &[Commit], label: &str, stage: &str) -> String {
 }
 
 /// The table across stages of every model in `labels`: probe passes by
-/// family, the exam's pass rate per tier, and the training that made it.
+/// family and the training that made it.
 #[must_use]
 pub fn summary(commits: &[Commit], labels: &[String]) -> String {
     let mut s = String::new();
     for label in labels {
         let _ = writeln!(
             s,
-            "\n{label}: what each checkpoint can do\n  {:<11} {:<7} {:<9} {:<9} {:<40} {:<26} training",
-            "stage", "probe", "held-out", "1st tool", "by skill", "exam a / b / c / anchor"
+            "\n{label}: what each checkpoint can do\n  {:<11} {:<7} {:<9} {:<9} {:<40} training",
+            "stage", "probe", "held-out", "1st tool", "by skill"
         );
         for stage in stages(commits, label) {
             let stage = stage.as_str();
@@ -272,26 +250,15 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
                 .as_array()
                 .cloned()
                 .unwrap_or_default();
-            let rates = exam_rates(commits, label, stage);
-            let exam = if rates.is_empty() {
-                "not examined".to_string()
-            } else {
-                ["a", "b", "c", "anchor"]
-                    .iter()
-                    .map(|t| rates.get(*t).map_or("-".into(), |r| format!("{r:.2}")))
-                    .collect::<Vec<_>>()
-                    .join(" / ")
-            };
             let h = &p.summary["heldout"];
             let _ = writeln!(
                 s,
-                "  {:<11} {:<7} {:<9} {:<9} {:<40} {:<26} {}",
+                "  {:<11} {:<7} {:<9} {:<9} {:<40} {}",
                 stage,
                 format!("{}/{}", p.summary["passed"], p.summary["total"]),
                 format!("{}/{}", h["passed"], h["total"]),
                 format!("{}/{}", p.summary["first_tool"], p.summary["total"]),
                 by_family(&examples),
-                exam,
                 training(commits, label, stage)
             );
         }
@@ -322,25 +289,6 @@ pub fn summary(commits: &[Commit], labels: &[String]) -> String {
                 "  retrieval while pretraining (listing+path exact): {}",
                 curve.join(", ")
             );
-        }
-        for pair in ["scratch", "experience"] {
-            if let Some(c) = find(commits, &format!("{label}/{pair}/verdict")) {
-                let _ = writeln!(
-                    s,
-                    "  verdict {pair}: {} ({}, {})",
-                    c.summary["verdict"].as_str().unwrap_or("?"),
-                    if c.summary["verified"].as_bool().unwrap_or(false) {
-                        "signature verified"
-                    } else {
-                        "signature NOT verified"
-                    },
-                    if c.summary["promotes"].as_bool().unwrap_or(false) {
-                        "promoted"
-                    } else {
-                        "not promoted"
-                    },
-                );
-            }
         }
     }
     s

@@ -10,11 +10,6 @@
 //! The data the model improves on: its own verified episodes, mixed with
 //! demonstrations it was fine-tuned on (rehearsal), so a few passes over a
 //! small set of its own successes teach without overwriting the rest.
-//!
-//! The same mix is drawn for the spurious-reward control arm, with one
-//! difference: its own episodes are chosen by a seeded draw that ignores the
-//! verifier, as many as the verifier accepted. A control that the
-//! examination would promote means the exam rewards what it should not.
 
 use anyhow::Context as _;
 use serde_json::json;
@@ -25,18 +20,13 @@ use splinter_sdk::vocabulary::rng::SplitMix64;
 use crate::recipe;
 use crate::stages::{write, Run};
 
-/// A world constant: separates the control arm's draw from every other
-/// stream under one run seed.
-const CONTROL_SALT: u64 = 0x636f_6e74_726f_6c00;
-
 /// A world constant: the stream rehearsal records are drawn from.
 const REHEARSAL_SALT: u64 = 0x7265_6865_6172_7300;
 
 impl Run<'_> {
     /// The improvement data of `label`, as unit `<label>/<name>/data`
     /// writing `data/<label>/<name>.jsonl`: the records of the own episodes
-    /// (the verified ones, or for a `control` arm as many drawn without the
-    /// verifier) and `experience.rehearsal` demonstration records per own
+    /// (the verified ones) and `experience.rehearsal` demonstration records per own
     /// record.
     ///
     /// # Errors
@@ -47,7 +37,6 @@ impl Run<'_> {
         name: &str,
         episodes: &[Commit],
         demonstrations: &Commit,
-        control: bool,
     ) -> anyhow::Result<Commit> {
         let demonstrations_commit = demonstrations.clone();
         let demos = demonstrations
@@ -59,7 +48,7 @@ impl Run<'_> {
             digests.iter().map(|(n, d)| (n.as_str(), d)).collect();
         inputs.push(("demonstrations", &demos));
         let unit = format!("{label}/{name}/data");
-        let slice = json!({ "experience": self.config.experience, "control": control });
+        let slice = json!({ "experience": self.config.experience });
         let key = self.key(&slice, &unit, &inputs, recipe::TRAIN, &[]);
         let rel = format!("data/{label}/{name}.jsonl");
         let episodes = episodes.to_vec();
@@ -68,20 +57,10 @@ impl Run<'_> {
                 .iter()
                 .filter(|c| c.output("records").is_some())
                 .collect();
-            let accepted = episodes
-                .iter()
+            let chosen: Vec<&Commit> = with_records
+                .into_iter()
                 .filter(|c| crate::collect::admitted(c))
-                .count();
-            let chosen: Vec<&Commit> = if control {
-                let mut pool = with_records.clone();
-                SplitMix64::new(run.seed ^ CONTROL_SALT).shuffle(&mut pool);
-                pool.into_iter().take(accepted).collect()
-            } else {
-                with_records
-                    .into_iter()
-                    .filter(|c| crate::collect::admitted(c))
-                    .collect()
-            };
+                .collect();
             let reader = run.episode_reader(&format!("{label}/explore"))?;
             let mut own = Vec::new();
             for commit in &chosen {
@@ -113,7 +92,7 @@ impl Run<'_> {
             write(&run.path(&rel), &text)?;
             Ok(StageWork::new(json!({
                 "episodes": chosen.len(), "verified": passed_chosen, "own_records": own.len(),
-                "rehearsal_records": rehearsed.len(), "control": control,
+                "rehearsal_records": rehearsed.len(),
             }))
             .output("records", &rel))
         })

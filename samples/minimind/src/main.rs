@@ -19,7 +19,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context as _};
 use splinter_minimind::config::{Config, Profile};
 use splinter_minimind::stages::{Revisions, Run};
-use splinter_sdk::bench::examine::{Bench, Examiner};
 use splinter_sdk::model::endpoint::BrainEndpoints;
 use splinter_sdk::model::scratch::ServedBrain;
 use splinter_sdk::model::served_train::ArtifactStore;
@@ -49,19 +48,7 @@ usage: splinter-minimind <run|status> [options]
   --gpu-lock FILE        held exclusively while a training job runs, shared with other users of
                          the card
   --brain-key KEY        the key a given endpoint takes (default: none needed)
-  --bench DIR            a bench checkout: examine with its sealed workspace tool-use exam
-  --bench-seed-file F    the exam's private seed file (never read by this program; drawn
-                         into it by bench when missing)
-  --bench-anchor-seed-file F  the anchor's own private seed file (likewise)
-  --bench-exams-dir DIR  where bench generates the exam, relative to its checkout (default
-                         .bench-data/exams; bench refuses one that resolves outside the checkout)
-  --bench-public-key F   bench's verdict public key (verdict.key.pub of `./bench keygen`)
-  --sven-bin PATH        the sven binary bench runs the exam's agent with
-  --min-gain X           the gain a promotion must show (default 0.05)
 ";
-
-/// The smallest gain a promotion must show, unless given.
-const DEFAULT_MIN_GAIN: f64 = 0.05;
 
 struct Args {
     command: String,
@@ -99,13 +86,6 @@ fn parse(mut args: Vec<String>) -> anyhow::Result<Args> {
                 | "gpu-lock"
                 | "scratch-dir"
                 | "teacher"
-                | "bench"
-                | "bench-seed-file"
-                | "bench-anchor-seed-file"
-                | "bench-exams-dir"
-                | "bench-public-key"
-                | "sven-bin"
-                | "min-gain"
         ) {
             bail!("unknown option --{name}\n{USAGE}");
         }
@@ -267,38 +247,6 @@ fn run(
             "needs a brain service: give --brain-bin PATH, or --brain-endpoint URL --brain-artifact-store DIR"
         ),
     };
-    let bench = match flag("bench") {
-        Some(dir) => {
-            let dir = PathBuf::from(dir);
-            Some(Bench {
-                sven: PathBuf::from(flag("sven-bin").context("--bench needs --sven-bin")?),
-                seed_file: PathBuf::from(
-                    flag("bench-seed-file").context("--bench needs --bench-seed-file")?,
-                ),
-                anchor_seed_file: PathBuf::from(
-                    flag("bench-anchor-seed-file")
-                        .context("--bench needs --bench-anchor-seed-file")?,
-                ),
-                concurrency: config.agent.concurrency,
-                exams: PathBuf::from(
-                    flag("bench-exams-dir")
-                        .unwrap_or_else(|| splinter_sdk::bench::examine::DEFAULT_EXAMS.into()),
-                ),
-                public_key: PathBuf::from(
-                    flag("bench-public-key").context("--bench needs --bench-public-key")?,
-                ),
-                proposer_commit: git_revision(&sample_dir()),
-                min_gain: flag("min-gain")
-                    .map(|g| g.parse())
-                    .transpose()
-                    .context("--min-gain is a number")?
-                    .unwrap_or(DEFAULT_MIN_GAIN),
-                serving_build: brain_revision.clone(),
-                dir,
-            })
-        }
-        None => None,
-    };
     let mut revisions = Revisions::default();
     revisions
         .0
@@ -309,12 +257,8 @@ fn run(
     if let Some(commit) = flag("brain-commit") {
         revisions.0.insert("brain-commit".into(), commit);
     }
-    if let Some(b) = &bench {
-        revisions.0.insert("bench".into(), git_revision(&b.dir));
-    }
     let mut out = std::io::stdout();
-    let examiner = bench.as_ref().map(|b| b as &dyn Examiner);
-    let mut run = Run::open(run_dir, config, seed, revisions, &brain, examiner, &mut out)?;
+    let mut run = Run::open(run_dir, config, seed, revisions, &brain, &mut out)?;
     if let Some(cache) = flag("cache-dir") {
         run.cache = PathBuf::from(cache);
     }

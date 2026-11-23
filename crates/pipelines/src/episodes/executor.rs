@@ -171,11 +171,7 @@ impl EpisodeExecutor for SvenEpisodes<'_> {
 /// The episode of an attempt at `task` that ended in `outcome`, with the
 /// experience it left: the instruction as its prompt, the final output as
 /// its completion and the calls its trajectory sampled.
-pub(crate) fn episode_of(
-    task: String,
-    outcome: &EpisodeOutcome,
-    experience: Option<&Experience>,
-) -> Episode {
+fn episode_of(task: String, outcome: &EpisodeOutcome, experience: Option<&Experience>) -> Episode {
     Episode {
         task,
         reward: outcome.reward(),

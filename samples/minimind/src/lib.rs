@@ -13,19 +13,17 @@
 //! profiles ([`config`]), the synthetic world ([`world`]), the training
 //! task families and their verifier ([`tasks`]), the deterministic expert
 //! ([`expert`]), the model's chat template ([`template`]), the stage list
-//! ([`stages`], [`collect`], [`experience`], [`exam`]) with what their keys depend on ([`recipe`]), the
+//! ([`stages`], [`collect`], [`experience`]) with what their keys depend on ([`recipe`]), the
 //! terminal's panels ([`panel`]) and the report ([`report`]). Everything generic
 //! is Splinter's: the stage ledger (`store::stage_ledger`), sven episodes in
 //! a workspace and the policy endpoint (`agent`), training records from
-//! recorded calls (`data::wire`), brain over its API (`model::scratch`) and
-//! bench's examination (`bench::examine`).
+//! recorded calls (`data::wire`) and brain over its API (`model::scratch`).
 
 pub mod admission;
 pub mod collect;
 pub mod config;
 pub mod datacheck;
 pub mod episode_store;
-pub mod exam;
 pub mod experience;
 pub mod expert;
 pub mod formats;

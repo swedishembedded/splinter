@@ -1,3 +1,2 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
 docs/guides/distillation.md	doc:--seed 1	world: the reference candidate was trained with seed 1, and the list after the block says so; another seed is another run of the same recipe
-docs/guides/bench-trials.md	doc:--seed 20261121	world: the pre-registered seed of the vim rationalisation feasibility gate (roadmap item 24), which the example reproduces; another seed draws other tasks

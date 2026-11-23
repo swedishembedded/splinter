@@ -16,10 +16,9 @@ mod common;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
-use common::{FakeBrain, FakeExaminer};
+use common::FakeBrain;
 use splinter_minimind::config::{Config, Profile};
 use splinter_minimind::stages::{run_all, Revisions, Run};
-use splinter_sdk::bench::examine::Examiner;
 use splinter_sdk::store::stage_ledger::{Commit, StageLedger};
 
 /// A directory for one spec, in memory when the machine has a memory-backed
@@ -77,14 +76,8 @@ fn revisions() -> Revisions {
     r
 }
 
-fn go(
-    dir: &Path,
-    config: Config,
-    seed: u64,
-    brain: &FakeBrain,
-    examiner: Option<&dyn Examiner>,
-) -> anyhow::Result<String> {
-    go_at(dir, config, seed, brain, examiner, revisions())
+fn go(dir: &Path, config: Config, seed: u64, brain: &FakeBrain) -> anyhow::Result<String> {
+    go_at(dir, config, seed, brain, revisions())
 }
 
 fn go_at(
@@ -92,10 +85,9 @@ fn go_at(
     config: Config,
     seed: u64,
     brain: &FakeBrain,
-    examiner: Option<&dyn Examiner>,
     revisions: Revisions,
 ) -> anyhow::Result<String> {
-    go_taught(dir, config, seed, brain, examiner, revisions, None)
+    go_taught(dir, config, seed, brain, revisions, None)
 }
 
 fn go_taught(
@@ -103,14 +95,13 @@ fn go_taught(
     config: Config,
     seed: u64,
     brain: &FakeBrain,
-    examiner: Option<&dyn Examiner>,
     revisions: Revisions,
     teacher: Option<splinter_minimind::teacher::Teacher>,
 ) -> anyhow::Result<String> {
     let mut out = Vec::new();
     let scratch = temp();
     let result = {
-        let mut run = Run::open(dir, config, seed, revisions, brain, examiner, &mut out)?;
+        let mut run = Run::open(dir, config, seed, revisions, brain, &mut out)?;
         run.use_scratch_root(scratch.path())?;
         run.teacher = teacher;
         run_all(&mut run)
@@ -166,9 +157,7 @@ const SEED: u64 = 17;
 fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    let jobs = temp();
-    let examiner = FakeExaminer::new("Promote", true, jobs.path());
-    let shown = go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
+    let shown = go(dir.path(), smoke(), SEED, &brain).unwrap();
     let all = commits(dir.path());
     assert_eq!(
         commit(&all, "demonstrate").summary["accepted"],
@@ -182,15 +171,7 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     );
     assert_eq!(commit(&all, "probe/ouro/init").summary["passed"], 0);
     assert_eq!(commit(&all, "probe/ouro/sft").summary["passed"], 4);
-    assert!(commit(&all, "ouro/experience/verdict").summary["promotes"]
-        .as_bool()
-        .unwrap());
     assert!(shown.contains("probe ouro/sft: 4/4"), "{shown}");
-    // Each checkpoint sits the exam once, the control arm among them; a
-    // sitting is reused by both verdicts it takes part in.
-    let sat = examiner.sittings.lock().unwrap().clone();
-    assert_eq!(sat.len(), 4, "pretrained, sft, improved, control: {sat:?}");
-    assert!(shown.contains("exam ouro/experience: Promote"), "{shown}");
     assert!(
         shown.contains("what each checkpoint can do"),
         "the summary table: {shown}"
@@ -265,13 +246,8 @@ fn a_fresh_run_goes_end_to_end_and_a_second_run_trains_nothing() {
     let trained = brain.trained();
     let started = begins(dir.path());
 
-    let again = go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
+    let again = go(dir.path(), smoke(), SEED, &brain).unwrap();
     assert_eq!(brain.trained(), trained, "a finished run trains nothing");
-    assert_eq!(
-        examiner.sittings.lock().unwrap().len(),
-        4,
-        "and sits no exam"
-    );
     assert_eq!(
         begins(dir.path()),
         started,
@@ -289,7 +265,7 @@ fn a_teachers_verified_episodes_join_the_fine_tune_and_a_missing_teacher_is_name
     let brain = FakeBrain::new(dir.path());
     let mut config = smoke();
     config.tasks.teach = 4;
-    let refused = go(dir.path(), config.clone(), SEED, &brain, None).unwrap_err();
+    let refused = go(dir.path(), config.clone(), SEED, &brain).unwrap_err();
     assert!(format!("{refused:#}").contains("--teacher"), "{refused:#}");
     let models = dir.path().join("teacher-store");
     let source = dir.path().join("Teacher-1");
@@ -301,16 +277,7 @@ fn a_teachers_verified_episodes_join_the_fine_tune_and_a_missing_teacher_is_name
         models.join("local/teacher-teacher-1").exists(),
         "linked into the store"
     );
-    go_taught(
-        dir.path(),
-        config,
-        SEED,
-        &brain,
-        None,
-        revisions(),
-        Some(teacher),
-    )
-    .unwrap();
+    go_taught(dir.path(), config, SEED, &brain, revisions(), Some(teacher)).unwrap();
     let all = commits(dir.path());
     let taught = commit(&all, "teach");
     assert_eq!(
@@ -338,10 +305,10 @@ fn a_run_killed_in_fine_tuning_resumes_it_and_reuses_what_came_before() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
     *brain.fail_once.lock().unwrap() = Some("ouro-sft".into());
-    let err = go(dir.path(), smoke(), SEED, &brain, None).unwrap_err();
+    let err = go(dir.path(), smoke(), SEED, &brain).unwrap_err();
     assert!(format!("{err:#}").contains("killed during"), "{err:#}");
     let before = brain.trained();
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let all = commits(dir.path());
     assert_eq!(
         commit(&all, "ouro/sft").attempt,
@@ -363,7 +330,7 @@ fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and
     brain.down.store(true, Ordering::SeqCst);
     *brain.down_for.lock().unwrap() = Some("sft".into());
     assert!(
-        go(dir.path(), smoke(), SEED, &brain, None).is_err(),
+        go(dir.path(), smoke(), SEED, &brain).is_err(),
         "a model server that is down stops the run"
     );
     // Stopped mid-stage: what finished is in the packs, nothing is loose.
@@ -376,7 +343,7 @@ fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and
         "every finished demonstration is in its stage's pack"
     );
     brain.down.store(false, Ordering::SeqCst);
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let all = commits(dir.path());
     let probe = commit(&all, "probe/ouro/sft");
     assert_eq!(probe.summary["total"], 4, "every episode counted once");
@@ -399,14 +366,14 @@ fn an_episode_interrupted_by_a_failing_server_runs_again_under_a_new_attempt_and
 fn a_corrupt_checkpoint_is_caught_and_only_it_is_recomputed() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let trained = brain.trained();
     std::fs::write(
         dir.path().join("checkpoints/ouro/sft/weights.bin"),
         "flipped",
     )
     .unwrap();
-    let shown = go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    let shown = go(dir.path(), smoke(), SEED, &brain).unwrap();
     assert!(shown.contains("corrupt"), "{shown}");
     assert_eq!(
         brain.trained(),
@@ -419,12 +386,12 @@ fn a_corrupt_checkpoint_is_caught_and_only_it_is_recomputed() {
 fn a_changed_seed_is_a_new_run_and_a_changed_setting_recomputes_only_what_reads_it() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let trained = brain.trained();
 
     let mut longer = smoke();
     longer.sft.steps += 5;
-    go(dir.path(), longer, SEED, &brain, None).unwrap();
+    go(dir.path(), longer, SEED, &brain).unwrap();
     let all = commits(dir.path());
     assert_eq!(
         brain.trained(),
@@ -437,30 +404,10 @@ fn a_changed_seed_is_a_new_run_and_a_changed_setting_recomputes_only_what_reads_
 
     let other = temp();
     let fresh = FakeBrain::new(other.path());
-    go(other.path(), smoke(), SEED + 1, &fresh, None).unwrap();
+    go(other.path(), smoke(), SEED + 1, &fresh).unwrap();
     let a = commit(&commits(dir.path()), "world").key.clone();
     let b = commit(&commits(other.path()), "world").key.clone();
     assert_ne!(a, b, "a changed seed is a new identity");
-}
-
-#[test]
-fn no_promotion_without_a_verified_promote() {
-    for (verdict, verified) in [("Reject", true), ("Inconclusive", true), ("Promote", false)] {
-        let dir = temp();
-        let brain = FakeBrain::new(dir.path());
-        let jobs = temp();
-        let examiner = FakeExaminer::new(verdict, verified, jobs.path());
-        go(dir.path(), smoke(), SEED, &brain, Some(&examiner)).unwrap();
-        let all = commits(dir.path());
-        assert!(
-            !commit(&all, "ouro/experience/verdict").summary["promotes"]
-                .as_bool()
-                .unwrap(),
-            "{verdict} {verified}"
-        );
-        let report = std::fs::read_to_string(dir.path().join("report.md")).unwrap();
-        assert!(report.contains("not promoted"), "{report}");
-    }
 }
 
 #[test]
@@ -483,13 +430,13 @@ fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
     let brain = FakeBrain::new(&run_dir);
     let mut config = smoke();
     config.fetch = vec![corpus(&"0".repeat(64))];
-    let refused = go(&run_dir, config.clone(), SEED, &brain, None).unwrap_err();
+    let refused = go(&run_dir, config.clone(), SEED, &brain).unwrap_err();
     assert!(
         format!("{refused:#}").contains("not the pinned"),
         "{refused:#}"
     );
     config.fetch = vec![corpus(&sha)];
-    go(&run_dir, config, SEED, &brain, None).unwrap();
+    go(&run_dir, config, SEED, &brain).unwrap();
     let all = commits(&run_dir);
     assert_eq!(commit(&all, "world").summary["kinds"]["fetched"], 2);
     assert_eq!(commit(&all, "fetch/local").summary["license"], "CC0-1.0");
@@ -510,7 +457,7 @@ fn a_fetched_corpus_is_checked_against_its_pin_and_joins_the_world() {
         separator: "~~ story ends ~~".into(),
         ..corpus(&sha)
     }];
-    go(&run_dir, config, SEED, &brain, None).unwrap();
+    go(&run_dir, config, SEED, &brain).unwrap();
     let all = commits(&run_dir);
     assert_eq!(commit(&all, "world").summary["kinds"]["fetched"], 3);
     let world = std::fs::read_to_string(run_dir.join("world/corpus.jsonl")).unwrap();
@@ -543,28 +490,20 @@ fn with(name: &str, rev: &str) -> Revisions {
 fn a_change_recomputes_what_consumes_it_and_nothing_else() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let trained = brain.trained();
 
     // This repository's own code (the report, the terminal output) is in
     // no stage key: only the manifest is written again.
     let started = begins(dir.path());
-    go_at(
-        dir.path(),
-        smoke(),
-        SEED,
-        &brain,
-        None,
-        with("splinter", "r2"),
-    )
-    .unwrap();
+    go_at(dir.path(), smoke(), SEED, &brain, with("splinter", "r2")).unwrap();
     assert_eq!(begun_after(dir.path(), started), ["init"]);
     assert_eq!(brain.trained(), trained, "nothing is trained");
 
     // Another sven runs every episode again; the expert's episodes write
     // the same records, so no training run reads anything new.
     let started = begins(dir.path());
-    go_at(dir.path(), smoke(), SEED, &brain, None, with("sven", "r2")).unwrap();
+    go_at(dir.path(), smoke(), SEED, &brain, with("sven", "r2")).unwrap();
     let again = begun_after(dir.path(), started);
     assert!(
         again.iter().any(|u| u.starts_with("demonstrate/train-")),
@@ -583,7 +522,7 @@ fn a_change_recomputes_what_consumes_it_and_nothing_else() {
     // Another brain recomputes what brain computes or serves, and none of
     // the data before it.
     let started = begins(dir.path());
-    go_at(dir.path(), smoke(), SEED, &brain, None, with("brain", "r2")).unwrap();
+    go_at(dir.path(), smoke(), SEED, &brain, with("brain", "r2")).unwrap();
     let again = begun_after(dir.path(), started);
     for unit in [
         "ouro/checkpoint",
@@ -609,7 +548,7 @@ fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
     let read = |dir: &Path, rel: &str| std::fs::read(dir.join(rel)).unwrap();
     let a = temp();
     let brain = FakeBrain::new(a.path());
-    go(a.path(), smoke(), SEED, &brain, None).unwrap();
+    go(a.path(), smoke(), SEED, &brain).unwrap();
 
     // A second collection of the same seed, its probe episodes interrupted
     // by a server that went down and run again under new attempts.
@@ -617,9 +556,9 @@ fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
     let other = FakeBrain::new(b.path());
     other.down.store(true, Ordering::SeqCst);
     *other.down_for.lock().unwrap() = Some("sft".into());
-    assert!(go(b.path(), smoke(), SEED, &other, None).is_err());
+    assert!(go(b.path(), smoke(), SEED, &other).is_err());
     other.down.store(false, Ordering::SeqCst);
-    go(b.path(), smoke(), SEED, &other, None).unwrap();
+    go(b.path(), smoke(), SEED, &other).unwrap();
 
     for rel in [
         "world/corpus.jsonl",
@@ -642,7 +581,7 @@ fn the_same_episodes_write_the_same_bytes_whatever_was_interrupted() {
 fn a_pack_that_no_longer_matches_its_episodes_is_unpacked_and_they_run_again() {
     let dir = temp();
     let brain = FakeBrain::new(dir.path());
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     // Another setting's episodes packed over these: one record changed.
     let pack = dir.path().join("episodes/demonstrate.jsonl");
     let text = std::fs::read_to_string(&pack).unwrap();
@@ -661,7 +600,7 @@ fn a_pack_that_no_longer_matches_its_episodes_is_unpacked_and_they_run_again() {
     assert!(done, "the pack holds records");
     std::fs::write(&pack, changed).unwrap();
     let started = begins(dir.path());
-    go(dir.path(), smoke(), SEED, &brain, None).unwrap();
+    go(dir.path(), smoke(), SEED, &brain).unwrap();
     let again = begun_after(dir.path(), started);
     assert_eq!(
         again

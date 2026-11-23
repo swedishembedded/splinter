@@ -115,7 +115,6 @@ pub(crate) fn model_stages(
         &format!("{label}/pretrained"),
         (&pretrained.0, &pretrained.1),
     )?;
-    let sat_pretrained = run.sit(label, "pretrained", (&pretrained.0, &pretrained.1), false)?;
     // Mid-training: raw text with a share of verified trajectories.
     let mut base = pretrained.clone();
     if run.config.midtrain.budget.steps > 0 {
@@ -159,14 +158,6 @@ pub(crate) fn model_stages(
         }
     }
     run.probe(&format!("{label}/sft"), (&sft.0, &sft.1))?;
-    let sat_sft = run.sit(label, "sft", (&sft.0, &sft.1), false)?;
-    run.judge(
-        label,
-        "scratch",
-        sat_pretrained.as_ref(),
-        sat_sft.as_ref(),
-        None,
-    )?;
     let (explored, episodes) = run.explore(label, (&sft.0, &sft.1))?;
     let accepted = explored.summary["accepted"].as_u64().unwrap_or(0);
     if accepted == 0 {
@@ -176,25 +167,9 @@ pub(crate) fn model_stages(
         )?;
         return Ok(());
     }
-    let mixed = run.experience(label, "improve", &episodes, demonstrations, false)?;
+    let mixed = run.experience(label, "improve", &episodes, demonstrations)?;
     let improved = train_on(run, label, "improve", (&sft.0, &sft.1), &mixed)?;
     run.probe(&format!("{label}/improved"), (&improved.0, &improved.1))?;
-    let sat_improved = run.sit(label, "improved", (&improved.0, &improved.1), false)?;
-    // The spurious-reward control arm exists for the examination alone.
-    let sat_control = if run.examiner.is_some() {
-        let mixed = run.experience(label, "control", &episodes, demonstrations, true)?;
-        let control = train_on(run, label, "control", (&sft.0, &sft.1), &mixed)?;
-        run.sit(label, "control", (&control.0, &control.1), true)?
-    } else {
-        None
-    };
-    run.judge(
-        label,
-        "experience",
-        sat_sft.as_ref(),
-        sat_improved.as_ref(),
-        sat_control.as_ref(),
-    )?;
     Ok(())
 }
 

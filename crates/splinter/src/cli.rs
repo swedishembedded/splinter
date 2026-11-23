@@ -543,16 +543,6 @@ pub enum ExperiencesCommand {
     /// failure classes, frontier bands and the curriculum's weight, kept in
     /// the store with where every number came from.
     Capabilities(CapabilitiesArgs),
-    /// A teacher continues the failed attempts of practice runs from their
-    /// last good step; the task's own verifier keeps a repair only on a pass.
-    Repair(Box<RepairArgs>),
-    /// The hinted retry (rationalisation): the student's failed train-side
-    /// tasks of a compiled Harbor dataset worked again with the reference
-    /// solution as a hint, through the tasks' own tools and sandboxes; an
-    /// attempt is kept when verified and no answer content is in its own
-    /// text (real observations and sufficiency are opt-in), or earlier
-    /// runs' attempts re-graded offline.
-    Rationalise(Box<RationaliseArgs>),
     /// Import experience sets, with their experiences' annotations and trial
     /// register, from another state root.
     Import(ImportArgs),
@@ -673,10 +663,7 @@ pub use eval::{
     EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseArgs, ReleaseCommand,
 };
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
-pub use experiences::{
-    CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs,
-    RepairArgs, StrataArgs,
-};
+pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
     ExportArgs, ForkArgs, GenerateArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs, RunDirArgs,
 };

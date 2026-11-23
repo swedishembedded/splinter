@@ -59,7 +59,6 @@ mod output;
 mod panic_report;
 mod practice_output;
 mod practice_request;
-mod rationalise_session;
 mod release_output;
 mod session;
 mod solve_session;

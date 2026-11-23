@@ -30,17 +30,11 @@
 //! the same trial name with other content is refused. The split is enforced
 //! where datasets are made ([`split::exam_only`]), not here: an `eval` trial
 //! is admitted, as examination material, and cannot enter a dataset.
-//!
-//! [`examine`] runs bench's sealed workspace tool-use exam on a candidate
-//! and its predecessor and reads back the one signed verdict of aggregates;
-//! only a verified Promote promotes.
 
 pub mod artifact;
 pub mod capabilities;
 pub mod diagnose;
-pub mod examine;
-pub mod practice;
-pub mod repair;
+pub mod practice_material;
 pub mod score;
 pub mod split;
 

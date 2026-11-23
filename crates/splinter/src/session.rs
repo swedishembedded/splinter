@@ -442,56 +442,8 @@ impl Session {
                     return Ok(Exit::Failed);
                 }
             }
-            Command::Experiences(ExperiencesCommand::Repair(args)) => {
-                use splinter_sdk::bench::repair::{
-                    repair, RepairRequest, DEFAULT_BUDGET, DEFAULT_MAX_REPAIRS,
-                    DEFAULT_REPAIR_DEADLINE, DEFAULT_REPAIR_JOBS,
-                };
-                let checkout =
-                    splinter_sdk::bench::practice::BenchCheckout::new(args.bench.clone());
-                let seed = splinter_sdk::seed::resolve("seed", args.seed.map(|s| s.value()));
-                let arguments = json!({ "runs": args.runs, "teacher": args.teacher.to_string(),
-                    "student": args.student.as_ref().map(ToString::to_string),
-                    "proposer": args.proposer, "knowledge": args.knowledge,
-                    "interventions": args.interventions, "budget": args.budget,
-                    "seed": seed, "per_task": args.per_task, "samples": args.samples, "paths": args.paths,
-                    "classes": args.classes.iter().map(|c| c.as_str()).collect::<Vec<_>>() });
-                let paths = args
-                    .paths
-                    .iter()
-                    .map(|id| splinter_sdk::experiences::resolve_set(ctx, id))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let report = record(ctx, "experiences repair", &arguments, |run| {
-                    repair(
-                        ctx,
-                        &RepairRequest {
-                            runs: &args.runs,
-                            checkout: &checkout,
-                            teacher: &args.teacher,
-                            student: args.student.as_ref(),
-                            proposer: args.proposer,
-                            knowledge: &args.knowledge,
-                            interventions: &args.interventions,
-                            budget: args.budget.unwrap_or(DEFAULT_BUDGET),
-                            max: args.max.unwrap_or(DEFAULT_MAX_REPAIRS),
-                            jobs: args.jobs.unwrap_or(DEFAULT_REPAIR_JOBS),
-                            deadline: DEFAULT_REPAIR_DEADLINE,
-                            classes: &args.classes,
-                            per_task: args.per_task,
-                            samples: args.samples.unwrap_or(1),
-                            paths: &paths,
-                            seed,
-                            cancel: run.cancel_token(),
-                        },
-                    )
-                })?;
-                emit(json, &report);
-            }
             Command::Experiences(ExperiencesCommand::CompareArms(args)) => {
                 crate::compare_session::compare_arms(ctx, json, *args)?;
-            }
-            Command::Experiences(ExperiencesCommand::Rationalise(args)) => {
-                crate::rationalise_session::rationalise_command(ctx, json, *args)?;
             }
             Command::Experiences(ExperiencesCommand::Import(args)) => {
                 let source = splinter_sdk::store::StateRoot::new(args.from.clone());

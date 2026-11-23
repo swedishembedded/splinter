@@ -51,7 +51,7 @@ use splinter_orchestrator::error::OrchestratorError;
 
 use super::artifact::sha256_hex;
 use super::diagnose::{diagnose_dirs, DiagnosedTrial, DiagnosisRefused};
-use super::practice::{Practice, PracticeFacts};
+use super::practice_material::{Practice, PracticeFacts};
 use crate::curriculum::capability::{competence, Attempt, CapabilityCompetence};
 use crate::rl_build::{DEFAULT_FAIL_CEILING, PARTIAL_METRIC};
 use splinter_core::usage::TokenUsage;

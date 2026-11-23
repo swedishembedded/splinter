@@ -22,8 +22,7 @@
 //!   generators' output changes without a bump;
 //! - **the revisions of the services it consumes**: sven's for every
 //!   episode (the agent loop and its tools decide what the model sees),
-//!   the brain binary's digest for every stage brain computes or serves,
-//!   bench's for the examination.
+//!   the brain binary's digest for every stage brain computes or serves.
 //!
 //! The revision of this repository as a whole is in no stage key: a change
 //! to the report, the terminal output or a comment recomputes nothing. It is
@@ -89,12 +88,6 @@ pub const TRAIN: Recipe = Recipe {
 pub const PROBE: Recipe = Recipe {
     stage: "probe",
     version: 3,
-};
-
-/// The examination request.
-pub const EXAMINE: Recipe = Recipe {
-    stage: "examine",
-    version: 4,
 };
 
 #[cfg(test)]

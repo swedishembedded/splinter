@@ -143,7 +143,6 @@ Every command takes these.
     - [splinter tasks harbor import](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
     - [splinter tasks harbor export](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
     - [splinter tasks harbor episodes](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
-    - [splinter tasks harbor practice](#splinter-tasks-harbor-practice) - Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves
   - [splinter tasks list](#splinter-tasks-list) - List the stored task sets
   - [splinter tasks show](#splinter-tasks-show) - Show a task set's tasks, or one task
 - [splinter solve](#splinter-solve) - Solve every task of a task set, each in the environment it records
@@ -162,8 +161,6 @@ Every command takes these.
   - [splinter experiences ingest-bench](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
   - [splinter experiences diagnose](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
   - [splinter experiences capabilities](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
-  - [splinter experiences repair](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
-  - [splinter experiences rationalise](#splinter-experiences-rationalise) - The hinted retry (rationalisation)
   - [splinter experiences import](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
   - [splinter experiences ingest-hf](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1326,7 +1323,6 @@ Subcommands:
 - [`import`](#splinter-tasks-harbor-import) - Import Harbor tasks (each a task directory) as workspace tasks in one task set
 - [`export`](#splinter-tasks-harbor-export) - Write the workspace tasks of a task set as Harbor tasks, one directory each under --out, with everything needed to import them back exactly
 - [`episodes`](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
-- [`practice`](#splinter-tasks-harbor-practice) - Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves
 
 ##### splinter tasks harbor discover
 
@@ -1395,31 +1391,6 @@ Options:
 - `--max-tool-calls <N>`: Tool calls one attempt may request.
 - `--max-output-tokens <N>`: Output tokens one attempt may generate.
 - `--out <FILE>`: Also write every attempt's record to this file, one JSON object per line.
-
-##### splinter tasks harbor practice
-
-Run the examiner's staged practice material (a directory written by `bench task practice`, holding practice.json and job.yaml) under the policy brain serves: the examiner's gateway forwards the main role of a profile derived from the one the material was staged under to the policy, the material is staged again under it into the run's own directory (refused unless every task digest, the draw and the collection's digests are the ones practice.json names), Harbor runs the job with these attempts and tasks, and the examiner's export of the graded trials is admitted as `experiences ingest-bench` admits it. Each trial's outcome is read from the examiner's score record: passed, failed, exposed, verifier failure, ungraded or infrastructure; only the first three have a reward. A rerun of a finished run runs nothing and admits nothing twice
-
-```text
-splinter tasks harbor practice [OPTIONS] --bench <DIR> <DIR>
-```
-
-Arguments:
-
-- `<DIR>` (required): The practice directory (the one holding practice.json)
-
-Options:
-
-- `--policy <REF>`: The policy: a local model the brain endpoint serves. Default: `policy:default`.
-- `--bench <DIR>` (required): The examiner's checkout (`./bench` is run from it)
-- `--harbor <PATH>`: The `harbor` program that runs the job (default: the checkout's .venv/bin/harbor)
-- `--sven-build <PATH>`: The sven build the examiner runs the agent from (given to it as BENCH_SVEN_BUILD; without it, the environment's)
-- `--profile <FILE>`: The profile the policy's is derived from (default: the one the material was staged under, as its bench-run.json records it)
-- `--knowledge <DIR>`: A reference-knowledge collection (a directory) every trial's sandbox mounts read-only at /knowledge (`bench task practice --knowledge`); the run is keyed and reported by its digest. Without it the run is closed-book.
-- `--attempts <N>`: Attempts of each task. Default: `1`.
-- `--seed <SEED>`: The seed the run is named and recorded by (drawn and printed when not given; a rerun with the same seed finds its run)
-- `--jobs <N>`: Trials run at once. Default: `1`.
-- `--task <NAME>...`: Run only this staged task (repeatable); every task when not given.
 
 #### splinter tasks list
 
@@ -1608,8 +1579,6 @@ Subcommands:
 - [`ingest-bench`](#splinter-experiences-ingest-bench) - Admit the trials of exports written by `bench export` as experiences
 - [`diagnose`](#splinter-experiences-diagnose) - Why each failed trial of bench exports failed
 - [`capabilities`](#splinter-experiences-capabilities) - A policy's competence per capability of the examiner's taxonomy, from bench exports or practice runs
-- [`repair`](#splinter-experiences-repair) - A teacher continues the failed attempts of practice runs from their last good step
-- [`rationalise`](#splinter-experiences-rationalise) - The hinted retry (rationalisation)
 - [`import`](#splinter-experiences-import) - Import experience sets, with their experiences' annotations and trial register, from another state root
 - [`ingest-hf`](#splinter-experiences-ingest-hf) - Ingest a bundle `publish` wrote, at a pinned revision of its Hugging Face dataset repository
 - [`compare`](#splinter-experiences-compare) - Compare two experience sets of the same tasks
@@ -1708,63 +1677,6 @@ Options:
 
 - `--labels <PRACTICE_DIR>...`: A practice directory whose practice.json labels tasks the runs' material does not (staged before the examiner named capabilities); a task is labelled from it only when its source digest matches. Repeatable.
 - `--policy <NAME>`: The policy the trials of an export without a practice run's report count under.
-
-#### splinter experiences repair
-
-A teacher continues the failed attempts of practice runs from their last good step; the task's own verifier keeps a repair only on a pass
-
-```text
-splinter experiences repair [OPTIONS] --teacher <REF> --bench <DIR> <RUN>...
-```
-
-Arguments:
-
-- `<RUN>...` (required): The practice run directories (each holds report.json, export/ and staged/), as `tasks harbor practice` leaves them under the state root.
-
-Options:
-
-- `--teacher <REF>` (required): The model that continues the attempts (`remote:`/`local:`)
-- `--student <REF>`: The student's own model (`remote:`/`local:`): a retry samples it again from the last good step, and a decomposition's subgoals are worked by it. Without it neither runs.
-- `--proposer <WHO>`: Who proposes a decomposition's subgoals: `teacher` or `student`. Default: `teacher`.
-- `--knowledge <PATH>...`: A public reference document, or a directory of them (`.md`, `.txt`, `.rst`), a knowledge-assisted correction retrieves from (repeatable). Sealed material (a verifier's `tests`, a `solution`, an `oracle`, `truth.json`, run data) is refused when named and left out of a directory. Without it the knowledge-assisted correction does not run.
-- `--intervention <NAME>...`: Only this intervention (repeatable: `retry`, `fork_correction`, `knowledge_correction`, `decompose`, `path_guided`); without it every one the models and knowledge given allow, in the order each failure class's chain tries them.
-- `--budget <N>`: Attempts one failure may cost, every intervention and sample counted [default: 3]
-- `--bench <DIR>` (required): The examiner's checkout, which lays out and grades the workspaces.
-- `--max <N>`: The most failures this run repairs [default: 32]
-- `--jobs <N>`: Failures repaired at once [default: 8]
-- `--per-task <N>`: The most repairs of one task, the ones a run already graded counted: spreads a run across task families.
-- `--seed <N>`: The seed that orders the tasks and the attempts of each (drawn and printed when not given)
-- `--samples <K>`: Samples of each intervention of a failure's chain, each a repair of its own (default 1)
-- `--paths <SET>...`: An experience set whose verified passes are privileged paths for `path_guided` (a teacher's traces), besides every human-guided pass (repeatable; id or unique prefix)
-- `--class <CLASS>...`: Only failures of this class (repeatable; `wrong_content`, `tool`, ...)
-
-#### splinter experiences rationalise
-
-The hinted retry (rationalisation): the student's failed train-side tasks of a compiled Harbor dataset worked again with the reference solution as a hint, through the tasks' own tools and sandboxes; an attempt is kept when verified and no answer content is in its own text (real observations and sufficiency are opt-in), or earlier runs' attempts re-graded offline
-
-```text
-splinter experiences rationalise [OPTIONS] --dataset <DIR> --bench <DIR>
-```
-
-Options:
-
-- `--dataset <DIR>` (required): The compiled dataset (holding bench-compile.json; hints come only from its train-side tasks)
-- `--student <JOB>...`: A student's graded Harbor job, packed (`bench pack`) or not (repeatable; optional with `--regrade`); every trial must be of a train-side task of the dataset, and its passes are kept as they are. Never changed: a packed job is unpacked in a copy.
-- `--rationaliser <REF>`: The model that rationalises: a local model the brain endpoint (`--brain-endpoint`, `--brain-key-file`) serves. Needed when trials run (not for an offline `--regrade`)
-- `--bench <DIR>` (required): The examiner's checkout (`./bench` and its Harbor run from it; `bench unpack` reads packed jobs)
-- `--harbor <PATH>`: The `harbor` program (default: the checkout's .venv/bin/harbor)
-- `--sven-build <PATH>`: The sven build the agent runs, given to every sandbox. Needed when trials run.
-- `--profile <FILE>`: The run profile the rationaliser's is derived from: its sampling and sven settings, its main role forwarded to the rationaliser. Needed when trials run.
-- `--images <DIR>`: The examiner's cache of task images (default: .bench-data/rootfs-cache in the checkout)
-- `--count <N>`: Failed tasks to pick, stratified by difficulty rung.
-- `--seed <N>`: The seed of the pick (drawn and printed when not given; a rerun with the same seed resumes the run)
-- `--samples <K>`: Attempts of each picked task [default: 1]
-- `--jobs <N>`: Trials run at once [default: 8]
-- `--leak-term <TEXT>...`: A word or phrase whose mention in the model's own text also rejects an attempt (repeatable; none by default: naming a hint is no leak, only the answer's content is)
-- `--real-observations`: Also require real observations: the first tool call shows every file the task changes before writing it.
-- `--sufficiency`: Also require sufficiency: a second Harbor trial whose instruction carries only the attempt's reasoning, no hint, must pass.
-- `--hint-framing <HINT_FRAMING>`: How the hint is framed for the rationaliser: `worked-answer` (a worked answer for its eyes only) or `private-scratch` (private scratch knowledge: work as if you found the approach yourself, observe the files through the tool first, never mention or allude to a hint) Default: `worked-answer`. Values: `worked-answer`, `private-scratch`.
-- `--regrade <RUN_DIR>...`: An earlier `experiences rationalise` run's directory whose graded attempts are judged again with this run's checks, each with its own run's hint framing, instead of drawing and running new ones (repeatable). The earlier run is only read: its packed jobs are unpacked in a copy. Without `--sufficiency` nothing runs.
 
 #### splinter experiences import
 

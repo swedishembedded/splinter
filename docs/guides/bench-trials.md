@@ -3,13 +3,13 @@
 
 # Benchmark trials as training data
 
-> **Practice material, not benchmark runs.** A learning campaign never drives `bench run` on a benchmark's
-> collections for training data: a benchmark is the sealed measurement authority, asked for verdicts on finished
-> candidates. What the examiner publishes *for* a learner is its practice material, the train side of a collection
-> staged as a Harbor job (`bench task practice`); [Practice material](#practice-material-the-examiners-staged-train-side)
-> below runs it under a policy and admits the graded trials through the same intake. The other source of training
-> episodes is sven's training executor (see [Rollouts over a served policy](../concepts/learning-loop.md#rollouts-over-a-served-policy)). Ingesting a benchmark
-> run's export stays for the recorded arms and for exports that cannot be regenerated.
+> **Recorded material, not benchmark runs.** Splinter never drives `bench run` on a benchmark's collections for
+> training data: a benchmark is the sealed measurement authority, asked for verdicts on finished candidates. Running
+> rollouts of a recipe over Bench's collections, and hinted repair of failed attempts, are the learning factory's
+> (`docs/guides/learning-factory.md`). What this page covers is what Splinter reads of material that already exists:
+> an export of a run (`experiences ingest-bench`), the practice material a run recorded (`practice.json`), the
+> diagnosis of failed trials and the competence report. See also [Rollouts over a served
+> policy](../concepts/learning-loop.md#rollouts-over-a-served-policy).
 
 A benchmark that runs an agent on tasks it grades itself can feed Splinter's
 experience, dataset, train and select pipeline. The benchmark exports each run as a
@@ -47,65 +47,26 @@ one. The agent build, the model, the image, the reward and metrics and the artif
 digests are the verdict's evidence. Ingesting an export again changes nothing; a trial
 name that returns with other content is refused.
 
-## Practice material: the examiner's staged train side
+## Practice material: the examiner's recorded train side
 
-`bench task practice <collection> [--count N --seed S [--rung R] [--family F]...] --environment userns --profile P --out DIR` writes
-`DIR/<collection>/`: the staged task folders, `job.yaml` (the Harbor job), `practice.json` (schema
-`bench.practice/2`: the collection's manifest and content digests, each staged task's digest, and the draw) and
-`bench-run.json`. Only the train side is ever written; `practice.json` of any other side is refused. A draw at a
-rung (`--rung R`) or of some families (`--family F`, repeatable) records both in its `draw` (a rung is a signed integer; ladders may have negative rungs, `--rung -1`); staging it again for a
-run passes the same count, seed, rung and families, so such a draw is accepted as the same material. Material staged
-before the examiner recorded them (no `rung` or `families`, or both null) is staged again as it was.
+Practice material is a directory the examiner wrote earlier: the staged task folders, `job.yaml` (the Harbor job),
+`practice.json` (schema `bench.practice/2`: the collection's manifest and content digests, each staged task's digest,
+its capability ids, its naive floor and the draw) and `bench-run.json`. Only the train side is ever written;
+`practice.json` of any other side is refused. Splinter reads it and runs nothing from it: `experiences capabilities`
+takes a task's capability ids from it, and `dataset build --practice DIR` takes each task's naive floor and lineage
+from it for the `shaped-partial` reward. Running rollouts over such material is a recipe's job in the learning
+factory.
 
-A teacher's run of it, exported by the examiner (`bench export <job> --out EXPORT`), is ingested as above. To run
-the material under a policy brain serves:
-
-```sh
-splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
-    tasks harbor practice ~/practice/support --policy local:Qwen/Qwen3-4B \
-    --bench ~/code/bench --sven-build ~/sven-build/sven --attempts 2 --jobs 16
-```
-
-The examiner owns everything that runs inside a trial, so the policy is named to it the way it documents: a
-profile. The command derives one from the profile the material was staged under (`bench-run.json` names it and its
-sha256; `--profile` names another), changing only the main role's upstream to the endpoint and the id brain lists
-the policy under, and starts the examiner's gateway for it (`bench gateway serve`, with the endpoint's key in the
-gateway's environment only). It then stages the same material again under that profile into the run's own directory
-under the state root (`bench task practice`, which writes the job config, registers the job with the gateway and
-records the run), and refuses to go on unless every staged task's digest, the draw and the collection's digests are
-the ones the given `practice.json` names. Harbor runs the job (`harbor run -c`, the checkout's own Harbor unless
-`--harbor` names another) with the attempts, concurrency and tasks (`--task`) of the command, the gateway is
-stopped, the examiner exports the graded trials and they are admitted exactly as `experiences ingest-bench` admits
-them. The material is never edited.
-
-`--knowledge DIR` runs the material open-book: the staging mounts that reference-knowledge collection read-only at
-`/knowledge` in every trial's sandbox (`bench task practice --knowledge`), and how the agent is told about it is the
-profile's (`[sven].knowledge_prompt`). The run is keyed by the collection's digest (sha256 over
-`<path>\0<sha256 of the file>\n` per file in path order, `.git` left out, as the examiner documents it), so the same
-material with another collection, or with none, is another job; the staging is refused unless the examiner records
-that digest as mounted (or nothing mounted for a closed-book run), and the report carries it as `knowledge`.
-
-Every trial is reported with a typed outcome read from the examiner's score record: `passed`, `failed`, `exposed`
-(the agent reached for the hidden answers), a verifier failure, `ungraded` (a time limit on a task that does not
-grade timeouts, a spent budget, an unsupported capability, a defective task) or an infrastructure failure (the
-sandbox, the model server or the agent failed). Only the first three have a reward; an infrastructure failure is
-never a reward of 0 and leaves no experience. The report keeps the material's provenance (the `practice.json`
-sha256, the collection digests, the draw, the examiner's commit, the profile and its sha256), the policy (its
-identity and adapter digest, and the id it was served under) and the seed; it is also written as `report.json` in
-the run's directory.
-
-A run is keyed by the material, the policy, the profile, the attempts, the tasks and the seed. Running it again
-after it finished runs nothing, exports again (the export is idempotent) and admits nothing twice. A run that did
-not finish is staged and run again whole: the examiner's gateway forgets the jobs registered with it when it stops,
-and only a staging registers one. The seed names the run. How the policy samples is the profile's: its `[sven.sampling]` (the report records it as
-`sampling`, each trial seeded with its own seed derived from the profile's run seed by the examiner), or, without one, the
-policy samples as its server does. Material staged for docker sandboxes is refused: the gateway is served on the
-loopback address, which userns sandboxes reach.
+A run's export (`bench export <job> --out EXPORT`) is ingested as above, and a trial's outcome is read from the
+examiner's score record: `passed`, `failed`, `exposed` (the agent reached for the hidden answers), a verifier
+failure, `ungraded` (a time limit on a task that does not grade timeouts, a spent budget, an unsupported capability,
+a defective task) or an infrastructure failure. Only the first three have a reward; an infrastructure failure is never
+a reward of 0 and leaves no experience.
 
 From the trials to a candidate:
 
 ```sh
-splinter experiences ingest-bench ~/practice/export-support    # a teacher's export (the command above admits its own)
+splinter experiences ingest-bench ~/practice/export-support    # a teacher's export
 splinter dataset build --view sft-step --pack --max-block 32768 --from local:Qwen/Qwen3-4B TRAIN-SET-ID
 splinter dataset check DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
 splinter --brain-artifact-store /srv/brain-artifacts train DATASET-ID --from local:Qwen/Qwen3-4B --max-block 32768
@@ -152,7 +113,7 @@ splinter experiences capabilities STATE/practice/splinter-cb58... STATE/practice
 splinter experiences capabilities RUN... --labels ~/practice-relabelled/compiled   # material staged before bench named capabilities
 ```
 
-Bench labels every task with the capability ids of its taxonomy (`config/capabilities.toml`): `bench task practice`
+Bench labels every task with the capability ids of its taxonomy (`config/capabilities.toml`): the staging of practice material
 writes them into `practice.json`, `bench export` into every manifest, index row and `skipped.jsonl` line. Splinter reads
 them as data, never a list of its own. A trial's ids come from its export; else from the practice run's own material
 (the `practice.json` its `report.json` names, held to the sha256 the run recorded), by the staged task's name; else from
@@ -180,184 +141,11 @@ already exist.
 
 ## Repairing a failed attempt
 
-```sh
-splinter experiences repair STATE/practice/splinter-0d53... --teacher local:Qwen/Qwen3.8-27B-FP8 --bench ~/bench
-```
-
-Every failed trial of the practice runs is diagnosed (above) and routed by its class: a model failure whose decisive
-step the diagnosis placed is forked after its last good step; an infrastructure or task failure, a history probe
-and a failure with no decisive step are not repaired, and the report says why. The fork opens the examiner's sandbox
-session for the task (`bench task session`: the pristine workspace bound where a trial's agent works, the trial's
-account and image, the task's service when it has one), keeps the student's steps through the last good one, has
-sven's fork replay them (every replayed observation held to the recorded one; a fork whose replay differs is refused
-and counted) and the teacher continue the same tool loop under the profile the student ran; every shell command runs
-in the session (`bench task session-exec`, sven's shell launcher), so it sees what the student's saw. The session
-then grades the state the commands left with the task's own verifier, outside any agent. Only a pass is kept: as an experience of the student's task whose first steps are
-the student's stored steps (marked as copied context, never supervised), with the verifier's pass and a
-`revision_of` relation to the student's attempt, and its lineage in `extra.correction` (the
-student, the diagnosis, the kept step, the shared prefix, the teacher, the grade). The accepted repairs form one
-experience set, which `dataset build --view sft-step` trains on the teacher's suffix alone. A fail is counted and
-recorded, never stored. A repair is keyed by the student's attempt, the acting model and the intervention: a rerun finds
-the record and does nothing. `--jobs` failures are repaired at once (the teacher's decode slots), `--max` bounds a run and
-`--class` picks the classes. `--per-task N` spreads a run across task families: the tasks are taken in turn, in an
-order `--seed` fixes (drawn and printed when not given), at most N repairs of a task, the ones an earlier run
-already graded counted. `--samples K` has each intervention continue each selected failure K times, each a repair
-of its own (keyed by its sample index), since one sample of a hard task is often wrong.
-
-### Interventions and routing
-
-```sh
-splinter experiences repair RUN... --teacher local:Qwen/Qwen3.8-27B-FP8 --bench ~/bench \
-  --student local:Qwen/Qwen3-4B+A2s1 --knowledge ~/bench/environments/legal/README.md --budget 3
-```
-
-Five interventions share the fork and the grade above; which run depends on what the command is given:
-
-| Intervention | Needs | Who continues |
-|---|---|---|
-| `fork_correction` | `--teacher` | the teacher, after the last good step |
-| `knowledge_correction` | `--knowledge PATH` | the teacher, with the passages of the knowledge that match the task's instruction and the diagnosis shown beside the student's system prompt |
-| `retry` | `--student` | the student's own model, sampled again under the practice run's sampling (its report's `sampling`) and a seed derived from the repair's key |
-| `path_guided` | `--student`, and a verified path of the task a person guided in the store | the student's own model, from a state of that path with the person's turns (and the reply each one answered) taken out, sampled as `retry` is; sample `n` forks after the path's `n`-th latest action, so `--samples K` moves the fork earlier until the student passes alone |
-| `decompose` | `--student` | a proposer (`--proposer teacher`, the default, or `student`) splits the task into at most six ordered subgoals, each with a check of a state the task allows (`file_exists`, `file_contains`) or none; the student's model works them one user turn each, and a missed check ends the run |
-
-Each failure goes to its class's chain, tried in order until the verifier accepts one or the failure's `--budget`
-attempts (default 3, every intervention and sample counted) are spent; an intervention the run does not have is
-left out of the chain, and `--intervention NAME` (repeatable) keeps only the ones named (one the command cannot run
-is refused):
-
-A path-guided resampling leads every chain below for a failure whose task has a guided path (`experiences
-ingest-bench` or `ingest-harbor` of a `bench task play` job), and is left out, costing none of the budget, for one
-whose task has none.
-
-| Class | Chain |
-|---|---|
-| `tool`, `malformed_artifact` | retry, fork correction |
-| `repetition` | retry, decompose, fork correction |
-| `no_answer`, `resource`, `planning`, `strategy` | decompose, fork correction |
-| `information_missing`, `retrieval` | knowledge correction, fork correction |
-| `wrong_content`, `implementation`, `model_competence` | fork correction, knowledge correction, decompose |
-| infrastructure and task classes, `history_probing`, `unclassified` | never routed |
-
-Every attempt is graded by the task's own verifier; only a pass is kept. The record of every attempt names its
-intervention and the model that acted, and keeps what the intervention adds: a retry's sampling and seed; a
-decomposition's subgoals, its proposer and each subgoal's outcome (`reached`, `missed`, `unchecked`, `not_run`); a
-knowledge-assisted correction's knowledge snapshot (the digest of every document), the documents, the files left out
-as sealed, the query and each passage shown (source, unit, revision, rank, score, SHA-256 of its text). The same is
-in the kept experience's `extra.correction`. A knowledge-assisted correction is keyed by its snapshot, apart from the
-plain correction by the same teacher, so the two can be compared on the same failures: the knowledge's effect with
-the teacher held fixed. Its passages are in no kept step, so a student trained on the repair learns the teacher's
-steps without them. The knowledge never holds sealed material: a path under a verifier's `tests`, a `solution`, an
-`oracle`, a `truth.json`, `.bench-data`, `jobs` or the examiner's private store is refused when named and left out
-(and listed) when a named directory holds it. A decomposition kept is the subgoal-guided trajectory: the student's
-kept prefix (copied, never supervised), the subgoal turns (marked `guidance`) and the student's own steps (marked
-`policy`), which `sft-step` trains on; a retry's steps are the student's own. A path-guided resampling kept is the
-guided path's steps through the fork (copied, never supervised; the person's turns are not among them) and the
-student's own steps after them; nothing the person typed reached any request of the continuation. Its record names
-the path, the step it forked after, the states the path offered and the turns taken out (`privileged_path`).
-
-### Repairing a compiled dataset's trials
-
-A run of a bench-compiled dataset (Harbor's task layout, each task in its own image, its tools given as MCP servers) is
-repaired the same way. Its run directory holds the examiner's export of the job (`bench adopt`, then `bench export JOB --out
-RUN/export`) and a `report.json` that names the dataset as its material, optionally with the sampling the run used:
-
-```sh
-splinter experiences ingest-bench RUN/export
-echo '{"provenance": {"dir": "<dataset>"}, "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20}}' > RUN/report.json
-splinter experiences repair RUN --bench ~/bench --teacher local:Qwen/Qwen3.8-27B-FP8 --student local:Qwen/Qwen3-4B \
-  --intervention path_guided --samples 3
-```
-
-Each trial's task is the folder its manifest names (`train/<folder>`), served by the examiner's session for compiled
-tasks (`bench task session DATASET --task FOLDER`): the task's image, its working directory shared with the fork's tree, and
-the image's own Sven configuration (`sven_config`, or else the task's MCP servers). The fork's engine runs under that
-configuration with Sven's default profile, so the model is offered exactly the tools the trial's agent was (`tools.only`
-included), named as Sven names them (`<server>-<tool>`), with the system prompt the trial recorded. Each MCP server is
-started in the session through `bench task session-exec --stdin`, from the tree's root, once per call, without Sven's own
-`intent` argument unless the tool declares it; a recorded call is replayed there and held to its recorded observation. One
-exchange with a server takes at most 300 s; a server that does not answer by then is stopped and the repair is refused as
-an infrastructure failure, never shown to the model as an observation. A tool whose output is not the same for the same call (a random path in
-a message) cannot be replayed, and the examiner's `bench task replay` measures how often that happens.
-
-### The hinted retry: rationalising failures on a compiled dataset
-
-```sh
-splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
-  experiences rationalise --dataset ~/data/vim-headless-mastery --student jobs/train-k1 --student jobs/train-k4 \
-  --rationaliser local:Qwen/Qwen3-4B --bench ~/bench --sven-build ~/bin/sven --profile vim-base.toml \
-  --count 24 --samples 2 --seed 20261121 --jobs 16
-```
-
-The fifth intervention, `hinted_retry`, is not a fork and no failure class routes to it (`experiences repair` refuses
-it by name): it works the tasks of a compiled Harbor dataset (task folders with a `bench-compile.json` beside them, no
-practice material) through their own tools. The student's graded Harbor jobs (`--student`, packed by `bench pack` or
-not; a packed job is unpacked in a copy, never in place) name the tasks it failed. Every trial must be of a task
-`bench-compile.json` puts on the `train` side and no marker seals (`[metadata].bench_sealed`, a held-out tier, an
-`eval` family); any other refuses the run with the task and the reason, because a task's reference solution
-(`solution/solve.sh`) is the hint. `--count` failed tasks are drawn with `--seed`, each difficulty rung
-(`[metadata].bench_difficulty`) getting its share, and each is attempted `--samples` times.
-
-An attempt is an ordinary Harbor trial of a staged copy of the task (its folder without `solution/`, its
-`instruction.md` followed by a delimited hint section holding the reference solution, framed by `--hint-framing`:
-`worked-answer`, the default, a worked answer for the model's eyes only; `private-scratch`, private scratch knowledge
-with the instruction to work as if the approach were found unaided and to observe the files through the tool first), run through the examiner's
-user-namespace sandbox, its gateway (`bench gateway serve --state`, serving a profile derived from `--profile` whose
-main role is the rationaliser) and its Sven adapter, `--jobs` at once. By default it is judged by two checks, and kept
-when both pass:
-
-| Filter | Passes when |
-|---|---|
-| verified | the task's verifier gave reward 1 |
-| no answer present (`no_leak` in the record) | the model's own text (reasoning and messages, not tool arguments or replies) repeats no run of five words from one line of the hint section that it was not also shown (instruction, system prompt, tool schemas) or sent itself as a tool argument, and quotes no line of the task's files, starting or expected (8 characters or more, compared with runs of whitespace as one space), that neither the instruction nor an earlier tool reply showed, and writes none of the hint's commands (each line of its code, and each word of one that is not all letters, 6 characters or more, compared with runs of whitespace as one space) that the instruction, system prompt or tool schemas do not show and no earlier tool reply showed, unless the step explains it (with the commands removed, 12 or more words remain and one names a part of a command: two or more of its letters, or one of its letters standing alone) |
-
-Merely naming a hint, a solution or an expected result is no leak: only the answer's content is. A run opts into more:
-
-| Option | Adds |
-|---|---|
-| `--leak-term TEXT` (repeatable) | a word list: a mention in the model's own text (a word prefix, case-insensitive) also fails no answer present |
-| `--real-observations` | real observations: the first agent step that calls a tool shows every non-empty line of each file the task changes (from `environment/workspace/` to `tests/expected/`) in its replies, and none of those replies confirms writing such a file (`"FILE" ... written`), unless the instruction itself shows every non-empty starting line of that file; a task without `tests/expected/` is undecidable and fails |
-| `--sufficiency` | sufficient: a second trial of a copy whose instruction is the task's plus only the attempt's reasoning (no hint, no tool calls or replies) passes the verifier; it runs only for an attempt that passed the other checks |
-
-A kept attempt becomes an experience of the task on the train side: its user turn the task's own instruction (nothing
-of the hint section anywhere in it), the system prompt and tool schemas of its first model request, its real tool
-replies, the verifier's pass, and its lineage in `extra.splinter_rationalise` (origin, trials, every verdict); its
-provenance marks it as made with material the student does not see. The student's own passes are kept the same way
-with origin `own`. Every attempt's record carries every verdict reached, kept or not, and the report counts the
-attempts through the filters in order and each filter alone (a check the run left off counts as passed). It also
-gives two controls from the student's own passes, which never saw a hint: how many mention each leak term, and how
-many would pass the real-observations rule. A filter that rejects most unhinted work measures something other than
-the hint. The kept experiences are one set:
-
-```sh
-splinter dataset build --view sft-step --pack --max-block 16384 --from local:Qwen/Qwen3-4B KEPT-SET-ID
-```
-
-A record is keyed by the student's trial, the rationaliser, the sample, the profile, the endpoint's model id, the
-leak terms, and the hint framing and checks where they differ from what runs used before they were options (the
-worked answer, every check on): a run made then, rerun with `--real-observations --sufficiency` and its own leak
-terms, finds its records. A decided attempt (kept or rejected) is never redone; one that passed the other checks of a
-`--sufficiency` run resumes at its sufficiency trial; one the infrastructure stopped is run again. A finished Harbor
-job is read, not run again. The run directory (`STATE/rationalise/<run>`) holds the derived profile, the gateway's
-log, the staged copies, the Harbor jobs and `report.json`.
-
-#### Re-grading earlier runs
-
-```sh
-splinter experiences rationalise --dataset ~/data/vim-headless-mastery --bench ~/bench \
-  --regrade STATE/rationalise/rationalise-947783646ccf6c8e --regrade STATE/rationalise/rationalise-941a3ca1386127e4
-```
-
-`--regrade RUN_DIR` (repeatable) judges every graded attempt of earlier runs again with this run's checks instead of
-drawing and running new ones; `--count`, `--seed`, `--samples` and `--hint-framing` are refused with it. Each
-attempt's hint section is rebuilt with its own run's framing (`hint_framing` in its `report.json`, absent meaning the
-worked answer) and must be the one its user turn holds; the run must be of the same dataset (its compile record's
-sha256), and a re-grade run is not re-graded again. A packed job (`bench pack`) is unpacked in a copy in the new
-run's directory (`STATE/rationalise/regrade-<id>/regraded/`), so the earlier run is only read. A re-graded record is
-keyed by the earlier record's key and the re-grade's checks and leak terms, names the attempt it re-grades
-(`regrade_of`), and the report lists the runs re-graded. Without `--sufficiency` nothing runs: no gateway, no Harbor
-job, no model, so `--rationaliser`, `--profile` and `--sven-build` are not needed; with it, the sufficiency trials
-run as above and those three are needed. `--student` is optional: given, its passes are kept as they are.
+Continuing a failed attempt from its last good step with a teacher, and retrying a failed task with the reference
+solution as a hint, are rollout passes of the learning factory (a pass with `hint:`), run over a recipe with
+`splinter run`; see `docs/guides/learning-factory.md`. Splinter no longer has the `experiences repair` and
+`experiences rationalise` commands that drove Bench for them. The attempts those commands already recorded stay as
+experience, and `experiences diagnose` and `experiences capabilities` still read their run directories.
 
 ## Moving experience between state roots
 

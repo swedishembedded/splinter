@@ -11,7 +11,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use splinter_sdk::bench::practice::PracticeReport;
 use splinter_sdk::episodes::{EpisodeOutcome, EpisodeReport};
 
 use crate::output::Report;
@@ -100,72 +99,6 @@ impl Report for EpisodeReport {
                 "  {unseeded} attempt(s) sampled as the provider does: the seed and the exact sampling could not be set"
             );
         }
-        out
-    }
-}
-
-impl Report for PracticeReport {
-    fn human(&self) -> String {
-        let mut out = format!(
-            "{} trial(s) of {} ({}) by {} served as {}, seed {}, job {} ({})\n",
-            self.trials.len(),
-            self.provenance.collection,
-            self.provenance.practice_sha256,
-            self.policy.model,
-            self.served_as,
-            self.seed,
-            self.job,
-            if self.ran {
-                "run now"
-            } else {
-                "finished earlier"
-            }
-        );
-        let mut tasks: BTreeMap<&str, Tally> = BTreeMap::new();
-        let mut all = Tally::default();
-        for trial in &self.trials {
-            tasks
-                .entry(trial.task.as_str())
-                .or_default()
-                .count(&trial.outcome, trial.reward);
-            all.count(&trial.outcome, trial.reward);
-        }
-        for (name, tally) in &tasks {
-            let _ = writeln!(out, "{}", tally.line(name));
-        }
-        let _ = writeln!(out, "{}", all.line("all"));
-        let admitted: usize = self.ingested.admitted.values().sum();
-        let _ = writeln!(
-            out,
-            "  admitted {admitted} trial(s), {} held already, {} refused; train set {}",
-            self.ingested.already_held,
-            self.ingested.refused.len(),
-            self.ingested
-                .train_set
-                .as_ref()
-                .map_or_else(|| "none".to_string(), ToString::to_string)
-        );
-        for refused in &self.ingested.refused {
-            let _ = writeln!(
-                out,
-                "  refused {}: {}",
-                refused.trial.as_deref().unwrap_or("the export"),
-                refused.reason
-            );
-        }
-        let _ = match &self.sampling {
-            Some(sampling) => writeln!(
-                out,
-                "  the seed names the run; every trial sampled as the profile's [sven.sampling] \
-                 sets ({sampling}), seeded with its own seed derived from the profile's"
-            ),
-            None => writeln!(
-                out,
-                "  the seed names the run; the profile sets no [sven.sampling], so the policy \
-                 sampled as its server does"
-            ),
-        };
-        let _ = writeln!(out, "  run directory {}", self.dir.display());
         out
     }
 }

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use splinter_data::{AdvantageKind, Overlong, RewardShape};
 use splinter_orchestrator::error::OrchestratorError;
 
-use crate::bench::practice::PracticeFacts;
+use crate::bench::practice_material::PracticeFacts;
 
 /// A named reward: how a failed attempt earns part of a pass's reward.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

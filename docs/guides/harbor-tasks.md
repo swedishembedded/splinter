@@ -116,8 +116,7 @@ splinter experiences ingest-harbor TASKSET-ID ~/runs/vim-play/*/   # or, for tas
   automatic experiences trains on the automatic ones only.
 * **No arm counts them.** `experiences compare-arms --arm NAME=JOB` refuses a job holding a guided trial: its pass is
   not the agent's.
-* **What they are for** is path-guided resampling: `experiences repair ... --student MODEL` gives a failed attempt
-  of a task that has a verified guided path the `path_guided` intervention ([Repairing a failed
-  attempt](bench-trials.md#interventions-and-routing)): the student's own model is forked at the path's states with the
-  person's turns taken out, and a continuation the task's verifier passes is kept with the path's steps as copied
-  context and the student's own steps after them, which a dataset trains on.
+* **What they are for** is path-guided resampling: a hinted rollout pass of the learning factory
+  (`docs/guides/learning-factory.md`) may fork the student's own model at a verified guided path's states with the
+  person's turns taken out; a continuation the task's verifier passes is kept with the path's steps as copied context
+  and the student's own steps after them, which a dataset trains on.

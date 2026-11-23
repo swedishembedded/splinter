@@ -14,7 +14,6 @@ use std::fmt::Write as _;
 
 use splinter_sdk::bench::capabilities::StoredCapabilities;
 use splinter_sdk::bench::diagnose::DiagnosisReport;
-use splinter_sdk::bench::repair::RepairReport;
 use splinter_sdk::set_import::SetsImported;
 
 use crate::output::Report;
@@ -139,50 +138,6 @@ impl Report for StoredCapabilities {
                 refused.dir.display(),
                 refused.reason
             );
-        }
-        out
-    }
-}
-
-impl Report for RepairReport {
-    fn human(&self) -> String {
-        let mut out = String::new();
-        let _ = writeln!(out, "repairs continued by {}", self.teacher);
-        let names: Vec<&str> = self.interventions.iter().map(|k| k.as_str()).collect();
-        let _ = writeln!(
-            out,
-            "interventions: {} (budget {} per failure)",
-            names.join(", "),
-            self.routing.budget
-        );
-        for (name, y) in &self.by_intervention {
-            let _ = writeln!(
-                out,
-                "  {name}: attempts {}, accepted {}, rejected {}, refused {}",
-                y.routed, y.accepted, y.rejected, y.refused
-            );
-        }
-        for (class, y) in &self.by_class {
-            let _ = writeln!(
-                out,
-                "  {class}: failed {}, routed {}, accepted {}, rejected {}, refused {}, held {}",
-                y.failed, y.routed, y.accepted, y.rejected, y.refused, y.held
-            );
-        }
-        for record in &self.repairs {
-            let why = record.reason.as_deref().unwrap_or("");
-            let _ = writeln!(
-                out,
-                "  {} {} {} after step {}: {:?} {why}",
-                record.domain,
-                record.trial,
-                record.intervention,
-                record.keep_through,
-                record.outcome
-            );
-        }
-        if let Some(set) = &self.repair_set {
-            let _ = writeln!(out, "accepted repairs: experience set {set}");
         }
         out
     }

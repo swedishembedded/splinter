@@ -24,7 +24,6 @@ use splinter_sdk::{Context, Error};
 use crate::cli::{HarborCommand, OracleArg, TasksCommand};
 use crate::output::emit;
 use crate::session::Exit;
-use splinter_sdk::bench::practice;
 use splinter_sdk::episodes::{self, EpisodeSettings};
 use splinter_sdk::harbor;
 use splinter_sdk::knowledge::tasks::workspace::Oracle;
@@ -149,63 +148,6 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                     episodes::write_records(out, &report)?;
                 }
                 Ok(report)
-            })?;
-            emit(json, &report);
-        }
-        TasksCommand::Harbor(HarborCommand::Practice {
-            dir,
-            policy,
-            bench,
-            harbor,
-            sven_build,
-            profile,
-            knowledge,
-            attempts,
-            seed,
-            jobs,
-            tasks,
-        }) => {
-            let arguments = json!({
-                "dir": dir,
-                "policy": policy,
-                "bench": bench,
-                "harbor": harbor,
-                "sven_build": sven_build,
-                "profile": profile,
-                "knowledge": knowledge,
-                "attempts": attempts,
-                "seed": seed,
-                "jobs": jobs,
-                "tasks": tasks,
-            });
-            let report = record(ctx, "tasks harbor practice", &arguments, |run| {
-                let seed = run.seed("seed", seed)?;
-                let attempts = u32::try_from(attempts)
-                    .map_err(|_| Error::Refused(format!("{attempts} attempts are too many")))?;
-                let practice = practice::Practice::read(&dir)?;
-                let mut checkout = practice::BenchCheckout::new(bench.clone());
-                if let Some(harbor) = &harbor {
-                    checkout.harbor.clone_from(harbor);
-                }
-                checkout.sven_build.clone_from(&sven_build);
-                Ok(practice::run_practice(
-                    ctx,
-                    &practice::PracticeRequest {
-                        practice: &practice,
-                        checkout: &checkout,
-                        profile: profile.as_deref(),
-                        knowledge: knowledge.as_deref(),
-                        policy: &policy,
-                        adapter: None,
-                        settings: practice::PracticeSettings {
-                            attempts,
-                            seed: seed.value(),
-                            jobs,
-                        },
-                        tasks: (!tasks.is_empty()).then_some(tasks.as_slice()),
-                        cancel: run.cancel_token(),
-                    },
-                )?)
             })?;
             emit(json, &report);
         }

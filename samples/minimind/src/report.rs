@@ -11,13 +11,10 @@
 //! from the ledger alone.
 //!
 //! Two kinds of evidence are kept apart. Learning from scratch is what the
-//! probes show across random init, pretraining and fine-tuning, with the
-//! examination of the fine-tuned model against its random init. Learning
+//! probes show across random init, pretraining and fine-tuning. Learning
 //! from experience is what training on the model's own verified episodes
-//! changed, with the examination of the improved model against the
-//! fine-tuned one. A finished program is not a learning claim: only a
-//! verified Promote is one, and a measurement that was not made is said to
-//! be absent.
+//! changed. A finished program is not a learning claim, and a measurement
+//! that was not made is said to be absent.
 
 use std::fmt::Write as _;
 
@@ -51,22 +48,6 @@ fn losses(commits: &[Commit], unit: &str) -> String {
         format!(
             "{} steps, loss {} -> {}",
             c.summary["steps"], c.summary["first_loss"], c.summary["last_loss"]
-        )
-    })
-}
-
-fn verdict(commits: &[Commit], unit: &str) -> String {
-    find(commits, unit).map_or("not examined".into(), |c| {
-        let promotes = c.summary["promotes"].as_bool().unwrap_or(false);
-        format!(
-            "{} (verified: {}){}",
-            c.summary["verdict"].as_str().unwrap_or("?"),
-            c.summary["verified"],
-            if promotes {
-                ": promoted"
-            } else {
-                ": not promoted"
-            }
         )
     })
 }
@@ -105,11 +86,6 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
         for stage in ["init", "pretrained", "sft"] {
             let _ = writeln!(s, "{}", probe_line(commits, label, stage));
         }
-        let _ = writeln!(
-            s,
-            "\nExamination, fine-tuned against pretrained: {}.\n",
-            verdict(commits, &format!("{label}/scratch/verdict"))
-        );
         let _ = writeln!(s, "### Learning from experience\n");
         let _ = writeln!(
             s,
@@ -124,11 +100,6 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
         for stage in ["sft", "improved"] {
             let _ = writeln!(s, "{}", probe_line(commits, label, stage));
         }
-        let _ = writeln!(
-            s,
-            "\nExamination, improved against fine-tuned (with a spurious-reward control arm): {}.\n",
-            verdict(commits, &format!("{label}/experience/verdict"))
-        );
     }
     let _ = writeln!(
         s,
@@ -137,7 +108,7 @@ pub fn markdown(commits: &[Commit], labels: &[String]) -> String {
     );
     s.push_str(
         "A probe is a handful of development tasks of the training families: it shows what a checkpoint does, \
-         it is not evidence of learning. Only a verified Promote from the sealed examination is a learning claim.\n",
+         it is not evidence of learning.\n",
     );
     s
 }

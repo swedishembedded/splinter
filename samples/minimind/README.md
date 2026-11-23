@@ -6,7 +6,7 @@
 One command takes a tiny model from random weights to an agent that solves
 elementary workspace tool-use tasks (read a value from a file in one of
 several formats, follow a chain of lookups, run a helper, edit a key, write
-the answer), and examines it on a sealed exam it never saw. The command
+the answer), and probes it on development and held-out tasks. The command
 is idempotent and resumable: run it again after an abort and it continues;
 run it again after it finished and it trains nothing.
 
@@ -21,18 +21,17 @@ from random weights to a working tool-using agent for its clients. If your
 team needs expertise in training small agents from scratch, you can procure our
 services by sending an email to info@swedishembedded.com. Everything else is
 Splinter's: the stage ledger, sven episodes under the compact profile, the
-recording endpoint, training records from recorded calls, brain over its API
-and bench's examination.
+recording endpoint, training records from recorded calls and brain over its API.
 
 ## How the pieces connect
 
 ```text
  splinter-minimind (stages, ledger in the run directory)
-   |                                   |                         |
-   | brain/train jobs, install,        | sven agent (compact     | bench run / verdict
-   | /v1/chat/completions              | profile) in a workspace |
-   v                                   v                         v
- brain serve --training  <------  recording endpoint  <---  sven  ----> brain (exam arms)
+   |                                   |
+   | brain/train jobs, install,        | sven agent (compact
+   | /v1/chat/completions              | profile) in a workspace
+   v                                   v
+ brain serve --training  <------  recording endpoint  <---  sven
    (one service, HTTP only)        (expert policy, or a proxy
                                     to brain for the model)
 ```
@@ -43,17 +42,13 @@ and bench's examination.
 - sven runs each episode against an OpenAI-compatible endpoint: the expert's
   for demonstrations, a recording proxy to brain for the model's own episodes
   and the probes. The requests sven sends are what the training records hold.
-- bench runs sven itself for the exam, against the same brain, and returns one
-  signed document of aggregates.
-- Every episode here is the exam's conditions: sven's compact profile, the
-  task file's text (final newline included), the exam's per-task time limit
+- Every episode here runs under the conditions of a headless sven run: sven's compact profile, the
+  task file's text (final newline included), a per-task time limit
   (`agent.deadline_secs`), announced as a headless run announces it (a `Time:`
   line ending the request and every tool result), no sampling in the probes'
   requests, so the model's declared sampling decides (greedy: the checkpoint
   is made with `do_sample: false`). The pretraining documents shaped as agent
-  runs carry the same notice and list the tools in sven's order. Give
-  `--sven-bin` a build of the sven revision this program is built with (its
-  `Cargo.lock`), so the exam's agent is the one the training records came from.
+  runs carry the same notice and list the tools in sven's order.
 
 ## Prerequisites
 
@@ -75,20 +70,6 @@ and bench's examination.
   training floor), naming what is missing. The server dies with the run.
 - On a shared card, run the command under the card's lock, for example
   `flock <locks>/gpu3.lock samples/minimind/run.sh ...`.
-- For the examination (optional): a bench checkout (`--bench DIR`), the
-  private seed files of its exam and its anchor (`--bench-seed-file`,
-  `--bench-anchor-seed-file`; bench draws them when they do not exist), the
-  public key of bench's verdict signing key (`--bench-public-key`, the
-  `verdict.key.pub` that `./bench keygen` writes beside the private key it
-  keeps) and the sven binary bench runs the agent with (`--sven-bin`). The run
-  holds no signing key: bench signs, and the run verifies each verdict with
-  the public key. Keep the seed files outside the run directory. Bench generates the exam
-  into `--bench-exams-dir` (relative to its checkout, default
-  `.bench-data/exams`) and refuses a directory that resolves outside the
-  checkout, as one behind a symbolic link does; name another directory inside
-  the checkout then (for example `.tmp/splinter-exams`). Without `--bench` the
-  run says that it makes no promotion claim.
-
 ## The one command
 
 ```bash
@@ -121,13 +102,9 @@ run's manifest afterwards.
 | 8 | `<model>/pretrain-<i>`, `<model>/pretrain` | raw-text pretraining in `pretrain_segments` segments, each continuing the last; after each, the retrieval probe and, with `headroom_steps`, a fixed small fine-tune and the probe (the checkpoint's post-fine-tune headroom) | steps, losses, rate; the probes |
 | 9 | `<model>/midtrain/data`, `<model>/midtrain` | mid-training: raw text with the demonstrations rendered in the template as `midtrain.agentic_share` of it | the same |
 | 10 | `<model>/sft-<i>`, `<model>/sft` | the fine-tune on `data/sft.jsonl` (brain's `full_train`, only the replies supervised) in `sft_segments` segments, the probe after each: the points of the learning-aptitude fit | the same; at the end `s(N) = b + k log10(N/N0)`, `k` and `N*` |
-| 11 | `<model>/sit/<stage>` | with `--bench`: the pretrained, fine-tuned and improved checkpoints (and the control arm) each sit bench's sealed exam and its anchor once | - |
-| 12 | `<model>/scratch/verdict` | bench's signed paired verdict, fine-tuned against pretrained | the verdict and the pass rate of each tier, both sides |
-| 13 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; admitted episodes become records | accepted, flagged |
-| 14 | `<model>/improve/data`, `<model>/improve`, probe | its own admitted episodes mixed with `experience.rehearsal` demonstration records per own record, fine-tuned on (expert iteration with rehearsal), then the probe | the same |
-| 14b | `<model>/control/data`, `<model>/control` | with `--bench`: the spurious-reward control arm, the same mix with its own episodes drawn without the verifier | - |
-| 15 | `<model>/experience/verdict` | bench: the improved model against the fine-tuned one, the control arm beside it | the verdict and the tiers |
-| 16 | `report.md` | written from the ledger; the terminal gets the table across stages, the retrieval curve and the aptitude fit | its path and the table |
+| 11 | `<model>/explore/<task>`, `<model>/explore` | the model itself as a sven agent on fresh instances, through a recording proxy; admitted episodes become records | accepted, flagged |
+| 12 | `<model>/improve/data`, `<model>/improve`, probe | its own admitted episodes mixed with `experience.rehearsal` demonstration records per own record, fine-tuned on (expert iteration with rehearsal), then the probe | the same |
+| 13 | `report.md` | written from the ledger; the terminal gets the table across stages, the retrieval curve and the aptitude fit | its path and the table |
 
 `chat_training.as_text: true` trains the fine-tune and the improvement on
 whole conversations as text instead; whole trajectories as text belong in the
@@ -136,13 +113,11 @@ mid-training stage, and the fine-tune proper stays role-masked.
 ## Measured
 
 Seed 7, one GH200 (gpu3), brain 16c2db09e, 2026-11-16. The smoke profile
-(about 13 minutes to the improved checkpoint, plus about 100 seconds per exam
-sitting):
+(about 13 minutes to the improved checkpoint; the sample then also sat bench's
+sealed exam, which it no longer does):
 
 ```text
-$ samples/minimind/run.sh --run-dir RUN --seed SEED --brain-bin BRAIN --device gpu3 \
-    --bench BENCH --bench-seed-file S/exam.seed --bench-anchor-seed-file S/anchor.seed \
-    --bench-public-key S/verdict.key.pub --bench-exams-dir .tmp/splinter-exams --sven-bin SVEN
+$ samples/minimind/run.sh --run-dir RUN --seed SEED --brain-bin BRAIN --device gpu3
 [  done] world: bytes=13208671 documents=33300
 [  done] tasks: dev=12 explore=96 train=1600
 [  done] demonstrate: accepted=1600 episodes=1600 records=5868
@@ -157,23 +132,21 @@ $ samples/minimind/run.sh --run-dir RUN --seed SEED --brain-bin BRAIN --device g
          write_file({"path": "answer.txt", "text": "412\n"})
          answer.txt: "412"  (answer.txt holds "412")
 [  done] ouro/explore: accepted=15 episodes=96 records=45
-[  done] ouro/improve/data: control=false episodes=15 own_records=45 rehearsal_records=45 verified=15
+[  done] ouro/improve/data: episodes=15 own_records=45 rehearsal_records=45 verified=15
 
 ouro: what each checkpoint can do
-  stage       probe   by family                          exam a / b / c / anchor    training
-  init        0/12    combine 0/4, lookup 0/4, count 0/4 not examined
-  pretrained  0/12    combine 0/4, lookup 0/4, count 0/4 0.00 / 0.00 / 0.00 / -     loss 0.624
-  sft         2/12    combine 0/4, lookup 0/4, count 2/4 0.00 / 0.00 / 0.00 / -     loss 0.193
-  improved    3/12    combine 0/4, lookup 0/4, count 3/4 0.00 / 0.00 / 0.00 / -     loss 0.082
+  stage       probe   by family                          training
+  init        0/12    combine 0/4, lookup 0/4, count 0/4
+  pretrained  0/12    combine 0/4, lookup 0/4, count 0/4 loss 0.624
+  sft         2/12    combine 0/4, lookup 0/4, count 2/4 loss 0.193
+  improved    3/12    combine 0/4, lookup 0/4, count 3/4 loss 0.082
   retrieval while pretraining (listing+path exact): 0M tok: 0+0/24, 20M tok: 0+0/24
-  verdict scratch: Invalid (signature verified, not promoted)
-  verdict experience: Invalid (signature verified, not promoted)
 ```
 
 <!-- perf-number: the measured result of the smoke run above -->
 Times of that run: world 29 s, tasks 17 s, pretraining 354 s at 55k tok/s,
 <!-- perf-number: the measured result of the smoke run above -->
-fine-tune 239 s, improvement 6 s, each exam sitting about 100 s.
+fine-tune 239 s, improvement 6 s.
 
 The smoke model learns the protocol (read, run the helper, write
 `answer.txt`, answer) and the task that needs no copying (count); it does not
@@ -183,11 +156,7 @@ pretrained on copy drills alone copied none of 24 held-out values after 16,
 33 and 49M tokens and 10 of 24 after 65M (the retrieval probe,
 `src/retrieval.rs`). Smoke pretrains on 20M; the default profile pretrains
 the same model on about 200M tokens of a world dense in copy drills, past
-that point. The sealed exam scores 0 on every tier for every smoke
-checkpoint, and bench calls both verdicts Invalid (`same_tasks: 4 task(s)
-differ in content or verifier between the runs`, a check of bench's own that
-fails although every sitting runs the one generated collection), so no
-promotion is claimed. Pretraining runs at about 55k tokens a second on this
+that point. Pretraining runs at about 55k tokens a second on this
 model whatever the batch (64 x 512 to 256 x 1024).
 
 ## Abort, resume, re-run
@@ -199,11 +168,10 @@ what its result depends on and nothing else:
 - the digests of the stage outputs it reads (a dataset, a checkpoint);
 - its **recipe version**, a constant in `src/recipe.rs` for the sample code
   that decides its result (world, tasks, episode, gather, checkpoint, train,
-  probe, examine), bumped in the change that alters that behaviour; a spec
+  probe), bumped in the change that alters that behaviour; a spec
   pins the generators' output, so a change without a bump fails it;
 - the revisions of the **services it consumes**: sven's for every episode,
-  the brain binary's digest for every stage brain computes or serves,
-  bench's for the examination.
+  the brain binary's digest for every stage brain computes or serves.
 
 This repository's revision is in no key: a change to the report, the
 terminal output or a comment recomputes nothing (only the manifest, which
@@ -256,14 +224,14 @@ and none of the data before it.
 
 | Profile | Model (Ouro, looped) | Data | Where |
 |---|---|---|---|
-| `smoke` | hidden 256, 4 shared layers, 2 passes, vocabulary 1024 learned without digits, context 2048 (2.1M parameters) | 33300 documents (6000 worked tool-use conversations, 20000 copy drills), 1600/96/12 task instances; pretraining 600 x 64 x 512 (20M tokens), the chat stages as text | one card, about 13 minutes plus the exam; the specs run it, smaller, against a double |
+| `smoke` | hidden 256, 4 shared layers, 2 passes, vocabulary 1024 learned without digits, context 2048 (2.1M parameters) | 33300 documents (6000 worked tool-use conversations, 20000 copy drills), 1600/96/12 task instances; pretraining 600 x 64 x 512 (20M tokens), the chat stages as text | one card, about 13 minutes; the specs run it, smaller, against a double |
 | `default` | the smoke model | 12000 worked conversations and 150000 copy drills, 3000/384/12 instances; pretraining 6000 x 64 x 512 (197M tokens) in six segments with the retrieval probe after each | one card, about an hour and a half |
 | `64m` | hidden 512, 8 shared layers, 4 passes, vocabulary 8192, context 2048 | 200 towns, 2000/1000/8 instances | not run |
 
 The architecture is configuration: `models.<label>` names an `arch` brain
 knows and that architecture's own `config`, handed to brain unread. A second
 label (for example a small `qwen3`) runs the same model stages on the same
-data, budgets, probes and exam, beside the first, and the report compares them
+data, budgets and probes, beside the first, and the report compares them
 stage by stage.
 
 ## Where outputs live
@@ -273,8 +241,7 @@ repository: `manifest.json`, `ledger.jsonl`, `world/corpus.jsonl`,
 `tasks/{train,explore,dev}.jsonl`, `tasks/harbor.jsonl` (the Harbor task
 folders), `episodes/<stage>.jsonl` (each episode's outcome, records, sven
 trajectory and audit trail), `data/*.jsonl` (training records),
-`checkpoints/<model>/<stage>/`, `exam/<model>/<stage>/sitting.json`,
-`exam/<model>/<pair>/verdict.json` and `report.md`.
+`checkpoints/<model>/<stage>/` and `report.md`.
 
 A stage's episodes and task folders are thousands of small files, so they
 are never made in the run directory: agent workspaces, episode files and task
@@ -288,26 +255,6 @@ commits the pack is rewritten in path order. A reused stage reads its pack,
 each file checked against the digest its episode committed; a stage that
 must run more episodes unpacks it into scratch first. Shared file systems
 bound the number of files, so a run directory stays at a few hundred.
-
-## The examination
-
-With `--bench`, bench generates its sealed workspace tool-use exam and anchor
-from their private seed files (`--bench-seed-file`, `--bench-anchor-seed-file`;
-the sample never opens them, bench draws them when missing), and each examined
-checkpoint sits it once through sven against the same brain (`bench run
---endpoint`, at the run's episode concurrency): pretrained, fine-tuned,
-improved, and a spurious-reward control arm (the improvement with its own
-episodes drawn without the verifier, run under bench's control profile, which
-must never be promoted). Bench keeps the jobs, which hold item-level records,
-in its own data directory; a sitting whose jobs are gone is sat again. Two
-verdicts pair them (`./bench verdict --min-gain X`): fine-tuned against
-pretrained, and improved against fine-tuned with the control arm. Each is
-verified with `./bench verify-verdict`; only a verified **Promote** promotes.
-Reject, Inconclusive, Invalid or a document that does not verify promote
-nothing, and the report says "not promoted". What crosses back is aggregates:
-the verdict and, per tier (a: fresh seeds of trained skills, b: held-out
-templates or families, c: held-out domains) and for the anchor, the pass rates
-of both sides.
 
 ## Limits
 

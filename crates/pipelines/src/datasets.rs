@@ -41,7 +41,7 @@ mod request;
 pub use check::{check, DatasetCheck};
 pub use request::{BuildRequest, TransitionBuild, VoiceBuild};
 
-use crate::bench::practice::PracticeFacts;
+use crate::bench::practice_material::PracticeFacts;
 use crate::describe::{describe, Described};
 use crate::exam_seal;
 use crate::grouping::{assign_draws, assign_groups, part_families};

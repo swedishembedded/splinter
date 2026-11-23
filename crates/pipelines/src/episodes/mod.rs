@@ -58,7 +58,6 @@ use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
 pub use collection::{load_collection, PracticeTask};
-pub(crate) use executor::episode_of;
 pub use executor::SvenEpisodes;
 
 use crate::solving::harness_protocol;

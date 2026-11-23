@@ -27,7 +27,6 @@ use splinter_sdk::store::stage_ledger::{
 };
 use splinter_sdk::vocabulary::digest::Digest;
 
-use splinter_sdk::bench::examine::Examiner;
 use splinter_sdk::model::scratch::{
     ChatFormat, Checkpoint, CheckpointRequest, ModelService, Objective, TrainRequest,
 };
@@ -88,8 +87,6 @@ pub struct Run<'a> {
     pub revisions: Revisions,
     /// The model service.
     pub brain: &'a dyn ModelService,
-    /// The examiner; `None` leaves the examination out, said in the report.
-    pub examiner: Option<&'a dyn Examiner>,
     /// Where progress is shown.
     pub out: &'a mut dyn Write,
     /// The template the model is made with.
@@ -111,7 +108,6 @@ impl<'a> Run<'a> {
         seed: u64,
         revisions: Revisions,
         brain: &'a dyn ModelService,
-        examiner: Option<&'a dyn Examiner>,
         out: &'a mut dyn Write,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -129,7 +125,6 @@ impl<'a> Run<'a> {
             seed,
             revisions,
             brain,
-            examiner,
             out,
             template: Template::default(),
             this_run: Vec::new(),
