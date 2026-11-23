@@ -9,7 +9,9 @@
 //! `answer.collect`: a closed-book task (one `task.generate` admitted from a
 //! real document) answered in process, through the one solve, and graded by
 //! the verifiers its kind names: the same verdicts, under the same producer,
-//! as wherever an answer is graded.
+//! as wherever an answer is graded. A kind graded against its evidence is
+//! graded against the document the task was generated from, which the task's
+//! item carries.
 
 use std::sync::{Arc, Mutex};
 
@@ -49,6 +51,24 @@ struct Student(Arc<Answering>);
 impl Models for Student {
     fn model(&self, _: &ModelBinding) -> Result<Model, String> {
         Ok(Model::new(self.0.clone(), "scripted/student-1"))
+    }
+}
+
+/// A teacher that proposes `tasks` and a student that answers `answer`,
+/// told apart by the model each role is bound to.
+struct Classroom {
+    teacher: Arc<Answering>,
+    student: Arc<Answering>,
+}
+
+impl Models for Classroom {
+    fn model(&self, binding: &ModelBinding) -> Result<Model, String> {
+        let provider = if binding.model == "org/teacher" {
+            &self.teacher
+        } else {
+            &self.student
+        };
+        Ok(Model::new(provider.clone(), "scripted/model-1"))
     }
 }
 
@@ -113,4 +133,150 @@ fn a_closed_book_answer_is_graded_by_its_kinds_verifiers() {
         "pass"
     );
     assert_eq!(verdict("It deletes the attempt and moves on."), "fail");
+}
+
+const LETTER: &str = "# To a young man
+
+## Business
+
+I have received your favour of the tenth and enclose the bill of lading for the hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month.
+
+## Study
+
+I advise you to fix a habit of study every morning before you do anything else. Never let a day pass without reading something of history or ethics, and always write down what you have read, for the memory fails what the pen has not fixed.
+";
+
+const ADVICE: &str = "I advise you to fix a habit of study every morning before you do anything else. Never let a day pass without reading something of history or ethics, and always write down what you have read, for the memory fails what the pen has not fixed.";
+
+const ADVISED: &str = "schema: splinter.recipe/v2
+name: advised
+inputs:
+  letters: { kind: files, path: letters }
+models:
+  teacher: \"hosted:org/teacher\"
+  student: \"hosted:org/student\"
+stages:
+  - id: generated
+    uses: task.generate
+    inputs: { documents: $inputs.letters }
+    with: { model: teacher, kinds: [advise] }
+  - id: answered
+    uses: answer.collect
+    foreach: $stages.generated.tasks
+    inputs: { task: $item }
+    with: { model: student }
+";
+
+/// The recipe `kinds` of tasks are generated from the letters by, and
+/// answered.
+fn classroom(kinds: &str) -> String {
+    ADVISED.replace("[advise]", kinds)
+}
+
+/// The verdict `producer` gave the one answer `answer` to the one task the
+/// teacher's `proposal` makes of `document`, by the recipe `recipe`.
+fn graded(recipe: &str, document: &str, proposal: &Value, answer: &str, producer: &str) -> String {
+    let repo = Repo::new();
+    repo.write("letters/letter.md", document);
+    let resolved = resolve(&repo.root, recipe, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let classroom = Classroom {
+        teacher: Arc::new(Answering(Mutex::new(proposal.to_string()))),
+        student: Arc::new(Answering(Mutex::new(answer.into()))),
+    };
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: Some(&classroom),
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let answered = dir.path().join("answered");
+    let item = std::fs::read_dir(&answered)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.join("verdicts-0.json").is_file())
+        .unwrap_or_else(|| panic!("no task was answered in {}", answered.display()));
+    let verdicts: Value =
+        serde_json::from_str(&std::fs::read_to_string(item.join("verdicts-0.json")).unwrap())
+            .unwrap();
+    let verdict = verdicts
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["producer"]["name"] == producer)
+        .unwrap_or_else(|| panic!("no verdict of {producer} in {verdicts:#}"));
+    verdict["body"]["outcome"].as_str().unwrap().to_owned()
+}
+
+/// The quotation verdict of the one answer `answer` to the advice task
+/// generated from the letter.
+fn quoted(answer: &str) -> String {
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": "I am nineteen and have finished my first year at college, but I find my mornings slip away in idleness; what would you advise me to do about my habits?",
+        "reference": ADVICE,
+        "evidence": [{ "section": 2, "quote": ADVICE }],
+    }]});
+    graded(ADVISED, LETTER, &proposal, answer, "splinter-lab/quotation")
+}
+
+#[test]
+fn advice_is_graded_against_the_letter_it_was_generated_from() {
+    // A quotation is held to the letter: one it holds passes, one it does
+    // not hold fails, however much of the advice the answer gives.
+    assert_eq!(quoted(&format!("As I wrote to you: \"{ADVICE}\"")), "pass");
+    assert_eq!(
+        quoted(&format!(
+            "{ADVICE} As I wrote: \"sleep late every morning and read nothing at all of history\""
+        )),
+        "fail"
+    );
+}
+
+const CLAMP_SPEC: &str = "# Numeric helpers
+
+## clamp
+
+clamp(x, lo, hi) returns lo when x is below lo, hi when x is above hi, and x otherwise.
+";
+
+const CLAMP: &str = "def clamp(x, lo, hi):
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+";
+
+/// The verdict of the code checks on the one answer `answer` to a task to
+/// fix a faulty clamp.
+fn checked(answer: &str) -> String {
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": "This Python clamp(x, lo, hi) returns x when x is above hi. Fix it.",
+        "subject": "clamp",
+        "reference": CLAMP,
+        "material": "def clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    return x\n",
+        "evidence": [{ "section": 1, "quote": null }],
+        "checks": [{ "code": "assert clamp(7, 0, 3) == 3\nassert clamp(-5, 0, 3) == 0\n", "exit_code": 0 }],
+    }]});
+    graded(
+        &classroom("[debug]"),
+        CLAMP_SPEC,
+        &proposal,
+        answer,
+        "splinter-lab/executable",
+    )
+}
+
+#[test]
+fn fixed_code_is_graded_by_running_its_checks_in_its_runtime() {
+    assert_eq!(checked(CLAMP), "pass");
+    assert_eq!(
+        checked("def clamp(x, lo, hi):\n    return max(x, lo)\n"),
+        "fail"
+    );
 }

@@ -312,18 +312,22 @@ reason, in the pack `pack.json`.
     with: { pack: shop-policy }
 ```
 
-## Closed-book tasks from documents
+## Tasks from documents
 
 `task.generate` asks a generator model for tasks of the named kinds (`recall`,
-`arithmetic`, `format`, ...) from each document, and code admits a task only
-when its evidence quotes the document verbatim, it stands on its own, names its
-subject and is new; each admitted task is an item (`task.json`), and
-`rejected.jsonl` keeps every refusal with its reason. `answer.collect`, run once
-per task, has a model answer it closed-book in Splinter's own process and grades
+`advise`, `debug`, ...) from each document, and code admits a task only when
+its evidence quotes the document verbatim, it stands on its own, names its
+subject and is new; a kind that runs code is offered its runtime, found on the
+default search path. Each admitted task is an item: `task.json`, and
+`sources/`, the document its evidence is in. `rejected.jsonl` keeps every
+refusal with its reason. `answer.collect`, run once per task, has a model answer
+it in Splinter's own process (closed-book, or in its kind's runtime) and grades
 the answer with the verifiers the task's kind names, the same verdicts as
-wherever an answer is graded (a judge grades only where one is given; a kind
-whose verifier needs a runtime, the source store or a workspace is refused by
-name). Each item holds `experience-N.json` and `verdicts-N.json`.
+wherever an answer is graded: a quotation or grounding check reads the item's
+`sources/`, a code check runs in the process sandbox. A judge grades only where
+one is given; a kind solved in a workspace, or whose check's evidence or
+runtime is missing, is refused by name. Each item holds `experience-N.json` and
+`verdicts-N.json`.
 
 ```yaml
   - id: generated

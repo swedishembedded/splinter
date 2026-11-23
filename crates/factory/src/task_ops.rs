@@ -15,17 +15,23 @@
 //!   own); code admits a task only when its evidence quotes the document
 //!   verbatim, it stands on its own, names its subject and is new
 //!   ([`splinter_knowledge::tasks`]). Each admitted task is an item
-//!   (`task.json`); `rejected.jsonl` keeps every refusal with its reason.
+//!   (`task.json`), holding the document its evidence is in as a source
+//!   store of its own (`sources/`), so the item is graded against it
+//!   wherever it goes; `rejected.jsonl` keeps every refusal with its reason.
+//!   A kind that runs code is offered the runtime it names, found on the
+//!   default search path, in the process sandbox.
 //! * `answer.collect`, run once per task, has the stage's model answer it
 //!   closed-book through the one solve every task runs through
 //!   ([`splinter_agent::solve::solve`]) and grades the answer with the
 //!   verifiers the task's kind names
-//!   ([`splinter_knowledge::tasks::verifiers::plain_verifier`]): the same
-//!   verdicts, under the same producer names, as everywhere else (a judge
-//!   grades only where one is given, and none is here). A kind graded by a
-//!   verifier that needs a run's environment (a runtime, the source store,
-//!   a workspace) is rejected by name. The item
-//!   holds each attempt's `experience-N.json` and `verdicts-N.json`.
+//!   ([`splinter_knowledge::tasks::verifiers`]): the same verdicts, under
+//!   the same producer names, as everywhere else. A quotation or grounding
+//!   check reads the item's own `sources/`; a code check, and the answer
+//!   of a kind solved in its runtime, runs in the process sandbox. A judge
+//!   grades only where one is given, and none is here; a kind solved in a
+//!   workspace, or graded by a check whose evidence or runtime is not
+//!   there, is rejected by name. The item holds each attempt's
+//!   `experience-N.json` and `verdicts-N.json`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -45,9 +51,15 @@ use splinter_core::factory::operation::{
 };
 use splinter_core::source::{CapturedSource, Origin, PartContent};
 use splinter_eval::verifiers::Strongest;
-use splinter_knowledge::tasks::verifiers::plain_verifier;
-use splinter_knowledge::tasks::{Catalogue, GenerationPolicy, ModelTaskGenerator, SourceText};
-use splinter_sandbox::environment::ResolvedEnvironment;
+use splinter_eval::verifiers::Verifier;
+use splinter_knowledge::tasks::verifiers::{evidence_verifier, plain_verifier, runtime_verifier};
+use splinter_knowledge::tasks::{
+    Catalogue, GenerationPolicy, ModelTaskGenerator, SolverEnvironment, SourceText, TaskKind,
+    VerifierKind,
+};
+use splinter_sandbox::environment::{ResolvedEnvironment, RUNTIME_KIND_PREFIX};
+use splinter_sandbox::runtime::RuntimeRegistry;
+use splinter_sandbox::{Limits, ProcessSandbox, RuntimeEnvironment, Sandbox};
 use splinter_store::sources::SourceStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
@@ -62,6 +74,37 @@ pub const ANSWER: &str = "answer.collect";
 
 /// An admitted task in its item.
 const TASK_FILE: &str = "task.json";
+
+/// The source store, in a task's item, its evidence is in.
+const SOURCES_DIR: &str = "sources";
+
+/// The source store at `dir`.
+fn source_store(dir: &Path) -> SourceStore {
+    SourceStore::new(&Workspace::at(&StateRoot::new(dir.to_path_buf())))
+}
+
+/// Those of the runtimes `names` installed here, resolved in a process
+/// sandbox under `scratch` that finds interpreters on the default search
+/// path.
+fn runtimes<'a>(
+    scratch: &Path,
+    names: impl IntoIterator<Item = &'a str>,
+) -> Vec<RuntimeEnvironment> {
+    let sandbox: Arc<dyn Sandbox> = Arc::new(ProcessSandbox::new(
+        scratch.join("calls"),
+        Vec::new(),
+        &[],
+        Limits::default(),
+    ));
+    let registry = RuntimeRegistry::builtin();
+    let mut found: Vec<RuntimeEnvironment> = Vec::new();
+    for name in names {
+        if found.iter().all(|env| env.runtime().spec.name != name) {
+            found.extend(RuntimeEnvironment::new(&registry, name, Arc::clone(&sandbox)).ok());
+        }
+    }
+    found
+}
 
 fn port(name: &str, kind: ArtifactKind, many: bool) -> Port {
     Port {
@@ -198,7 +241,11 @@ impl Execute for Generate {
         let catalogue = Catalogue::builtin();
         let kinds: Vec<_> = p.kinds.iter().filter_map(|k| catalogue.get(k)).collect();
         let state = tempfile::tempdir().map_err(|e| e.to_string())?;
-        let store = SourceStore::new(&Workspace::at(&StateRoot::new(state.path().to_path_buf())));
+        let store = source_store(&state.path().join(SOURCES_DIR));
+        let offered = runtimes(
+            &state.path().join("sandbox"),
+            kinds.iter().filter_map(|k| k.runtime.as_deref()),
+        );
         let mut policy = GenerationPolicy::default();
         if let Some(tokens) = p.max_output_tokens {
             policy.max_output_tokens = Some(tokens);
@@ -211,7 +258,8 @@ impl Execute for Generate {
         }
         let generator =
             ModelTaskGenerator::new(Arc::new(SvenProposer::new(model.clone())), store.clone())
-                .with_policy(policy);
+                .with_policy(policy)
+                .with_runtimes(offered);
         let mut found = Vec::new();
         for root in call.inputs.get("documents").into_iter().flatten() {
             texts(root, root, &mut found)?;
@@ -257,6 +305,9 @@ impl Execute for Generate {
                 let dir = call.out.join(&id);
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                 write(&dir.join(TASK_FILE), &generated.task)?;
+                source_store(&dir.join(SOURCES_DIR))
+                    .put_source(&captured)
+                    .map_err(|e| e.to_string())?;
                 items.push(Item {
                     path: id.clone(),
                     id,
@@ -335,28 +386,76 @@ impl OperationSpec for Answer {
     }
 }
 
-/// The verifiers `task`'s kind grades it with, or the one that needs a
-/// run's environment.
-fn verifiers_of(task: &Task) -> Result<Strongest, String> {
+/// Where `task` is answered, and the verifiers its kind grades it with:
+/// the evidence read from `sources`, code run in `runtimes`. A reason
+/// names what is missing for either.
+struct Grading {
+    environment: ResolvedEnvironment,
+    verifiers: Strongest,
+}
+
+fn grading(task: &Task, sources: Option<&SourceStore>, scratch: &Path) -> Result<Grading, String> {
     let catalogue = Catalogue::builtin();
     let kind = catalogue
         .get(&task.task.kind)
         .ok_or_else(|| format!("no task kind {:?} in the catalogue", task.task.kind))?;
+    let solved_in = task.environment.kind.strip_prefix(RUNTIME_KIND_PREFIX);
+    let found = runtimes(
+        scratch,
+        kind.runtime.as_deref().into_iter().chain(solved_in),
+    );
+    let environment = match kind.environment {
+        SolverEnvironment::ClosedBook => ResolvedEnvironment::ClosedBook,
+        SolverEnvironment::Runtime => {
+            let name = solved_in.ok_or("it names no runtime to be solved in")?;
+            let env = found
+                .iter()
+                .find(|env| env.runtime().spec.name == name)
+                .ok_or_else(|| format!("runtime {name} is not installed here"))?;
+            ResolvedEnvironment::Runtime(env.clone())
+        }
+        SolverEnvironment::Workspace => {
+            return Err(format!("its kind {} is solved in a workspace", kind.name))
+        }
+    };
     let mut out = Vec::new();
     for verifier in &kind.verifiers {
         // A judge grades only where one is given, as everywhere answers are
         // graded; none is given here.
-        if *verifier == splinter_knowledge::tasks::VerifierKind::Judged {
-            continue;
+        if *verifier != VerifierKind::Judged {
+            out.push(verifier_of(kind, *verifier, sources, &found)?);
         }
-        out.push(plain_verifier(*verifier).ok_or_else(|| {
-            format!(
-                "its kind {} is graded by {verifier:?}, which needs a run's environment",
-                task.task.kind
-            )
-        })?);
     }
-    Ok(Strongest::new(out))
+    Ok(Grading {
+        environment,
+        verifiers: Strongest::new(out),
+    })
+}
+
+fn verifier_of(
+    kind: &TaskKind,
+    verifier: VerifierKind,
+    sources: Option<&SourceStore>,
+    runtimes: &[RuntimeEnvironment],
+) -> Result<Box<dyn Verifier>, String> {
+    let made = plain_verifier(verifier)
+        .or_else(|| sources.and_then(|store| evidence_verifier(verifier, store)))
+        .or_else(|| {
+            (!runtimes.is_empty())
+                .then(|| runtime_verifier(verifier, runtimes.to_vec()))
+                .flatten()
+        });
+    made.ok_or_else(|| {
+        let missing = match verifier {
+            VerifierKind::Quotation | VerifierKind::Grounding => "the sources of its evidence",
+            VerifierKind::Executable | VerifierKind::MutationValidated => "its runtime",
+            _ => "what only a run has",
+        };
+        format!(
+            "its kind {} is graded by {verifier:?}, which needs {missing}",
+            kind.name
+        )
+    })
 }
 
 impl Execute for Answer {
@@ -379,8 +478,11 @@ impl Execute for Answer {
             &std::fs::read_to_string(dir.join(TASK_FILE)).map_err(|e| e.to_string())?,
         )
         .map_err(|e| e.to_string())?;
-        let verifiers = match verifiers_of(&task) {
-            Ok(v) => v,
+        let stored = dir.join(SOURCES_DIR);
+        let sources = stored.is_dir().then(|| source_store(&stored));
+        let scratch = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let grading = match grading(&task, sources.as_ref(), scratch.path()) {
+            Ok(grading) => grading,
             Err(why) => return Ok(Outcome::Rejected(why)),
         };
         let runtime = runtime()?;
@@ -388,7 +490,7 @@ impl Execute for Answer {
             let solution = runtime
                 .block_on(solve(
                     &task,
-                    &ResolvedEnvironment::ClosedBook,
+                    &grading.environment,
                     model.provider.clone(),
                     SolveOptions::new(Duration::from_secs(p.deadline_seconds)),
                 ))
@@ -405,7 +507,8 @@ impl Execute for Answer {
             let experience = solution
                 .into_experience(task.clone(), provenance)
                 .map_err(|e| e.to_string())?;
-            let report = verifiers
+            let report = grading
+                .verifiers
                 .run(&task, &experience)
                 .map_err(|e| e.to_string())?;
             write(
