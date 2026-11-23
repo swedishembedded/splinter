@@ -90,15 +90,23 @@ impl Plan {
                 .model
                 .as_ref()
                 .map_or_else(|| "its own model".to_owned(), ToString::to_string);
+            let work = if pass.interactive {
+                format!(
+                    "the sessions people play of {selected} with {} on {model} (`splinter play`)",
+                    pass.agent
+                )
+            } else {
+                format!(
+                    "{selected} x {} attempts of {} on {model}, {} at a time",
+                    pass.attempts, pass.agent, pass.concurrency
+                )
+            };
             stages.push(PlannedStage {
                 key: stage_key(StageKind::Rollout, &pass.name),
                 kind: StageKind::Rollout,
                 name: pass.name.clone(),
                 depends_on,
-                work: format!(
-                    "{} x {} attempts of {} on {model}, {} at a time",
-                    selected, pass.attempts, pass.agent, pass.concurrency
-                ),
+                work,
             });
         }
         if let Some(dataset) = &recipe.dataset {
