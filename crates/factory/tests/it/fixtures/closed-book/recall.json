@@ -1,0 +1,38 @@
+{
+  "task": {
+    "id": "blake3:0ebf42b4b6a2d6f34f8b09c5d0a98965d5ec5bfca0e93b04acbed01d861bcf62",
+    "kind": "recall"
+  },
+  "evidence": [
+    {
+      "source": "blake3:225c39d1b13a2032fa137aa300a1133c8147c3387f5cd4a2f6dcd396e451476d",
+      "start": 0,
+      "end": 2974,
+      "part": {
+        "source": "blake3:36ad473919baa399595cb1b67d5c5b1b34a7b41ede38123d6ed14eccf9a88209",
+        "name": "corrections.md"
+      }
+    }
+  ],
+  "environment": {
+    "kind": "closed-book",
+    "spec": {},
+    "snapshot": "blake3:d47cd1bc4d98968355dab7373f75093f20091692d937e8853af6b99dce20def4"
+  },
+  "instruction": "What does a fork correction do with each failed attempt?",
+  "privileged": [
+    {
+      "kind": "reference",
+      "content": "continues it instead of starting the task afresh",
+      "span": {
+        "source": "blake3:225c39d1b13a2032fa137aa300a1133c8147c3387f5cd4a2f6dcd396e451476d",
+        "start": 0,
+        "end": 2974,
+        "part": {
+          "source": "blake3:36ad473919baa399595cb1b67d5c5b1b34a7b41ede38123d6ed14eccf9a88209",
+          "name": "corrections.md"
+        }
+      }
+    }
+  ]
+}

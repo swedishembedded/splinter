@@ -53,5 +53,6 @@ pub mod registry;
 pub mod resolve;
 pub mod run;
 mod stage_checks;
+pub mod task_ops;
 pub mod training;
 pub mod tree;

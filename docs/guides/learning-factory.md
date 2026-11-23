@@ -111,6 +111,8 @@ outputs: { dataset: $stages.sft.dataset }
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
 | `source.ingest` | `documents` (files) | `sections` |
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
+| `task.generate` | `documents` (one or more) | `tasks` |
+| `answer.collect` | `task` | `answers` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -307,6 +309,31 @@ reason, in the pack `pack.json`.
     uses: knowledge.admit
     inputs: { sections: $stages.sections.sections, proposals: $stages.proposed.output }
     with: { pack: shop-policy }
+```
+
+## Closed-book tasks from documents
+
+`task.generate` asks a generator model for tasks of the named kinds (`recall`,
+`arithmetic`, `format`, ...) from each document, and code admits a task only
+when its evidence quotes the document verbatim, it stands on its own, names its
+subject and is new; each admitted task is an item (`task.json`), and
+`rejected.jsonl` keeps every refusal with its reason. `answer.collect`, run once
+per task, has a model answer it closed-book in Splinter's own process and grades
+the answer with the verifiers the task's kind names, the same verdicts as
+wherever an answer is graded (a judge grades only where one is given; a kind
+whose verifier needs a runtime, the source store or a workspace is refused by
+name). Each item holds `experience-N.json` and `verdicts-N.json`.
+
+```yaml
+  - id: generated
+    uses: task.generate
+    inputs: { documents: [$inputs.docs] }
+    with: { kinds: [recall, arithmetic], model: teacher, max_output_tokens: 16000 }
+  - id: answered
+    uses: answer.collect
+    foreach: $stages.generated.tasks
+    inputs: { task: $item }
+    with: { model: student, attempts: 4 }
 ```
 
 ## The task repository's own operators
