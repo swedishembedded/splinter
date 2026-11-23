@@ -50,6 +50,10 @@ const AF_PACKET: u32 = 17;
 /// The first system-call number of the x32 ABI, which no filter written for
 /// the native numbers can classify.
 const X32_FLAG: u32 = 0x4000_0000;
+/// The number a tracer (proot) sets to skip a call: -1, which the kernel
+/// answers with `ENOSYS`. It has the x32 bit set but is no x32 call, so it
+/// is allowed before that check.
+const SKIPPED_CALL: u32 = u32::MAX;
 
 #[cfg(target_arch = "x86_64")]
 const AUDIT_ARCH: u32 = 0xc000_003e;
@@ -103,9 +107,9 @@ impl Filter {
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     pub fn deny_inet_sockets() -> io::Result<Self> {
         // Indices of the three outcomes at the end of the program.
-        const ALLOW: u8 = 9;
-        const DENY: u8 = 10;
-        const KILL: u8 = 11;
+        const ALLOW: u8 = 10;
+        const DENY: u8 = 11;
+        const KILL: u8 = 12;
         // A jump offset counts from the instruction after the jump.
         const fn to(target: u8, at: u8) -> u8 {
             target - at - 1
@@ -114,15 +118,16 @@ impl Filter {
             /* 0 */ stmt(BPF_LD_W_ABS, OFFSET_ARCH),
             /* 1 */ jump(BPF_JEQ_K, AUDIT_ARCH, 0, to(KILL, 1)),
             /* 2 */ stmt(BPF_LD_W_ABS, OFFSET_NR),
-            /* 3 */ jump(BPF_JGE_K, X32_FLAG, to(KILL, 3), 0),
-            /* 4 */ jump(BPF_JEQ_K, SYS_SOCKET, 0, to(ALLOW, 4)),
-            /* 5 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
-            /* 6 */ jump(BPF_JEQ_K, AF_INET, to(DENY, 6), 0),
-            /* 7 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 7), 0),
-            /* 8 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 8), 0),
-            /* 9 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
-            /* 10 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
-            /* 11 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
+            /* 3 */ jump(BPF_JEQ_K, SKIPPED_CALL, to(ALLOW, 3), 0),
+            /* 4 */ jump(BPF_JGE_K, X32_FLAG, to(KILL, 4), 0),
+            /* 5 */ jump(BPF_JEQ_K, SYS_SOCKET, 0, to(ALLOW, 5)),
+            /* 6 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
+            /* 7 */ jump(BPF_JEQ_K, AF_INET, to(DENY, 7), 0),
+            /* 8 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 8), 0),
+            /* 9 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 9), 0),
+            /* 10 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
+            /* 11 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
+            /* 12 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
         ];
         Ok(Self { program })
     }
@@ -132,9 +137,9 @@ impl Filter {
     /// TCP, which Landlock then holds to its allowed ports.
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     pub fn deny_inet_sockets_but_tcp4() -> io::Result<Self> {
-        const ALLOW: u8 = 12;
-        const DENY: u8 = 13;
-        const KILL: u8 = 14;
+        const ALLOW: u8 = 13;
+        const DENY: u8 = 14;
+        const KILL: u8 = 15;
         const fn to(target: u8, at: u8) -> u8 {
             target - at - 1
         }
@@ -142,18 +147,19 @@ impl Filter {
             /* 0 */ stmt(BPF_LD_W_ABS, OFFSET_ARCH),
             /* 1 */ jump(BPF_JEQ_K, AUDIT_ARCH, 0, to(KILL, 1)),
             /* 2 */ stmt(BPF_LD_W_ABS, OFFSET_NR),
-            /* 3 */ jump(BPF_JGE_K, X32_FLAG, to(KILL, 3), 0),
-            /* 4 */ jump(BPF_JEQ_K, SYS_SOCKET, 0, to(ALLOW, 4)),
-            /* 5 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
-            /* 6 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 6), 0),
-            /* 7 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 7), 0),
-            /* 8 */ jump(BPF_JEQ_K, AF_INET, 0, to(ALLOW, 8)),
-            /* 9 */ stmt(BPF_LD_W_ABS, OFFSET_ARG1),
-            /* 10 */ stmt(BPF_ALU_AND_K, SOCK_TYPE_MASK),
-            /* 11 */ jump(BPF_JEQ_K, SOCK_STREAM, to(ALLOW, 11), to(DENY, 11)),
-            /* 12 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
-            /* 13 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
-            /* 14 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
+            /* 3 */ jump(BPF_JEQ_K, SKIPPED_CALL, to(ALLOW, 3), 0),
+            /* 4 */ jump(BPF_JGE_K, X32_FLAG, to(KILL, 4), 0),
+            /* 5 */ jump(BPF_JEQ_K, SYS_SOCKET, 0, to(ALLOW, 5)),
+            /* 6 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
+            /* 7 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 7), 0),
+            /* 8 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 8), 0),
+            /* 9 */ jump(BPF_JEQ_K, AF_INET, 0, to(ALLOW, 9)),
+            /* 10 */ stmt(BPF_LD_W_ABS, OFFSET_ARG1),
+            /* 11 */ stmt(BPF_ALU_AND_K, SOCK_TYPE_MASK),
+            /* 12 */ jump(BPF_JEQ_K, SOCK_STREAM, to(ALLOW, 12), to(DENY, 12)),
+            /* 13 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
+            /* 14 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
+            /* 15 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
         ];
         Ok(Self { program })
     }

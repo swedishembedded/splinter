@@ -129,3 +129,29 @@ fn a_launcher_given_nothing_to_run_or_an_unknown_option_refuses() {
         Some(2)
     );
 }
+
+#[test]
+fn a_skipped_system_call_is_answered_not_killed() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    // A tracer (proot) skips a call by setting its number to -1, which the
+    // kernel answers with ENOSYS; the socket filter must not kill it.
+    let skip = "import ctypes, sys; sys.exit(0 if ctypes.CDLL(None).syscall(-1) == -1 else 1)";
+    for network in ["none", "tcp:9"] {
+        let status = confine()
+            .args([
+                "--read-only",
+                "/",
+                "--network",
+                network,
+                "--",
+                "python3",
+                "-c",
+                skip,
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success(), "{network}: {status}");
+    }
+}
