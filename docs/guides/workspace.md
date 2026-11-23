@@ -30,3 +30,8 @@ Point it at shared storage and a second node starts in seconds instead of rebuil
   the recipe against it, and stops the server when splinter ends. Several recipes run side by side on other cards;
   running the same command again continues the run.
 - `workspace.json` records the commits and the records the workspace was built from.
+
+`scripts/run-metrics.py RUN_DIR` reads what a run's evaluation arms did: counted and never-counted slots, passes
+(over all slots, a slot that never counted as not passed, and over counted slots), retried attempts and infrastructure
+timeouts, and from the trajectories how often a call that followed a Vim error repeated it, how many trials a loop
+watchdog ended, refused model requests, and replies that carry reasoning.
