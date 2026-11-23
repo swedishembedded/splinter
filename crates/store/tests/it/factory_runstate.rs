@@ -133,6 +133,28 @@ fn slots_are_ensured_idempotently_and_finish_once() {
             4,
         )
         .unwrap();
+    // A failed attempt returns the slot; the slot's every attempt is kept.
+    let retry_slot = SlotKey::new("pass-a", "t1", 1);
+    let failed = state
+        .claim_next(&fence, "pass-a", "{}", 4)
+        .unwrap()
+        .unwrap();
+    assert_eq!(failed.slot, retry_slot);
+    state
+        .record_attempt(&fence, failed.id, AttemptState::Failed, None, 4)
+        .unwrap();
+    let again = state
+        .claim_next(&fence, "pass-a", "{}", 4)
+        .unwrap()
+        .unwrap();
+    assert_eq!(again.slot, retry_slot);
+    let ids: Vec<_> = state
+        .attempts(&retry_slot)
+        .unwrap()
+        .iter()
+        .map(|a| a.id)
+        .collect();
+    assert_eq!(ids, [failed.id, again.id]);
     state.finish_slot(&fence, &attempt.slot, &trial, 5).unwrap();
     state.finish_slot(&fence, &attempt.slot, &trial, 6).unwrap();
     let other = state.finish_slot(&fence, &attempt.slot, &digest("other"), 7);

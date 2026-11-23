@@ -377,6 +377,16 @@ impl RunState {
         rows.map(|row| decode_slot(row?)).collect()
     }
 
+    /// Every attempt at slot `key`, oldest first.
+    pub fn attempts(&self, key: &SlotKey) -> Result<Vec<AttemptRecord>, RunStateError> {
+        let mut statement = self.conn.prepare(&format!(
+            "SELECT {ATTEMPT_COLUMNS} FROM attempts
+             WHERE pass = ?1 AND task = ?2 AND idx = ?3 ORDER BY id"
+        ))?;
+        let rows = statement.query_map(params![key.pass, key.task, key.slot], attempt_row)?;
+        rows.map(|row| decode_attempt(row?)).collect()
+    }
+
     /// The attempts that were launched or running and have no outcome, oldest
     /// first: what a restarted controller reconciles with its backends.
     pub fn unfinished_attempts(&self) -> Result<Vec<AttemptRecord>, RunStateError> {
