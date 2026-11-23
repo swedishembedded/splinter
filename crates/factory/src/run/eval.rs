@@ -120,6 +120,7 @@ fn arm_pass(section: &EvalSection, plan: &EvalPlan, name: &str) -> Result<Rollou
         retries: 2,
         seed: plan.seed,
         interactive: false,
+        hint: None,
     })
 }
 

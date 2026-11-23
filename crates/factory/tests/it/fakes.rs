@@ -54,6 +54,11 @@ pub struct FakeBackend {
     pub executed: Mutex<Vec<ExecutionSpec>>,
     /// Every played session: its spec and the trial it continued.
     pub played: Mutex<Vec<(ExecutionSpec, Option<PathBuf>)>>,
+    /// A passing trial was given the instruction of the task copy it ran,
+    /// not the fixture's: as a real agent would have been.
+    pub echo_instruction: bool,
+    /// The instruction of every task copy executed, in order.
+    pub instructions: Mutex<Vec<String>>,
 }
 
 impl FakeBackend {
@@ -98,11 +103,42 @@ fn write(path: &Path, bytes: &[u8]) {
 }
 
 /// Write the trial directory and report of one attempt.
-fn attempt(out: &Path, spec: &ExecutionSpec, outcome: Outcome) {
-    attempt_as(out, spec, outcome, false);
+fn attempt(out: &Path, spec: &ExecutionSpec, outcome: Outcome, instruction: Option<&str>) {
+    attempt_as(out, spec, outcome, false, instruction);
 }
 
-fn attempt_as(out: &Path, spec: &ExecutionSpec, outcome: Outcome, guided: bool) {
+/// The fixture's file with its instruction replaced by `instruction`.
+fn fixture_file(name: &str, instruction: Option<&str>) -> Vec<u8> {
+    let fixture = fixture();
+    let text = std::fs::read_to_string(fixture.join(name)).unwrap();
+    let Some(instruction) = instruction else {
+        return text.into_bytes();
+    };
+    let trajectory: atif::Trajectory =
+        serde_json::from_slice(&std::fs::read(fixture.join("agent/trajectory.json")).unwrap())
+            .unwrap();
+    let original = trajectory.steps[0].message.as_text().unwrap().to_owned();
+    let escaped = |s: &str| {
+        serde_json::to_string(s)
+            .unwrap()
+            .trim_matches('"')
+            .to_owned()
+    };
+    assert!(
+        text.contains(&escaped(&original)),
+        "the fixture's {name} holds its instruction"
+    );
+    text.replace(&escaped(&original), &escaped(instruction))
+        .into_bytes()
+}
+
+fn attempt_as(
+    out: &Path,
+    spec: &ExecutionSpec,
+    outcome: Outcome,
+    guided: bool,
+    instruction: Option<&str>,
+) {
     let name = format!(
         "{}__{}-{}",
         spec.task.id.replace('/', "__"),
@@ -131,15 +167,14 @@ fn attempt_as(out: &Path, spec: &ExecutionSpec, outcome: Outcome, guided: bool) 
             json!({"exception_type": "ApiInternalServerError", "exception_message": "500"});
     }
     write(&dir.join("result.json"), result.to_string().as_bytes());
-    let fixture = fixture();
     write(
         &dir.join("agent/requests.jsonl"),
-        &std::fs::read(fixture.join("agent/requests.jsonl")).unwrap(),
+        &fixture_file("agent/requests.jsonl", instruction),
     );
     let trace = if outcome == Outcome::CorruptTrace {
         b"not json".to_vec()
     } else {
-        std::fs::read(fixture.join("agent/trajectory.json")).unwrap()
+        fixture_file("agent/trajectory.json", instruction)
     };
     write(&dir.join("agent/trajectory.json"), &trace);
     let report = AttemptReport {
@@ -189,9 +224,14 @@ impl ExecutionBackend for FakeBackend {
                 return Err(BackendError::Worker("killed".into()));
             }
             self.executed.lock().unwrap().push(spec.clone());
+            let instruction =
+                std::fs::read_to_string(batch.tasks.join(&spec.task_dir).join("instruction.md"))
+                    .unwrap();
+            self.instructions.lock().unwrap().push(instruction.clone());
             let outcome = self.outcome(spec);
             if outcome != Outcome::Lost {
-                attempt(batch.out, spec, outcome);
+                let given = self.echo_instruction.then_some(instruction.as_str());
+                attempt(batch.out, spec, outcome, given);
             }
         }
         read_reports(batch.out)
@@ -217,7 +257,7 @@ impl ExecutionBackend for FakeBackend {
             .lock()
             .unwrap()
             .push((spec.clone(), continue_from.map(Path::to_path_buf)));
-        attempt_as(batch.out, spec, Outcome::Pass, true);
+        attempt_as(batch.out, spec, Outcome::Pass, true, None);
         Ok(read_reports(batch.out)?.remove(0))
     }
 }

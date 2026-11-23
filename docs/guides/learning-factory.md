@@ -77,7 +77,10 @@ that selects tasks unsolved by a pass after it, a credential written as a litera
   prompt, environment variables (`env:NAME` passes this machine's variable), a
   model or none (the agent's own provider), attempts, retries and seed. A pass
   with `unsolved_by` runs only the tasks no earlier pass solved, frozen when it
-  starts. A pass with `interactive: true` is played by people (below).
+  starts. A pass with `interactive: true` is played by people (below). A pass
+  with `hint: solution` works each task from the run's own copy of it whose
+  instruction carries the task's reference solution (`solution/solve.sh`), in
+  the task's own sandbox and graded by its own verifier (below).
 
 ## What each stage guarantees
 
@@ -133,6 +136,26 @@ recipe and fork the run: every product the change leaves alone is reused.
 splinter fork runs/vim-mastery --recipe recipes/vim-mastery-r32.yaml --out runs/vim-mastery-r32
 splinter eval runs/vim-mastery --plan eval/vim-sealed.yaml --out runs/vim-mastery-sealed
 ```
+
+## Hinted passes
+
+A hinted pass rationalises what the model could not solve unaided: it attempts
+the tasks earlier passes left unsolved with their reference solution in front
+of it, and each verified success is learned under the task's own instruction,
+the hint nowhere in the record:
+
+```yaml
+  - { name: hinted, agent: sven, model: "brain:Qwen/Qwen3-4B", hint: solution,
+      environment: environments/vim/environment.yaml,
+      tasks: { unsolved_by: [local] }, attempts: 2, seed: 5 }
+```
+
+A trial whose own replies or reasoning repeat a line of the solution learned
+to quote the hint, not to do the task, and is excluded (`hint_repeated`); so is
+a record that still shows the hint (`hint_not_removed`) or never held it
+(`hint_not_found`). `supervision.jsonl` marks every record of a hinted pass
+`hinted`. A hinted pass is never interactive, and every task it runs needs a
+reference solution.
 
 ## Generations
 

@@ -189,6 +189,19 @@ pub struct RolloutPass {
     /// trial and marked guided.
     #[serde(default)]
     pub interactive: bool,
+    /// A hinted pass: each task is worked from a copy whose instruction
+    /// carries the hint ([`crate::hint`]); its verified successes are
+    /// learned under the task's own instruction.
+    #[serde(default)]
+    pub hint: Option<Hint>,
+}
+
+/// What a hinted pass shows the model beside the task.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Hint {
+    /// The task's reference solution (`solution/solve.sh`).
+    Solution,
 }
 
 fn one() -> u32 {
@@ -406,6 +419,12 @@ impl Recipe {
             }
             if pass.agent.trim().is_empty() {
                 problems.push(format!("rollout {} names no agent", pass.name));
+            }
+            if pass.hint.is_some() && pass.interactive {
+                problems.push(format!(
+                    "rollout {}: a hinted pass is never interactive; a person guiding the agent is the hint",
+                    pass.name
+                ));
             }
             if !passes.insert(pass.name.as_str()) {
                 problems.push(format!("rollout {} is named twice", pass.name));

@@ -210,6 +210,17 @@ fn project(
     ))
 }
 
+/// The hint the rollout pass `source` showed, if it is a hinted pass.
+fn hint_of(factory: &Factory<'_>, source: &str) -> Option<crate::recipe::Hint> {
+    factory
+        .resolved
+        .recipe
+        .rollouts
+        .iter()
+        .find(|p| p.name == source)
+        .and_then(|p| p.hint)
+}
+
 fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunError> {
     let path = staging.path().join(name);
     let file = std::fs::File::open(&path).map_err(io(&path))?;
@@ -283,7 +294,18 @@ pub(crate) fn produce(
                 continue;
             }
             successes += 1;
-            match project(&view, &trial, &dataset.projection) {
+            let learned = project(&view, &trial, &dataset.projection).and_then(|mut found| {
+                if let Some(hint) = hint_of(factory, source) {
+                    // Learned under the task's own instruction, from the
+                    // tasks the run pinned.
+                    let (instruction, solution) =
+                        crate::hint::material(&factory.view("tasks").join(&trial.task), hint)
+                            .map_err(|e| ("hint_not_found".to_owned(), e))?;
+                    crate::hint::unhint(&mut found.0.body, &instruction, &solution)?;
+                }
+                Ok(found)
+            });
+            match learned {
                 Ok((record, actions, tools)) => {
                     projected.push((source.clone(), trial, record, actions, tools))
                 }
@@ -402,6 +424,7 @@ pub(crate) fn produce(
         supervision.push(json!({
             "split": split, "line": index, "pass": source, "slot": trial.slot.to_string(), "task": trial.task,
             "trace": trial.trace.as_ref().map(|t| &t.path), "supervised_messages": supervised,
+            "hinted": hint_of(factory, source).is_some(),
         }));
         let agent = format!(
             "{}{} {}",

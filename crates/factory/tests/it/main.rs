@@ -9,6 +9,7 @@ mod brain_trainer;
 mod factory_run;
 mod fakes;
 mod generations;
+mod hinted;
 mod native;
 mod repo;
 mod resolve;

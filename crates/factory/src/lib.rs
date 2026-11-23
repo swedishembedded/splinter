@@ -21,6 +21,8 @@
 //!   the training engine.
 //! * [`champion`] - the model a finished run leaves in use, as a later
 //!   recipe's `champion:RUN`.
+//! * [`hint`] - hinted passes: tasks worked with their reference solution
+//!   shown, learned without it.
 //! * [`tree`] - the digest of a directory tree.
 
 #![warn(missing_docs)]
@@ -31,6 +33,7 @@ pub mod collection;
 pub mod connections;
 pub mod environment;
 pub mod eval_plan;
+pub mod hint;
 pub mod plan;
 pub mod recipe;
 pub mod resolve;

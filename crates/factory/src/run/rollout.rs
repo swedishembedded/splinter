@@ -247,6 +247,7 @@ impl Arm<'_> {
             "retries": self.pass.retries,
             "budget": self.pass.budget,
             "timeout_policy": self.pass.timeout_policy,
+            "hint": self.pass.hint,
         }))
     }
 }
@@ -566,6 +567,17 @@ pub(crate) fn run_arm(
     let run = Running::new(factory, arm, factory.work(&arm.key))?;
     std::fs::create_dir_all(&run.work).map_err(io(&run.work))?;
     pin_files(factory, &run)?;
+    // A hinted pass runs the run's own copies of its tasks, the hint in
+    // their instruction.
+    let hinted = run.work.join("hinted");
+    let task_root = match arm.pass.hint {
+        Some(hint) => {
+            crate::hint::stage(&arm.task_root, &arm.tasks, hint, &hinted)
+                .map_err(|e| stage_error(&arm.key, e))?;
+            &hinted
+        }
+        None => &arm.task_root,
+    };
     let ids: Vec<String> = arm.tasks.iter().map(|t| t.id.clone()).collect();
     factory.state.ensure_slots(
         &factory.fence,
@@ -612,7 +624,7 @@ pub(crate) fn run_arm(
         }
         let reports = factory.services.backend.execute(Batch {
             specs: &specs,
-            tasks: &arm.task_root,
+            tasks: task_root,
             files: &run.work.join("files"),
             out: &run.batch_dir(batch),
             concurrency: arm.pass.concurrency,
