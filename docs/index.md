@@ -21,6 +21,7 @@ provider. Neither needs Splinter installed.
   [Your first learning run](getting-started/first-learning-run.md).
 - Teach it something: [documents and commands](guides/documents.md), [a repository](guides/repositories.md),
   [your own agent sessions](guides/agent-sessions.md), [a person's way of thinking](guides/personas.md).
+- Run on a new machine or directory: [Set up a run workspace anywhere](guides/workspace.md).
 - Check what it learned: [Measure what a candidate learned](guides/evaluation.md) and
   [Release, serve and roll back](guides/releases.md).
 - Understand it: [Architecture](concepts/architecture.md), [the learning loop](concepts/learning-loop.md),
