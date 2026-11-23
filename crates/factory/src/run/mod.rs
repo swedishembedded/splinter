@@ -48,6 +48,45 @@ use crate::tree::TreeError;
 pub const LOCK_FILE: &str = "recipe.lock.json";
 /// The file a run's recipe is kept in.
 pub const RECIPE_FILE: &str = "recipe.yaml";
+/// The run's report for a person.
+pub const REPORT_FILE: &str = "report.md";
+/// Where the run was started from.
+pub const ORIGIN_FILE: &str = "origin.json";
+/// The file whose presence asks a running controller to stop.
+pub const CANCEL_FILE: &str = "state/cancel";
+
+/// Where a run was started from: the repository its recipe's paths are
+/// relative to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunOrigin {
+    /// The repository root.
+    pub repository: PathBuf,
+}
+
+/// The repository and recipe text a run was started with, for a resume.
+///
+/// # Errors
+/// The run's recipe or origin cannot be read.
+pub fn started_with(run: &Path) -> Result<(PathBuf, String), RunError> {
+    let origin: RunOrigin = read_json(&run.join(ORIGIN_FILE))?;
+    let recipe = run.join(RECIPE_FILE);
+    let text = std::fs::read_to_string(&recipe).map_err(io(&recipe))?;
+    Ok((origin.repository, text))
+}
+
+/// Ask the controller of `run` to stop at its next stage or batch boundary;
+/// what is committed stays, and `resume` continues.
+///
+/// # Errors
+/// The request cannot be written.
+pub fn request_cancel(run: &Path) -> Result<(), RunError> {
+    let path = run.join(CANCEL_FILE);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(io(parent))?;
+    }
+    std::fs::write(&path, b"cancel\n").map_err(io(&path))
+}
+
 /// The run's own manifest: every stage and its product.
 pub const RUN_MANIFEST: &str = "manifest.json";
 
@@ -185,12 +224,12 @@ impl<'a> Factory<'a> {
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 write_json(&lock_path, &resolved.lock)?;
-                let recipe = serde_yaml::to_string(&resolved.recipe).map_err(|e| RunError::Io {
-                    path: run.join(RECIPE_FILE),
-                    message: e.to_string(),
-                })?;
-                std::fs::write(run.join(RECIPE_FILE), recipe)
+                std::fs::write(run.join(RECIPE_FILE), &resolved.recipe_text)
                     .map_err(io(&run.join(RECIPE_FILE)))?;
+                let origin = RunOrigin {
+                    repository: resolved.repository.clone(),
+                };
+                write_json(&run.join(ORIGIN_FILE), &origin)?;
             }
             Err(e) => return Err(io(&lock_path)(e)),
         }
@@ -207,7 +246,8 @@ impl<'a> Factory<'a> {
             services,
             done: BTreeMap::new(),
             cancel: Box::new(|| false),
-        })
+        }
+        .with_cancel_file())
     }
 
     /// Stop between stages and between rollout batches once `cancelled`
@@ -216,6 +256,14 @@ impl<'a> Factory<'a> {
     pub fn with_cancel(mut self, cancelled: impl Fn() -> bool + 'a) -> Self {
         self.cancel = Box::new(cancelled);
         self
+    }
+
+    /// Stop once the run's cancel file appears (`request_cancel`), and
+    /// forget an earlier request: opening the run is the resume.
+    fn with_cancel_file(self) -> Self {
+        let path = self.run.join(CANCEL_FILE);
+        let _ = std::fs::remove_file(&path);
+        self.with_cancel(move || path.exists())
     }
 
     pub(crate) fn cancelled(&self) -> Result<(), RunError> {
@@ -245,6 +293,8 @@ impl<'a> Factory<'a> {
             stages: entries,
         };
         write_json(&self.run.join(RUN_MANIFEST), &manifest)?;
+        let report = self.run.join(REPORT_FILE);
+        std::fs::write(&report, report_of(&self.run, &manifest)).map_err(io(&report))?;
         Ok(manifest)
     }
 
@@ -554,4 +604,38 @@ impl SlotNamespace for splinter_store::factory::runstate::StageRecord {
             .strip_prefix("eval/_arms/")
             .map(|arm| format!("eval-{arm}"))
     }
+}
+
+/// The run's report: every stage with its product, then each stage's own
+/// report, in plan order.
+#[must_use]
+pub fn report_of(run: &Path, manifest: &RunManifest) -> String {
+    let mut out = format!(
+        "# Run of {}\n\n| stage | product | this invocation |\n|---|---|---|\n",
+        manifest.recipe
+    );
+    for stage in &manifest.stages {
+        let short = &stage.product.hex()[..12];
+        let how = if stage.computed { "computed" } else { "reused" };
+        out.push_str(&format!("| {} | {short} | {how} |\n", stage.key));
+    }
+    for stage in &manifest.stages {
+        if let Ok(text) = std::fs::read_to_string(run.join(&stage.key).join("report.md")) {
+            // A stage's headings move one level down under the run's.
+            let demoted: Vec<String> = text
+                .lines()
+                .map(|l| {
+                    if l.starts_with('#') {
+                        format!("#{l}")
+                    } else {
+                        l.to_owned()
+                    }
+                })
+                .collect();
+            out.push('\n');
+            out.push_str(demoted.join("\n").trim_end());
+            out.push('\n');
+        }
+    }
+    out
 }

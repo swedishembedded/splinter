@@ -381,3 +381,37 @@ fn a_tampered_product_fails_verification() {
         "{problems:?}"
     );
 }
+
+#[test]
+fn a_cancelled_run_stops_at_a_boundary_and_resumes_from_what_it_recorded() {
+    let repo = Repo::new();
+    let recipe = RECIPE.split("dataset:").next().unwrap();
+    let resolved_first = resolved(&repo, recipe);
+    let backend = FakeBackend::with(Outcome::Pass);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+    };
+    let stopped = {
+        let mut factory = Factory::open(&resolved_first, dir.path(), services, OWNER).unwrap();
+        splinter_factory::run::request_cancel(dir.path()).unwrap();
+        factory.run()
+    };
+    assert!(matches!(stopped, Err(RunError::Cancelled)), "{stopped:?}");
+    assert!(backend.executed().is_empty());
+
+    let (repository, text) = splinter_factory::run::started_with(dir.path()).unwrap();
+    assert_eq!(
+        (repository.as_path(), text.as_str()),
+        (repo.root.as_path(), recipe)
+    );
+    let again = resolve(&repository, &text, connections()).unwrap();
+    let mut factory = Factory::open(&again, dir.path(), services, OWNER).unwrap();
+    factory.run().unwrap();
+    assert_eq!(
+        trials_of(&dir.path().join("rollouts/local")).unwrap().len(),
+        4
+    );
+}

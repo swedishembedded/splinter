@@ -55,6 +55,8 @@ pub struct Resolved {
     pub repository: PathBuf,
     /// The recipe.
     pub recipe: Recipe,
+    /// The recipe's text, as read (its digest is the lock's).
+    pub recipe_text: String,
     /// The tasks the recipe's tasks section selects.
     pub collection: LoadedCollection,
     /// Environments by path.
@@ -227,6 +229,7 @@ pub fn resolve(
     Ok(Resolved {
         repository: repository.to_path_buf(),
         recipe,
+        recipe_text: recipe_text.to_owned(),
         collection: loaded,
         environments,
         eval,
