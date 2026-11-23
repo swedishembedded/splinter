@@ -1,0 +1,76 @@
+{
+  "evaluations": {
+    "lora-r16": {
+      "baseline": [
+        8,
+        8,
+        0
+      ],
+      "candidate": [
+        8,
+        8,
+        8
+      ],
+      "decision": "improved",
+      "statistics": {
+        "alpha": 0.025,
+        "difference": 1.0,
+        "losses": 0,
+        "min_difference": 0.0,
+        "p": 0.0039062499999999974,
+        "pairs": 8,
+        "test": "exact one-sided paired sign test",
+        "wins": 8
+      }
+    },
+    "lora-r8": {
+      "baseline": [
+        8,
+        8,
+        0
+      ],
+      "candidate": [
+        8,
+        8,
+        8
+      ],
+      "decision": "improved",
+      "statistics": {
+        "alpha": 0.025,
+        "difference": 1.0,
+        "losses": 0,
+        "min_difference": 0.0,
+        "p": 0.0039062499999999974,
+        "pairs": 8,
+        "test": "exact one-sided paired sign test",
+        "wins": 8
+      }
+    }
+  },
+  "exclusions": {
+    "not_a_success:graded": 4
+  },
+  "records": "blake3:55104aee51d25a4a94965be9ed3aeb8da82c95d4d87a09c2e0cae44cb9412628",
+  "release": {
+    "promote": false,
+    "promoted": null
+  },
+  "waterfall": [
+    {
+      "remaining": 6,
+      "step": "raw_trials"
+    },
+    {
+      "remaining": 2,
+      "step": "verified_successes"
+    },
+    {
+      "remaining": 2,
+      "step": "projected"
+    },
+    {
+      "remaining": 2,
+      "step": "accepted"
+    }
+  ]
+}
