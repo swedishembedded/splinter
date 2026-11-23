@@ -108,9 +108,9 @@ pub(crate) fn projection_problems(
     if stage.sources("attempts").is_empty() && !answers {
         out.push("projects no attempts and no answers".to_owned());
     }
-    if answers && params.objective == "sft" {
+    if answers && params.objective == "sft" && !stage.sources("attempts").is_empty() {
         out.push(
-            "an SFT dataset projects attempts; answers are projected by a view's objective"
+            "an SFT dataset projects attempts or answers, not both: an attempt is learned action by action, an answer as its final reply"
                 .to_owned(),
         );
     }

@@ -508,7 +508,9 @@ compiles its collection evaluates on the same compiled tasks:
   a passed experience's question, the source passage its evidence names, and
   the passages other experiences rest on as negatives. These objectives also
   read `answers`: the experiences `answer.collect` made in process, each with
-  its verdicts and the sources its evidence is in. A policy-gradient record is an action of a graded attempt carrying
+  its verdicts and the sources its evidence is in. An SFT dataset of answers
+  (and no attempts) supervises each passed answer's final reply under its
+  question. A policy-gradient record is an action of a graded attempt carrying
   the attempt's reward and its group; a group whose attempts all earned the
   same is left out. Hinted, continued and harnessed attempts are refused: they
   would teach what the target is never shown. `model.train` trains each

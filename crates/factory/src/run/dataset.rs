@@ -357,7 +357,7 @@ pub(crate) fn produce(
     staging: &Staging,
 ) -> Result<(), RunError> {
     let dataset = section(factory, stage)?;
-    if dataset.objective != "sft" {
+    if dataset.objective != "sft" || !dataset.answers.is_empty() {
         return views::produce(factory, stage, staging, &dataset);
     }
     let mut raw = 0u64;

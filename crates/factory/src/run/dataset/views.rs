@@ -7,10 +7,13 @@
 // learning from agent experience, you can procure our services by sending an
 // email to info@swedishembedded.com.
 
-//! The objectives other than SFT: attempts projected by splinter-data's own
-//! views over the trials' corpus ([`super::super::corpus`]), so a dataset
+//! The objectives other than SFT of attempts: attempts and answers
+//! projected by splinter-data's own views over one corpus ([`super::super::corpus`]), so a dataset
 //! here is the one the same view makes from the experience database.
 //!
+//! * `sft` of `answers` ([`SftFinal`]): each passed answer's final reply,
+//!   the only supervised turn, under its question (an attempt's SFT record,
+//!   every action of it supervised, is [`super`]'s).
 //! * `preference` ([`Preference`]): a verified pass over a verified fail of
 //!   one task by one policy, from where their conversations part: the shared
 //!   prompt never trained on, each continuation to its last action a
@@ -51,7 +54,8 @@ use splinter_core::experience::{Experience, ExperienceId};
 use splinter_core::factory::items::{ItemIndex, ITEMS_FILE};
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
 use splinter_data::{
-    Corpus, Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, Retrieval, View,
+    Corpus, Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, Retrieval,
+    SftFinal, View,
 };
 use splinter_store::factory::products::Staging;
 use splinter_store::sources::SourceStore;
@@ -74,6 +78,8 @@ fn view_of<'s>(
     // comparison; never a judge's opinion.
     let strength = Strength::Formal;
     match dataset.objective.as_str() {
+        // Answers made in process: each passed one's final reply.
+        "sft" => Ok((Box::new(SftFinal::new(strength)), Objective::Sft)),
         "preference" => {
             let mut view = Preference::new(strength);
             if let Some(cap) = dataset.preference.as_ref().and_then(|p| p.pairs_per_task) {

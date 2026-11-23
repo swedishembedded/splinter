@@ -333,3 +333,59 @@ fn answered_tasks_give_a_retrieval_dataset_of_the_passages_they_rest_on() {
         "{record}"
     );
 }
+
+/// Learning from documents: a passed answer to a generated task is an SFT
+/// record of the question and the answer, supervised on the answer alone.
+#[test]
+fn passed_answers_give_an_sft_dataset_of_the_question_and_the_answer() {
+    // seed: a dataset stage states its seed; one record has no split to draw.
+    let recipe = ADVISED.to_owned()
+        + "  - id: sft
+    uses: dataset.project
+    inputs: { answers: [$stages.answered.answers] }
+    with: { target: student, seed: 13 }
+";
+    let repo = Repo::new();
+    repo.write("letters/letter.md", LETTER);
+    let question = "I am nineteen and have finished my first year at college, but I find my mornings slip away in idleness; what would you advise me to do about my habits?";
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": question,
+        "reference": ADVICE,
+        "evidence": [{ "section": 2, "quote": ADVICE }],
+    }]});
+    let answer = format!("As I wrote to you: \"{ADVICE}\"");
+    let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let classroom = Classroom {
+        teacher: Arc::new(Answering(Mutex::new(proposal.to_string()))),
+        student: Arc::new(Answering(Mutex::new(answer.clone()))),
+    };
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: Some(&classroom),
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let text = std::fs::read_to_string(dir.path().join("sft/train.jsonl")).unwrap();
+    let records: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(records.len(), 1, "{text}");
+    let messages = records[0]["messages"].as_array().unwrap();
+    let supervised: Vec<&str> = messages
+        .iter()
+        .filter(|m| m["train"] == true)
+        .map(|m| m["content"].as_str().unwrap())
+        .collect();
+    assert_eq!(supervised, [answer.as_str()]);
+    assert!(messages.iter().any(|m| m["content"]
+        .as_str()
+        .unwrap()
+        .contains("mornings slip away")));
+}
