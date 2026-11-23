@@ -539,6 +539,89 @@ fn tasks_identity_id(
     .digest())
 }
 
+/// The examiner, as the plan's command, run from the repository root with
+/// `--candidate FILE [--predecessor FILE] --out FILE` appended.
+fn examine_by_command(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    command: &[String],
+    candidate: &std::path::Path,
+    predecessor: Option<&std::path::Path>,
+    out: &std::path::Path,
+) -> Result<(), RunError> {
+    let Some((program, args)) = command.split_first() else {
+        return Err(stage_error(&stage.key, "the authority's command is empty"));
+    };
+    let mut run = Command::new(program);
+    run.args(args).arg("--candidate").arg(candidate);
+    if let Some(file) = predecessor {
+        run.arg("--predecessor").arg(file);
+    }
+    let status = run
+        .arg("--out")
+        .arg(out)
+        .current_dir(&factory.resolved.repository)
+        .status()
+        .map_err(|e| stage_error(&stage.key, format!("{program}: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(stage_error(
+            &stage.key,
+            format!("the examiner exited with {status}"),
+        ))
+    }
+}
+
+/// The examiner as one of the repository's operators: its inputs the
+/// candidate file, the predecessor file and the trained candidate's view
+/// (`model`), all read-only, it writes `verdict.json` into its output.
+fn examine_by_operator(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    operator: &str,
+    candidate: &std::path::Path,
+    predecessor: Option<&std::path::Path>,
+    model: &std::path::Path,
+    out: &std::path::Path,
+) -> Result<(), RunError> {
+    let executor = factory
+        .resolved
+        .registry
+        .get(operator)
+        .and_then(|o| o.executor())
+        .ok_or_else(|| stage_error(&stage.key, format!("no operator {operator}")))?;
+    let dir = |file: &std::path::Path| file.parent().map(std::path::Path::to_path_buf);
+    let mut inputs = std::collections::BTreeMap::new();
+    inputs.insert("candidate".to_owned(), dir(candidate).into_iter().collect());
+    inputs.insert("model".to_owned(), vec![model.to_path_buf()]);
+    if let Some(file) = predecessor {
+        inputs.insert("predecessor".to_owned(), dir(file).into_iter().collect());
+    }
+    let written = tempfile::tempdir().map_err(|e| stage_error(&stage.key, e))?;
+    let call = crate::execute::Call {
+        inputs,
+        params: &json!({}),
+        files: &std::collections::BTreeMap::new(),
+        models: &std::collections::BTreeMap::new(),
+        variables: factory.services.variables,
+        out: written.path().to_path_buf(),
+    };
+    match executor.execute(&call) {
+        Ok(crate::execute::Outcome::Produced) => {}
+        Ok(crate::execute::Outcome::Rejected(why)) => {
+            return Err(stage_error(
+                &stage.key,
+                format!("the examiner refused: {why}"),
+            ))
+        }
+        Err(why) => return Err(stage_error(&stage.key, why)),
+    }
+    let verdict = written.path().join("verdict.json");
+    std::fs::copy(&verdict, out).map_err(io(&verdict))?;
+    Ok(())
+}
+
 /// Hand the candidate to the examiner and keep its signed verdict. The
 /// examiner reads the candidate as it reads any (`adapter`, its
 /// `adapter_digest`, the builds that made it); Splinter appends
@@ -558,9 +641,6 @@ fn protected(
     candidate: &splinter_core::factory::product::ModelCandidate,
     staging: &Staging,
 ) -> Result<(), RunError> {
-    let Some((program, args)) = authority.command.split_first() else {
-        return Err(stage_error(&stage.key, "the authority's command is empty"));
-    };
     let training = factory.view(&section.candidate);
     let adapter = candidate
         .artifacts
@@ -581,7 +661,9 @@ fn protected(
         "proposer_commit": Factory::implementation(""),
         "brain_commit": candidate.trainer,
     });
-    let candidate_file = staging.path().join("examined-candidate.json");
+    let exam = staging.path().join("examined");
+    let candidate_file = exam.join("candidate/candidate.json");
+    std::fs::create_dir_all(exam.join("candidate")).map_err(io(&exam))?;
     write_json(&candidate_file, &examined)?;
     // A champion baseline with an adapter is the examiner's predecessor; the
     // base model as it is otherwise.
@@ -590,11 +672,11 @@ fn protected(
         .champions
         .get(&section.baseline.to_string())
         .filter(|c| c.adapter.is_some());
-    let mut command = Command::new(program);
-    command.args(args).arg("--candidate").arg(&candidate_file);
+    let mut predecessor = None;
     let mut predecessor_digest = None;
     if let Some(champion) = champion {
-        let file = staging.path().join("examined-predecessor.json");
+        let file = exam.join("predecessor/predecessor.json");
+        std::fs::create_dir_all(exam.join("predecessor")).map_err(io(&exam))?;
         let digest = champion
             .record
             .adapter_digest
@@ -607,21 +689,28 @@ fn protected(
                 "series": champion.record.candidate, "step": 0,
             }),
         )?;
-        command.arg("--predecessor").arg(&file);
+        predecessor = Some(file);
         predecessor_digest = digest;
     }
     let out = staging.path().join("verdict.json");
-    let status = command
-        .arg("--out")
-        .arg(&out)
-        .current_dir(&factory.resolved.repository)
-        .status()
-        .map_err(|e| stage_error(&stage.key, format!("{program}: {e}")))?;
-    if !status.success() {
-        return Err(stage_error(
-            &stage.key,
-            format!("the examiner exited with {status}"),
-        ));
+    match &authority.operator {
+        Some(operator) => examine_by_operator(
+            factory,
+            stage,
+            operator,
+            &candidate_file,
+            predecessor.as_deref(),
+            &training,
+            &out,
+        )?,
+        None => examine_by_command(
+            factory,
+            stage,
+            &authority.command,
+            &candidate_file,
+            predecessor.as_deref(),
+            &out,
+        )?,
     }
     let document: serde_json::Value = read_json(&out)?;
     let key = PublicKey::read(&factory.resolved.repository.join(&authority.public_key))

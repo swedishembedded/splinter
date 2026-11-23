@@ -386,15 +386,18 @@ compiles its collection evaluates on the same compiled tasks:
   attempts: 1
   seed: 7
   decision: { alpha: 0.05 }
-  authority:
-    command: [./bench, examine, --collection, tasks/vim-sealed, --private, DIR,
-              --brain, BRAIN, --models-dir, DIR, --api-key-file, FILE]
-    public_key: config/verdict.pub
+  authority: { operator: exam.sealed, public_key: config/verdict.pub }
   ```
 
-  Splinter appends `--candidate FILE --out FILE`, and keeps the examiner's
-  verdict only when its signature verifies under the public key and it is about
-  this candidate against the base at the plan's level.
+  The examiner is one of the repository's operators: it is given the candidate
+  (`candidate/candidate.json`, the adapter and its digest), the trained
+  candidate's files (`model`) and, against a champion, the predecessor, all
+  read-only, and writes `verdict.json`; what it needs of the machine (the brain
+  server, a key, the sealed tasks) is that machine's grant. An authority may
+  instead name a `command`, to which Splinter appends `--candidate FILE --out
+  FILE`. Either way the verdict counts only when its signature verifies under
+  the public key and it is about this candidate against the base at the plan's
+  level.
 - **Release** (`promotion`). Records every decision; with `promote: true` it promotes the best
   improved candidate. It names the champion the run leaves in use (below).
 

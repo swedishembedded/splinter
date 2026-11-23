@@ -11,8 +11,12 @@
 //! alone: what [`crate::resolve`] reports beside what reading the
 //! repository's files finds.
 
+use std::collections::BTreeMap;
+
+use crate::collection::LoadedCollection;
 use crate::eval_plan::EvalPlan;
 use crate::ops::AttemptParams;
+use crate::registry::Registry;
 
 /// Why an evaluation under `plan` (at `path`) has no one source of tasks:
 /// its plan's collection, the stage's pinned tasks, or its examiner's.
@@ -66,4 +70,25 @@ pub(crate) fn harness_refusals(params: &AttemptParams) -> Vec<&'static str> {
         out.push("runs a harness, which carries its own instructions: it takes no system_prompt");
     }
     out
+}
+
+/// Why the evaluation plans' authorities cannot examine: an authority that
+/// is an operator the repository does not have.
+pub(crate) fn authority_problems(
+    plans: &BTreeMap<String, (EvalPlan, Option<LoadedCollection>)>,
+    registry: &Registry,
+) -> Vec<String> {
+    plans
+        .iter()
+        .filter_map(|(path, (plan, _))| {
+            let name = plan.authority.as_ref()?.operator.as_ref()?;
+            registry
+                .get(name)
+                .and_then(|o| o.executor())
+                .is_none()
+                .then(|| {
+                    format!("{path}: its authority is the operator {name}, which the repository does not have")
+                })
+        })
+        .collect()
 }

@@ -52,9 +52,14 @@ pub struct DecisionRule {
 #[serde(deny_unknown_fields)]
 pub struct Authority {
     /// The examiner's command (argv, run from the repository root), to which
-    /// `--candidate FILE --out FILE` is appended (`./bench examine
-    /// --collection ... --private ... --brain ... ...`).
+    /// `--candidate FILE --out FILE` is appended; empty when it is an
+    /// operator.
+    #[serde(default)]
     pub command: Vec<String>,
+    /// The examiner as one of the repository's operators: given the
+    /// candidate (and its predecessor) as inputs, it writes `verdict.json`.
+    #[serde(default)]
+    pub operator: Option<String>,
     /// The examiner's public key file, to check its verdict's signature.
     pub public_key: String,
 }
@@ -124,6 +129,11 @@ impl EvalPlan {
         }
         if !(plan.decision.alpha > 0.0 && plan.decision.alpha < 0.5) {
             problems.push(format!("alpha {} is not in (0, 0.5)", plan.decision.alpha));
+        }
+        if let Some(authority) = &plan.authority {
+            if authority.command.is_empty() == authority.operator.is_none() {
+                problems.push("an authority names its command or its operator, one of them".into());
+            }
         }
         if plan.attempts == 0 {
             problems.push("a plan needs at least one attempt per task".into());

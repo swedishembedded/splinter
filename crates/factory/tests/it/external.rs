@@ -300,3 +300,104 @@ fn an_operator_gets_only_the_variables_its_machine_grants() {
         "machine-key"
     );
 }
+
+const EXAMINER: &str = "schema: splinter.operator/v1
+name: exam.sealed
+revision: 1
+summary: the examiner, on sealed tasks it alone holds
+inputs:
+  - { name: candidate, kind: files, many: false, optional: false }
+  - { name: model, kind: model, many: false, optional: false }
+output: { name: verdict, kind: evaluation, many: false, optional: false }
+parameters: { type: object, additionalProperties: false }
+reproducibility: nondeterministic
+command: [./eval/exam.sh]
+code: [eval/exam.sh]
+";
+
+/// The stand-in examiner: reads the candidate it is handed, then gives the
+/// verdict the test prepared.
+const EXAM: &str = r#"#!/bin/sh
+exec python3 - "$2" <<'PY'
+import json, os, shutil, sys
+request = json.load(open(sys.argv[1]))
+candidate = json.load(open(os.path.join(request["inputs"]["candidate"][0], "candidate.json")))
+assert candidate["adapter_digest"].startswith("sha256:")
+shutil.copy(os.path.join(request["repository"], "eval", "verdict.json"), os.path.join(request["out"], "verdict.json"))
+PY
+"#;
+
+#[test]
+fn an_examiner_operator_examines_a_candidate_and_its_verdict_is_verified() {
+    use crate::factory_run::{resolved, run, signed_verdict};
+    use crate::fakes::FakeTrainer;
+    use crate::repo::{evaluation, EVALUATION, RECIPE};
+    use splinter_core::factory::product::Decision;
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = Repo::new();
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Pass)
+    };
+    let trainer = FakeTrainer::default();
+    let training_only = RECIPE.split(EVALUATION).next().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, training_only),
+        dir.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let candidate =
+        splinter_factory::run::training::candidate_of(&dir.path().join("lora-r8")).unwrap();
+    let digest = candidate
+        .artifacts
+        .iter()
+        .find(|a| a.path.ends_with(".safetensors"))
+        .unwrap()
+        .digest
+        .to_string();
+    // seed: the examiner's test key; the gate checks a signature under it.
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[3; 32]);
+    let public: String = signer
+        .verifying_key()
+        .to_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    repo.write("eval/examiner.pub", &public);
+    repo.write(
+        "eval/verdict.json",
+        &signed_verdict(&signer, &digest, None, 0.05, "Promote"),
+    );
+    repo.write("operators/exam.yaml", EXAMINER);
+    repo.write("eval/exam.sh", EXAM);
+    std::fs::set_permissions(
+        repo.root.join("eval/exam.sh"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    // seed: the plan states its seed; the examiner draws nothing from it.
+    repo.write(
+        "eval/sealed.yaml",
+        "schema: splinter.evalplan/v1\nattempts: 1\nseed: 5\ndecision: { alpha: 0.05, comparisons: 1 }\n\
+         authority: { operator: exam.sealed, public_key: eval/examiner.pub }\n",
+    );
+    let recipe = training_only.to_owned() + &evaluation("lora-r8", "eval/sealed.yaml", "student");
+    let examined = tempfile::tempdir().unwrap();
+    splinter_factory::run::fork(dir.path(), examined.path()).unwrap();
+    run(
+        &resolved(&repo, &recipe),
+        examined.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let result =
+        splinter_factory::run::eval::result_of(&examined.path().join("eval-lora-r8")).unwrap();
+    assert!(result.protected && result.signature.is_some());
+    assert_eq!(result.decision, Decision::Improved);
+}

@@ -295,6 +295,12 @@ pub fn resolve_with(
             }
         }
     }
+    reader
+        .problems
+        .extend(crate::stage_checks::authority_problems(
+            &found.eval_plans,
+            &registry,
+        ));
     for stage in &mut plan.stages {
         stage.work = crate::describe::work(stage, &compiled, &found.collections);
     }
