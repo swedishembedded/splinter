@@ -126,7 +126,15 @@ pub struct ModelBinding {
     /// The worker environment variable holding the credential.
     #[serde(default)]
     pub token_env: Option<String>,
+    /// Headers of the agent's the gateway does not pass on to this
+    /// endpoint (one of [`FORWARDED_HEADERS`]); empty for most.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drop_headers: Vec<String>,
 }
+
+/// The agent's own headers the worker's gateway passes on to an Anthropic
+/// endpoint; a connection may drop any of them.
+pub const FORWARDED_HEADERS: &[&str] = &["anthropic-version", "anthropic-beta"];
 
 impl ModelBinding {
     /// `connection:model`, as a recipe writes it.

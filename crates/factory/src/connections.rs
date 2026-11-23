@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use splinter_core::factory::execution::{ModelBinding, Protocol};
+use splinter_core::factory::execution::{ModelBinding, Protocol, FORWARDED_HEADERS};
 
 use crate::recipe::ModelRef;
 
@@ -38,6 +38,10 @@ pub struct Connection {
     /// `env:NAME`: the variable holding the credential.
     #[serde(default)]
     pub token: Option<String>,
+    /// Headers of the agent's this endpoint does not take, which the
+    /// worker's gateway drops (an endpoint that refuses `anthropic-beta`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drop_headers: Vec<String>,
 }
 
 /// Every connection of an installation.
@@ -77,6 +81,16 @@ impl Connections {
         let parsed: Self =
             serde_yaml::from_str(text).map_err(|e| ConnectionError::Parse(e.to_string()))?;
         for (name, connection) in &parsed.connections {
+            if let Some(header) = connection
+                .drop_headers
+                .iter()
+                .find(|h| !FORWARDED_HEADERS.contains(&h.as_str()))
+            {
+                return Err(ConnectionError::Parse(format!(
+                    "connection {name} drops {header}, but the gateway forwards only {}",
+                    FORWARDED_HEADERS.join(", ")
+                )));
+            }
             if let Some(token) = &connection.token {
                 let variable = token.strip_prefix("env:").unwrap_or_default();
                 if variable.is_empty()
@@ -113,6 +127,7 @@ impl Connections {
                 .as_deref()
                 .and_then(|t| t.strip_prefix("env:"))
                 .map(str::to_owned),
+            drop_headers: connection.drop_headers.clone(),
         })
     }
 }

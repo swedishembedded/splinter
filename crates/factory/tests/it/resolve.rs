@@ -220,3 +220,24 @@ fn examination_tasks_never_reach_a_dataset_under_any_name() {
     std::fs::remove_dir_all(repo.root.join("tasks/vim/train/003-copy")).unwrap();
     resolve(&repo.root, &no_dataset, connections()).expect("a recipe that trains on nothing");
 }
+
+#[test]
+fn a_connection_drops_only_headers_the_gateway_forwards() {
+    use splinter_factory::connections::Connections;
+    let connections = Connections::parse(
+        "connections:\n  hosted: { protocol: anthropic, url: \"https://example.invalid/v1\", \
+         token: \"env:KEY\", drop_headers: [anthropic-beta] }\n",
+    )
+    .unwrap();
+    let binding = connections.bind(&"hosted:m".parse().unwrap()).unwrap();
+    assert_eq!(binding.drop_headers, ["anthropic-beta"]);
+    let refused = Connections::parse(
+        "connections:\n  hosted: { protocol: anthropic, drop_headers: [authorization] }\n",
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        refused.contains("authorization") && refused.contains("anthropic-beta"),
+        "{refused}"
+    );
+}

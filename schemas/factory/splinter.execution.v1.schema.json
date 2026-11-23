@@ -200,6 +200,13 @@
           "description": "The connection's name (`brain`, `hosted`).",
           "type": "string"
         },
+        "drop_headers": {
+          "description": "Headers of the agent's the gateway does not pass on to this\nendpoint (one of [`FORWARDED_HEADERS`]); empty for most.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "model": {
           "description": "The model id the endpoint serves.",
           "type": "string"

@@ -128,3 +128,10 @@ def test_unreadable_specs_are_refused(tmp_path, bad, capsys) -> None:
     specs = tmp_path / "specs.jsonl"
     specs.write_text(bad + "\n")
     assert main(["run", "--specs", str(specs), "--tasks", str(tmp_path), "--out", str(tmp_path / "out")]) == 2
+
+
+def test_a_header_the_gateway_does_not_forward_cannot_be_dropped(tmp_path, capsys, monkeypatch) -> None:
+    model = {"connection": "c", "model": "m", "protocol": "anthropic", "url": "http://127.0.0.1:9/v1",
+             "drop_headers": ["authorization"]}
+    message = refuse(tmp_path, make_spec(TASK, agent="claude-code", model=model), capsys, monkeypatch)
+    assert "authorization" in message and "anthropic-beta" in message

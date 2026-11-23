@@ -118,12 +118,25 @@ class AgentInvocation(_Strict):
     system_prompt: FileRef | None = None
 
 
+# The agent's own headers the gateway passes on to an Anthropic upstream; a connection may drop any of them.
+FORWARDED_HEADERS = ("anthropic-version", "anthropic-beta")
+
+
 class ModelBinding(_Strict):
     connection: str
     model: str
     protocol: Literal["openai", "anthropic"]
     url: str | None = None
     token_env: str | None = None
+    drop_headers: list[str] = []
+
+    @field_validator("drop_headers")
+    @classmethod
+    def _droppable(cls, value: list[str]) -> list[str]:
+        unknown = [name for name in value if name not in FORWARDED_HEADERS]
+        if unknown:
+            raise ValueError(f"the gateway forwards only {', '.join(FORWARDED_HEADERS)}; it cannot drop {unknown}")
+        return value
 
 
 class Mount(_Strict):

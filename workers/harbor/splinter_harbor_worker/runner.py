@@ -114,7 +114,8 @@ def _register_models(gateway: ModelGateway, specs: list[ExecutionSpec], out: Pat
         if spec.model is None:
             continue
         token = os.environ.get(spec.model.token_env) if spec.model.token_env else None
-        upstream = Upstream(spec.model.url, spec.model.model, spec.model.protocol, token)
+        upstream = Upstream(spec.model.url, spec.model.model, spec.model.protocol, token,
+                            tuple(spec.model.drop_headers))
         gateway.register(trial_name(spec), upstream, trial_dir(out, spec) / "gateway" / REQUEST_LOG)
 
 

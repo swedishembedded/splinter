@@ -47,6 +47,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
+from splinter_harbor_worker.spec import FORWARDED_HEADERS
+
 # Generation can legitimately stay silent for minutes on a slow local model; connecting cannot.
 _UPSTREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=None)
 _UPSTREAM_LIMITS = httpx.Limits(max_connections=None, max_keepalive_connections=256, keepalive_expiry=30.0)
@@ -70,6 +72,8 @@ class Upstream:
     model: str
     protocol: str
     token: str | None = None
+    # Headers of the agent's this upstream does not take (an endpoint that refuses ``anthropic-beta``); dropped.
+    drop_headers: tuple[str, ...] = ()
 
     def __repr__(self) -> str:  # the credential never reaches a log through a traceback or a debug print
         return f"Upstream({self.base_url!r}, {self.model!r}, {self.protocol!r})"
@@ -141,7 +145,9 @@ class ModelGateway:
     def _headers(self, upstream: Upstream, request: Request) -> dict[str, str]:
         headers = {"content-type": "application/json", "accept-encoding": "identity"}
         if upstream.protocol == "anthropic":
-            for name in ("anthropic-version", "anthropic-beta"):
+            for name in FORWARDED_HEADERS:
+                if name in upstream.drop_headers:
+                    continue
                 if value := request.headers.get(name):
                     headers[name] = value
             if upstream.token:

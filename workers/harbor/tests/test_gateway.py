@@ -124,3 +124,25 @@ def test_the_upstream_credential_is_never_in_a_representation_or_a_record(served
 def test_printable_strips_control_characters_and_bounds_the_length() -> None:
     assert printable("a\x00b\x1b[0m\r\nc") == "a b [0m  c"
     assert len(printable("x" * 10_000)) == 500
+
+
+def test_a_connections_dropped_headers_never_reach_its_upstream(tmp_path, stub_model) -> None:
+    gateway = ModelGateway(secret="test-secret")
+    log = tmp_path / "gateway" / "requests.jsonl"
+    gateway.register("kept", Upstream(stub_model.base_url, "m", "anthropic", UPSTREAM_KEY), log)
+    gateway.register("dropped", Upstream(stub_model.base_url, "m", "anthropic", UPSTREAM_KEY,
+                                         drop_headers=("anthropic-beta",)), log)
+    server = GatewayServer(gateway)
+    server.start()
+    try:
+        for trial in ("kept", "dropped"):
+            reply = httpx.post(f"http://127.0.0.1:{server.port}/v1/messages",
+                               headers={"x-api-key": gateway.token_for(trial), "anthropic-version": "2023-06-01",
+                                        "anthropic-beta": "some-beta"},
+                               json={"model": "x", "max_tokens": 8, "messages": []}, timeout=30)
+            assert reply.status_code == 200
+    finally:
+        server.stop()
+    kept, dropped = stub_model.posts()
+    assert kept.headers["anthropic-beta"] == "some-beta"
+    assert "anthropic-beta" not in dropped.headers and dropped.headers["anthropic-version"] == "2023-06-01"
