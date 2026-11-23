@@ -42,6 +42,12 @@ pub struct PlannedStage {
     /// Its parameters, checked against the operation's when compiled.
     #[serde(skip)]
     pub params: Value,
+    /// The collection it runs once per item of.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreach: Option<Source>,
+    /// How many of its items run at once.
+    #[serde(skip)]
+    pub concurrency: u32,
 }
 
 impl PlannedStage {

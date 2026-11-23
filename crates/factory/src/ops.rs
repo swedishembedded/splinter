@@ -34,7 +34,7 @@ use splinter_core::factory::operation::{
 };
 use splinter_core::factory::trial::{RunBudget, TimeoutPolicy};
 
-use crate::graph::{OperationSpec, Registry};
+use crate::registry::{OperationSpec, Registry};
 
 /// `tasks.pin`: the tasks of a collection, pinned into the run.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

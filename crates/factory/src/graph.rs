@@ -45,9 +45,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use splinter_core::factory::operation::{plain_name, ArtifactKind, OperationDescriptor, Port};
+use splinter_core::factory::operation::{plain_name, ArtifactKind, Port};
 
 use crate::recipe::{ModelRef, RecipeError};
+use crate::registry::{OperationSpec, Registry};
 
 /// The schema every v2 recipe names.
 pub const RECIPE_V2_SCHEMA: &str = "splinter.recipe/v2";
@@ -55,6 +56,8 @@ pub const RECIPE_V2_SCHEMA: &str = "splinter.recipe/v2";
 pub const SUBRECIPE: &str = "recipe";
 /// How deep subrecipes may nest; deeper is refused as a likely cycle.
 const MAX_NESTING: usize = 16;
+/// The most items of a fan-out that may run at once.
+pub const MAX_CONCURRENCY: u32 = 64;
 
 /// An input of the recipe: a product of a kind, read from a path of the
 /// task repository.
@@ -103,6 +106,9 @@ pub struct StageSpec {
     /// A collection the stage runs once per item of (`$item`).
     #[serde(default)]
     pub foreach: Option<String>,
+    /// How many items of `foreach` run at once (one by default).
+    #[serde(default)]
+    pub concurrency: Option<u32>,
 }
 
 fn empty_object() -> Value {
@@ -163,6 +169,8 @@ pub struct CompiledStage {
     pub params: Value,
     /// The collection it runs once per item of.
     pub foreach: Option<Source>,
+    /// How many items run at once.
+    pub concurrency: u32,
     /// The stages it consumes.
     pub depends_on: Vec<String>,
 }
@@ -180,51 +188,6 @@ pub struct CompiledPlan {
     pub stages: Vec<CompiledStage>,
     /// Its outputs.
     pub outputs: BTreeMap<String, Source>,
-}
-
-/// An operation as the compiler sees it: its contract, and how to check a
-/// stage's parameters.
-pub trait OperationSpec: Send + Sync {
-    /// Its contract.
-    fn descriptor(&self) -> OperationDescriptor;
-    /// `params` checked against the operation's own typed parameters.
-    ///
-    /// # Errors
-    /// Why they are refused (an unknown parameter, a missing or ill-typed
-    /// one).
-    fn check(&self, params: &Value) -> Result<(), String>;
-    /// The model roles `params` name.
-    fn model_roles(&self, _params: &Value) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-/// The operations a recipe may use, by name.
-#[derive(Default)]
-pub struct Registry {
-    operations: BTreeMap<String, Box<dyn OperationSpec>>,
-}
-
-impl Registry {
-    /// Add `operation`; a second one of the same name replaces the first.
-    #[must_use]
-    pub fn with(mut self, operation: impl OperationSpec + 'static) -> Self {
-        self.operations
-            .insert(operation.descriptor().name, Box::new(operation));
-        self
-    }
-
-    /// The operation named `name`.
-    #[must_use]
-    pub fn get(&self, name: &str) -> Option<&dyn OperationSpec> {
-        self.operations.get(name).map(AsRef::as_ref)
-    }
-
-    /// Every operation's name.
-    #[must_use]
-    pub fn names(&self) -> Vec<&str> {
-        self.operations.keys().map(String::as_str).collect()
-    }
 }
 
 /// `text` as a reference.
@@ -383,6 +346,14 @@ impl Compiler<'_> {
                 }
             }
         });
+        let concurrency = self.concurrency(id, stage, operation, foreach.is_some());
+        if operation.executor().is_some() && descriptor.outputs.len() != 1 {
+            self.problems.push(format!(
+                "stage {id}: {} computes one product, and it declares {} outputs",
+                descriptor.name,
+                descriptor.outputs.len()
+            ));
+        }
         let mut inputs = BTreeMap::new();
         for name in stage.inputs.keys() {
             if descriptor.input(name).is_none() {
@@ -447,8 +418,44 @@ impl Compiler<'_> {
             inputs,
             params,
             foreach,
+            concurrency,
             depends_on: depends_on.into_iter().collect(),
         });
+    }
+
+    /// The bound on a fan-out's items at once, checked: only a stage that
+    /// runs once per item has one, only an operation the controller runs as
+    /// a computation runs once per item, and the bound is a number of
+    /// workers this machine can hold.
+    fn concurrency(
+        &mut self,
+        id: &str,
+        stage: &StageSpec,
+        operation: &dyn OperationSpec,
+        fans_out: bool,
+    ) -> u32 {
+        if fans_out && operation.executor().is_none() {
+            self.problems.push(format!(
+                "stage {id}: {} does not run once per item; foreach is for an operation that computes one product from its inputs",
+                stage.uses
+            ));
+        }
+        match stage.concurrency {
+            None => 1,
+            Some(_) if !fans_out => {
+                self.problems.push(format!(
+                    "stage {id}: concurrency bounds a foreach, and the stage has none"
+                ));
+                1
+            }
+            Some(n) if n == 0 || n > MAX_CONCURRENCY => {
+                self.problems.push(format!(
+                    "stage {id}: concurrency is {n}; it is from 1 to {MAX_CONCURRENCY}"
+                ));
+                1
+            }
+            Some(n) => n,
+        }
     }
 
     fn check_kind(
@@ -493,6 +500,11 @@ impl Compiler<'_> {
         {
             self.problems.push(format!(
                 "stage {id}: a subrecipe stage takes only `recipe`, not {extra:?}"
+            ));
+        }
+        if stage.foreach.is_some() || stage.concurrency.is_some() {
+            self.problems.push(format!(
+                "stage {id}: a subrecipe runs once; foreach and concurrency belong on its stages"
             ));
         }
         let Some(path) = stage.params.get("recipe").and_then(Value::as_str) else {

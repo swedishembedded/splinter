@@ -20,6 +20,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::{digest_of, Digest};
@@ -37,6 +38,7 @@ use crate::ops::{
 };
 use crate::plan::{Plan, PlannedStage};
 use crate::recipe::{ModelRef, RecipeError};
+use crate::registry::Registry;
 
 /// The schema of a [`Lock`].
 pub const LOCK_SCHEMA: &str = "splinter.lock/v2";
@@ -82,6 +84,9 @@ pub struct Resolved {
     pub lock: Lock,
     /// The graph of stages.
     pub plan: Plan,
+    /// The operations the recipe was compiled against; the run computes
+    /// with theirs.
+    pub registry: Arc<Registry>,
 }
 
 impl Resolved {
@@ -173,6 +178,20 @@ pub fn resolve(
     recipe_text: &str,
     connections: Connections,
 ) -> Result<Resolved, RecipeError> {
+    resolve_with(repository, recipe_text, connections, ops::registry())
+}
+
+/// [`resolve`] against the operations of `registry` (the built-in ones and
+/// any other the run is given).
+///
+/// # Errors
+/// As [`resolve`].
+pub fn resolve_with(
+    repository: &Path,
+    recipe_text: &str,
+    connections: Connections,
+    registry: Registry,
+) -> Result<Resolved, RecipeError> {
     let load = |path: &str| -> Result<String, String> {
         if !plain_relative(path) {
             return Err(format!(
@@ -182,7 +201,7 @@ pub fn resolve(
         std::fs::read_to_string(repository.join(path)).map_err(|e| e.to_string())
     };
     // What compiled is checked further, so every problem is reported at once.
-    let (compiled, problems) = graph::compile_partly(recipe_text, &ops::registry(), &load)?;
+    let (compiled, problems) = graph::compile_partly(recipe_text, &registry, &load)?;
     let mut reader = Reader {
         repository,
         files: BTreeMap::new(),
@@ -202,11 +221,19 @@ pub fn resolve(
                 work: String::new(),
                 inputs: s.inputs.clone(),
                 params: s.params.clone(),
+                foreach: s.foreach.clone(),
+                concurrency: s.concurrency,
             })
             .collect(),
     };
     for stage in &plan.stages {
         check(stage, &compiled, &mut reader, &mut found);
+        if registry
+            .get(&stage.operation)
+            .is_some_and(|o| o.executor().is_some())
+        {
+            pin_inputs(stage, &compiled, &mut reader);
+        }
     }
     for stage in &mut plan.stages {
         stage.work = work(stage, &compiled, &found.collections);
@@ -249,7 +276,38 @@ pub fn resolve(
         connections,
         lock,
         plan,
+        registry: Arc::new(registry),
     })
+}
+
+/// The recipe inputs a computed stage reads (bound to a port or fanned out
+/// over), each pinned in the lock by the digest of what the run copies.
+fn pin_inputs(stage: &PlannedStage, compiled: &CompiledPlan, reader: &mut Reader<'_>) {
+    let named = stage.inputs.values().flatten().chain(stage.foreach.iter());
+    for source in named {
+        let graph::Source::Input(name) = source else {
+            continue;
+        };
+        let Some(spec) = compiled.inputs.get(name) else {
+            continue;
+        };
+        if reader.files.contains_key(&spec.path) {
+            continue;
+        }
+        if !plain_relative(&spec.path) {
+            reader.problems.push(format!(
+                "input {name}: {:?} is not a plain path relative to the repository",
+                spec.path
+            ));
+            continue;
+        }
+        match crate::tree::entry_digest(&reader.repository.join(&spec.path)) {
+            Ok(digest) => {
+                reader.files.insert(spec.path.clone(), digest);
+            }
+            Err(e) => reader.problems.push(format!("input {name}: {e}")),
+        }
+    }
 }
 
 /// Every model role bound: a champion loaded (and its base's connection
@@ -542,7 +600,23 @@ fn work(
                 "record the candidates without promoting any".into()
             }
         }
-        _ => String::new(),
+        operation => match &stage.foreach {
+            Some(collection) => format!(
+                "{operation} once per item of {}, {} at a time",
+                source_name(collection),
+                stage.concurrency
+            ),
+            None => format!("{operation} once"),
+        },
+    }
+}
+
+/// A source as the recipe names it.
+fn source_name(source: &graph::Source) -> String {
+    match source {
+        graph::Source::Input(name) => format!("$inputs.{name}"),
+        graph::Source::Stage { stage, port } => format!("$stages.{stage}.{port}"),
+        graph::Source::Item => "$item".into(),
     }
 }
 

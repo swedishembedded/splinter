@@ -13,7 +13,9 @@ use splinter_core::factory::execution::Isolation;
 use splinter_core::factory::operation::{
     ArtifactKind, OperationDescriptor, Port, Reproducibility, OPERATION_SCHEMA,
 };
-use splinter_factory::graph::{compile, OperationSpec, Registry, Source};
+use splinter_factory::execute::{Call, Execute, Outcome};
+use splinter_factory::graph::{compile, Source};
+use splinter_factory::registry::{OperationSpec, Registry};
 
 fn port(name: &str, kind: ArtifactKind, many: bool, optional: bool) -> Port {
     Port {
@@ -92,6 +94,20 @@ impl OperationSpec for Use {
         serde_json::from_value::<UseParams>(params.clone())
             .map(|p| vec![p.model])
             .unwrap_or_default()
+    }
+    fn executor(&self) -> Option<&dyn Execute> {
+        Some(self)
+    }
+}
+
+/// `files.use` computes (so it may run once per item); compiling never
+/// runs it.
+impl Execute for Use {
+    fn implementation(&self) -> String {
+        "test".into()
+    }
+    fn execute(&self, _: &Call<'_>) -> Result<Outcome, String> {
+        Err("compiled, never run".into())
     }
 }
 

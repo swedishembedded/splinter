@@ -27,6 +27,7 @@
 pub mod attempt;
 pub mod execution;
 pub mod identity;
+pub mod items;
 pub mod operation;
 pub mod product;
 pub mod schemas;

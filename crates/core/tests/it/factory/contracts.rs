@@ -91,6 +91,8 @@ fn every_golden_fixture_satisfies_its_schema_and_round_trips() {
         round_trips("attempt", "splinter.attempt/1");
     let operation: splinter_core::factory::operation::OperationDescriptor =
         round_trips("operation", "splinter.operation/1");
+    let items: splinter_core::factory::items::ItemIndex = round_trips("items", "splinter.items/1");
+    items.validate().expect("the golden index is valid");
     assert!(
         operation.problems().is_empty(),
         "{:?}",
@@ -200,4 +202,33 @@ fn an_operation_contract_refuses_loose_parameters_and_ambiguous_ports() {
     ] {
         assert!(text.contains(expected), "{expected:?} missing from {text}");
     }
+}
+
+#[test]
+fn an_item_index_refuses_an_escaping_or_repeated_item() {
+    use splinter_core::factory::items::{Item, ItemIndex, ItemsError, Rejection};
+    let item = |id: &str, path: &str| Item {
+        id: id.into(),
+        path: path.into(),
+    };
+    let index = ItemIndex::new(vec![item("b", "b"), item("a", "a")], vec![]).expect("valid");
+    assert_eq!(index.items[0].id, "a", "kept in id order");
+    assert!(matches!(
+        ItemIndex::new(vec![item("..", "x")], vec![]),
+        Err(ItemsError::BadId(_))
+    ));
+    assert!(matches!(
+        ItemIndex::new(vec![item("a", "../x")], vec![]),
+        Err(ItemsError::BadPath { .. })
+    ));
+    assert!(matches!(
+        ItemIndex::new(
+            vec![item("a", "a")],
+            vec![Rejection {
+                id: "a".into(),
+                reason: "no".into()
+            }]
+        ),
+        Err(ItemsError::Duplicate(_))
+    ));
 }

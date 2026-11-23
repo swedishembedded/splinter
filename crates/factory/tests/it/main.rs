@@ -8,6 +8,7 @@
 mod brain_trainer;
 mod factory_run;
 mod fakes;
+mod foreach;
 mod generations;
 mod golden;
 mod graph;

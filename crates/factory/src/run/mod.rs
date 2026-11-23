@@ -21,6 +21,7 @@
 //! continue on changed inputs; a fresh run (or a fork) is how a change is
 //! made.
 
+mod compute;
 pub mod dataset;
 pub mod eval;
 mod pass;
@@ -221,6 +222,19 @@ pub struct RunManifest {
     pub stages: Vec<StageEntry>,
 }
 
+/// Where [`Factory::begin`] leaves a stage.
+pub(crate) enum Begun {
+    /// Its product is committed already.
+    Reused(ProductManifest),
+    /// It runs: produce into `staging`, then [`Factory::finish`].
+    Fresh {
+        /// Its run-state version.
+        version: u64,
+        /// Where to produce.
+        staging: Staging,
+    },
+}
+
 /// A controller over one run directory.
 pub struct Factory<'a> {
     pub(crate) resolved: &'a Resolved,
@@ -356,25 +370,15 @@ impl<'a> Factory<'a> {
     }
 
     fn stage(&mut self, stage: &PlannedStage) -> Result<StageEntry, RunError> {
-        let identity = match stage.operation.as_str() {
-            names::PIN => tasks::identity(self, stage)?,
-            names::ATTEMPTS => rollout::identity(self, stage)?,
-            names::PROJECT => dataset::identity(self, stage)?,
-            names::TRAIN => training::identity(self, stage)?,
-            names::EVALUATION => eval::identity(self, stage)?,
-            names::PROMOTION => release::identity(self, stage)?,
-            other => return Err(stage_error(&stage.key, format!("no operation {other}"))),
+        let (identity, (manifest, computed)) = match stage.operation.as_str() {
+            names::PIN
+            | names::ATTEMPTS
+            | names::PROJECT
+            | names::TRAIN
+            | names::EVALUATION
+            | names::PROMOTION => self.built_in(stage)?,
+            _ => compute::stage(self, stage)?,
         };
-        let produce = |factory: &Self, staging: &Staging| match stage.operation.as_str() {
-            names::PIN => tasks::produce(factory, stage, staging),
-            names::ATTEMPTS => rollout::produce(factory, stage, &identity, staging),
-            names::PROJECT => dataset::produce(factory, stage, staging),
-            names::TRAIN => training::produce(factory, stage, &identity, staging),
-            names::EVALUATION => eval::produce(factory, stage, &identity, staging),
-            _ => release::produce(factory, stage, staging),
-        };
-        let (manifest, computed) =
-            self.commit(&stage.key, &stage.operation, &identity, &produce)?;
         let id = identity.digest();
         let product = manifest.digest();
         self.done.insert(stage.key.clone(), (id.clone(), manifest));
@@ -385,6 +389,31 @@ impl<'a> Factory<'a> {
             product,
             computed,
         })
+    }
+
+    /// A built-in operation's stage: its identity and committed product.
+    fn built_in(
+        &self,
+        stage: &PlannedStage,
+    ) -> Result<(StageIdentity, (ProductManifest, bool)), RunError> {
+        let identity = match stage.operation.as_str() {
+            names::PIN => tasks::identity(self, stage)?,
+            names::ATTEMPTS => rollout::identity(self, stage)?,
+            names::PROJECT => dataset::identity(self, stage)?,
+            names::TRAIN => training::identity(self, stage)?,
+            names::EVALUATION => eval::identity(self, stage)?,
+            _ => release::identity(self, stage)?,
+        };
+        let produce = |factory: &Self, staging: &Staging| match stage.operation.as_str() {
+            names::PIN => tasks::produce(factory, stage, staging),
+            names::ATTEMPTS => rollout::produce(factory, stage, &identity, staging),
+            names::PROJECT => dataset::produce(factory, stage, staging),
+            names::TRAIN => training::produce(factory, stage, &identity, staging),
+            names::EVALUATION => eval::produce(factory, stage, &identity, staging),
+            _ => release::produce(factory, stage, staging),
+        };
+        let committed = self.commit(&stage.key, &stage.operation, &identity, &produce)?;
+        Ok((identity, committed))
     }
 
     /// The committed product of the stage `identity` viewed at `key`:
@@ -399,6 +428,25 @@ impl<'a> Factory<'a> {
         identity: &StageIdentity,
         produce: &dyn Fn(&Self, &Staging) -> Result<(), RunError>,
     ) -> Result<(ProductManifest, bool), RunError> {
+        match self.begin(key, operation, identity)? {
+            Begun::Reused(manifest) => Ok((manifest, false)),
+            Begun::Fresh { version, staging } => {
+                let produced = produce(self, &staging);
+                self.finish(key, identity, version, staging, produced)
+                    .map(|manifest| (manifest, true))
+            }
+        }
+    }
+
+    /// The first half of [`Self::commit`]: the product of `identity`
+    /// reused, or the stage recorded as running with an empty staging area
+    /// to produce it in.
+    pub(crate) fn begin(
+        &self,
+        key: &str,
+        operation: &str,
+        identity: &StageIdentity,
+    ) -> Result<Begun, RunError> {
         let id = identity.digest();
         let record = self
             .state
@@ -415,12 +463,27 @@ impl<'a> Factory<'a> {
                     unix_now(),
                 )?;
             }
-            return Ok((manifest, false));
+            return Ok(Begun::Reused(manifest));
         }
         let version = self.to_running(&id, record.version, record.state)?;
         let staging = self.products.begin_staging()?;
-        if let Err(error) = produce(self, &staging)
-            .and_then(|()| write_json(&staging.path().join("stage.json"), identity))
+        Ok(Begun::Fresh { version, staging })
+    }
+
+    /// The second half of [`Self::commit`]: what was `produced` into
+    /// `staging` published as the product of `identity`, or the stage
+    /// recorded as failed (a cancelled one stays running, for the resume).
+    pub(crate) fn finish(
+        &self,
+        key: &str,
+        identity: &StageIdentity,
+        version: u64,
+        staging: Staging,
+        produced: Result<(), RunError>,
+    ) -> Result<ProductManifest, RunError> {
+        let id = identity.digest();
+        if let Err(error) =
+            produced.and_then(|()| write_json(&staging.path().join("stage.json"), identity))
         {
             if !matches!(error, RunError::Cancelled) {
                 let failed = StageOutcome::Error(error.to_string());
@@ -450,7 +513,7 @@ impl<'a> Factory<'a> {
         if work.exists() {
             std::fs::remove_dir_all(&work).map_err(io(&work))?;
         }
-        Ok((manifest, true))
+        Ok(manifest)
     }
 
     /// Move a stage to running from wherever it stands; returns its version.

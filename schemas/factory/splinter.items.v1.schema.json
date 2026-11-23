@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ItemIndex",
+  "description": "The items of a collection product.",
+  "type": "object",
+  "properties": {
+    "items": {
+      "description": "The items, in id order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Item"
+      }
+    },
+    "rejected": {
+      "description": "The items rejected, in id order.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Rejection"
+      }
+    },
+    "schema": {
+      "description": "Always [`ITEMS_SCHEMA`].",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "items"
+  ],
+  "$defs": {
+    "Item": {
+      "description": "One item of a collection.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Its id, stable across runs: one path component.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Where it is, relative to the product's root.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path"
+      ]
+    },
+    "Rejection": {
+      "description": "An item an operation refused to produce anything for.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The item's id.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why, in the operation's words.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "reason"
+      ]
+    }
+  }
+}

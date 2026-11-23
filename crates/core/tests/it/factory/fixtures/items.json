@@ -1,0 +1,10 @@
+{
+  "schema": "splinter.items/1",
+  "items": [
+    { "id": "a.txt", "path": "a.txt" },
+    { "id": "chapter-02", "path": "chapter-02" }
+  ],
+  "rejected": [
+    { "id": "b.txt", "reason": "the document has no text" }
+  ]
+}

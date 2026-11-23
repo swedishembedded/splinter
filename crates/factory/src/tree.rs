@@ -40,46 +40,148 @@ struct Entry {
 /// A file or directory cannot be read.
 pub fn tree_digest(dir: &Path) -> Result<Digest, TreeError> {
     let mut entries = Vec::new();
-    walk(dir, dir, &mut entries)?;
+    walk(dir, dir, true, &mut entries)?;
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(digest_of(&entries))
 }
 
-fn walk(root: &Path, dir: &Path, entries: &mut Vec<Entry>) -> Result<(), TreeError> {
+/// The digest of a recipe input or a collection's item at `path`: a
+/// directory's tree without the hidden entries at its top (`.git`), or one
+/// file as the tree of a directory holding only it, so a file and its copy
+/// into a directory have the same digest. A symbolic link is refused: an
+/// input is the content it names, never a pointer out of it.
+///
+/// # Errors
+/// It cannot be read, or holds a symbolic link.
+pub fn entry_digest(path: &Path) -> Result<Digest, TreeError> {
+    let fail = |source| TreeError {
+        path: path.to_path_buf(),
+        source,
+    };
+    let meta = std::fs::symlink_metadata(path).map_err(fail)?;
+    let mut entries = Vec::new();
+    if meta.is_dir() {
+        walk(path, path, false, &mut entries)?;
+    } else {
+        let root = path.parent().unwrap_or(Path::new("."));
+        entry(root, path, &mut entries)?;
+    }
+    if let Some(link) = entries.iter().find(|e| e.link.is_some()) {
+        return Err(TreeError {
+            path: path.join(&link.path),
+            source: std::io::Error::other("a symbolic link is not an input"),
+        });
+    }
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(digest_of(&entries))
+}
+
+/// Copy the input at `path` into the directory `dst` as [`entry_digest`]
+/// sees it: a directory's entries but the hidden ones at its top, or the
+/// one file. Copied, never linked, so nothing the run does to its products
+/// reaches the repository's files.
+///
+/// # Errors
+/// It cannot be read or written, or holds a symbolic link.
+pub fn copy_input(path: &Path, dst: &Path) -> Result<(), TreeError> {
     let fail = |path: &Path| {
         let path = path.to_path_buf();
         move |source| TreeError { path, source }
     };
-    for entry in std::fs::read_dir(dir).map_err(fail(dir))? {
-        let entry = entry.map_err(fail(dir))?;
-        let path = entry.path();
-        let kind = entry.file_type().map_err(fail(&path))?;
-        let relative = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-        if kind.is_symlink() {
-            let target = std::fs::read_link(&path).map_err(fail(&path))?;
-            entries.push(Entry {
-                path: relative,
-                executable: false,
-                content: None,
-                link: Some(target.to_string_lossy().into()),
-            });
-        } else if kind.is_dir() {
-            walk(root, &path, entries)?;
-        } else {
-            let file = std::fs::File::open(&path).map_err(fail(&path))?;
-            let mode = file.metadata().map_err(fail(&path))?.permissions().mode();
-            let content = Digest::of_reader(file).map_err(fail(&path))?;
-            entries.push(Entry {
-                path: relative,
-                executable: mode & 0o111 != 0,
-                content: Some(content),
-                link: None,
-            });
+    std::fs::create_dir_all(dst).map_err(fail(dst))?;
+    if !std::fs::symlink_metadata(path)
+        .map_err(fail(path))?
+        .is_dir()
+    {
+        let name = path.file_name().unwrap_or_default();
+        return copy_entry(path, &dst.join(name));
+    }
+    for item in std::fs::read_dir(path).map_err(fail(path))? {
+        let item = item.map_err(fail(path))?;
+        if !item.file_name().to_string_lossy().starts_with('.') {
+            copy_entry(&item.path(), &dst.join(item.file_name()))?;
         }
+    }
+    Ok(())
+}
+
+fn copy_entry(from: &Path, to: &Path) -> Result<(), TreeError> {
+    let fail = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| TreeError { path, source }
+    };
+    let kind = std::fs::symlink_metadata(from)
+        .map_err(fail(from))?
+        .file_type();
+    if kind.is_symlink() {
+        return Err(TreeError {
+            path: from.to_path_buf(),
+            source: std::io::Error::other("a symbolic link is not an input"),
+        });
+    }
+    if kind.is_dir() {
+        std::fs::create_dir_all(to).map_err(fail(to))?;
+        for item in std::fs::read_dir(from).map_err(fail(from))? {
+            let item = item.map_err(fail(from))?;
+            copy_entry(&item.path(), &to.join(item.file_name()))?;
+        }
+        return Ok(());
+    }
+    std::fs::copy(from, to).map(|_| ()).map_err(fail(to))
+}
+
+/// Every entry under `dir`, recursively; `hidden` keeps the hidden entries
+/// of `dir` itself (always kept below it).
+fn walk(root: &Path, dir: &Path, hidden: bool, entries: &mut Vec<Entry>) -> Result<(), TreeError> {
+    let fail = |path: &Path| {
+        let path = path.to_path_buf();
+        move |source| TreeError { path, source }
+    };
+    for item in std::fs::read_dir(dir).map_err(fail(dir))? {
+        let item = item.map_err(fail(dir))?;
+        if !hidden && item.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let path = item.path();
+        if item.file_type().map_err(fail(&path))?.is_dir() {
+            walk(root, &path, true, entries)?;
+        } else {
+            entry(root, &path, entries)?;
+        }
+    }
+    Ok(())
+}
+
+/// The entry of the file or symbolic link at `path`, named relative to
+/// `root`.
+fn entry(root: &Path, path: &Path, entries: &mut Vec<Entry>) -> Result<(), TreeError> {
+    let fail = |source| TreeError {
+        path: path.to_path_buf(),
+        source,
+    };
+    let relative = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    if std::fs::symlink_metadata(path).map_err(fail)?.is_symlink() {
+        let target = std::fs::read_link(path).map_err(fail)?;
+        entries.push(Entry {
+            path: relative,
+            executable: false,
+            content: None,
+            link: Some(target.to_string_lossy().into()),
+        });
+    } else {
+        let file = std::fs::File::open(path).map_err(fail)?;
+        let mode = file.metadata().map_err(fail)?.permissions().mode();
+        let content = Digest::of_reader(file).map_err(fail)?;
+        entries.push(Entry {
+            path: relative,
+            executable: mode & 0o111 != 0,
+            content: Some(content),
+            link: None,
+        });
     }
     Ok(())
 }
