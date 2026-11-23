@@ -121,6 +121,8 @@ pub struct ProcessSandbox {
     landlock: bool,
     /// Paths every command may read, beside the system and its tree.
     read_only: Vec<PathBuf>,
+    /// Paths every command may write, beside its tree and home.
+    read_write: Vec<PathBuf>,
 }
 
 impl ProcessSandbox {
@@ -166,6 +168,7 @@ impl ProcessSandbox {
             require_private_proc: false,
             landlock: crate::landlock::abi_version().is_some(),
             read_only: Vec::new(),
+            read_write: Vec::new(),
         }
     }
 
@@ -243,6 +246,14 @@ impl ProcessSandbox {
         self
     }
 
+    /// Lets every command write (and read) `paths`: state a program the
+    /// caller runs keeps between runs.
+    #[must_use]
+    pub fn read_write(mut self, paths: Vec<PathBuf>) -> Self {
+        self.read_write = paths;
+        self
+    }
+
     /// Lets commands use the network. Off by default: a command cannot
     /// connect anywhere (a brain server on the loopback included) and a
     /// kernel that cannot deny the network refuses to run it. The
@@ -283,6 +294,7 @@ impl ProcessSandbox {
             home.to_path_buf(),
             PathBuf::from("/dev"),
         ];
+        read_write.extend(self.read_write.iter().cloned());
         for name in TOOLCHAIN_HOMES {
             // A toolchain's home is written to (cargo locks its registry).
             read_write.extend(self.env.get(name).map(PathBuf::from));

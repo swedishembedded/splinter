@@ -314,13 +314,15 @@ An operator file is the same on every machine; what a machine lets an operator
 have beyond its inputs and the repository is the machine's to say, in
 `~/.config/splinter/operators.yaml`. An operator that declares `network: true`
 or needs variables (`env: [NAME]`) is refused before anything runs unless its
-grant says so; a grant may also let it read paths outside the repository:
+grant says so; a grant may also let it read paths outside the repository, and
+write the paths where it keeps state between runs:
 
 ```yaml
 schema: splinter.operator-grants/v1
 grants:
   exam.sealed:
     read: [/srv/bench/sealed, /srv/models]
+    write: [/srv/bench/private]
     network: true
     env: [BENCH_BRAIN_KEY]
 ```

@@ -284,3 +284,33 @@ fn a_command_reads_the_paths_it_is_granted_and_writes_none_of_them() {
     assert_ne!(written.exit_code, Some(0), "{written:?}");
     assert!(!granted.join("out.txt").exists());
 }
+
+/// A command writes a path it is granted to write.
+#[test]
+fn a_command_writes_the_paths_it_is_granted_to_write() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let scratch = Scratch::new("granted-writes");
+    let tree = scratch.0.join("tree");
+    let state = scratch.0.join("state");
+    for dir in [&tree, &state] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let sandbox = ProcessSandbox::new(&scratch.0, caller_env(), &[], Limits::default())
+        .read_write(vec![state.clone()]);
+    let call = splinter_sandbox::CommandCall {
+        argv: vec![
+            "sh".into(),
+            "-c".into(),
+            format!("echo kept > {}", state.join("burn.json").display()),
+        ],
+        stdin: None,
+    };
+    let ran = sandbox.run_command(&tree, &call).unwrap();
+    assert_eq!(ran.exit_code, Some(0), "{ran:?}");
+    assert_eq!(
+        std::fs::read_to_string(state.join("burn.json")).unwrap(),
+        "kept\n"
+    );
+}

@@ -13,7 +13,8 @@
 //! the operator needs (the network, environment variables by name). What a
 //! machine lets it have is the machine's to say, here: paths it may read
 //! besides its inputs and the repository (a sealed task set, a model store),
-//! the network, and variables of the controller's environment passed through
+//! paths it may write (the state it keeps between runs), the network, and
+//! variables of the controller's environment passed through
 //! by name (never a value written here). An operator that needs what it is
 //! not granted is refused before anything runs.
 //!
@@ -22,6 +23,7 @@
 //! grants:
 //!   exam.sealed:
 //!     read: [/srv/bench/sealed, /srv/models]
+//!     write: [/srv/bench/private]
 //!     network: true
 //!     env: [BENCH_BRAIN_URL, BENCH_BRAIN_KEY]
 //! ```
@@ -41,6 +43,10 @@ pub struct Grant {
     /// Absolute paths it may read (never write).
     #[serde(default)]
     pub read: Vec<PathBuf>,
+    /// Absolute paths it may write (and read): state it keeps between runs,
+    /// as an examiner's record of the exams it gave.
+    #[serde(default)]
+    pub write: Vec<PathBuf>,
     /// Whether it may reach the network.
     #[serde(default)]
     pub network: bool,
@@ -83,11 +89,13 @@ impl Grants {
             return Err(format!("not a {GRANTS_SCHEMA} file"));
         }
         for (name, grant) in &file.grants {
-            if let Some(path) = grant.read.iter().find(|p| !p.is_absolute()) {
-                return Err(format!(
-                    "{name}: read path {} is not absolute",
-                    path.display()
-                ));
+            if let Some(path) = grant
+                .read
+                .iter()
+                .chain(&grant.write)
+                .find(|p| !p.is_absolute())
+            {
+                return Err(format!("{name}: path {} is not absolute", path.display()));
             }
             if let Some(var) = grant.env.iter().find(|v| !variable_name(v)) {
                 return Err(format!("{name}: {var:?} is not a variable name"));

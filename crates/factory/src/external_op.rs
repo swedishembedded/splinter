@@ -303,6 +303,7 @@ impl Execute for External {
         };
         let sandbox = ProcessSandbox::new(work.path().join("calls"), BTreeMap::new(), &[], limits)
             .granted_env(variables)
+            .read_write(self.grant.write.clone())
             .read_only(readable)
             .allow_network(self.file.network);
         let mut argv = vec![self.program()];
