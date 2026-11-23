@@ -13,9 +13,12 @@
 
 use std::collections::BTreeMap;
 
+use crate::champion;
 use crate::collection::LoadedCollection;
 use crate::eval_plan::EvalPlan;
-use crate::ops::AttemptParams;
+use crate::graph::CompiledPlan;
+use crate::ops::{self, names, AttemptParams, ProjectParams};
+use crate::plan::PlannedStage;
 use crate::registry::Registry;
 
 /// Why an evaluation under `plan` (at `path`) has no one source of tasks:
@@ -91,4 +94,110 @@ pub(crate) fn authority_problems(
                 })
         })
         .collect()
+}
+
+/// What is wrong with a `dataset.project` stage: its sources, its split,
+/// and its objective's parameters and sources.
+pub(crate) fn projection_problems(
+    stage: &PlannedStage,
+    params: &ProjectParams,
+    compiled: &CompiledPlan,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if stage.sources("attempts").is_empty() {
+        out.push("projects no attempts".to_owned());
+    }
+    if params.validation.as_ref().is_some_and(|v| v.percent >= 100) {
+        out.push("holds out every record for validation".to_owned());
+    }
+    if !ops::OBJECTIVES.contains(&params.objective.as_str()) {
+        out.push(format!(
+            "objective {} is not one of {:?}",
+            params.objective,
+            ops::OBJECTIVES
+        ));
+    }
+    if params.preference.is_some() && params.objective != "preference" {
+        out.push("gives preference options to another objective".to_owned());
+    }
+    if params.objective != "sft" {
+        // The views pair and weigh attempts as they were made: a
+        // hinted or continued one would teach what the hint showed.
+        let defaults = ops::params::<ProjectParams>(&serde_json::json!({
+            "target": params.target, "seed": params.seed
+        }))
+        .ok();
+        if defaults
+            .is_some_and(|d| d.projection != params.projection || d.admission != params.admission)
+            || params.max_block.is_some()
+        {
+            out.push(format!(
+                    "projection, admission and max_block are an SFT dataset's; a {} dataset is projected by its own view",
+                    params.objective
+                ),
+            );
+        }
+        for source in stage.sources("attempts") {
+            let attempts = compiled
+                .stages
+                .iter()
+                .find(|s| s.id == source && s.operation == names::ATTEMPTS);
+            let shown = attempts.is_some_and(|s| {
+                s.inputs.contains_key("continue_from")
+                    || ops::params::<AttemptParams>(&s.params)
+                        .is_ok_and(|p| p.hint.is_some() || p.harness.is_some())
+            });
+            if shown {
+                out.push(format!("{source} is hinted, continued or runs a harness; a {} dataset is projected only from attempts made as the target will be asked", params.objective),
+                );
+            }
+        }
+    }
+    if params.objective == "sft" && params.projection == "native-sft" {
+        for source in stage.sources("attempts") {
+            let harnessed = compiled
+                .stages
+                .iter()
+                .find(|s| s.id == source && s.operation == names::ATTEMPTS)
+                .and_then(|s| ops::params::<AttemptParams>(&s.params).ok())
+                .is_some_and(|p| p.harness.is_some());
+            if harnessed {
+                out.push(format!("{source} runs a harness, which records no model requests to project natively; use projection: portable-sft"),
+                );
+            }
+        }
+    }
+    if compiled
+        .models
+        .get(&params.target)
+        .is_some_and(champion::is_champion)
+    {
+        out.push("a champion is served, never a dataset's target: name the base model".to_owned());
+    }
+    out
+}
+
+/// A `model.train` stage given a dataset of an objective it does not train.
+pub(crate) fn trained_objective_problems(
+    stage: &PlannedStage,
+    compiled: &CompiledPlan,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    // The trainer fine-tunes on chat records; a dataset of another
+    // objective needs the trainer of its regime.
+    for source in stage.sources("dataset") {
+        let objective = compiled
+            .stages
+            .iter()
+            .find(|s| s.id == source && s.operation == names::PROJECT)
+            .and_then(|s| ops::params::<ProjectParams>(&s.params).ok())
+            .map(|p| p.objective)
+            .filter(|o| o != "sft");
+        if let Some(objective) = objective {
+            out.push(format!(
+                "{source} is a {objective} dataset; model.train trains SFT datasets"
+            ));
+        }
+    }
+    out
 }

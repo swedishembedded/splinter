@@ -67,7 +67,14 @@ pub fn verdict_of(experience: &ExperienceId, trial: &TrialResult) -> Annotation 
         body: AnnotationBody::Verdict {
             outcome: outcome(trial),
             strength: Strength::Executable,
-            evidence: json!({ "grade": trial.grade, "slot": trial.slot, "guided": trial.guided }),
+            // What a view places the attempt by: its trial, its task and
+            // version, the model, the verifier's metrics.
+            evidence: json!({
+                "grade": trial.grade, "slot": trial.slot, "guided": trial.guided,
+                "trial": trial.slot.to_string(),
+                "task": { "id": trial.task, "digest": trial.task_digest },
+                "model": trial.model, "metrics": trial.grade.metrics,
+            }),
         },
     }
 }

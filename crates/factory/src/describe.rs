@@ -133,13 +133,21 @@ pub(crate) fn work(
         names::PROJECT => stage.params::<ProjectParams>().map_or_else(
             |_| String::new(),
             |p| {
-                format!(
-                    "{} {} records of {} attempts for {}",
-                    p.projection,
-                    p.objective,
-                    p.admission,
-                    model(&p.target)
-                )
+                if p.objective == "sft" {
+                    format!(
+                        "{} {} records of {} attempts for {}",
+                        p.projection,
+                        p.objective,
+                        p.admission,
+                        model(&p.target)
+                    )
+                } else {
+                    format!(
+                        "{} records of verified attempts for {}",
+                        p.objective,
+                        model(&p.target)
+                    )
+                }
             },
         ),
         names::TRAIN => stage.params::<TrainParams>().map_or_else(

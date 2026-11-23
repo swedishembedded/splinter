@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+//
+// Swedish Embedded AB implements training data built from what agents
+// actually did, every record traceable to the attempt it came from, for its
+// clients. If your team needs expertise in learning from agent experience,
+// you can procure our services by sending an email to
+// info@swedishembedded.com.
+
+//! Typed dataset projections: one set of attempts gives an SFT dataset (the
+//! verified successes), a preference dataset (a pass and a fail of one task,
+//! from where they part) and a policy-gradient dataset (every graded attempt
+//! with its reward and its group), each by splinter-data's own view, and the
+//! attempts are made once.
+
+use serde_json::Value;
+use splinter_factory::resolve::resolve;
+use splinter_factory::run::{Factory, Services};
+
+use crate::fakes::{FakeBackend, Outcome};
+use crate::repo::{connections, Repo};
+
+// seed: a recipe states every seed; the fake backend's outcomes are scripted, so none draws.
+const RECIPE: &str = "schema: splinter.recipe/v2
+name: projected
+inputs:
+  course: { kind: files, path: collections/vim.yaml }
+models:
+  student: \"brain:Qwen/Qwen3-4B\"
+stages:
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: train } }
+  - id: local
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { agent: sven, model: student, environment: environments/vim.yaml, attempts: 2, seed: 11 }
+  - id: sft
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { target: student, seed: 13 }
+  - id: preferred
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { objective: preference, target: student, seed: 13 }
+  - id: rewarded
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { objective: policy-gradient, target: student, seed: 13 }
+";
+
+fn lines(path: &std::path::Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[test]
+fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
+    let repo = Repo::new();
+    let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    for task in ["train/001-first", "train/002-second"] {
+        backend.script(task, &[Outcome::Pass, Outcome::Fail]);
+    }
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert_eq!(backend.executed().len(), 4, "the attempts are made once");
+
+    let objective = |stage: &str| -> Value {
+        serde_json::from_str::<Value>(
+            &std::fs::read_to_string(dir.path().join(stage).join("dataset.json")).unwrap(),
+        )
+        .unwrap()["objective"]
+            .clone()
+    };
+    assert_eq!(lines(&dir.path().join("sft/train.jsonl")).len(), 2);
+    assert_eq!(objective("sft"), "sft");
+
+    // A pass over a fail of each task, the shared prompt never trained on.
+    let pairs = lines(&dir.path().join("preferred/train.jsonl"));
+    assert_eq!(pairs.len(), 2, "{pairs:#?}");
+    assert_eq!(objective("preferred"), "preference");
+    for pair in &pairs {
+        let (chosen, rejected) = (pair["chosen"].to_string(), pair["rejected"].to_string());
+        assert!(chosen.contains("Done."), "{chosen}");
+        assert!(rejected.contains("I could not finish."), "{rejected}");
+        assert!(!pair["prompt"].to_string().contains("could not finish"));
+    }
+
+    // Every action of every graded attempt, with the attempt's reward and
+    // its group: four attempts, two per task, half of them passed.
+    let rewarded = lines(&dir.path().join("rewarded/train.jsonl"));
+    assert_eq!(objective("rewarded"), "policy-gradient");
+    let attempts: std::collections::BTreeMap<String, f64> = rewarded
+        .iter()
+        .map(|r| {
+            (
+                r["rollout"].as_str().unwrap().to_owned(),
+                r["reward"].as_f64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(attempts.len(), 4, "{attempts:?}");
+    let mut rewards: Vec<f64> = attempts.values().copied().collect();
+    rewards.sort_by(f64::total_cmp);
+    assert_eq!(rewards, [0.0, 0.0, 1.0, 1.0]);
+    let groups: std::collections::BTreeSet<String> = rewarded
+        .iter()
+        .map(|r| r["group"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(groups.len(), 2, "a group per task");
+}
+
+#[test]
+fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
+    let repo = Repo::new();
+    let refused = |stages: &str| {
+        let recipe = RECIPE.to_owned() + stages;
+        resolve(&repo.root, &recipe, connections())
+            .err()
+            .map(|e| format!("{e:?}"))
+            .unwrap_or_default()
+    };
+    // seed: a training stage states its seed; the refusal is at plan time.
+    assert!(refused(
+        "  - id: lora\n    uses: model.train\n    inputs: { dataset: $stages.preferred.dataset }\n    with: { base: student, method: lora, params: { rank: 8 }, seed: 1 }\n"
+    )
+    .contains("model.train trains SFT datasets"));
+    assert!(refused(
+        "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: policy-gradient, preference: { pairs_per_task: 2 }, target: student, seed: 13 }\n"
+    )
+    .contains("gives preference options to another objective"));
+}

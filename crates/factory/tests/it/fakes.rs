@@ -56,6 +56,9 @@ pub struct FakeBackend {
     pub executed: Mutex<Vec<ExecutionSpec>>,
     /// Every played session: its spec and the trial it continued.
     pub played: Mutex<Vec<(ExecutionSpec, Option<PathBuf>)>>,
+    /// A failed attempt ends otherwise than a passed one: its last turn
+    /// says it could not finish, so two attempts of one task part there.
+    pub vary_failures: bool,
     /// A passing trial was given the instruction of the task copy it ran,
     /// not the fixture's: as a real agent would have been.
     pub echo_instruction: bool,
@@ -143,8 +146,28 @@ pub fn unfinished_harbor_trial(job: &Path, trial: &str) {
 }
 
 /// Write the trial directory and report of one attempt.
-fn attempt(out: &Path, spec: &ExecutionSpec, outcome: Outcome, instruction: Option<&str>) {
-    attempt_as(out, spec, outcome, false, instruction);
+fn attempt(
+    out: &Path,
+    spec: &ExecutionSpec,
+    outcome: Outcome,
+    instruction: Option<&str>,
+    vary: bool,
+) {
+    attempt_as(out, spec, outcome, false, instruction, vary);
+}
+
+/// The last turn of the fixture's conversation, as its files hold it.
+const LAST_TURN: &str = "Done.\\n\\n**What changed";
+/// The last turn of a failed attempt that ends otherwise.
+const GAVE_UP: &str = "I could not finish.\\n\\n**What changed";
+
+fn ended(bytes: Vec<u8>, vary: bool) -> Vec<u8> {
+    if !vary {
+        return bytes;
+    }
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.contains(LAST_TURN), "the fixture ends as expected");
+    text.replace(LAST_TURN, GAVE_UP).into_bytes()
 }
 
 /// The fixture's file with its instruction replaced by `instruction`.
@@ -178,7 +201,9 @@ fn attempt_as(
     outcome: Outcome,
     guided: bool,
     instruction: Option<&str>,
+    vary: bool,
 ) {
+    let vary = vary && outcome == Outcome::Fail;
     let name = format!(
         "{}__{}-{}",
         spec.task.id.replace('/', "__"),
@@ -209,12 +234,12 @@ fn attempt_as(
     write(&dir.join("result.json"), result.to_string().as_bytes());
     write(
         &dir.join("agent/requests.jsonl"),
-        &fixture_file("agent/requests.jsonl", instruction),
+        &ended(fixture_file("agent/requests.jsonl", instruction), vary),
     );
     let trace = if outcome == Outcome::CorruptTrace {
         b"not json".to_vec()
     } else {
-        fixture_file("agent/trajectory.json", instruction)
+        ended(fixture_file("agent/trajectory.json", instruction), vary)
     };
     write(&dir.join("agent/trajectory.json"), &trace);
     let report = AttemptReport {
@@ -280,7 +305,7 @@ impl ExecutionBackend for FakeBackend {
             let outcome = self.outcome(spec);
             if outcome != Outcome::Lost {
                 let given = self.echo_instruction.then_some(instruction.as_str());
-                attempt(batch.out, spec, outcome, given);
+                attempt(batch.out, spec, outcome, given, self.vary_failures);
             }
         }
         read_reports(batch.out)
@@ -376,7 +401,7 @@ impl ExecutionBackend for FakeBackend {
             .lock()
             .unwrap()
             .push((spec.clone(), continue_from.map(Path::to_path_buf)));
-        attempt_as(batch.out, spec, Outcome::Pass, true, None);
+        attempt_as(batch.out, spec, Outcome::Pass, true, None, false);
         Ok(read_reports(batch.out)?.remove(0))
     }
 }

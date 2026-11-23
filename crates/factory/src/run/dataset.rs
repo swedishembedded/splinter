@@ -39,6 +39,8 @@
 //! supervised messages), `dataset.json` (the [`DatasetProduct`]) and
 //! `report.md`.
 
+mod views;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -56,7 +58,7 @@ use splinter_store::factory::products::Staging;
 use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
-use crate::ops::{AttemptParams, Hint, ProjectParams, ValidationSplit};
+use crate::ops::{AttemptParams, Hint, PreferenceOptions, ProjectParams, ValidationSplit};
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 
@@ -112,6 +114,7 @@ struct Dataset {
     objective: String,
     admission: String,
     projection: String,
+    preference: Option<PreferenceOptions>,
     target: ModelRef,
     max_block: Option<u64>,
     thinking: bool,
@@ -141,6 +144,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         objective: params.objective,
         admission: params.admission,
         projection: params.projection,
+        preference: params.preference,
         target,
         max_block: params.max_block,
         thinking: params.thinking,
@@ -154,7 +158,8 @@ pub(crate) fn identity(
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
     let dataset = section(factory, stage)?;
-    if !PROJECTIONS.contains(&dataset.projection.as_str()) {
+    let sft = dataset.objective == "sft";
+    if sft && !PROJECTIONS.contains(&dataset.projection.as_str()) {
         return Err(stage_error(
             &stage.key,
             format!(
@@ -163,7 +168,7 @@ pub(crate) fn identity(
             ),
         ));
     }
-    if !ADMISSIONS.contains(&dataset.admission.as_str()) {
+    if sft && !ADMISSIONS.contains(&dataset.admission.as_str()) {
         return Err(stage_error(
             &stage.key,
             format!(
@@ -192,6 +197,10 @@ pub(crate) fn identity(
         "target": dataset.target, "max_block": dataset.max_block, "validation": dataset.validation,
         "policy_role": "first-request", "thinking": dataset.thinking,
     });
+    let mut parameters = parameters;
+    if let Some(options) = &dataset.preference {
+        parameters["preference"] = json!(options);
+    }
     Ok(super::identity_of(
         &stage.versioned_operation(),
         &dataset.name,
@@ -233,6 +242,21 @@ fn project(
         native.actions,
         native.tools,
     ))
+}
+
+/// The group `task` is held out with: itself, or its family (from whichever
+/// pinned collection holds it) when the split is by family.
+fn group_of(factory: &Factory<'_>, dataset: &Dataset, task: &str) -> String {
+    match dataset.validation.as_ref().map(|v| v.group_by.as_str()) {
+        Some("task_family") => factory
+            .resolved
+            .collections
+            .values()
+            .find_map(|c| c.collection.task(task))
+            .and_then(|t| t.family.clone())
+            .unwrap_or_else(|| task.to_owned()),
+        _ => task.to_owned(),
+    }
 }
 
 /// How many tasks the sources' passes were offered: the tasks of every
@@ -308,6 +332,9 @@ pub(crate) fn produce(
     staging: &Staging,
 ) -> Result<(), RunError> {
     let dataset = section(factory, stage)?;
+    if dataset.objective != "sft" {
+        return views::produce(factory, stage, staging, &dataset);
+    }
     let mut raw = 0u64;
     let mut successes = 0u64;
     let mut projected: Vec<(String, TrialResult, Record, usize, Vec<String>)> = Vec::new();
@@ -445,19 +472,7 @@ pub(crate) fn produce(
             format!("no trial of {raw} became a record; excluded: {reasons:?} {first}"),
         ));
     }
-    let group_of = |trial: &TrialResult| -> String {
-        match dataset.validation.as_ref().map(|v| v.group_by.as_str()) {
-            // The task's family, from whichever pinned collection holds it.
-            Some("task_family") => factory
-                .resolved
-                .collections
-                .values()
-                .find_map(|c| c.collection.task(&trial.task))
-                .and_then(|t| t.family.clone())
-                .unwrap_or_else(|| trial.task.clone()),
-            _ => trial.task.clone(),
-        }
-    };
+    let group_of = |trial: &TrialResult| group_of(factory, &dataset, &trial.task);
     let groups: BTreeSet<String> = projected.iter().map(|(_, t, ..)| group_of(t)).collect();
     let held = dataset
         .validation

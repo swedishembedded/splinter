@@ -578,37 +578,8 @@ fn check(
             let Ok(params) = stage.params::<ProjectParams>() else {
                 return;
             };
-            if stage.sources("attempts").is_empty() {
-                problem(reader, "projects no attempts");
-            }
-            if params.validation.as_ref().is_some_and(|v| v.percent >= 100) {
-                problem(reader, "holds out every record for validation");
-            }
-            if params.projection == "native-sft" {
-                for source in stage.sources("attempts") {
-                    let harnessed = compiled
-                        .stages
-                        .iter()
-                        .find(|s| s.id == source && s.operation == names::ATTEMPTS)
-                        .and_then(|s| ops::params::<AttemptParams>(&s.params).ok())
-                        .is_some_and(|p| p.harness.is_some());
-                    if harnessed {
-                        problem(
-                            reader,
-                            &format!("{source} runs a harness, which records no model requests to project natively; use projection: portable-sft"),
-                        );
-                    }
-                }
-            }
-            if compiled
-                .models
-                .get(&params.target)
-                .is_some_and(champion::is_champion)
-            {
-                problem(
-                    reader,
-                    "a champion is served, never a dataset's target: name the base model",
-                );
+            for text in crate::stage_checks::projection_problems(stage, &params, compiled) {
+                problem(reader, &text);
             }
         }
         names::TRAIN => {
@@ -624,6 +595,9 @@ fn check(
                     reader,
                     "a champion is served, never trained from: a variant trains from a base model",
                 );
+            }
+            for text in crate::stage_checks::trained_objective_problems(stage, compiled) {
+                problem(reader, &text);
             }
         }
         names::EVALUATION => {

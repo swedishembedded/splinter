@@ -492,6 +492,27 @@ compiles its collection evaluates on the same compiled tasks:
   is told the same mode. `projection: portable-sft` rebuilds
   each conversation from the trial's ATIF trajectory instead, for an agent whose
   model calls are not recorded (Claude Code).
+
+  `objective: preference` and `objective: policy-gradient` project the same
+  attempts by splinter-data's own views, the ones that read the experience
+  database, over the trials as experiences (each trial's grade its executable
+  verdict, its recorded model calls its conversation). A preference record is
+  a verified pass over a verified fail of one task by one policy, from where
+  their conversations part: the shared prompt is never trained on
+  (`preference: { pairs_per_task: N }` bounds a task's pairs, drawn by the
+  seed). A policy-gradient record is an action of a graded attempt carrying
+  the attempt's reward and its group; a group whose attempts all earned the
+  same is left out. Hinted, continued and harnessed attempts are refused: they
+  would teach what the target is never shown. `model.train` trains SFT
+  datasets, so these are refused as its input until a trainer of their
+  regime is wired.
+
+  ```yaml
+  - id: preferred
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { objective: preference, preference: { pairs_per_task: 4 }, target: student, seed: 13 }
+  ```
 - **Training** (`model.train`). Each candidate is one brain job, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   stage's parameters trains a new candidate and reuses the dataset and attempts.

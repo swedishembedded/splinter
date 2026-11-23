@@ -213,19 +213,35 @@ pub struct ValidationSplit {
     pub percent: u32,
 }
 
+/// The objectives `dataset.project` projects attempts for.
+pub const OBJECTIVES: &[&str] = &["sft", "preference", "policy-gradient"];
+
+/// How a preference dataset pairs attempts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreferenceOptions {
+    /// The most pairs one task (by one policy) gives, drawn by the stage's
+    /// seed when it has more; every pair when unset.
+    #[serde(default)]
+    pub pairs_per_task: Option<usize>,
+}
+
 /// `dataset.project`: training records projected from attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectParams {
-    /// The objective.
+    /// The objective (`sft`, `preference`, `policy-gradient`).
     #[serde(default = "sft")]
     pub objective: String,
-    /// The admission rule.
+    /// The admission rule of an SFT dataset.
     #[serde(default = "verified_success")]
     pub admission: String,
-    /// The projection.
+    /// The projection of an SFT dataset.
     #[serde(default = "native_sft")]
     pub projection: String,
+    /// How a preference dataset pairs attempts.
+    #[serde(default)]
+    pub preference: Option<PreferenceOptions>,
     /// The model role the records are for.
     pub target: String,
     /// The longest record, in the target's tokens, when bounded.
