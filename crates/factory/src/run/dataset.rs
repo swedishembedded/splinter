@@ -48,12 +48,12 @@ use splinter_core::digest::{digest_of, Digest};
 use splinter_core::factory::execution::FileRef;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, TrialResult, WaterfallStep, DATASET_SCHEMA};
-use splinter_data::request_log::read_request_log;
 use splinter_data::{
     native_record, portable_record, Objective, Record, RecordBody, RecordMetadata, TrialSource,
 };
 use splinter_store::factory::products::Staging;
 
+use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{AttemptParams, Hint, ProjectParams, ValidationSplit};
@@ -66,8 +66,6 @@ pub const DATASET_FILE: &str = "dataset.json";
 pub const PROJECTIONS: &[&str] = &["native-sft", "portable-sft"];
 /// The admission rules the stage implements.
 pub const ADMISSIONS: &[&str] = &["verified-success"];
-/// The agent's request log in a trial directory.
-pub const CALL_LOG: &str = "agent/requests.jsonl";
 /// The agent's ATIF trajectory in a trial directory.
 pub const TRAJECTORY: &str = "agent/trajectory.json";
 
@@ -221,16 +219,7 @@ fn project(
     } else {
         let log = std::fs::read(dir.join(CALL_LOG))
             .map_err(|e| ("no_native_calls".to_owned(), format!("{CALL_LOG}: {e}")))?;
-        let logged = read_request_log(&log).map_err(|e| ("calls_unreadable".to_owned(), e))?;
-        // The policy's calls are those made for the role of the agent's own
-        // loop: its first request's. Another role's (an advisor, a delegated
-        // model) are never the policy's actions.
-        let role = logged.first().and_then(|r| r.role.clone());
-        let policy: Vec<_> = logged
-            .iter()
-            .filter(|r| r.role == role)
-            .filter_map(|r| r.call.clone())
-            .collect();
+        let policy = policy_calls(&log).map_err(|e| ("calls_unreadable".to_owned(), e))?;
         native_record(&trajectory, &policy)
     };
     let native = projected.map_err(|e| ("unprojectable".to_owned(), e.to_string()))?;

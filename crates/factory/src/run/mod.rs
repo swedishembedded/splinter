@@ -22,6 +22,7 @@
 //! made.
 
 mod compute;
+pub mod corpus;
 pub mod dataset;
 pub mod dataset_extend;
 pub mod dataset_import;
