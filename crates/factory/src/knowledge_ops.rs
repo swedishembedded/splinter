@@ -21,7 +21,19 @@
 //!   ([`splinter_knowledge::objects::admit`]): an object stands only when its
 //!   quote is in its section verbatim and its data has its kind's keys;
 //!   conflicts are flagged, amendments resolved, every refusal kept with its
-//!   reason. The product is the knowledge pack (`pack.json`).
+//!   reason. The product is the knowledge pack (`pack.json`). Admission
+//!   relates what every section says: one `source.ingest` over all the
+//!   documents and one admission over its sections is how knowledge from
+//!   several documents is merged, their conflicts flagged and amendments
+//!   resolved in one pack.
+//! * `knowledge.query` finds, for each question of a file in the task
+//!   repository, the sections that bear on it
+//!   ([`splinter_knowledge::retrieve::Bm25`]: lexical, deterministic, rare
+//!   words weighing more), best first. Each question is an item holding its
+//!   `question.md` and `passages.json` (each passage's section, document,
+//!   title, score and text), so a stage over the items reads what the
+//!   documents say. The index is built from the sections each time: it is
+//!   cheap, and a stored one would be a second copy of them to keep in step.
 
 use std::path::Path;
 
@@ -35,6 +47,7 @@ use splinter_core::factory::operation::{
     ArtifactKind, OperationDescriptor, Port, Reproducibility, OPERATION_SCHEMA,
 };
 use splinter_knowledge::objects::{admit, Document, ProposedObject};
+use splinter_knowledge::retrieve::{Bm25, Passage};
 use splinter_knowledge::sections::{sections, title, MARKDOWN};
 
 use crate::execute::{Call, Execute, Outcome};
@@ -44,6 +57,8 @@ use crate::registry::OperationSpec;
 pub const INGEST: &str = "source.ingest";
 /// `knowledge.admit`.
 pub const ADMIT: &str = "knowledge.admit";
+/// `knowledge.query`.
+pub const QUERY: &str = "knowledge.query";
 
 /// A section's text in its item.
 const TEXT: &str = "text.md";
@@ -338,6 +353,150 @@ impl Execute for Admit {
         }
         let pack = admit(&params.pack, &documents, &proposals);
         write(&call.out.join("pack.json"), &pack)?;
+        Ok(Outcome::Produced)
+    }
+}
+
+fn three() -> usize {
+    3
+}
+
+/// `knowledge.query`'s parameters.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QueryParams {
+    /// The questions: a YAML list of strings, a file of the task repository.
+    pub questions: String,
+    /// The most passages each question is given.
+    #[serde(default = "three")]
+    pub passages: usize,
+}
+
+fn query_params(value: &Value) -> Result<QueryParams, String> {
+    serde_json::from_value(value.clone()).map_err(|e| e.to_string())
+}
+
+fn questions(text: &str) -> Result<Vec<String>, String> {
+    let questions: Vec<String> = serde_yaml::from_str(text).map_err(|e| e.to_string())?;
+    if questions.iter().any(|q| q.trim().is_empty()) || questions.is_empty() {
+        return Err("lists no question, or an empty one".into());
+    }
+    Ok(questions)
+}
+
+/// One passage given to a question.
+#[derive(Serialize)]
+struct Found<'a> {
+    /// The section's item in the sections product.
+    section: &'a str,
+    document: &'a str,
+    title: Option<&'a str>,
+    /// Comparable only among one question's passages.
+    score: f64,
+    text: &'a str,
+}
+
+/// The `knowledge.query` operation.
+pub struct Query;
+
+impl OperationSpec for Query {
+    fn descriptor(&self) -> OperationDescriptor {
+        descriptor(
+            QUERY,
+            "each question given the sections that bear on it, best first",
+            vec![port("sections", ArtifactKind::Files)],
+            port("passages", ArtifactKind::Files),
+            serde_json::to_value(schema_for!(QueryParams)).unwrap_or(Value::Null),
+        )
+    }
+    fn check(&self, params: &Value) -> Result<(), String> {
+        let p = query_params(params)?;
+        if p.passages == 0 {
+            return Err("passages is at least 1".into());
+        }
+        Ok(())
+    }
+    fn files(&self, params: &Value) -> Vec<String> {
+        query_params(params)
+            .map(|p| vec![p.questions])
+            .unwrap_or_default()
+    }
+    fn check_files(
+        &self,
+        params: &Value,
+        files: &std::collections::BTreeMap<String, String>,
+    ) -> Vec<String> {
+        let Ok(p) = query_params(params) else {
+            return Vec::new();
+        };
+        match files.get(&p.questions).map(|text| questions(text)) {
+            Some(Err(why)) => vec![format!("{}: {why}", p.questions)],
+            _ => Vec::new(),
+        }
+    }
+    fn executor(&self) -> Option<&dyn Execute> {
+        Some(self)
+    }
+}
+
+impl Execute for Query {
+    fn implementation(&self) -> String {
+        format!("{QUERY} 1")
+    }
+
+    fn execute(&self, call: &Call<'_>) -> Result<Outcome, String> {
+        let p = query_params(call.params)?;
+        let asked = questions(
+            call.files
+                .get(&p.questions)
+                .ok_or_else(|| format!("{} is not pinned", p.questions))?,
+        )
+        .map_err(|why| format!("{}: {why}", p.questions))?;
+        let view = call
+            .inputs
+            .get("sections")
+            .and_then(|v| v.first())
+            .ok_or("sections is not bound")?;
+        let mut held = Vec::new();
+        for (n, item) in read_index(view)?.items.into_iter().enumerate() {
+            let dir = view.join(&item.path);
+            let text = std::fs::read_to_string(dir.join(TEXT)).map_err(|e| e.to_string())?;
+            let source: SectionSource = serde_json::from_str(
+                &std::fs::read_to_string(dir.join(SOURCE)).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            held.push((item.id, source, Passage::of_text(&item.path, n, &text)));
+        }
+        let passages: Vec<Passage> = held.iter().map(|(_, _, p)| p.clone()).collect();
+        let bm25 = Bm25::new(&passages);
+        let mut items = Vec::new();
+        for (n, question) in asked.iter().enumerate() {
+            let id = format!("question-{:03}", n + 1);
+            let found: Vec<Found<'_>> = bm25
+                .search(question, p.passages)
+                .into_iter()
+                .map(|hit| {
+                    let (section, source, passage) = &held[hit.passage];
+                    Found {
+                        section,
+                        document: &source.document,
+                        title: source.title.as_deref(),
+                        score: hit.score,
+                        text: &passage.text,
+                    }
+                })
+                .collect();
+            let dir = call.out.join(&id);
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            std::fs::write(dir.join("question.md"), format!("{}\n", question.trim()))
+                .map_err(|e| e.to_string())?;
+            write(&dir.join("passages.json"), &found)?;
+            items.push(Item {
+                path: id.clone(),
+                id,
+            });
+        }
+        index(&call.out, items)?;
         Ok(Outcome::Produced)
     }
 }

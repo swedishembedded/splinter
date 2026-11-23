@@ -10,6 +10,7 @@
 //! sections that name where they came from, an `agent` stage proposes typed
 //! knowledge per section with the quote it rests on, and `knowledge.admit`
 //! keeps only what the sections say verbatim, every refusal with its reason.
+//! `knowledge.query` gives each question the sections that bear on it.
 
 use std::sync::Arc;
 
@@ -143,4 +144,62 @@ fn a_document_yields_only_the_knowledge_its_sections_state() {
     assert!(rejected
         .iter()
         .all(|r| r["id"].as_str().unwrap().ends_with("#b")));
+}
+
+const ASKED: &str = "schema: splinter.recipe/v2
+name: asked
+inputs:
+  docs: { kind: files, path: documents }
+stages:
+  - { id: sections, uses: source.ingest, inputs: { documents: $inputs.docs } }
+  - id: found
+    uses: knowledge.query
+    inputs: { sections: $stages.sections.sections }
+    with: { questions: questions.yaml, passages: 1 }
+";
+
+/// Retrieval: each question an item holding the sections that bear on it,
+/// best first, each naming where it came from, so a stage over the items
+/// (a teacher's brief, a retrieval dataset) reads what the documents say.
+#[test]
+fn each_question_is_given_the_sections_that_bear_on_it() {
+    let repo = Repo::new();
+    repo.write("documents/policy.md", POLICY);
+    repo.write(
+        "documents/opening.md",
+        "# Opening hours\n\nThe store opens at nine and is closed on Sundays.\n",
+    );
+    repo.write(
+        "questions.yaml",
+        "- How many days until refunds are paid?\n- Is the store closed on Sundays?\n",
+    );
+    let resolved = resolve(&repo.root, ASKED, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let found = |item: &str| -> (String, Value) {
+        let dir = dir.path().join("found").join(item);
+        (
+            std::fs::read_to_string(dir.join("question.md")).unwrap(),
+            serde_json::from_str(&std::fs::read_to_string(dir.join("passages.json")).unwrap())
+                .unwrap(),
+        )
+    };
+    let (question, passages) = found("question-001");
+    assert_eq!(question.trim(), "How many days until refunds are paid?");
+    assert_eq!(passages.as_array().unwrap().len(), 1, "{passages:#}");
+    assert_eq!(passages[0]["section"], "policy.md--002", "{passages:#}");
+    assert_eq!(passages[0]["document"], "policy.md");
+    assert!(passages[0]["text"].as_str().unwrap().contains("14 days"));
+    let (_, passages) = found("question-002");
+    assert_eq!(passages[0]["section"], "opening.md--001", "{passages:#}");
 }

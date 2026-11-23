@@ -111,6 +111,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
 | `source.ingest` | `documents` (files) | `sections` |
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
+| `knowledge.query` | `sections` | `passages` |
 | `task.generate` | `documents` (one or more) | `tasks` |
 | `answer.collect` | `task` | `answers` |
 | `environment.build` | `documents` (optional) | `environments` |
@@ -311,6 +312,23 @@ reason, in the pack `pack.json`.
     uses: knowledge.admit
     inputs: { sections: $stages.sections.sections, proposals: $stages.proposed.output }
     with: { pack: shop-policy }
+```
+
+Knowledge from several documents is merged by ingesting them together: one
+admission over all their sections relates what each says, flagging conflicts
+and resolving amendments in one pack.
+
+`knowledge.query` gives each question of a file in the task repository (a YAML
+list of strings) the sections that bear on it, best first, by lexical retrieval
+(rare words weigh more; words are matched as written, not stemmed). Each
+question is an item holding `question.md` and `passages.json` (each passage's
+section, document, title, score and text), for a stage over the items to read:
+
+```yaml
+  - id: found
+    uses: knowledge.query
+    inputs: { sections: $stages.sections.sections }
+    with: { questions: questions.yaml, passages: 3 }
 ```
 
 ## Tasks from documents

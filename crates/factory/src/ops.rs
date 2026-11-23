@@ -387,6 +387,7 @@ pub fn registry() -> Registry {
         .with(crate::harness_op::HarnessOp)
         .with(crate::knowledge_ops::Ingest)
         .with(crate::knowledge_ops::Admit)
+        .with(crate::knowledge_ops::Query)
         .with(crate::task_ops::Generate)
         .with(crate::task_ops::Answer)
         .with(crate::env_ops::Build)
