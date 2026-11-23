@@ -438,6 +438,8 @@ pub struct FakeTrainer {
     pub objectives: Mutex<Vec<String>>,
     /// The adapter each training request continues, if it continues one.
     pub starts: Mutex<Vec<Option<std::path::PathBuf>>>,
+    /// Each training request's replayed record files and their share.
+    pub replayed: Mutex<Vec<(usize, Option<f32>)>>,
 }
 
 impl Trainer for FakeTrainer {
@@ -472,6 +474,10 @@ impl Trainer for FakeTrainer {
             .lock()
             .unwrap()
             .push(request.objective.to_owned());
+        self.replayed
+            .lock()
+            .unwrap()
+            .push((request.replay.len(), request.replay_share));
         let adapter = request.out.join("adapter.safetensors");
         std::fs::write(
             &adapter,

@@ -31,7 +31,9 @@ use serde_json::json;
 use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::SystemClock;
 use splinter_core::digest::Digest;
-use splinter_core::experience::{Environment, Experience, ExperienceId, Provenance, Task};
+use splinter_core::experience::{
+    Environment, Experience, ExperienceId, Privileged, PrivilegedKind, Provenance, Task,
+};
 use splinter_core::factory::product::TrialResult;
 use splinter_core::harness::{ModelCall, RecordedCalls, CALLS_KEY};
 use splinter_core::kinds::BENCH_TASK;
@@ -95,12 +97,19 @@ pub fn policy_calls(log: &[u8]) -> Result<Vec<ModelCall>, String> {
         .collect())
 }
 
-/// The experience `trial` of the attempts product at `view` is.
+/// The experience `trial` of the attempts product at `view` is. A task's
+/// `reference` (its folder's `solution/solve.sh`), when given, is privileged
+/// context of the experience: what a teacher may be shown and the student
+/// never is.
 ///
 /// # Errors
 /// The trial left no trajectory, its trajectory names no instruction, or
 /// its call log cannot be read.
-pub fn experience_of(view: &Path, trial: &TrialResult) -> Result<Experience, String> {
+pub fn experience_of(
+    view: &Path,
+    trial: &TrialResult,
+    reference: Option<String>,
+) -> Result<Experience, String> {
     let trace = trial.trace.as_ref().ok_or("the trial left no trajectory")?;
     let bytes =
         std::fs::read(view.join(&trace.path)).map_err(|e| format!("{}: {e}", trace.path))?;
@@ -132,7 +141,14 @@ pub fn experience_of(view: &Path, trial: &TrialResult) -> Result<Experience, Str
         Vec::new(),
         Environment::new(Environment::BENCH, spec),
         instruction,
-        Vec::new(),
+        reference
+            .into_iter()
+            .map(|content| Privileged {
+                kind: PrivilegedKind::Reference,
+                content,
+                span: None,
+            })
+            .collect(),
     )
     .map_err(|e| e.to_string())?;
     let solver = format!(
@@ -163,21 +179,44 @@ pub struct TrialCorpus {
     pub skipped: Vec<(String, TrialResult, String)>,
 }
 
-/// The trials of `sources` (each a source's name and its attempts
-/// product's trials, at its view) as one corpus. A trial already in it
-/// (the same attempt reached through two sources) is taken once.
+/// An attempts product a corpus reads: its stage, its view, its trials,
+/// and the view of the tasks it attempted, when known.
+pub struct Source {
+    /// The stage that holds it.
+    pub name: String,
+    /// Its product's view.
+    pub view: std::path::PathBuf,
+    /// Its trials.
+    pub trials: Vec<TrialResult>,
+    /// The pinned tasks it attempted: each task folder's reference solution
+    /// (`solution/solve.sh`) goes with its trials' experiences.
+    pub tasks: Option<std::path::PathBuf>,
+}
+
+/// A task folder's reference solution, `solution/solve.sh`.
+pub const REFERENCE: &str = "solution/solve.sh";
+
+/// The trials of `sources` as one corpus. A trial already in it (the same
+/// attempt reached through two sources) is taken once.
 ///
 /// # Errors
 /// The corpus refuses an experience for a reason other than holding it.
-pub fn corpus_of(
-    sources: &[(String, std::path::PathBuf, Vec<TrialResult>)],
-) -> Result<TrialCorpus, String> {
+pub fn corpus_of(sources: &[Source]) -> Result<TrialCorpus, String> {
     let mut corpus = Corpus::new();
     let mut trials = BTreeMap::new();
     let mut skipped = Vec::new();
-    for (source, view, held) in sources {
+    for Source {
+        name: source,
+        view,
+        trials: held,
+        tasks,
+    } in sources
+    {
         for trial in held {
-            let experience = match experience_of(view, trial) {
+            let reference = tasks.as_ref().and_then(|root| {
+                std::fs::read_to_string(root.join(&trial.task).join(REFERENCE)).ok()
+            });
+            let experience = match experience_of(view, trial, reference) {
                 Ok(experience) => experience,
                 Err(why) => {
                     skipped.push((source.clone(), trial.clone(), why));

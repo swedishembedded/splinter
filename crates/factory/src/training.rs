@@ -52,6 +52,12 @@ pub struct TrainRequest<'a> {
     pub train: &'a Path,
     /// The validation records (may be empty).
     pub validation: &'a Path,
+    /// Earlier datasets' training records rehearsed beside `train` (chat
+    /// records only).
+    pub replay: &'a [PathBuf],
+    /// The share of the training draws that come from `replay`; `None`
+    /// mixes the plain union.
+    pub replay_share: Option<f32>,
     /// The seed.
     pub seed: u64,
     /// Train reasoning (the dataset's `thinking`).
@@ -436,13 +442,21 @@ impl Trainer for BrainTrainer {
         let resolved = self.resolve(request.method, request.params)?;
         let params: LoraParams = serde_json::from_value(resolved)
             .map_err(|e| TrainError(format!("lora params: {e}")))?;
+        if !request.replay.is_empty() && !matches!(request.objective, "sft" | "cpt") {
+            return Err(TrainError(format!(
+                "brain trainer: replay rehearses chat records; a {} dataset trains without it",
+                request.objective
+            )));
+        }
         match request.objective {
             // A text is one supervised turn: continued pretraining trains as
             // chat records do.
             "sft" | "cpt" => {}
             "preference" => return self.preference(request, &params),
             "feedback" => return self.feedback(request, &params),
-            "policy-gradient" => return self.policy_gradient(request, &params),
+            // Self-distillation records are rollout records with a teacher
+            // context, trained by the same objective.
+            "policy-gradient" | "distill" => return self.policy_gradient(request, &params),
             other => {
                 return Err(TrainError(format!(
                     "brain trainer: a {other} dataset has no LoRA regime here"
@@ -476,8 +490,8 @@ impl Trainer for BrainTrainer {
             steps: params.steps,
             rank: params.rank,
             alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
-            replay: &[],
-            replay_share: None,
+            replay: request.replay,
+            replay_share: request.replay_share,
             weighted_replay: &[],
             grad_accum: params.grad_accum,
             continue_from: None,

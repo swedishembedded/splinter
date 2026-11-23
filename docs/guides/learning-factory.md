@@ -576,7 +576,11 @@ compiles its collection evaluates on the same compiled tasks:
   seed;
   `max_block` leaves out the pairs whose longer continuation exceeds it, as the trainer
   sizes every row to the longest). A feedback record (KTO) is one verified attempt's continuation,
-  desirable when it passed. `objective: retrieval` makes contrastive triples:
+  desirable when it passed. `objective: distill` makes every attempt a self-distillation
+  record: its conversation as the student saw it, and beside it what only the
+  frozen teacher reads (the task's reference solution, `solution/solve.sh` of
+  its folder, and the checks that failed); it trains by the policy-gradient
+  job. `objective: retrieval` makes contrastive triples:
   a passed experience's question, the source passage its evidence names, and
   the passages other experiences rest on as negatives. These objectives also
   read `answers`: the experiences `answer.collect` made in process, each with
@@ -610,6 +614,11 @@ compiles its collection evaluates on the same compiled tasks:
   rate strictly inside 0 to 1, or inside `min_pass_rate`..`max_pass_rate`),
   each task's folder as the run pinned it, for `tasks.pin`; `rlvr.json` lists
   every attempted task's counts, rate and whether it was kept.
+- **Replay** (`model.train` with `replay`). A candidate trained on new chat records can rehearse
+  earlier datasets' records beside them, `replay_share` of the draws (the plain union when
+  unset), so what it learned before is kept: `inputs: { dataset: $stages.sft.dataset, replay:
+  [$stages.earlier.dataset] }`. Replay rehearses chat records, so a view objective's dataset
+  takes none and is none.
 - **Training** (`model.train`). Each candidate is one brain job of its dataset's regime, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   stage's parameters trains a new candidate and reuses the dataset and attempts.

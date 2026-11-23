@@ -19,7 +19,7 @@
 //! | `dataset.text` | `documents` (files) | `dataset` |
 //! | `harness.search` | `tasks` | `harness` |
 //! | `task.mutate` | (a repository and revision) | `tasks` |
-//! | `model.train` | `dataset` | `model` |
+//! | `model.train` | `dataset`, `replay` (many, optional) | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
 //! | `agent` | `input` (files, many) | `output` ([`crate::agent_op`]) |
@@ -258,6 +258,7 @@ pub const OBJECTIVES: &[&str] = &[
     "preference",
     "feedback",
     "policy-gradient",
+    "distill",
     "retrieval",
 ];
 
@@ -276,7 +277,7 @@ pub struct PreferenceOptions {
 #[serde(deny_unknown_fields)]
 pub struct ProjectParams {
     /// The objective (`sft`, `preference`, `feedback`, `policy-gradient`,
-    /// `retrieval`).
+    /// `distill`, `retrieval`).
     #[serde(default = "sft")]
     pub objective: String,
     /// The admission rule of an SFT dataset.
@@ -326,6 +327,10 @@ pub struct TrainParams {
     /// that made its pairs. The champion must be served from the same base.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start: Option<String>,
+    /// The share of the training draws that come from the `replay`
+    /// datasets' records; the plain union when unset.
+    #[serde(default)]
+    pub replay_share: Option<f64>,
     /// The training seed.
     pub seed: u64,
 }
@@ -757,7 +762,14 @@ pub fn registry() -> Registry {
         .with(Builtin::<TrainParams> {
             name: names::TRAIN,
             summary: "train one candidate from a base through the training engine",
-            inputs: vec![port("dataset", ArtifactKind::Dataset)],
+            inputs: vec![
+                port("dataset", ArtifactKind::Dataset),
+                Port {
+                    many: true,
+                    optional: true,
+                    ..port("replay", ArtifactKind::Dataset)
+                },
+            ],
             output: port("model", ArtifactKind::Model),
             reproducibility: Reproducibility::Seeded,
             isolation: Isolation::Any,

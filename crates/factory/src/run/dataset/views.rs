@@ -28,6 +28,10 @@
 //!   with `reward` and `group`); a group whose attempts all earned the same
 //!   says nothing and is left out.
 //!
+//! * `distill` ([`PolicyGradient`] distilling every attempt): each
+//!   attempt's conversation as the student saw it, with a teacher context
+//!   beside it (the task's reference solution, the checks that failed),
+//!   which only the frozen teacher of a self-distillation run reads.
 //! * `retrieval` ([`Retrieval`]): each passed experience's question and
 //!   the source passage its evidence names, with the passages other
 //!   experiences rest on as negatives (contrastive triples).
@@ -54,15 +58,15 @@ use splinter_core::experience::{Experience, ExperienceId};
 use splinter_core::factory::items::{ItemIndex, ITEMS_FILE};
 use splinter_core::factory::product::{DatasetProduct, WaterfallStep, DATASET_SCHEMA};
 use splinter_data::{
-    Corpus, Feedback, Objective, PolicyGradient, Preference, Record, RecordBody, Retrieval,
-    SftFinal, View,
+    Corpus, Distill, Feedback, Objective, PolicyGradient, Preference, Record, RecordBody,
+    Retrieval, SftFinal, View,
 };
 use splinter_store::factory::products::Staging;
 use splinter_store::sources::SourceStore;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
-use super::super::corpus::corpus_of;
+use super::super::corpus::{corpus_of, Source};
 use super::super::rollout::trials_of;
 use super::super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use super::{file_ref, group_of, held_out, Accepted, Dataset, Excluded, DATASET_FILE};
@@ -90,6 +94,12 @@ fn view_of<'s>(
         "feedback" => Ok((Box::new(Feedback::new(strength)), Objective::Feedback)),
         "policy-gradient" => Ok((
             Box::new(PolicyGradient::new(strength)),
+            Objective::PolicyGradient,
+        )),
+        // Every attempt, with what only a teacher is shown beside it: the
+        // task's reference solution, and the checks that failed.
+        "distill" => Ok((
+            Box::new(PolicyGradient::new(strength).distilling(Distill::Every)),
             Objective::PolicyGradient,
         )),
         "retrieval" => Ok((
@@ -272,9 +282,20 @@ pub(super) fn produce(
         sources.push(factory.product(source)?.1.digest());
         let at = factory.view(source);
         let trials = trials_of(&at)?;
-        held.push((source.clone(), at, trials));
+        let tasks = factory
+            .resolved
+            .plan
+            .stage(source)
+            .and_then(|s| s.source("tasks"))
+            .map(|pin| factory.view(pin));
+        held.push(Source {
+            name: source.clone(),
+            view: at,
+            trials,
+            tasks,
+        });
     }
-    let mut raw: usize = held.iter().map(|(_, _, t)| t.len()).sum();
+    let mut raw: usize = held.iter().map(|s| s.trials.len()).sum();
     let mut trials = corpus_of(&held).map_err(fail)?;
     let mut members: BTreeMap<ExperienceId, Member> = trials
         .trials

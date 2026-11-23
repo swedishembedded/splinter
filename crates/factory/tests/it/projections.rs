@@ -46,11 +46,28 @@ stages:
     uses: dataset.project
     inputs: { attempts: [$stages.local.attempts] }
     with: { objective: feedback, target: student, seed: 13 }
+  - id: distilled
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { objective: distill, target: student, seed: 13 }
   - id: rewarded
     uses: dataset.project
     inputs: { attempts: [$stages.local.attempts] }
     with: { objective: policy-gradient, target: student, seed: 13 }
 ";
+
+/// The reference repository, each training task with its reference
+/// solution: what a distilled record's teacher is shown.
+fn repo() -> Repo {
+    let repo = Repo::new();
+    for task in ["train/001-first", "train/002-second"] {
+        repo.write(
+            &format!("tasks/vim/{task}/solution/solve.sh"),
+            "echo solved\n",
+        );
+    }
+    repo
+}
 
 fn lines(path: &std::path::Path) -> Vec<Value> {
     std::fs::read_to_string(path)
@@ -63,6 +80,12 @@ fn lines(path: &std::path::Path) -> Vec<Value> {
 #[test]
 fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
     let repo = Repo::new();
+    for task in ["train/001-first", "train/002-second"] {
+        repo.write(
+            &format!("tasks/vim/{task}/solution/solve.sh"),
+            "echo solved\n",
+        );
+    }
     let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
     let backend = FakeBackend {
         vary_failures: true,
@@ -115,6 +138,17 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
     desirable.sort();
     assert_eq!(desirable, [false, false, true, true], "{judged:#?}");
 
+    // Every attempt, its conversation as the student saw it, and beside it
+    // what only a teacher is shown: the task's reference solution.
+    let distilled = lines(&dir.path().join("distilled/train.jsonl"));
+    assert_eq!(objective("distilled"), "distill");
+    assert!(!distilled.is_empty());
+    for record in &distilled {
+        let teacher = record["teacher_context"].to_string();
+        assert!(teacher.contains("echo solved"), "{record:#}");
+        assert!(!record["messages"].to_string().contains("echo solved"));
+    }
+
     // Every action of every graded attempt, with the attempt's reward and
     // its group: four attempts, two per task, half of them passed.
     let rewarded = lines(&dir.path().join("rewarded/train.jsonl"));
@@ -143,9 +177,9 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
 /// preference, judged-completion and rollout records, each by its own job.
 #[test]
 fn each_dataset_is_trained_by_its_objectives_regime() {
-    let repo = Repo::new();
+    let repo = repo();
     // seed: a training stage states its seed; the fake trainer draws nothing.
-    let trained: String = ["sft", "preferred", "judged", "rewarded"]
+    let trained: String = ["sft", "preferred", "judged", "rewarded", "distilled"]
         .iter()
         .map(|d| {
             format!(
@@ -175,7 +209,13 @@ fn each_dataset_is_trained_by_its_objectives_regime() {
         .unwrap();
     assert_eq!(
         *trainer.objectives.lock().unwrap(),
-        ["sft", "preference", "feedback", "policy-gradient"]
+        [
+            "sft",
+            "preference",
+            "feedback",
+            "policy-gradient",
+            "distill"
+        ]
     );
 }
 
@@ -251,7 +291,7 @@ const LEARNABLE: &str = "  - id: rlvr
 /// to roll out again.
 #[test]
 fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
-    let repo = Repo::new();
+    let repo = repo();
     let resolved = resolve(&repo.root, &(RECIPE.to_owned() + LEARNABLE), connections()).unwrap();
     let backend = FakeBackend {
         vary_failures: true,
@@ -285,4 +325,66 @@ fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
             .unwrap();
     assert_eq!(report["train/002-second"]["kept"], false, "{report:#}");
     assert_eq!(report["train/001-first"]["pass_rate"], 0.5, "{report:#}");
+}
+
+/// Replay: a candidate trained on new records rehearses an earlier
+/// dataset's beside them, at a stated share of the draws, so what it
+/// learned before is kept.
+#[test]
+fn an_earlier_dataset_is_replayed_beside_the_new_records() {
+    let repo = repo();
+    // seed: a training stage states its seed; the fake trainer draws nothing.
+    let recipe = RECIPE.to_owned()
+        + "  - id: earlier
+    uses: dataset.text
+    inputs: { documents: $inputs.notes }
+    with: { target: student, seed: 2 }
+  - id: lora
+    uses: model.train
+    inputs: { dataset: $stages.sft.dataset, replay: [$stages.earlier.dataset] }
+    with: { base: student, method: lora, params: { rank: 8 }, replay_share: 0.25, seed: 1 }
+";
+    let recipe = recipe.replace(
+        "  course: { kind: files, path: collections/vim.yaml }\n",
+        "  course: { kind: files, path: collections/vim.yaml }\n  notes: { kind: files, path: notes }\n",
+    );
+    repo.write(
+        "notes/known.md",
+        "# Known\n\nWhat the model already knew, rehearsed.\n",
+    );
+    let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    for task in ["train/001-first", "train/002-second"] {
+        backend.script(task, &[Outcome::Pass, Outcome::Fail]);
+    }
+    let trainer = crate::fakes::FakeTrainer::default();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert_eq!(*trainer.replayed.lock().unwrap(), [(1, Some(0.25))]);
+
+    // Replay rehearses chat records: a preference dataset trains without it.
+    let refused = resolve(
+        &repo.root,
+        &recipe.replace(
+            "dataset: $stages.sft.dataset, replay",
+            "dataset: $stages.preferred.dataset, replay",
+        ),
+        connections(),
+    )
+    .err()
+    .map(|e| format!("{e:?}"))
+    .unwrap_or_default();
+    assert!(refused.contains("replay"), "{refused}");
 }

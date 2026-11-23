@@ -644,6 +644,9 @@ fn check(
             for text in crate::stage_checks::trained_objective_problems(stage, compiled) {
                 problem(reader, &text);
             }
+            for text in crate::stage_checks::replay_problems(stage, compiled) {
+                problem(reader, &text);
+            }
         }
         names::EVALUATION => {
             let Ok(params) = stage.params::<EvaluationParams>() else {

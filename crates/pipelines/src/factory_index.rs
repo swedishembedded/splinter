@@ -69,7 +69,7 @@ pub fn index_run(ctx: &Context, run: &Path) -> Result<Vec<IndexedPass>, Orchestr
         let trials = trials_of(&view).map_err(refused)?;
         let (mut members, mut verdicts, mut skipped) = (Vec::new(), BTreeMap::new(), Vec::new());
         for trial in &trials {
-            let experience = match experience_of(&view, trial) {
+            let experience = match experience_of(&view, trial, None) {
                 Ok(experience) => experience,
                 Err(why) => {
                     skipped.push((trial.slot.to_string(), why));

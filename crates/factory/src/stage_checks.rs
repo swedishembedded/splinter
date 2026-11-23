@@ -370,3 +370,41 @@ pub(crate) fn mutate_problems(
     }
     out
 }
+
+/// A `model.train` stage whose `replay` cannot be rehearsed: replay
+/// rehearses chat records, so neither the dataset trained nor a replayed
+/// one may be of a view objective, and a share is a share.
+pub(crate) fn replay_problems(stage: &PlannedStage, compiled: &CompiledPlan) -> Vec<String> {
+    let mut out = Vec::new();
+    let replayed = stage.sources("replay");
+    let share = ops::params::<ops::TrainParams>(&stage.params)
+        .ok()
+        .and_then(|p| p.replay_share);
+    if let Some(share) = share {
+        if replayed.is_empty() {
+            out.push("replay_share is given and nothing is replayed".to_owned());
+        } else if !(share > 0.0 && share < 1.0) {
+            out.push("replay_share is a share of the draws, between 0 and 1".to_owned());
+        }
+    }
+    if replayed.is_empty() {
+        return out;
+    }
+    let objective = |source: &str| {
+        compiled
+            .stages
+            .iter()
+            .find(|s| s.id == source && s.operation == names::PROJECT)
+            .and_then(|s| ops::params::<ProjectParams>(&s.params).ok())
+            .map(|p| p.objective)
+            .filter(|o| o != "sft")
+    };
+    for source in stage.sources("dataset").into_iter().chain(replayed) {
+        if let Some(objective) = objective(source) {
+            out.push(format!(
+                "{source} is a {objective} dataset; replay rehearses chat records, beside a chat dataset"
+            ));
+        }
+    }
+    out
+}

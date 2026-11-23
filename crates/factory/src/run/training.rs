@@ -118,7 +118,14 @@ pub(crate) fn identity(
 ) -> Result<StageIdentity, RunError> {
     let variant = variant(factory, stage)?;
     let key = dataset_key(stage)?;
-    let inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
+    let mut inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
+    for replayed in stage.sources("replay") {
+        inputs.push((replayed.to_owned(), factory.product(replayed)?.1.digest()));
+    }
+    let share = stage
+        .params::<crate::ops::TrainParams>()
+        .map_err(|e| stage_error(&stage.key, e))?
+        .replay_share;
     let mut parameters = json!({
         "engine": variant.engine, "base": variant.base, "method": variant.method,
         // As the trainer will train them: a changed default is a new candidate.
@@ -128,6 +135,9 @@ pub(crate) fn identity(
         // By content: the same adapter continued is the same input, wherever its run is. A candidate
         // trained from nothing keeps the identity it had before a start could be named.
         parameters["start"] = json!(start.digest.hex());
+    }
+    if !stage.sources("replay").is_empty() {
+        parameters["replay_share"] = json!(share);
     }
     Ok(super::identity_of(
         &stage.versioned_operation(),
@@ -150,6 +160,16 @@ pub(crate) fn produce(
     let key = dataset_key(stage)?;
     let view = factory.view(&key);
     let dataset = dataset_of(&view)?;
+    // Each replayed dataset's training records.
+    let mut replay = Vec::new();
+    for replayed in stage.sources("replay") {
+        let at = factory.view(replayed);
+        replay.push(at.join(dataset_of(&at)?.train.path));
+    }
+    let share = stage
+        .params::<crate::ops::TrainParams>()
+        .map_err(|e| stage_error(&stage.key, e))?
+        .replay_share;
     let stage_id = identity.digest();
     // The tag names the candidate at the trainer; it is the identity, so a
     // changed variant is a different candidate there too.
@@ -164,6 +184,8 @@ pub(crate) fn produce(
             objective: &dataset.objective,
             train: &view.join(&dataset.train.path),
             validation: &view.join(&dataset.validation.path),
+            replay: &replay,
+            replay_share: share.map(|s| s as f32),
             seed: variant.seed,
             // The mode the dataset was built for.
             thinking: dataset.thinking,
