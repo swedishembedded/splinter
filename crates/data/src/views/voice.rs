@@ -101,7 +101,7 @@ pub fn whole_text(text: &str, _media_type: &str) -> Vec<Range<usize>> {
     std::iter::once(0..text.len()).collect()
 }
 
-/// Characters at [`CHARS_PER_TOKEN`], rounded up: the measure when no
+/// Characters at `CHARS_PER_TOKEN`, rounded up: the measure when no
 /// tokenizer is given.
 #[must_use]
 pub fn chars_as_tokens(text: &str) -> usize {

@@ -147,7 +147,7 @@ impl SftStep {
     }
 
     /// The same view reading a run exported as one agent step as one call per
-    /// turn ([`crate::trajectory`]): for trajectories recorded before the agent
+    /// turn (`crate::trajectory`): for trajectories recorded before the agent
     /// kept its turns apart.
     #[must_use]
     pub fn serialise_calls(mut self, serialise_calls: bool) -> Self {

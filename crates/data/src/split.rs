@@ -16,7 +16,7 @@
 //! verified before it is returned:
 //!
 //! - [`DataSplit::from_partition`]: participant-exclusive, from a
-//!   [`Partition`](crate::partition::Partition) (the locked test is `Test`,
+//!   [`Partition`] (the locked test is `Test`,
 //!   one fold is `Validation`).
 //! - [`temporal_split`]: units whose time is at or before a cutoff train
 //!   (a seeded share of them validate), later units test. A group with

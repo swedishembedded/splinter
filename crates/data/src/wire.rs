@@ -157,7 +157,7 @@ const DURATION_FIELD: &str = " | Duration: ";
 const CANONICAL_DURATION: &str = "0.0s";
 
 /// `text`, a tool result, with every wall-clock measurement replaced by
-/// [`CANONICAL_DURATION`]: the duration in a shell result's
+/// `CANONICAL_DURATION`: the duration in a shell result's
 /// `Exit: <code> | Duration: <seconds>s` status line is the only part of a
 /// result that differs between two runs of one command. Everything else is
 /// kept byte for byte.

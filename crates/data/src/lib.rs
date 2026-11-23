@@ -269,8 +269,9 @@ pub struct Projection {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub packed: bool,
     /// Whether every record comes from an experience an independent verdict
-    /// passed ([`SftStep::outcome_verified_only`]); without it an action
-    /// labelled good is admitted from an unverified or failed experience.
+    /// passed (an [`SftStep`] whose control is `OutcomeVerified`); without it
+    /// an action labelled good is admitted from an unverified or failed
+    /// experience.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub outcome_verified_only: bool,
     /// The terms the records' data came under, combined over their sources

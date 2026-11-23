@@ -131,7 +131,7 @@ impl Transition {
     }
 
     /// The same view reading a run exported as one agent step as one call per
-    /// turn ([`crate::trajectory`]).
+    /// turn (`crate::trajectory`).
     #[must_use]
     pub fn serialise_calls(mut self, serialise_calls: bool) -> Self {
         self.rendering.serialise_calls = serialise_calls;
