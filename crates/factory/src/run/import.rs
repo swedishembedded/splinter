@@ -67,7 +67,6 @@ fn resolved<'r>(
     let params: ImportParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
     let pin = pin(stage)?;
     let collection = &factory
-        .resolved
         .collections
         .get(pin)
         .ok_or_else(|| stage_error(&stage.key, format!("{pin} pins no tasks")))?

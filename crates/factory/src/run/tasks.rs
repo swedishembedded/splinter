@@ -45,10 +45,41 @@ fn collection<'r>(
     stage: &PlannedStage,
 ) -> Result<&'r LoadedCollection, RunError> {
     factory
-        .resolved
         .collections
         .get(&stage.key)
         .ok_or_else(|| stage_error(&stage.key, "its collection was not resolved"))
+}
+
+/// The collection a stage produced, as the pin `stage` reads it: every task
+/// below the producing stage's view, of the pin's split.
+///
+/// # Errors
+/// The pin is bound to no stage, or the product holds no such task.
+pub(crate) fn produced_collection(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+) -> Result<LoadedCollection, RunError> {
+    let source = stage
+        .source("collection")
+        .ok_or_else(|| stage_error(&stage.key, "its collection was not resolved"))?;
+    factory.product(source)?;
+    let params: crate::ops::PinParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
+    let mut loaded = crate::collection::scan(&factory.view(source), stage.key.clone(), &[])
+        .map_err(|e| stage_error(&stage.key, e))?;
+    loaded
+        .collection
+        .tasks
+        .retain(|t| params.split.is_none() || t.split == params.split);
+    if loaded.collection.tasks.is_empty() {
+        return Err(stage_error(
+            &stage.key,
+            format!(
+                "{source} produced no task of split {}",
+                params.split.as_deref().unwrap_or("(any)")
+            ),
+        ));
+    }
+    Ok(loaded)
 }
 
 pub(crate) fn produce(

@@ -237,7 +237,6 @@ pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<
     let pass = pass(factory, stage)?;
     let pin = pin(stage)?;
     let tasks = &factory
-        .resolved
         .collections
         .get(pin)
         .ok_or_else(|| stage_error(&stage.key, format!("{pin} pins no tasks")))?

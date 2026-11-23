@@ -435,11 +435,8 @@ fn check(
             let Ok(params) = stage.params::<PinParams>() else {
                 return;
             };
+            // A collection a stage produces is read when the pin runs.
             let Some(input) = stage.input("collection") else {
-                problem(
-                    reader,
-                    "a collection is read from the recipe's `inputs:` (a collection file)",
-                );
                 return;
             };
             let Some(path) = compiled.inputs.get(input).map(|i| i.path.clone()) else {

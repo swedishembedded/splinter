@@ -310,6 +310,16 @@ last line of output), anything else when it failed. Its parameters are checked
 against `parameters` before anything runs, and `code` is pinned: a changed
 program is a changed input, which a run refuses and a fork recomputes.
 
+A collection an operator compiles is pinned like a collection file: bind the
+pin's `collection` to the operator's output, and its tasks (every directory
+holding a `task.toml`, of the pin's split) are read when the pin runs:
+
+```yaml
+  - { id: compile, uses: course.compile, inputs: { course: $inputs.course } }
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.compile.tasks },
+      with: { split: train } }
+```
+
 ## What each stage guarantees
 
 - **Attempts** (`attempt.collect`). Every attempt is graded by the one outcome classifier: a reward-0

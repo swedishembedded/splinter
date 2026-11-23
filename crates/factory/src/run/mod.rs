@@ -256,6 +256,9 @@ pub struct Factory<'a> {
     pub(crate) services: Services<'a>,
     /// Committed products by stage key, as this invocation knows them.
     pub(crate) done: BTreeMap<String, (Digest, ProductManifest)>,
+    /// The tasks each `tasks.pin` stage pins: read when the recipe was
+    /// resolved, or, for a collection a stage produced, when the pin runs.
+    pub(crate) collections: BTreeMap<String, crate::collection::LoadedCollection>,
     cancel: Box<dyn Fn() -> bool + 'a>,
 }
 
@@ -327,6 +330,7 @@ impl<'a> Factory<'a> {
             fence,
             services,
             done: BTreeMap::new(),
+            collections: resolved.collections.clone(),
             cancel: Box::new(|| false),
         }
         .with_cancel_file())
@@ -381,6 +385,10 @@ impl<'a> Factory<'a> {
     }
 
     fn stage(&mut self, stage: &PlannedStage) -> Result<StageEntry, RunError> {
+        if stage.operation == names::PIN && !self.collections.contains_key(&stage.key) {
+            let produced = tasks::produced_collection(self, stage)?;
+            self.collections.insert(stage.key.clone(), produced);
+        }
         let (identity, (manifest, computed)) = match stage.operation.as_str() {
             names::PIN
             | names::ATTEMPTS

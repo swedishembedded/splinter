@@ -136,21 +136,31 @@ pub fn load(repository: &Path, relative: &str) -> Result<LoadedCollection, LoadE
         )])
         .into());
     }
+    scan(&root, file.name, &file.include)
+}
+
+/// The tasks below `root` (every directory holding a `task.toml`), as the
+/// collection `name`; with `include`, only the tasks at or below those
+/// prefixes. A collection a stage produced is read this way, its root the
+/// product's view.
+///
+/// # Errors
+/// A task cannot be read, or two share an id.
+pub fn scan(root: &Path, name: String, include: &[String]) -> Result<LoadedCollection, LoadError> {
     let mut found = Vec::new();
-    find_tasks(&root, &root, &mut found)?;
+    find_tasks(root, root, &mut found)?;
     let mut tasks = Vec::new();
     for dir in found {
         let id = dir
-            .strip_prefix(&root)
+            .strip_prefix(root)
             .map_err(|e| LoadError::Task {
                 path: dir.clone(),
                 message: e.to_string(),
             })?
             .to_string_lossy()
             .replace('\\', "/");
-        let wanted = file.include.is_empty()
-            || file
-                .include
+        let wanted = include.is_empty()
+            || include
                 .iter()
                 .any(|prefix| id == *prefix || id.starts_with(&format!("{prefix}/")));
         if wanted {
@@ -158,8 +168,8 @@ pub fn load(repository: &Path, relative: &str) -> Result<LoadedCollection, LoadE
         }
     }
     Ok(LoadedCollection {
-        collection: TaskCollection::new(file.name, tasks)?,
-        root,
+        collection: TaskCollection::new(name, tasks)?,
+        root: root.to_path_buf(),
     })
 }
 
