@@ -113,6 +113,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
 | `task.generate` | `documents` (one or more) | `tasks` |
 | `answer.collect` | `task` | `answers` |
+| `environment.build` | `documents` (optional) | `environments` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -334,6 +335,25 @@ name). Each item holds `experience-N.json` and `verdicts-N.json`.
     foreach: $stages.generated.tasks
     inputs: { task: $item }
     with: { model: student, attempts: 4 }
+```
+
+## Environments from an objective
+
+`environment.build` compiles a learning objective (a file of the task
+repository) into admitted, executable training environments, as `splinter env
+compile` does: each buildable skill's generator plugin makes environments along
+its difficulty knobs, and each passes the admission gates (its verifier
+red-teamed, its base pass rate banded) before it is kept. The product holds the
+instances as Harbor task folders by split, which `tasks.pin` pins like a
+compiled collection, and `compile.json`, the report of every environment, the
+rejected and quarantined ones with their reasons:
+
+```yaml
+  - id: built
+    uses: environment.build
+    with: { objective: objectives/python.md, environments: 4, instances: 8, seed: 7 }
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.built.environments },
+      with: { split: train } }
 ```
 
 ## The task repository's own operators

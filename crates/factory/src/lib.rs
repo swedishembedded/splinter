@@ -36,6 +36,7 @@ pub mod champion;
 pub mod collection;
 pub mod connections;
 mod describe;
+pub mod env_ops;
 pub mod environment;
 pub mod eval_plan;
 pub mod execute;

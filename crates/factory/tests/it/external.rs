@@ -401,3 +401,47 @@ fn an_examiner_operator_examines_a_candidate_and_its_verdict_is_verified() {
     assert!(result.protected && result.signature.is_some());
     assert_eq!(result.decision, Decision::Improved);
 }
+
+#[test]
+fn an_objective_compiled_into_environments_is_pinned_as_tasks() {
+    use splinter_factory::run::tasks::tasks_of;
+    let repo = Repo::new();
+    repo.write(
+        "objectives/python.md",
+        "Predict the output of Python snippets\n",
+    );
+    // seed: the recipe states the generators' seed; the spec reads only what is admitted.
+    let recipe = "schema: splinter.recipe/v2
+name: built
+stages:
+  - id: built
+    uses: environment.build
+    with: { objective: objectives/python.md, environments: 1, instances: 2, seed: 7 }
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.built.environments }, with: { split: train } }
+";
+    let resolved = resolve(&repo.root, recipe, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert!(dir.path().join("built/compile.json").is_file());
+    let pinned = tasks_of(&dir.path().join("tasks")).unwrap();
+    assert_eq!(pinned.tasks.len(), 2, "{:?}", pinned.tasks);
+    assert!(pinned.tasks.iter().all(|t| t.id.starts_with("train/")));
+    for task in &pinned.tasks {
+        assert!(dir
+            .path()
+            .join("tasks")
+            .join(&task.id)
+            .join("task.toml")
+            .is_file());
+    }
+}
