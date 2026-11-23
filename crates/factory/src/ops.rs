@@ -16,6 +16,7 @@
 //! | `dataset.import` | `records` (files) | `dataset` |
 //! | `dataset.project` | `attempts` (many) | `dataset` |
 //! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
+//! | `dataset.text` | `documents` (files) | `dataset` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
@@ -197,6 +198,28 @@ fn ten() -> u8 {
     10
 }
 
+/// How a text dataset holds documents out for validation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentSplit {
+    /// The share of documents held out, in percent.
+    pub percent: u32,
+}
+
+/// `dataset.text`: documents as a continued-pretraining dataset
+/// ([`crate::run::dataset_text`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TextDatasetParams {
+    /// The model role the records are for.
+    pub target: String,
+    /// How documents are held out for validation; none when unset.
+    #[serde(default)]
+    pub validation: Option<DocumentSplit>,
+    /// The seed the held-out documents are drawn by.
+    pub seed: u64,
+}
+
 fn sft() -> String {
     "sft".into()
 }
@@ -336,6 +359,8 @@ pub mod names {
     pub const IMPORT: &str = "attempt.import";
     /// `dataset.import`.
     pub const IMPORT_DATASET: &str = "dataset.import";
+    /// `dataset.text`.
+    pub const TEXT_DATASET: &str = "dataset.text";
     /// `dataset.project`.
     pub const PROJECT: &str = "dataset.project";
     /// `dataset.extend`.
@@ -491,6 +516,15 @@ pub fn registry() -> Registry {
             ],
             output: port("dataset", ArtifactKind::Dataset),
             reproducibility: Reproducibility::Deterministic,
+            isolation: Isolation::Any,
+            roles: |p| vec![p.target.clone()],
+        })
+        .with(Builtin::<TextDatasetParams> {
+            name: names::TEXT_DATASET,
+            summary: "documents as a continued-pretraining dataset, each text once",
+            inputs: vec![port("documents", ArtifactKind::Files)],
+            output: port("dataset", ArtifactKind::Dataset),
+            reproducibility: Reproducibility::Seeded,
             isolation: Isolation::Any,
             roles: |p| vec![p.target.clone()],
         })

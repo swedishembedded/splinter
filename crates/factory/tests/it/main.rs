@@ -30,3 +30,4 @@ mod qualify;
 mod repo;
 mod resolve;
 mod reuse;
+mod text_dataset;

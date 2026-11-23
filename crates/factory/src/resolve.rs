@@ -553,6 +553,20 @@ fn check(
                 }
             }
         }
+        names::TEXT_DATASET => {
+            if stage.input("documents").is_none() {
+                problem(
+                    reader,
+                    "reads no documents: bind `documents` to a recipe input (a directory)",
+                );
+            }
+            pin_inputs(stage, compiled, reader);
+            if let Ok(params) = stage.params::<ops::TextDatasetParams>() {
+                if params.validation.as_ref().is_some_and(|v| v.percent >= 100) {
+                    problem(reader, "holds out every document for validation");
+                }
+            }
+        }
         names::IMPORT_DATASET => {
             if stage.input("records").is_none() {
                 problem(

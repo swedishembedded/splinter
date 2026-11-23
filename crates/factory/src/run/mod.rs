@@ -26,6 +26,7 @@ pub mod corpus;
 pub mod dataset;
 pub mod dataset_extend;
 pub mod dataset_import;
+pub mod dataset_text;
 mod directory;
 pub mod eval;
 pub mod fork;
@@ -399,6 +400,7 @@ impl<'a> Factory<'a> {
             | names::IMPORT
             | names::IMPORT_DATASET
             | names::EXTEND_DATASET
+            | names::TEXT_DATASET
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
@@ -428,6 +430,7 @@ impl<'a> Factory<'a> {
             names::IMPORT => import::identity(self, stage)?,
             names::IMPORT_DATASET => dataset_import::identity(self, stage)?,
             names::EXTEND_DATASET => dataset_extend::identity(self, stage)?,
+            names::TEXT_DATASET => dataset_text::identity(self, stage)?,
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
@@ -439,6 +442,7 @@ impl<'a> Factory<'a> {
             names::IMPORT => import::produce(factory, stage, staging),
             names::IMPORT_DATASET => dataset_import::produce(factory, stage, staging),
             names::EXTEND_DATASET => dataset_extend::produce(factory, stage, staging),
+            names::TEXT_DATASET => dataset_text::produce(factory, stage, staging),
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),

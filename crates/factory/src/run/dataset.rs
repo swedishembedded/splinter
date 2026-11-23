@@ -309,7 +309,7 @@ pub(crate) fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunErro
 }
 
 /// The groups held out: `percent` of them, drawn by `seed`, never all.
-fn held_out(groups: &BTreeSet<String>, percent: u32, seed: u64) -> BTreeSet<String> {
+pub(crate) fn held_out(groups: &BTreeSet<String>, percent: u32, seed: u64) -> BTreeSet<String> {
     let mut drawn: Vec<(u64, &String)> = groups
         .iter()
         .map(|g| (digest_of(&(seed, g)).leading_u64(), g))

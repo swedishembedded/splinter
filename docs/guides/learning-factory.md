@@ -103,6 +103,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `dataset.import` | `records` (a recipe input) | `dataset` |
 | `dataset.project` | `attempts` (one or more) | `dataset` |
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
+| `dataset.text` | `documents` (a recipe input) | `dataset` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model), `tasks` (optional) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
@@ -516,6 +517,12 @@ compiles its collection evaluates on the same compiled tasks:
     inputs: { attempts: [$stages.local.attempts] }
     with: { objective: preference, preference: { pairs_per_task: 4 }, target: student, seed: 13 }
   ```
+- **Texts** (`dataset.text`). Continued pretraining on a directory of the task
+  repository: each file's text is one record by splinter-data's CPT view (a
+  text two files share is trained on once, a file that is not text or is
+  empty is left out and counted), one supervised turn, so it trains like a
+  chat dataset; `validation: { percent: N }` holds out whole documents, drawn
+  by the seed.
 - **RLVR tasks** (`dataset.rlvr`). An online trainer rolls a task out again and
   grades each rollout by the task's own verifier; a task the policy always or
   never solves gives it no gradient. `dataset.rlvr` keeps the pinned tasks whose

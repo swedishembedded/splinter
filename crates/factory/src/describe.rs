@@ -106,6 +106,19 @@ pub(crate) fn work(
                 jobs.join(", ")
             )
         }
+        names::TEXT_DATASET => stage.params::<crate::ops::TextDatasetParams>().map_or_else(
+            |_| String::new(),
+            |p| {
+                let from = stage
+                    .input("documents")
+                    .and_then(|i| compiled.inputs.get(i))
+                    .map_or("?", |i| i.path.as_str());
+                format!(
+                    "the texts of {from} for continued pretraining of {}",
+                    model(&p.target)
+                )
+            },
+        ),
         names::IMPORT_DATASET => stage.params::<ImportDatasetParams>().map_or_else(
             |_| String::new(),
             |p| {
