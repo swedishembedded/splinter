@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use crate::collection::LoadedCollection;
 use crate::graph::{self, CompiledPlan};
 use crate::ops::{
-    names, AttemptParams, EvaluationParams, ImportDatasetParams, ImportParams, ProjectParams,
-    PromotionParams, TrainParams,
+    names, AttemptParams, EvaluationParams, ExtendDatasetParams, ImportDatasetParams, ImportParams,
+    ProjectParams, PromotionParams, TrainParams,
 };
 use crate::plan::PlannedStage;
 
@@ -106,6 +106,17 @@ pub(crate) fn work(
                 format!(
                     "import the training records of {from} for {}",
                     model(&p.target)
+                )
+            },
+        ),
+        names::EXTEND_DATASET => stage.params::<ExtendDatasetParams>().map_or_else(
+            |_| String::new(),
+            |p| {
+                format!(
+                    "add the candidates' new solutions to the base dataset for {}, at most {} \
+                     records a task",
+                    model(&p.target),
+                    p.per_task
                 )
             },
         ),

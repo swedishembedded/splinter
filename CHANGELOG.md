@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (`dataset.extend`: novelty-gated admission)
+- `dataset.extend` adds new verified records to an existing dataset only as new solutions of their task: the base byte for byte, then the candidates whose tool-call sequence (arguments in `ignore_call_arguments` left out) the task does not have yet, under the base's system prompt and tool schema, up to `per_task` records a task. A task's side never moves (a held-out task keeps its new records in validation; a task new to the base is held out whole by a hash of `holdout_seed`), candidates are weighed in task and content order so the result does not depend on production order, and `lineage.json` records the parents and every left-out reason.
+
 ### Added (dataset build: `--ignore-call-argument`)
 - `dataset build --distinct-calls --ignore-call-argument NAME` leaves an argument out when two passes' tool calls are compared. The `vim-vim` tool's free-text `intent` made two runs that sent the same commands two demonstrations (4 duplicate records in the published vim set under whole-argument comparison, 13 with `intent` ignored). `PassCuration` carries `ignore_call_arguments` and the manifest records it.
 

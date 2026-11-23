@@ -102,6 +102,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `attempt.import` | `tasks`, `jobs` (Harbor job directories, recipe inputs) | `attempts` |
 | `dataset.import` | `records` (a recipe input) | `dataset` |
 | `dataset.project` | `attempts` (one or more) | `dataset` |
+| `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
@@ -172,6 +173,34 @@ tell whether a trial was verified or a task is examination material, so keep exa
 An `evaluation` stage takes `files`, `system_prompt` and `budget` as an attempt stage does, for every arm. A
 candidate trained on records whose system prompt carries an appended instruction, or in a mode a configuration
 file sets, is then evaluated under the same.
+
+## Growing a dataset with new solutions
+
+New verified trajectories make a dataset better only when they are other solutions. A `dataset.extend` stage takes a
+`base` dataset and a `candidates` dataset (new attempts projected by `dataset.project`, or imported records) and makes
+a dataset that holds every record of the base, byte for byte and in order, followed by the candidates that qualify:
+
+```yaml
+  - id: more
+    uses: dataset.project
+    inputs: { attempts: [$stages.local.attempts] }
+    with: { projection: native-sft, target: student, max_block: 16384, seed: 4 }
+  - id: grown
+    uses: dataset.extend
+    inputs: { base: $stages.sft.dataset, candidates: $stages.more.dataset }
+    with: { target: student, per_task: 4, ignore_call_arguments: [intent], holdout_seed: 17925836769974212992 }
+```
+
+A candidate is admitted when it was made under the base's system prompt and tool schema, the sequence of its tool
+calls (name and arguments, whitespace normalised, `ignore_call_arguments` left out) is not one its task already has,
+and the task has fewer than `per_task` records. Otherwise it is left out and listed in `excluded.jsonl` as
+`prompt_mismatch`, `tools_mismatch`, `duplicate_solution` or `over_task_cap`. The candidates are weighed in the order
+of their task and content digest, so what is admitted does not depend on the order the attempts were produced in.
+
+A task's side never changes: a task the base holds out keeps its new records in `validation`, a task the base trains
+on keeps them in `train`, and a task new to the base is held out as a whole, or trained on as a whole, by a hash of
+`holdout_seed` and the task at `holdout_percent` (10 by default); use the seed the base was split with. A task on both
+sides stops the stage. `lineage.json` names the parents, the counts and every left-out reason.
 
 ## Harness stages
 

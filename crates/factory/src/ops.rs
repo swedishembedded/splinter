@@ -15,6 +15,7 @@
 //! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
 //! | `dataset.import` | `records` (files) | `dataset` |
 //! | `dataset.project` | `attempts` (many) | `dataset` |
+//! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
@@ -159,6 +160,35 @@ pub struct ImportDatasetParams {
     pub thinking: bool,
 }
 
+/// `dataset.extend`: new records admitted into an existing dataset only as
+/// new solutions of their task ([`crate::run::dataset_extend`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExtendDatasetParams {
+    /// The model role the dataset is for.
+    pub target: String,
+    /// The most records a task has in the result, the base's included.
+    #[serde(default = "four")]
+    pub per_task: usize,
+    /// Argument names left out when two solutions' tool calls are compared:
+    /// the free text a call carries beside what it does (a stated intent).
+    #[serde(default)]
+    pub ignore_call_arguments: Vec<String>,
+    /// The share, in percent, of the tasks new to the base that are held out
+    /// (as whole tasks). A task the base already has stays on its side.
+    #[serde(default = "ten")]
+    pub holdout_percent: u8,
+    /// The seed the held-out draw of a new task is made by; keep the base's.
+    pub holdout_seed: u64,
+}
+
+fn four() -> usize {
+    4
+}
+fn ten() -> u8 {
+    10
+}
+
 fn sft() -> String {
     "sft".into()
 }
@@ -284,6 +314,8 @@ pub mod names {
     pub const IMPORT_DATASET: &str = "dataset.import";
     /// `dataset.project`.
     pub const PROJECT: &str = "dataset.project";
+    /// `dataset.extend`.
+    pub const EXTEND_DATASET: &str = "dataset.extend";
     /// `model.train`.
     pub const TRAIN: &str = "model.train";
     /// `evaluation`.
@@ -412,6 +444,19 @@ pub fn registry() -> Registry {
             summary: "training records made elsewhere (a directory of train.jsonl and \
                       validation.jsonl), carried over unchanged as a dataset",
             inputs: vec![port("records", ArtifactKind::Files)],
+            output: port("dataset", ArtifactKind::Dataset),
+            reproducibility: Reproducibility::Deterministic,
+            isolation: Isolation::Any,
+            roles: |p| vec![p.target.clone()],
+        })
+        .with(Builtin::<ExtendDatasetParams> {
+            name: names::EXTEND_DATASET,
+            summary: "new verified records added to an existing dataset only when they are a \
+                      new solution of their task, a task's side never changing",
+            inputs: vec![
+                port("base", ArtifactKind::Dataset),
+                port("candidates", ArtifactKind::Dataset),
+            ],
             output: port("dataset", ArtifactKind::Dataset),
             reproducibility: Reproducibility::Deterministic,
             isolation: Isolation::Any,
