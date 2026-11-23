@@ -30,7 +30,7 @@
 //! its unfinished attempts; those with a report are recorded, the others are
 //! marked lost and their slots launched again.
 //!
-//! The same machinery runs an evaluation's arms ([`Arm`]).
+//! The same machinery runs an evaluation's arms.
 //!
 //! The product holds `trials.jsonl` (one [`TrialResult`] per slot, by slot),
 //! `attempts.jsonl` (every physical attempt), `selected-tasks.jsonl`,
