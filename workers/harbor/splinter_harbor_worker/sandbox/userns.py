@@ -472,6 +472,21 @@ class UserNamespaceEnvironment(BaseEnvironment):
             spec["stdin"] = True
         return await self._stream(spec, command, timeout_sec, sink, stdin)
 
+    async def exec_terminal(self, command: str, *, output: Callable[[bytes], Awaitable[None]],
+                            keys: AsyncIterator[bytes], size: tuple[int, int], cwd: str | None = None,
+                            env: dict[str, str] | None = None, timeout_sec: int | None = None) -> int:
+        """Run ``command`` on a pseudo-terminal of the sandbox's own, ``size`` (rows, columns) to begin with, for a
+        person who watches and types into it: everything it writes goes to ``output`` as written, and ``keys`` yields
+        the frames (``sandbox.terminal``) to put into it; ``keys`` ending hangs the terminal up. The return code;
+        cancelling the call kills the command with its whole process group."""
+        spec = self._launch_spec(command, cwd, self._merge_env(env))
+        spec["terminal"] = {"rows": size[0], "cols": size[1]}
+
+        async def sink(number: int, chunk: bytes) -> None:
+            await output(chunk)
+
+        return await self._stream(spec, command, timeout_sec, sink, keys)
+
     @property
     def workdir(self) -> str:
         """The sandbox directory commands run in unless told otherwise: the task's working directory."""

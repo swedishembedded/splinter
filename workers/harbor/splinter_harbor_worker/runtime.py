@@ -16,8 +16,10 @@ secret is never put in an adapter's keyword arguments, which Harbor writes to th
 from __future__ import annotations
 
 from splinter_harbor_worker.gateway import ModelGateway
+from splinter_harbor_worker.seat import TerminalSeat
 
 _gateway: ModelGateway | None = None
+_seat: TerminalSeat | None = None
 
 
 def publish_gateway(gateway: ModelGateway | None) -> None:
@@ -29,3 +31,15 @@ def gateway() -> ModelGateway:
     if _gateway is None:
         raise RuntimeError("this job runs no model gateway, but the agent asked for a model token")
     return _gateway
+
+
+def publish_seat(seat: TerminalSeat | None) -> None:
+    """The person's seat of a played trial (``splinter-harbor-worker play``); ``None`` for a job nobody sits at."""
+    global _seat
+    _seat = seat
+
+
+def seat() -> TerminalSeat:
+    if _seat is None:
+        raise RuntimeError("a human-guided trial runs inside `splinter-harbor-worker play`, which gives it a seat")
+    return _seat

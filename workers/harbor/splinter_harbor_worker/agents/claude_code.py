@@ -42,3 +42,11 @@ class ClaudeCodeAgent(SplinterAgent):
         if settings.get("system_prompt"):
             parts += ["--append-system-prompt", settings["system_prompt"]]
         return [*parts, "-p", instruction]
+
+    def interactive_argv(self, instruction: str | None, run_timeout_sec: int, continuing: bool) -> list[str]:
+        """Claude Code's own terminal UI: the instruction is its first message."""
+        settings = self._settings
+        parts = [*self._command.split(), *sandbox_args(settings.get("args", []), settings.get("files", []))]
+        if settings.get("system_prompt"):
+            parts += ["--append-system-prompt", settings["system_prompt"]]
+        return [*parts, instruction]

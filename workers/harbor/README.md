@@ -14,10 +14,45 @@ make test/worker           # the suite: proot sandboxes, stub models, no network
 splinter-harbor-worker run --specs SPECS.jsonl --tasks TASK_ROOT --out OUT_DIR \
     [--concurrency N] [--files FILES_ROOT] [--image-cache DIR]
 splinter-harbor-worker reconcile --out OUT_DIR
+splinter-harbor-worker play --spec SPEC.json --tasks TASK_ROOT --out OUT_DIR \
+    [--files FILES_ROOT] [--image-cache DIR] [--continue TRIAL_DIR]
 ```
 
 `run` exits 0 when every attempt has a report (a reward-0 trial or a model error is still a report), 1 when the worker
 itself failed or an attempt has none, 2 when a specification or an argument is refused before Harbor starts.
+
+## Play: a person drives the agent
+
+`play` runs exactly one ExecutionSpec (one JSON object in SPEC.json) as one Harbor trial under `OUT_DIR/harbor/job/<trial>`
+with the same staging, sandbox, gateway and agent plumbing as `run`, except that the agent is started interactively on a
+terminal attached to yours: you type into the agent's own interface (Sven's TUI, `sven --interactive`; Claude Code's) and
+end the session by quitting it. The terminal is raw while the agent runs, window resizes are forwarded, and it is restored
+however the session ends. Then the verifier runs and the worker writes the AttemptReport and `events.jsonl` exactly as
+`run` does. `OUT_DIR` must be new (a person's session is never resumed), and the agent's time limit (the task's, or the
+specification's `timeout_seconds`) bounds the session. Harbor's own progress display and log lines are kept off your screen
+(they are in the trial's logs).
+
+```
+splinter-harbor-worker play --spec spec.json --tasks tasks --out out/play-1
+splinter-harbor-worker play --spec spec.json --tasks tasks --out out/play-2 --continue out/play-1/harbor/job/<trial>
+```
+
+* **Refused with exit 2:** standard input or output is not a TTY; the agent is `oracle` or `nop` (only `sven` and
+  `claude-code` have an interface to play); the provider is `docker` (only `userns` and `proot` give the agent a terminal
+  of the sandbox's own); the usual specification refusals. It works under `proot`, where there are no user namespaces and
+  no docker.
+* **Marking.** A reader tells a guided trial from an automatic one by `config.agent.kwargs.human_guided: true` in the
+  trial's `result.json`, which is `evidence.result.config.agent.kwargs.human_guided` in the report: the field Splinter's
+  Harbor ingestion reads. Sven also marks each turn you type in its trajectory (`extra.sven.origin: human`), and the
+  worker writes `agent/guidance.json` (`splinter.guidance/1`): who sat there, how many turns were typed and after how many
+  agent steps. Claude Code leaves no trajectory, so its guidance record has `trace: false` and the configuration is the marker.
+* **`--continue TRIAL_DIR`** goes on with the conversation of an earlier played Sven trial (`TRIAL_DIR` is its
+  `OUT_DIR/harbor/job/<trial>`, beside that `OUT_DIR/specs.jsonl`; the specification must be for the same slot). The new
+  trial is the next attempt of that slot: Sven is started on a copy of the old trajectory (`--trace`) and its trajectory is
+  the whole conversation, the first message is not sent again, and `guidance.json` records `continued_from` (trial,
+  attempt, trajectory digest). The old trial is only read. The workspace starts fresh from the task: the conversation
+  continues, the files the earlier session changed do not come with it. Sven drops the human marks of the turns it reloads;
+  the worker restores them (`continued_from.marks_restored`).
 
 ## Output
 
@@ -62,4 +97,6 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
 ## Not verified here
 
 `userns` needs unprivileged user namespaces and `docker` a daemon; this container has neither, so only what they decide
-before any process starts is tested. A real `claude` binary was not run; a scripted stand-in speaks its protocol.
+before any process starts is tested. A real `claude` binary was not run; a scripted stand-in speaks its protocol, also in `play`. `play` was run here only
+on `proot` (real Sven's TUI and a scripted agent on a pseudo-terminal); the `userns` terminal path is the one `bench task play`
+ran and was ported, not run.

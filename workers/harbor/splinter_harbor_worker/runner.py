@@ -33,7 +33,7 @@ from splinter_harbor_worker.events import EventLog
 from splinter_harbor_worker.evidence import build_report, finished_trial
 from splinter_harbor_worker.gateway import REQUEST_LOG, GatewayServer, ModelGateway, Upstream
 from splinter_harbor_worker.plan import (
-    JOB_NAME, GatewayAddress, job_config, preflight, report_path, stage_task, stage_tools,
+    JOB_NAME, GatewayAddress, Guided, job_config, preflight, report_path, stage_task, stage_tools,
     staged_task_dir, trial_config, trial_name, unenforced_limits,
 )
 from splinter_harbor_worker.spec import ExecutionSpec, load_specs
@@ -147,7 +147,7 @@ def run(specs_path: Path, tasks_root: Path, out: Path, *, concurrency: int = DEF
             raise UsageError("--concurrency must be at least 1")
         checked = preflight(specs, tasks_root, files_root)
         _copy_specs(out, specs_path)
-        return asyncio.run(_run(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events))
+        return asyncio.run(run_job(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events))
     except WorkerError as exc:
         events.emit("error", detail=str(exc))
         print(f"splinter-harbor-worker: {exc}", file=sys.stderr)
@@ -157,7 +157,9 @@ def run(specs_path: Path, tasks_root: Path, out: Path, *, concurrency: int = DEF
         raise
 
 
-async def _run(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events) -> int:
+async def run_job(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events,
+                  guided: Guided | None = None) -> int:
+    """Stage and run ``specs`` as the one Harbor job; ``guided`` makes every trial one a person plays."""
     (out / "staged").mkdir(exist_ok=True)
     staged = {spec.key: stage_task(out, tasks_root, spec) for spec in specs}
     stage_tools(out, checked.binaries)
@@ -176,7 +178,7 @@ async def _run(specs, tasks_root, files_root, out, concurrency, image_cache, che
     address = GatewayAddress(checked.gateway_host, server.port) if server else None
     try:
         configs = [trial_config(spec, out=out, staged=staged[spec.key], files_root=files_root, image_cache=image_cache,
-                                gateway=address) for spec in specs]
+                                gateway=address, guided=guided) for spec in specs]
         job = await _planned_job(configs).create(job_config(out, list(staged.values()), concurrency))
         # A trial Harbor finished before a crash keeps its result and is not run again; its report may be missing.
         sweep(out, specs, events, "resumed")

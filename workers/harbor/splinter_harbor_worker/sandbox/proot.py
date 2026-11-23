@@ -36,10 +36,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import json
 import os
+import pty
 import shutil
 import subprocess
+import termios
 from collections.abc import AsyncIterator
 from pathlib import Path, PurePosixPath
 
@@ -50,6 +53,7 @@ from splinter_harbor_worker.sandbox.userns import (
     _HOST_CERTIFICATES, _HOST_RUNTIME, _OUTPUT_GRACE_SEC, OutputSink, UserNamespaceEnvironment,
     _exit_status, _feed, _pump,
 )
+from splinter_harbor_worker.sandbox.terminal import FRAME, RESIZE, SIZE, TYPED, set_size
 from splinter_harbor_worker.sandbox.userns_keeper import prepare
 from splinter_harbor_worker.procgroup import signal_group
 from splinter_harbor_worker.rootfs.images import ensure_task_image
@@ -186,6 +190,8 @@ class ProotEnvironment(UserNamespaceEnvironment):
     async def _stream(self, spec: dict, command: str, timeout_sec: int | None, sink: OutputSink,
                       keys: AsyncIterator[bytes] | None = None) -> int:
         argv, env = self._argv(spec)
+        if "terminal" in spec:
+            return await self._terminal(argv, env, spec["terminal"], command, timeout_sec, sink, keys)
         proc = await asyncio.create_subprocess_exec(
             *argv, stdin=asyncio.subprocess.PIPE if keys is not None else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, env=env)
@@ -217,7 +223,62 @@ class ProotEnvironment(UserNamespaceEnvironment):
                 raise
             await proc.wait()
             raise TimeoutError(f"command timed out after {timeout_sec} s: {command[:200]}") from None
+    async def _terminal(self, argv: list[str], env: dict[str, str], size: dict, command: str, timeout_sec: int | None,
+                        sink: OutputSink, keys: AsyncIterator[bytes] | None) -> int:
+        """``argv`` on a pseudo-terminal of its own (``exec_terminal``): what it writes goes to ``sink``, ``keys`` are
+        the person's frames (``sandbox.terminal``); their end hangs the terminal up."""
+        master, slave = pty.openpty()
+        set_size(master, size["rows"], size["cols"])
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *argv, stdin=slave, stdout=slave, stderr=slave, start_new_session=True, env=env,
+                preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
+        finally:
+            os.close(slave)
+        loop = asyncio.get_running_loop()
+        output: asyncio.Queue[bytes | None] = asyncio.Queue()
 
+        def readable() -> None:
+            try:
+                chunk = os.read(master, 1 << 16)
+            except OSError:  # EIO: every process holding the terminal has gone
+                chunk = b""
+            if not chunk:
+                loop.remove_reader(master)
+            output.put_nowait(chunk or None)
+
+        async def relay() -> None:
+            while (chunk := await output.get()) is not None:
+                await sink(1, chunk)
+
+        async def typed() -> None:
+            buffer = b""
+            async for frame in keys:
+                buffer += frame
+                while len(buffer) >= FRAME.size:
+                    kind, length = FRAME.unpack_from(buffer)
+                    if len(buffer) < FRAME.size + length:
+                        break
+                    body, buffer = buffer[FRAME.size:FRAME.size + length], buffer[FRAME.size + length:]
+                    if kind == TYPED:
+                        os.write(master, body)
+                    elif kind == RESIZE and length == SIZE.size:
+                        set_size(master, *SIZE.unpack(body))
+            os.write(master, b"\x04")  # the person has gone: end of input, as a hung-up terminal gives
+
+        loop.add_reader(master, readable)
+        relayed = asyncio.ensure_future(relay())
+        feeder = asyncio.ensure_future(typed()) if keys is not None else None
+        try:
+            return await self._wait(proc, command, timeout_sec, [relayed, *([feeder] if feeder else [])])
+        finally:
+            if feeder is not None:
+                feeder.cancel()
+                await asyncio.gather(feeder, return_exceptions=True)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(relayed, timeout=_OUTPUT_GRACE_SEC)
+            loop.remove_reader(master)
+            os.close(master)
 
     # -- file transfer: the tree is a host directory -----------------------------
 

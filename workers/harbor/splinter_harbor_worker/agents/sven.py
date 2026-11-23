@@ -27,6 +27,7 @@ REQUEST_LOG = "/logs/agent/requests.jsonl"
 class SvenAgent(SplinterAgent):
     SUPPORTS_ATIF: bool = True
     BINARY = "sven"
+    TRACE_PATH = TRACE
 
     @staticmethod
     def name() -> str:
@@ -57,4 +58,19 @@ class SvenAgent(SplinterAgent):
             parts += ["--append-system-prompt", settings["system_prompt"]]
         parts += sandbox_args(settings.get("args", []), settings.get("files", []))
         parts.append(instruction)
+        return parts
+
+    def interactive_argv(self, instruction: str | None, run_timeout_sec: int, continuing: bool) -> list[str]:
+        """Sven's own terminal UI (``--interactive``): the instruction is the first message and the person types the
+        rest; the turns they type are marked ``extra.sven.origin: human`` in the trace. Continuing a trial gives Sven
+        its earlier trajectory as the trace to load and extend (``--trace``, the one persistence flag of the TUI), and
+        sends no instruction: the conversation so far already holds it."""
+        settings = self._settings
+        parts = [*self._command.split(), "--interactive", "--run-timeout", str(run_timeout_sec),
+                 *(["--trace", TRACE] if continuing else ["--output-trace", TRACE]), "--record-requests", REQUEST_LOG]
+        if settings.get("system_prompt"):
+            parts += ["--append-system-prompt", settings["system_prompt"]]
+        parts += sandbox_args(settings.get("args", []), settings.get("files", []))
+        if instruction is not None:
+            parts.append(instruction)
         return parts

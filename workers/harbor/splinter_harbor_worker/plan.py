@@ -43,6 +43,7 @@ from harbor.models.trial.config import AgentConfig, EnvironmentConfig, TaskConfi
 from splinter_harbor_worker.agents.base import TOOLS_DIR
 from splinter_harbor_worker.errors import UsageError
 from splinter_harbor_worker.fscopy import copy_tree
+from splinter_harbor_worker.guidance import HUMAN_GUIDED_KWARG
 from splinter_harbor_worker.spec import ExecutionSpec
 
 JOB_NAME = "job"
@@ -248,7 +249,18 @@ class GatewayAddress:
         return f"http://{self.host}:{self.port}"
 
 
-def _agent_config(spec: ExecutionSpec, files_root: Path, gateway: GatewayAddress | None, timeout: float) -> AgentConfig:
+@dataclass(frozen=True)
+class Guided:
+    """What makes a trial one a person plays (``splinter-harbor-worker play``): the agent runs interactively, the trial's
+    configuration says ``human_guided``, and, when it continues an earlier conversation, where that trajectory is
+    (``continue_trace``) and which trial it came from (``continued_from``, recorded in ``guidance.json``)."""
+
+    continue_trace: Path | None = None
+    continued_from: dict | None = None
+
+
+def _agent_config(spec: ExecutionSpec, files_root: Path, gateway: GatewayAddress | None, timeout: float,
+                  guided: Guided | None) -> AgentConfig:
     model_name = f"{spec.model.connection}/{spec.model.model}" if spec.model else None
     override = float(spec.sandbox.timeout_seconds) if spec.sandbox.timeout_seconds is not None else None
     hosts = [gateway.host] if gateway and spec.sandbox.network == "model-gateway-only" else []
@@ -270,8 +282,13 @@ def _agent_config(spec: ExecutionSpec, files_root: Path, gateway: GatewayAddress
         "protocol": spec.model.protocol if spec.model else None,
         "model": spec.model.model if spec.model else None,
     }
+    kwargs: dict = {"splinter": settings}
+    if guided is not None:
+        settings["continue_trace"] = str(guided.continue_trace) if guided.continue_trace else None
+        settings["continued_from"] = guided.continued_from
+        kwargs[HUMAN_GUIDED_KWARG] = True
     return AgentConfig(import_path=AGENT_CLASSES[spec.agent.name], model_name=model_name, override_timeout_sec=override,
-                       extra_allowed_hosts=hosts, kwargs={"splinter": settings})
+                       extra_allowed_hosts=hosts, kwargs=kwargs)
 
 
 def _mounts(spec: ExecutionSpec, files_root: Path, out: Path) -> list[dict]:
@@ -312,13 +329,14 @@ def unenforced_limits(spec: ExecutionSpec) -> list[str]:
 
 
 def trial_config(spec: ExecutionSpec, *, out: Path, staged: Path, files_root: Path, image_cache: Path,
-                 gateway: GatewayAddress | None, job_id: UUID | None = None) -> TrialConfig:
+                 gateway: GatewayAddress | None, job_id: UUID | None = None,
+                 guided: Guided | None = None) -> TrialConfig:
     timeout = agent_timeout_sec(staged, spec)
     return TrialConfig(
         task=TaskConfig(path=staged),
         trial_name=trial_name(spec),
         trials_dir=out / "harbor" / JOB_NAME,
-        agent=_agent_config(spec, files_root, gateway, timeout),
+        agent=_agent_config(spec, files_root, gateway, timeout, guided),
         environment=_environment_config(spec, files_root, out, image_cache, gateway),
         job_id=job_id,
     )
