@@ -215,6 +215,8 @@ fn the_child_sees_only_allowlisted_variables_from_the_callers_map() {
     for name in &names {
         assert!(
             ["HOME", "LANG", "PATH", "SPLINTER_TEST_SHARED", "TERM", "TMPDIR"].contains(name)
+                // The run's tag, where no pid namespace holds its processes.
+                || *name == splinter_sandbox::tagged::TOKEN_VAR
                 // The interpreter may add its own locale variable.
                 || name.starts_with("LC_"),
             "unexpected variable {name}: {}",

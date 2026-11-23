@@ -565,6 +565,12 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
+    // Without a pid namespace of its own, a process that leaves the group
+    // and is orphaned is found again by the run's tag (`crate::tagged`).
+    let tag = (!crate::namespace::available()).then(crate::tagged::token);
+    if let Some(token) = &tag {
+        command.env(crate::tagged::TOKEN_VAR, token);
+    }
     if let Some(mut resources) = spec.resources {
         resources.max_processes = resources
             .max_processes
@@ -609,6 +615,7 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     }
 
     let started = Instant::now();
+    let watchdog = tag.as_deref().and_then(crate::tagged::Watchdog::start);
     let mut child = command.spawn().map_err(|source| ProcessError::Spawn {
         program: program.clone(),
         source,
@@ -666,6 +673,12 @@ pub fn run(spec: &ProcessSpec) -> Result<ProcessOutput, ProcessError> {
     // The leader is not reaped yet, so the group id is still its own.
     kill_group(&child);
     let status = child.wait().map_err(failed)?;
+    if let Some(token) = &tag {
+        crate::tagged::kill_tagged(token);
+    }
+    if let Some(watchdog) = watchdog {
+        watchdog.stop();
+    }
     let grace = Instant::now() + KILL_GRACE;
     while !readers.iter().all(JoinHandle::is_finished) {
         if Instant::now() >= grace {

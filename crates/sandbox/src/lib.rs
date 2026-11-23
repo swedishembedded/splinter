@@ -57,6 +57,7 @@ pub mod runtime;
 pub mod scratch;
 pub mod seccomp;
 pub mod step;
+pub mod tagged;
 pub mod workspace;
 pub mod workspace_host;
 

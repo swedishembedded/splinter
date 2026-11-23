@@ -400,7 +400,9 @@ fn a_command_runs_in_the_tree_with_only_the_sandboxs_environment() {
     for name in &names {
         assert!(
             ["PATH", "LANG", "TERM", "HOME", "TMPDIR", "PWD", "SHLVL", "_", "OLDPWD"]
-                .contains(name),
+                .contains(name)
+                // The run's tag, where no pid namespace holds its processes.
+                || *name == splinter_sandbox::tagged::TOKEN_VAR,
             "unexpected variable {name}"
         );
     }
