@@ -1,0 +1,24 @@
+{
+ "schema": "splinter.attempt/1",
+ "slot": {"pass": "local", "task": "train/015-delete-a-word", "slot": 2},
+ "attempt": 1,
+ "evidence": {
+  "result": {"trial_name": "015__AbC", "verifier_result": {"rewards": {"reward": 1.0}}, "exception_info": null},
+  "verification": null,
+  "agent_timed_out": false,
+  "agent_budget_exhausted": false,
+  "agent_reasoning_loop": false,
+  "leaks": [],
+  "turns": 3,
+  "model_responses": 3,
+  "model_errors": 0,
+  "requests": [{"status": 200, "error": null, "prompt_tokens": 210, "completion_tokens": 21, "cached_tokens": 0}]
+ },
+ "native_dir": "harbor/job/015__AbC",
+ "trace": "harbor/job/015__AbC/agent/trajectory.json",
+ "native_files": ["harbor/job/015__AbC/result.json"],
+ "agent_version": "5.9.2",
+ "started_at": "2026-11-22T10:00:00Z",
+ "finished_at": "2026-11-22T10:01:30Z",
+ "usage": {"prompt_tokens": 210, "completion_tokens": 21, "cached_tokens": 0, "cost_usd": null}
+}

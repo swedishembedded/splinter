@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AttemptReport",
+  "description": "One physical attempt, as its worker saw it.",
+  "type": "object",
+  "properties": {
+    "agent_version": {
+      "description": "The version the agent reported.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "attempt": {
+      "description": "The attempt's number.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "evidence": {
+      "description": "The facts the classifier reads.",
+      "$ref": "#/$defs/TrialEvidence"
+    },
+    "finished_at": {
+      "description": "When it finished (RFC 3339).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "native_dir": {
+      "description": "The backend's own trial directory, relative to the worker's output\ndirectory.",
+      "type": "string"
+    },
+    "native_files": {
+      "description": "Every other file of the trial the evidence was read from, relative to\nthe worker's output directory.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "schema": {
+      "description": "Always [`ATTEMPT_SCHEMA`].",
+      "type": "string"
+    },
+    "slot": {
+      "description": "The slot the attempt filled.",
+      "$ref": "#/$defs/SlotKey"
+    },
+    "started_at": {
+      "description": "When the attempt started (RFC 3339).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "trace": {
+      "description": "The ATIF trajectory, relative to the worker's output directory, when\nthe agent left one.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "usage": {
+      "description": "What it consumed.",
+      "$ref": "#/$defs/TrialUsage",
+      "default": {
+        "cached_tokens": null,
+        "completion_tokens": null,
+        "cost_usd": null,
+        "prompt_tokens": null
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "slot",
+    "attempt",
+    "evidence",
+    "native_dir"
+  ],
+  "$defs": {
+    "ModelRequest": {
+      "description": "One model request the gateway logged for a trial.",
+      "type": "object",
+      "properties": {
+        "cached_tokens": {
+          "description": "Prompt tokens served from cache.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "completion_tokens": {
+          "description": "Completion tokens generated.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "error": {
+          "description": "The error the request ended with.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prompt_tokens": {
+          "description": "Prompt tokens processed.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "status": {
+          "description": "The HTTP status the request ended with; `None` when none was recorded.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        }
+      }
+    },
+    "SlotKey": {
+      "description": "A requested trial: one slot of one task in one pass. It stays the same\nwhichever physical attempt fills it.",
+      "type": "object",
+      "properties": {
+        "pass": {
+          "description": "The rollout pass.",
+          "type": "string"
+        },
+        "slot": {
+          "description": "The slot's index among the task's attempts in the pass, from 0.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "task": {
+          "description": "The task's id in the collection.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pass",
+        "task",
+        "slot"
+      ]
+    },
+    "TrialEvidence": {
+      "description": "The facts a trial is classified from.",
+      "type": "object",
+      "properties": {
+        "agent_budget_exhausted": {
+          "description": "The agent reported stopping at the run's budget.",
+          "type": "boolean",
+          "default": false
+        },
+        "agent_reasoning_loop": {
+          "description": "The agent reported that a reasoning loop ended the run.",
+          "type": "boolean",
+          "default": false
+        },
+        "agent_timed_out": {
+          "description": "The agent reported that a time limit ended it.",
+          "type": "boolean",
+          "default": false
+        },
+        "leaks": {
+          "description": "What the leak audit found, one line each.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "model_errors": {
+          "description": "How many of those carry an error instead of an answer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "model_responses": {
+          "description": "The model responses the agent's own request log records.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "requests": {
+          "description": "The model requests the gateway logged, in order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelRequest"
+          }
+        },
+        "result": {
+          "description": "The execution backend's result record (Harbor's trial `result.json`)."
+        },
+        "turns": {
+          "description": "The agent's turns, when the trace records them.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "verification": {
+          "description": "The verifier's verification record, when it wrote one.",
+          "default": null
+        }
+      },
+      "required": [
+        "result"
+      ]
+    },
+    "TrialUsage": {
+      "description": "Tokens and cost an attempt's model requests consumed; a value nobody\nmeasured is absent, never 0.",
+      "type": "object",
+      "properties": {
+        "cached_tokens": {
+          "description": "Prompt tokens served from cache.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "completion_tokens": {
+          "description": "Completion tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "cost_usd": {
+          "description": "Cost in US dollars, when the provider reported it.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "prompt_tokens": {
+          "description": "Prompt tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

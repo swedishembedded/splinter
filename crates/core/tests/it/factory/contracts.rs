@@ -87,6 +87,8 @@ fn every_golden_fixture_satisfies_its_schema_and_round_trips() {
     let _: DatasetProduct = round_trips("dataset", "splinter.dataset/1");
     let _: ModelCandidate = round_trips("candidate", "splinter.candidate/1");
     let _: EvalResult = round_trips("eval", "splinter.eval/1");
+    let _: splinter_core::factory::attempt::AttemptReport =
+        round_trips("attempt", "splinter.attempt/1");
     spec.validate().expect("the golden spec is valid");
     assert!(trial.verified_success());
     assert_eq!(

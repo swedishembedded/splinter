@@ -14,6 +14,7 @@
 //! * [`task`] - the pinned task collection a recipe runs.
 //! * [`execution`] - one attempt at one logical slot, as a worker receives
 //!   it.
+//! * [`attempt`] - what a worker reports for one physical attempt.
 //! * [`trial`] - how one executed trial ended: the one outcome classifier.
 //! * [`product`] - trial results, datasets, model candidates and evaluation
 //!   results.
@@ -21,6 +22,7 @@
 //!
 //! Nothing here performs I/O.
 
+pub mod attempt;
 pub mod execution;
 pub mod identity;
 pub mod product;
