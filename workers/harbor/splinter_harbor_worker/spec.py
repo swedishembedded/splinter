@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from splinter_harbor_worker.errors import UsageError
 
 EXECUTION_SCHEMA = "splinter.execution/1"
-AGENTS = ("sven", "claude-code", "oracle", "nop")
+AGENTS = ("sven", "claude-code", "codex", "oracle", "nop")
 PROVIDERS = ("docker", "userns", "proot")
 PROTOCOLS = ("openai", "anthropic")
 # A literal under a name like these is a secret written into a specification that is stored and shown.

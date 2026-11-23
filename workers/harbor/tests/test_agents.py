@@ -155,3 +155,54 @@ def test_arguments_files_prompt_and_environment_reach_the_agent_as_the_spec_says
     # a from_env value is resolved when the trial starts and never written to a file the worker keeps
     written = [p for p in (out / "harbor").rglob("*.json") if p.is_file()]
     assert all("value-from-the-worker-environment" not in p.read_text() for p in written)
+
+
+# A stand-in for the codex executable: reads the provider its configuration names (CODEX_HOME/config.toml) and posts
+# one Responses request to it with the key the provider's env_key names, then exits 0.
+FAKE_CODEX = r"""#!/bin/bash
+[ "$1" = --version ] && { echo "codex-cli 0.0.1"; exit 0; }
+printf '%s\n' "$@" > /logs/agent/argv.txt
+cp "$CODEX_HOME/config.toml" /logs/agent/config.toml
+cp "$CODEX_HOME/AGENTS.md" /logs/agent/agents.md 2>/dev/null
+while IFS= read -r line; do  # the image has no sed
+  case $line in base_url\ =\ *) base=${line#*\"}; base=${base%\"};; env_key\ =\ *) key_var=${line#*\"}; key_var=${key_var%\"};; esac
+done < "$CODEX_HOME/config.toml"
+host=${base#http://}; host=${host%%/*}; port=${host##*:}; host=${host%%:*}
+body='{"model":"x","input":"hi"}'
+exec 3<>/dev/tcp/$host/$port
+printf 'POST /v1/responses HTTP/1.1\r\nHost: %s\r\nauthorization: Bearer %s\r\ncontent-type: application/json\r\nconnection: close\r\ncontent-length: %s\r\n\r\n%s' \
+  "$host" "${!key_var}" "${#body}" "$body" >&3
+cat <&3 > /logs/agent/reply.txt
+echo expected > /app/answer.txt
+"""
+
+
+def test_codex_speaks_the_responses_protocol_through_the_gateway(tmp_path, monkeypatch, local_images, stub_model,
+                                                                 validator):
+    path = tmp_path / "bin" / "codex"
+    path.parent.mkdir()
+    path.write_text(FAKE_CODEX)
+    path.chmod(0o755)
+    prompt = {"path": "prompts/p.md", "digest": "sha256:" + hashlib.sha256(b"Be brief.\n").hexdigest()}
+    spec = make_spec(TASK, agent="codex", args=["--ephemeral"], system_prompt=prompt,
+                     model=model(stub_model, protocol="openai"))
+    code, out = run_one(tmp_path, spec, monkeypatch, local_images, env={"SPLINTER_CODEX_BIN": str(path),
+                        "STUB_TOKEN": SECRET}, files={"prompts/p.md": "Be brief.\n"})
+    assert code == 0
+    report = load_report(out)
+    validator.validate(report)
+    assert report["agent_version"] == "0.0.1"
+    assert report["evidence"]["requests"] == [
+        {"status": 200, "error": None, "prompt_tokens": 10, "completion_tokens": 2, "cached_tokens": 4}]
+    assert report["evidence"]["result"]["verifier_result"]["rewards"] == {"reward": 1.0}
+    (post,) = stub_model.posts()
+    assert post.path.endswith("/responses")
+    assert post.headers["authorization"] == f"Bearer {SECRET}" and post.body["model"] == "stub-model"
+    assert SECRET not in "".join(p.read_text(errors="ignore") for p in out.rglob("*") if p.is_file())
+    agent = out / report["native_dir"] / "agent"
+    argv = (agent / "argv.txt").read_text().rstrip("\n").splitlines()  # the instruction ends in a newline
+    assert argv[0] == "exec" and argv[-1] == "Write the word expected into /app/answer.txt."
+    assert {"--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--ephemeral"} <= set(argv)
+    config = (agent / "config.toml").read_text()
+    assert 'wire_api = "responses"' in config and 'model = "stub-model"' in config
+    assert (agent / "agents.md").read_text() == "Be brief.\n"

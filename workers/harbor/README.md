@@ -72,8 +72,11 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
 
 * **Paths.** `task_dir` is relative to `TASK_ROOT`; agent `files`, the `system_prompt` and mount `source`s are relative to
   `FILES_ROOT` (default `TASK_ROOT`). A path that leaves its root is refused; a `sha256:` digest is verified.
-* **Agents.** `sven` and `claude-code` (the executable named by `SPLINTER_SVEN_BIN` / `SPLINTER_CLAUDE_BIN`, else on
-  `PATH`, staged read-only at `/splinter/bin`), `oracle` and `nop` (Harbor's own). `agent.args` are an argv, never a
+* **Agents.** `sven`, `claude-code` and `codex` (the executable named by `SPLINTER_SVEN_BIN` / `SPLINTER_CLAUDE_BIN` /
+  `SPLINTER_CODEX_BIN`, else on `PATH`, staged read-only at `/splinter/bin`), `oracle` and `nop` (Harbor's own). Codex
+  runs as `codex exec` with its own sandbox off (the trial's is the boundary), configured in a `CODEX_HOME` below the
+  isolated HOME: the gateway as its one provider over the Responses API, an appended system prompt as that home's
+  `AGENTS.md`. `agent.args` are an argv, never a
   shell line; an argument equal to a listed file's path (or `--option=path`) names its uploaded copy under
   `/splinter/files`. `agent.env` is the only environment the agent gets besides its isolated HOME: `from_env` values are
   read from the worker's environment when the trial starts and never written to a file. A literal under a credential-like
@@ -81,7 +84,7 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
   cannot honour; a recipe that wants one passes it in `args`).
 * **Model.** With `model`, the worker runs one gateway for the job. The agent gets the trial's HMAC token as its only
   credential; the gateway forwards to `model.url` with the token read from the worker's `model.token_env` variable,
-  rewrites the model, sends `accept-encoding: identity` and logs each request to `<trial>/gateway/requests.jsonl`
+  rewrites the model, sends `accept-encoding: identity` and logs each request (Chat Completions, Responses or Anthropic Messages) to `<trial>/gateway/requests.jsonl`
   (`evidence.requests`). Error text is stripped of control characters. Without `model` the agent uses its own provider
   configuration (from `args` and `files`).
 * **Sandboxes.** `docker` is Harbor's own. `userns` and `proot` run the task's own image (`docker_image` or
@@ -97,6 +100,6 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
 ## Not verified here
 
 `userns` needs unprivileged user namespaces and `docker` a daemon; this container has neither, so only what they decide
-before any process starts is tested. A real `claude` binary was not run; a scripted stand-in speaks its protocol, also in `play`. `play` was run here only
+before any process starts is tested. A real `claude` or `codex` binary was not run; scripted stand-ins speak their protocols (Claude's also in `play`). `play` was run here only
 on `proot` (real Sven's TUI and a scripted agent on a pseudo-terminal); the `userns` terminal path is the one `bench task play`
 ran and was ported, not run.

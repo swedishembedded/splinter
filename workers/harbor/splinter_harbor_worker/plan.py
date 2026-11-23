@@ -49,6 +49,7 @@ from splinter_harbor_worker.spec import ExecutionSpec
 JOB_NAME = "job"
 SVEN_BIN_ENV = "SPLINTER_SVEN_BIN"
 CLAUDE_BIN_ENV = "SPLINTER_CLAUDE_BIN"
+CODEX_BIN_ENV = "SPLINTER_CODEX_BIN"
 GATEWAY_HOST_ENV = "SPLINTER_GATEWAY_HOST"
 DEFAULT_GATEWAY_HOST = "127.0.0.1"
 USERNS_ENVIRONMENT = "splinter_harbor_worker.sandbox.userns:UserNamespaceEnvironment"
@@ -56,8 +57,10 @@ PROOT_ENVIRONMENT = "splinter_harbor_worker.sandbox.proot:ProotEnvironment"
 AGENT_CLASSES = {
     "sven": "splinter_harbor_worker.agents.sven:SvenAgent",
     "claude-code": "splinter_harbor_worker.agents.claude_code:ClaudeCodeAgent",
+    "codex": "splinter_harbor_worker.agents.codex:CodexAgent",
 }
-AGENT_BINARIES = {"sven": ("sven", SVEN_BIN_ENV), "claude-code": ("claude", CLAUDE_BIN_ENV)}
+AGENT_BINARIES = {"sven": ("sven", SVEN_BIN_ENV), "claude-code": ("claude", CLAUDE_BIN_ENV),
+                  "codex": ("codex", CODEX_BIN_ENV)}
 _IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
 

@@ -144,7 +144,7 @@ pub type EnvSetting = String;
 pub struct RolloutPass {
     /// The pass's name, unique in the recipe.
     pub name: String,
-    /// The agent adapter (`sven`, `claude-code`).
+    /// The agent adapter (`sven`, `claude-code`, `codex`).
     pub agent: String,
     /// The agent's own arguments, passed as they are.
     #[serde(default)]

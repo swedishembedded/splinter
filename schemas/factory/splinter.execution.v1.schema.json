@@ -110,7 +110,7 @@
           }
         },
         "name": {
-          "description": "The agent adapter (`sven`, `claude-code`, `oracle`, `nop`).",
+          "description": "The agent adapter (`sven`, `claude-code`, `codex`, `oracle`, `nop`).",
           "type": "string"
         },
         "system_prompt": {

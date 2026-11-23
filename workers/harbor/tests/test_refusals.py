@@ -46,7 +46,7 @@ def test_a_literal_secret_in_an_agent_environment_is_refused(tmp_path, capsys, m
 
 def test_an_unknown_agent_is_refused_with_the_agents_there_are(tmp_path, capsys, monkeypatch) -> None:
     message = refuse(tmp_path, make_spec(TASK, agent="aider"), capsys, monkeypatch)
-    assert "unknown agent 'aider'" in message and "sven, claude-code, oracle, nop" in message
+    assert "unknown agent 'aider'" in message and "sven, claude-code, codex, oracle, nop" in message
 
 
 def test_an_unknown_sandbox_provider_is_refused(tmp_path, capsys, monkeypatch) -> None:

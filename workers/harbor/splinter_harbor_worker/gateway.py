@@ -124,11 +124,11 @@ class ModelGateway:
         record = {
             "ts": time.time(),
             "status": status,
-            # OpenAI's usage fields, else Anthropic's.
+            # Chat Completions' usage fields, else those of the Responses API and Anthropic's.
             "prompt_tokens": _first(usage, "prompt_tokens", "input_tokens"),
             "completion_tokens": _first(usage, "completion_tokens", "output_tokens"),
             # The part of the prompt the server's prefix cache served.
-            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get(
+            "cached_tokens": (usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}).get(
                 "cached_tokens", usage.get("cache_read_input_tokens")),
             "error": printable(error) if error else None,
         }
@@ -183,6 +183,10 @@ class ModelGateway:
         @app.post("/v1/chat/completions")
         async def chat(request: Request) -> Response:
             return await self._forward(request, "openai", "/chat/completions", record=True)
+
+        @app.post("/v1/responses")
+        async def responses(request: Request) -> Response:
+            return await self._forward(request, "openai", "/responses", record=True)
 
         @app.post("/v1/messages")
         async def messages(request: Request) -> Response:
@@ -292,9 +296,12 @@ class ModelGateway:
                         continue
                     if not isinstance(event, dict):
                         continue
-                    usage = event.get("usage") or usage
-                    if isinstance(event.get("error"), dict):
-                        error = event["error"].get("message") or json.dumps(event["error"])
+                    # The Responses API nests the usage and a failure in the event's response.
+                    response = event.get("response") if isinstance(event.get("response"), dict) else {}
+                    usage = event.get("usage") or response.get("usage") or usage
+                    failure = event.get("error") or response.get("error")
+                    if isinstance(failure, dict):
+                        error = failure.get("message") or json.dumps(failure)
             finished = True
             self._record(trial, 500 if error else reply.status_code, usage, error)
         finally:

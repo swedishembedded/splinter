@@ -46,7 +46,7 @@ def _parser() -> argparse.ArgumentParser:
     play_parser = commands.add_parser(
         "play", help="run one ExecutionSpec with a person driving the agent on this terminal, then grade it")
     play_parser.add_argument("--spec", type=Path, required=True, metavar="SPEC.json",
-                             help="one ExecutionSpec (a single JSON object); the agent must be sven or claude-code")
+                             help="one ExecutionSpec (a single JSON object); the agent must be sven or claude-code (codex cannot be played)")
     play_parser.add_argument("--tasks", type=Path, required=True, metavar="TASK_ROOT",
                              help="the directory the spec's task_dir is relative to")
     play_parser.add_argument("--out", type=Path, required=True, metavar="OUT_DIR",

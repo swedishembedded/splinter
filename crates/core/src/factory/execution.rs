@@ -81,7 +81,7 @@ pub enum EnvValue {
 /// not interpret.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AgentInvocation {
-    /// The agent adapter (`sven`, `claude-code`, `oracle`, `nop`).
+    /// The agent adapter (`sven`, `claude-code`, `codex`, `oracle`, `nop`).
     pub name: String,
     /// The pinned agent version, when the recipe pins one.
     #[serde(default)]

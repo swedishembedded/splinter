@@ -70,6 +70,12 @@ class StubModel:
                     self._send(200, {"id": "m", "type": "message", "role": "assistant", "model": MODEL,
                                      "content": [{"type": "text", "text": "Done."}], "stop_reason": "end_turn",
                                      "usage": {"input_tokens": 10, "output_tokens": 2, "cache_read_input_tokens": 4}})
+                elif self.path.endswith("/responses"):
+                    self._send(200, {"id": "r", "object": "response", "model": MODEL, "status": "completed",
+                                     "output": [{"type": "message", "role": "assistant",
+                                                 "content": [{"type": "output_text", "text": "Done."}]}],
+                                     "usage": {"input_tokens": 10, "output_tokens": 2,
+                                               "input_tokens_details": {"cached_tokens": 4}}})
                 elif not body.get("stream"):
                     self._send(200, {"id": "c", "object": "chat.completion", "model": MODEL, "usage": USAGE,
                                      "choices": [{"index": 0, "finish_reason": "stop",
