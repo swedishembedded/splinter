@@ -35,7 +35,7 @@ use splinter_sandbox::{CommandCall, Limits, ProcessSandbox, Sandbox};
 
 use crate::execute::{Call, Execute, Outcome};
 use crate::registry::{OperationSpec, Registry};
-use crate::tree::entry_digest;
+use crate::tree::code_digest;
 
 /// The schema of an operator file.
 pub const OPERATOR_SCHEMA: &str = "splinter.operator/v1";
@@ -121,7 +121,7 @@ impl External {
             if code.starts_with('/') || code.split('/').any(|p| p == "..") {
                 return Err(format!("{relative}: code {code:?} leaves the repository"));
             }
-            let digest = entry_digest(&repository.join(code))
+            let digest = code_digest(&repository.join(code))
                 .map_err(|e| format!("{relative}: code {code}: {e}"))?;
             pinned.push((code.clone(), digest));
         }

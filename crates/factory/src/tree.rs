@@ -45,8 +45,17 @@ pub fn tree_digest(dir: &Path) -> Result<Digest, TreeError> {
     Ok(digest_of(&entries))
 }
 
+/// The directories no input holds: bytecode caches an interpreter writes
+/// beside its sources, which are never content.
+const CACHES: &[&str] = &["__pycache__"];
+
+fn is_cache(relative: &str) -> bool {
+    relative.split('/').any(|part| CACHES.contains(&part))
+}
+
 /// The digest of a recipe input or a collection's item at `path`: a
-/// directory's tree without the hidden entries at its top (`.git`), or one
+/// directory's tree without the hidden entries at its top (`.git`) and
+/// without interpreters' caches (`__pycache__`), or one
 /// file as the tree of a directory holding only it, so a file and its copy
 /// into a directory have the same digest. A symbolic link is refused: an
 /// input is the content it names, never a pointer out of it.
@@ -54,6 +63,22 @@ pub fn tree_digest(dir: &Path) -> Result<Digest, TreeError> {
 /// # Errors
 /// It cannot be read, or holds a symbolic link.
 pub fn entry_digest(path: &Path) -> Result<Digest, TreeError> {
+    digest_where(path, |relative| !is_cache(relative))
+}
+
+/// The digest of a program's code at `path`, as [`entry_digest`] but
+/// without anything hidden at any depth: a virtual environment, a tool's
+/// cache, a checkout's metadata are where the code runs, not the code.
+///
+/// # Errors
+/// It cannot be read, or holds a symbolic link outside what is hidden.
+pub fn code_digest(path: &Path) -> Result<Digest, TreeError> {
+    digest_where(path, |relative| {
+        !is_cache(relative) && !relative.split('/').any(|part| part.starts_with('.'))
+    })
+}
+
+fn digest_where(path: &Path, keep: impl Fn(&str) -> bool) -> Result<Digest, TreeError> {
     let fail = |source| TreeError {
         path: path.to_path_buf(),
         source,
@@ -66,6 +91,7 @@ pub fn entry_digest(path: &Path) -> Result<Digest, TreeError> {
         let root = path.parent().unwrap_or(Path::new("."));
         entry(root, path, &mut entries)?;
     }
+    entries.retain(|e| keep(&e.path));
     if let Some(link) = entries.iter().find(|e| e.link.is_some()) {
         return Err(TreeError {
             path: path.join(&link.path),
@@ -120,6 +146,13 @@ fn copy_entry(from: &Path, to: &Path) -> Result<(), TreeError> {
         });
     }
     if kind.is_dir() {
+        if from
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| CACHES.contains(&n))
+        {
+            return Ok(());
+        }
         std::fs::create_dir_all(to).map_err(fail(to))?;
         for item in std::fs::read_dir(from).map_err(fail(from))? {
             let item = item.map_err(fail(from))?;
@@ -220,4 +253,25 @@ pub fn link_tree(src: &Path, dst: &Path) -> Result<(), TreeError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{copy_input, entry_digest};
+
+    #[test]
+    fn an_interpreters_cache_is_no_part_of_an_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let code = dir.path().join("code");
+        std::fs::create_dir_all(code.join("pkg")).unwrap();
+        std::fs::write(code.join("pkg/mod.py"), "x = 1\n").unwrap();
+        let before = entry_digest(&code).unwrap();
+        std::fs::create_dir_all(code.join("pkg/__pycache__")).unwrap();
+        std::fs::write(code.join("pkg/__pycache__/mod.pyc"), "bytes").unwrap();
+        assert_eq!(entry_digest(&code).unwrap(), before);
+        let copy = dir.path().join("copy");
+        copy_input(&code, &copy).unwrap();
+        assert!(!copy.join("pkg/__pycache__").exists());
+        assert_eq!(entry_digest(&copy).unwrap(), before);
+    }
 }
