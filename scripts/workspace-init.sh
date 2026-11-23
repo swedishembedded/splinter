@@ -184,12 +184,15 @@ EOF
 
 cat >"$dir/run.sh" <<EOF
 #!/usr/bin/env bash
-# run.sh RECIPE DEVICE [splinter run arguments]: run (or continue) a recipe of the task repository in this workspace
+# run.sh [--fork PARENT] RECIPE DEVICE [splinter arguments]: run (or continue) a recipe of the task repository in this workspace
 # on DEVICE (brain's grammar: gpu1, gpu0,gpu1, cpu0-7). It starts a brain server for the run (training enabled, the
 # adapters it trains served hot), runs splinter against it, and stops the server when splinter ends. The run directory
 # is runs/NAME, its state root state/NAME, its brain's files serve/NAME, so recipes may run side by side on other cards.
 set -euo pipefail
-[ \$# -ge 2 ] || { echo "usage: run.sh RECIPE DEVICE [splinter run arguments]" >&2; exit 2; }
+# --fork PARENT: a run of this workspace (runs/PARENT) whose stages the new run reuses where its recipe leaves them unchanged.
+parent=""
+if [ "\${1:-}" = "--fork" ]; then parent=\$2; shift 2; fi
+[ \$# -ge 2 ] || { echo "usage: run.sh [--fork PARENT] RECIPE DEVICE [splinter arguments]" >&2; exit 2; }
 . $dir/env.sh
 cd $dir/tasks
 recipe=\$1 device=\$2; shift 2
@@ -229,7 +232,8 @@ case "\$device" in gpu*)
     echo "brain did not start on CUDA (\$srv/brain.log)" >&2; exit 1
   fi ;;
 esac
-$dir/bin/splinter run "\$recipe" --out $dir/runs/\$name --state $dir/state/\$name \\
+if [ -n "\$parent" ]; then verb=(fork "$dir/runs/\$parent" --recipe "\$recipe"); else verb=(run "\$recipe"); fi
+$dir/bin/splinter "\${verb[@]}" --out $dir/runs/\$name --state $dir/state/\$name \\
   --brain-endpoint http://127.0.0.1:\$port/v1 --brain-key-file "\$srv/key" \\
   --brain-artifact-store "\$srv/artifacts" --brain-adapter-dir "\$srv/adapters" "\$@"
 EOF
