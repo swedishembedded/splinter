@@ -82,6 +82,7 @@ pub mod fork_at;
 pub mod forms;
 pub mod harness_call;
 pub mod harness_edit;
+pub mod harness_space;
 pub mod harness_work;
 pub mod judge;
 pub mod knowledge;

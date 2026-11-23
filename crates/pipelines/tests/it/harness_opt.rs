@@ -28,6 +28,7 @@ use std::sync::Arc;
 use common::gate::{put_base, FakeTrainer};
 use common::repo::{call, module_of, project, request_of, tool_calls};
 use common::{config, Scratch};
+use splinter_agent::harness_space::MutationSpace;
 use splinter_agent::solve::Model;
 use splinter_core::clock::FixedClock;
 use splinter_core::model_ref::ModelRef;
@@ -36,7 +37,6 @@ use splinter_eval::campaign::evidence::EvidenceGate;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
 use splinter_pipelines::harness_opt::gate::{PromotionRule, Verdict, NOT_EXAM_VERIFIED};
-use splinter_pipelines::harness_opt::space::MutationSpace;
 use splinter_pipelines::harness_opt::{
     optimise, OptimiseRequest, ProposerChoice, CHAMPION_POINTER,
 };

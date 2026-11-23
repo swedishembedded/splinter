@@ -37,7 +37,6 @@
 
 pub mod gate;
 pub mod llm;
-pub mod space;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -63,7 +62,7 @@ use crate::solving::{harness_protocol, solve_tasks, SamplingChoice, SolveRequest
 use crate::verify::{verify_set, Grading};
 use gate::{decide, differences, evidence_outcome, Decision, Evidence, PromotionRule, Verdict};
 use llm::{Feedback, LlmProposer, ProposalStats};
-use space::{MutationProposer, MutationSpace};
+use splinter_agent::harness_space::{MutationProposer, MutationSpace};
 use splinter_eval::promotion::Pair;
 
 /// Mixed into the search seed so the order the e-process reads an

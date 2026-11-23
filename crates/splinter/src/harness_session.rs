@@ -13,9 +13,9 @@
 use std::path::Path;
 
 use serde_json::json;
+use splinter_sdk::agent::harness_space::MutationSpace;
 use splinter_sdk::agent::sven::search::Strategy;
 use splinter_sdk::harness_opt::gate::PromotionRule;
-use splinter_sdk::harness_opt::space::MutationSpace;
 use splinter_sdk::harness_opt::{optimise, OptimiseRequest, ProposerChoice};
 use splinter_sdk::measure::campaign::evidence::EvidenceGate;
 use splinter_sdk::runs::record;

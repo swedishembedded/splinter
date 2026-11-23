@@ -13,9 +13,9 @@
 //! the baseline with a few edits, never a rewrite, and the edits are the
 //! candidate's whole description.
 
+use crate::harness_edit::child;
+use crate::sven::search::{Proposal, ProposalStep, Proposer, SearchError, SearchRng};
 use serde::{Deserialize, Serialize};
-use splinter_agent::harness_edit::child;
-use splinter_agent::sven::search::{Proposal, ProposalStep, Proposer, SearchError, SearchRng};
 
 /// One thing a candidate may change.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -135,7 +135,7 @@ impl MutationSpace {
         let mut last = String::new();
         for _ in 0..COMPILING_DRAWS {
             let mutated = self.mutate(document, rng).map_err(|e| e.to_string())?;
-            match splinter_agent::harness_edit::check(&mutated) {
+            match crate::harness_edit::check(&mutated) {
                 Ok(()) => return Ok(mutated),
                 Err(why) => last = why,
             }

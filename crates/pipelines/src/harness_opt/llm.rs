@@ -28,7 +28,7 @@ use splinter_agent::sven::search::{Proposal, ProposalStep, Proposer, SearchError
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 
-use super::space::MutationSpace;
+use splinter_agent::harness_space::MutationSpace;
 
 /// What the proposer did over a run.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
