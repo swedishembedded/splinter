@@ -97,6 +97,19 @@ $(TEST_CRATE_TARGETS): test/crate/%:
 test/package:
 	bats scripts/package/install-deb.bats scripts/package/publish-deb.bats
 
+## test/worker - the Harbor worker's own tests: Harbor jobs in the proot sandbox against stub models, no network (needs `make worker/install` and sven on PATH)
+test/worker:
+	cd workers/harbor && .venv/bin/python -m pytest
+
+## worker - lists the execution worker targets; does nothing
+worker:
+	@bash scripts/make-help.sh worker
+
+## worker/install - create workers/harbor/.venv and install the pinned Harbor worker with its test dependencies (needs network)
+worker/install:
+	python3 -m venv workers/harbor/.venv
+	workers/harbor/.venv/bin/pip install -e 'workers/harbor[test]'
+
 ## test/families - the repository task families: baselines pass identically five times, conventions hold, faults are caught (no model, no GPU, minutes)
 test/families:
 	python3 scripts/tasks/families.py check
@@ -547,7 +560,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) campaign campaign/flywheel campaign/flywheel/run campaign/flywheel/status test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

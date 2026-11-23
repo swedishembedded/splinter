@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements solutions for running coding agents over many
+# tasks in reproducible sandboxes for its clients. If your team needs expertise
+# in agent execution infrastructure then you can procure our services by
+# sending an email to info@swedishembedded.com.
+
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "splinter-harbor-worker"
+version = "0.1.0"
+description = "Executes Splinter ExecutionSpecs as one Harbor job and reports AttemptReports"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+# Harbor is pinned exactly: the worker uses its job API and reads its result
+# files, so a different version is a different contract.
+dependencies = [
+    "harbor==0.20.0",
+    "httpx==0.28.1",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.1",
+    "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==9.1.1",
+    "jsonschema==4.26.0",
+]
+
+[project.scripts]
+splinter-harbor-worker = "splinter_harbor_worker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["splinter_harbor_worker*"]
+
+[tool.setuptools.package-data]
+splinter_harbor_worker = ["**/*.c", "**/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -46,3 +46,8 @@ __pycache__/
 /samples/generations/*.jsonl
 /papers/splinter-brain-sven-flywheel/data/runs/
 /papers/*/generated/
+
+# The Harbor worker's virtual environment (make worker/install) and its build metadata.
+/workers/harbor/.venv/
+/workers/harbor/*.egg-info/
+.pytest_cache/
