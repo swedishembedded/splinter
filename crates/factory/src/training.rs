@@ -118,6 +118,11 @@ pub struct LoraParams {
     /// The longest training row in tokens.
     #[serde(default)]
     pub max_block: Option<u32>,
+    /// How the frozen base is held while the adapter trains (`fp32`, brain's
+    /// default; `bf16`, `int8`, `nf4`, `fp8` to fit a larger base on a card;
+    /// a CPU backend trains `fp32` only).
+    #[serde(default)]
+    pub base_precision: Option<String>,
 }
 
 fn one() -> u32 {
@@ -210,7 +215,12 @@ impl Trainer for BrainTrainer {
             grad_accum: params.grad_accum,
             continue_from: None,
             cancel: None,
-            base: BasePrecision::Bf16,
+            base: match &params.base_precision {
+                Some(text) => text
+                    .parse::<BasePrecision>()
+                    .map_err(|e| TrainError(format!("lora params: base_precision: {e}")))?,
+                None => BasePrecision::default(),
+            },
             learning_rate: params.learning_rate,
             weight_decay: params.weight_decay,
             seed: request.seed,

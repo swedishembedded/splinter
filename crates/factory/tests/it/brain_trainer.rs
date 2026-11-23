@@ -100,6 +100,21 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         "the adapter, not the base: {served}"
     );
 
+    let bf16 = json!({"rank": 4, "steps": 3, "base_precision": "bf16"});
+    let out_bf16 = dir.path().join("lora-r4-bf16");
+    std::fs::create_dir_all(&out_bf16).unwrap();
+    trainer
+        .train(&TrainRequest {
+            params: &bf16,
+            out: &out_bf16,
+            resume_key: "lora-r4-bf16",
+            ..request.clone()
+        })
+        .unwrap();
+    assert_eq!(
+        service.jobs().created().last().unwrap()["base_format"],
+        "bf16"
+    );
     let wrong = json!({"rank": 4, "steps": 3, "rnak": 8});
     let refused = trainer
         .train(&TrainRequest {
@@ -110,7 +125,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
     assert!(refused.to_string().contains("rnak"), "{refused}");
     assert_eq!(
         service.jobs().created().len(),
-        jobs.len() + 2,
+        jobs.len() + 3,
         "the refused request reached no job"
     );
 }
