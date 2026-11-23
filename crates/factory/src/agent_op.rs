@@ -199,7 +199,9 @@ fn write(path: &Path, value: &Value) -> Result<(), String> {
 }
 
 /// The inputs as the model reads them: each port's files, by name.
-fn input_of(inputs: &BTreeMap<String, Vec<std::path::PathBuf>>) -> Result<Value, String> {
+pub(crate) fn input_of(
+    inputs: &BTreeMap<String, Vec<std::path::PathBuf>>,
+) -> Result<Value, String> {
     let mut budget = MAX_INPUT_BYTES;
     let mut ports = serde_json::Map::new();
     for (port, paths) in inputs {

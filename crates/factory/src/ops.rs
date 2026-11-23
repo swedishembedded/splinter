@@ -20,6 +20,7 @@
 //! | `promotion` | `evaluations` (many) | `release` |
 //! | `agent` | `input` (files, many) | `output` ([`crate::agent_op`]) |
 //! | `attempts.failures` | `tasks`, `attempts` (many) | `failures` ([`crate::failures_op`]) |
+//! | `harness` | `input` (files, many, optional) | `output` ([`crate::harness_op`]) |
 //!
 //! Each operation's parameters are one struct that refuses unknown fields;
 //! the descriptor's parameter schema is generated from that struct, so the
@@ -351,6 +352,7 @@ pub fn registry() -> Registry {
     Registry::default()
         .with(crate::agent_op::Agent)
         .with(crate::failures_op::Failures)
+        .with(crate::harness_op::HarnessOp)
         .with(Builtin::<PinParams> {
             name: names::PIN,
             summary: "pin a collection's tasks (one split) into the run",

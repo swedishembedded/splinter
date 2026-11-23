@@ -106,6 +106,8 @@ outputs: { dataset: $stages.sft.dataset }
 | `evaluation` | `candidate` (a model) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
 | `agent` | `input` (files, one or more) | `output` |
+| `harness` | `input` (files, any number) | `output` |
+| `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -230,6 +232,24 @@ holds each answered item's `output.json` and `call.json` (the model that
 answered and the tokens it spent) under the item's id. The model is called
 from Splinter's own process, with the key the connection names read from its
 environment; a resume that recomputes nothing reaches no model.
+
+A `harness` stage runs a sven harness over the stage's files for the value it
+returns: a workflow of model calls (plan, draft, check, repair) where `agent` is
+one call. Its agent holds no tools (`agent: { profile: none }`); the stage's
+files reach it as a list of `{ name, text }` under its `files` input (or the one
+`files_input` names), beside the literal `inputs`, and the product holds
+`output.json` and `trajectory.json`. A harness that ends in its own `fail`
+rejects the item. `splinter validate` refuses a harness that would run
+commands (a shell, a command gate): one that must, works a task in its sandbox,
+as an attempt stage's `harness:`.
+
+```yaml
+  - id: summaries
+    uses: harness
+    foreach: $inputs.notes
+    inputs: { input: $item }
+    with: { harness: harnesses/summary.yaml, model: writer }
+```
 
 ## What each stage guarantees
 

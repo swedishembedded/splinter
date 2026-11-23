@@ -80,6 +80,7 @@ pub mod demonstration;
 pub mod flywheel;
 pub mod fork_at;
 pub mod forms;
+pub mod harness_call;
 pub mod harness_edit;
 pub mod harness_work;
 pub mod judge;
