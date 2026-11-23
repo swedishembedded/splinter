@@ -10,8 +10,10 @@
 //! its files (a hidden overlay), and an overlay laid over a tree.
 //!
 //! An archive is a function of the files it holds: entries are sorted by
-//! name, owned by root and stamped with one fixed time, so the same files
-//! are the same archive and so the same environment.
+//! name, owned by root, stamped with one fixed time and given the
+//! permissions their content calls for (readable by all, writable by the
+//! owner, executable where the file was), so the same files are the same
+//! archive and so the same environment, whatever umask made them.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -82,6 +84,10 @@ fn tar_create(
         "--owner=0",
         "--group=0",
         "--numeric-owner",
+        // Readable by all, writable by the owner, executable where it was:
+        // a file's permissions are what its content calls for, not the
+        // umask of whatever wrote it.
+        "--mode=a+rX,u+w,go-w",
     ]
     .map(String::from)
     .to_vec();
@@ -114,4 +120,40 @@ fn tar(argv: Vec<String>, cwd: &Path, what: &str) -> Result<(), WorkspaceError> 
                 .collect::<String>()
         ),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::pack_dir;
+
+    fn tree(mode: u32, script_mode: u32) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.py");
+        std::fs::write(&file, "x = 1\n").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+        let script = dir.path().join("run.sh");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(script_mode)).unwrap();
+        dir
+    }
+
+    fn archive(dir: &tempfile::TempDir) -> splinter_core::digest::Digest {
+        let out = tempfile::tempdir().unwrap();
+        let path = out.path().join("t.tar");
+        pack_dir(dir.path(), &[], &path).unwrap();
+        splinter_core::digest::Digest::of(&std::fs::read(path).unwrap())
+    }
+
+    #[test]
+    fn the_same_files_are_the_same_archive_whatever_umask_made_them() {
+        assert_eq!(archive(&tree(0o664, 0o775)), archive(&tree(0o666, 0o755)));
+        assert_eq!(archive(&tree(0o600, 0o700)), archive(&tree(0o644, 0o755)));
+        assert_ne!(
+            archive(&tree(0o644, 0o755)),
+            archive(&tree(0o644, 0o644)),
+            "whether a file is executable is part of the files"
+        );
+    }
 }
