@@ -129,3 +129,15 @@ def test_reconcile_names_the_slots_whose_trial_never_finished(finished, capsys) 
     finally:
         (trial / "result.json").write_bytes(saved)
         assert main(["reconcile", "--out", str(out)]) == 0
+
+
+def test_a_task_pinned_read_only_is_staged_with_its_network_written(tmp_path) -> None:
+    from splinter_harbor_worker.plan import stage_task
+    from splinter_harbor_worker.spec import ExecutionSpec
+
+    make_task(tmp_path, TASK)
+    for path in (tmp_path / "tasks" / TASK).rglob("*"):
+        path.chmod(path.stat().st_mode & ~0o222)
+    spec = ExecutionSpec.model_validate(make_spec(TASK, network="none"))
+    staged = stage_task(tmp_path / "out", tmp_path, spec)
+    assert 'network_mode = "no-network"' in (staged / "task.toml").read_text()

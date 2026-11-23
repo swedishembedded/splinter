@@ -228,6 +228,8 @@ def stage_task(out: Path, tasks_root: Path, spec: ExecutionSpec) -> Path:
     config.environment.allowed_hosts = None
     if spec.sandbox.image:
         config.environment.docker_image = spec.sandbox.image
+    # The pinned tasks are read-only (hard links of the run's pin), and the copy keeps their mode.
+    (target / "task.toml").chmod(0o644)
     (target / "task.toml").write_text(config.model_dump_toml())
     return target
 
