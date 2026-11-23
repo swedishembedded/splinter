@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (a wall-clock end of an agent whose model was answering counts)
+- A budgeted trial that the wall clock ended was always an `infra_timeout`: never graded, retried twice and then left out of the denominator. That is right for an agent stalled by the infrastructure and wrong for one that was working: an adapter of a small model used its whole time on 10 to 55 completed turns and its slot never counted (a fifth of the exam's attempts). It is now an `infra_timeout` only when the model never answered during the trial (no answered request, no completed turn); otherwise it is a `timeout` graded as it stands, as for a person at an exam, and it counts.
+
 ### Added (one dataset loading interface)
 - `splinter_data::load`: `load_dataset(reference, config, options)` gives a `DatasetDict` of typed `Dataset`s (random access, `select`, `shuffle`) from a directory of split files, a dataset product or a Hub repository (`owner/name`, `hf:owner/name@rev`, resolved to a commit, cached, verified against the Hub's sizes and hashes); `DataLoader`, `BatchSampler`, `RandomSampler` and `SequentialSampler` batch them in an order fixed by seed and epoch. `dataset.import` and `dataset.extend` read their records through `ChatRecord`, where each had its own reader. `splinter-data` now depends on `splinter-hub`.
 

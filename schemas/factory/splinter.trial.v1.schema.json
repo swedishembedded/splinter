@@ -398,7 +398,7 @@
           "const": "reasoning_loop"
         },
         {
-          "description": "A wall-clock limit ended the agent of a budgeted run: the\ninfrastructure's, never graded.",
+          "description": "A wall-clock limit ended the agent of a budgeted run before its model\nanswered once: the infrastructure's, never graded. One that ended an\nagent whose model was answering is a `Timeout`, graded as it stands.",
           "type": "string",
           "const": "infra_timeout"
         },

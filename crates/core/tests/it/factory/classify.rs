@@ -117,7 +117,8 @@ fn a_leak_is_a_hard_veto_whatever_the_score() {
 }
 
 #[test]
-fn a_run_budget_is_a_counted_fail_and_a_wall_clock_limit_is_the_infrastructures() {
+fn a_run_budget_is_a_counted_fail_and_a_wall_clock_end_is_the_infrastructures_only_when_the_model_never_answered(
+) {
     let cases = cases();
     let passed = cases
         .iter()
@@ -148,12 +149,27 @@ fn a_run_budget_is_a_counted_fail_and_a_wall_clock_limit_is_the_infrastructures(
             turns: 1000,
         }),
     };
-    let wall = grade(&timed_out, &roomy);
+    // The model never answered in this trial: the infrastructure stalled it.
+    let mut stalled = timed_out.clone();
+    stalled.requests.clear();
+    stalled.turns = None;
+    let wall = grade(&stalled, &roomy);
     assert_eq!(
         (wall.status, wall.counted),
         (TrialStatus::InfraTimeout, false)
     );
     assert!(wall.status.is_retryable());
+    // The model answered and the time ran out: out of time, graded as it
+    // stands and counted, as a person at an exam is.
+    let mut working = timed_out;
+    working.requests = vec![ModelRequest {
+        status: Some(200),
+        ..ModelRequest::default()
+    }];
+    let late = grade(&working, &roomy);
+    assert_eq!(late.status, TrialStatus::Timeout);
+    assert!(late.counted, "{late:?}");
+    assert!(!late.status.is_retryable());
 }
 
 #[test]

@@ -86,8 +86,9 @@ pub enum TrialStatus {
     BudgetExhausted,
     /// The model's reasoning looped and ended the run: a counted fail.
     ReasoningLoop,
-    /// A wall-clock limit ended the agent of a budgeted run: the
-    /// infrastructure's, never graded.
+    /// A wall-clock limit ended the agent of a budgeted run before its model
+    /// answered once: the infrastructure's, never graded. One that ended an
+    /// agent whose model was answering is a `Timeout`, graded as it stands.
     InfraTimeout,
     /// A sandbox escape or a hidden-answer leak: a hard veto.
     SecurityViolation,
@@ -470,6 +471,45 @@ fn detail(error: &str) -> String {
     }
 }
 
+/// Whether the model server answered during the trial: a request the gateway
+/// logged was answered, or the agent completed a turn.
+fn model_answered(evidence: &TrialEvidence) -> bool {
+    evidence
+        .requests
+        .iter()
+        .any(|r| r.status.is_some_and(|s| (200..300).contains(&s)))
+        || evidence.turns.unwrap_or(0) > 0
+}
+
+/// How a budgeted trial ended that the wall clock cut off. An agent that never
+/// had an answer from its model was stalled by the infrastructure, and a fresh
+/// attempt may do better. An agent that had answers and used the time the task
+/// allows without finishing is out of time, as a person at an exam is: a
+/// timeout graded as it stands, which counts.
+fn wall_clock_end(evidence: &TrialEvidence, what: &str) -> (TrialStatus, Option<Cause>) {
+    if model_answered(evidence) {
+        return (
+            TrialStatus::Timeout,
+            Some(Cause::new(
+                "wall_clock",
+                format!(
+                    "the wall clock ended an agent whose model was answering (the time the task allows, \
+                     not a stalled infrastructure): {what}"
+                ),
+            )),
+        );
+    }
+    (
+        TrialStatus::InfraTimeout,
+        Some(Cause::new(
+            "wall_clock",
+            format!(
+                "the wall clock ended an agent that never had an answer from its model: {what}"
+            ),
+        )),
+    )
+}
+
 /// How a trial ended, by the rules of the module documentation.
 #[must_use]
 pub fn classify(
@@ -627,28 +667,16 @@ pub fn classify(
             exception_status(result, &text("exception_type"), &text("exception_message"))
         {
             if status == TrialStatus::Timeout && budget.is_some() {
-                return (
-                    TrialStatus::InfraTimeout,
-                    Some(Cause::new(
-                        "wall_clock",
-                        format!(
-                            "the wall-clock backstop of a budgeted run ended the agent: {}",
-                            cause.message
-                        ),
-                    )),
-                );
+                return wall_clock_end(evidence, &cause.message);
             }
             return (status, Some(cause));
         }
     }
     if evidence.agent_timed_out {
         if budget.is_some() {
-            return (
-                TrialStatus::InfraTimeout,
-                Some(Cause::new(
-                    "wall_clock",
-                    "an agent step or run time limit ended the agent of a budgeted run",
-                )),
+            return wall_clock_end(
+                evidence,
+                "an agent step or run time limit ended the agent of a budgeted run",
             );
         }
         return (

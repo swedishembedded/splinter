@@ -314,13 +314,9 @@ fn arm_result(arm: &str, model: &str, trials: &[TrialResult], product: Digest) -
     }
 }
 
-/// The paired sign test's decision over the slots both arms counted.
-///
-/// A slot that either arm never counted is no evidence for either side, and
-/// dropping it quietly shrinks the sample toward the trials that finished. So
-/// such a slot makes the verdict `Inconclusive` whatever the counted slots
-/// show; `statistics` says how many there were (`unpaired_slots`) and that
-/// the evaluation was `incomplete`.
+/// The paired sign test's decision over the slots both arms counted. A slot
+/// either arm never counted makes it `Inconclusive` (`unpaired_slots` says how
+/// many): dropping it would shrink the sample toward the trials that finished.
 #[must_use]
 pub fn decide(
     baseline: &[TrialResult],
@@ -801,69 +797,4 @@ pub fn result_of(view: &Path) -> Result<EvalResult, RunError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const ZERO: &str = "blake3:0000000000000000000000000000000000000000000000000000000000000000";
-
-    /// A trial of slot 0 of `task` in the given arm, counted or not, passed or not.
-    fn trial(arm: &str, task: &str, counted: bool, passed: bool) -> TrialResult {
-        serde_json::from_value(json!({
-            "schema": "splinter.trial/1",
-            "slot": { "pass": arm, "task": task, "slot": 0 },
-            "attempt": 1, "task": task, "task_digest": ZERO,
-            "agent": { "name": "sven", "version": null, "invocation": ZERO },
-            "grade": {
-                "status": if counted { "graded" } else { "infra_timeout" },
-                "cause": null, "counted": counted,
-                "score": counted.then_some(if passed { 1.0 } else { 0.0 }),
-                "passed": counted.then_some(passed),
-                "metrics": {}, "vetoes": []
-            },
-            "native_dir": "x"
-        }))
-        .expect("a trial")
-    }
-
-    fn arm(name: &str, outcomes: &[(bool, bool)]) -> Vec<TrialResult> {
-        outcomes
-            .iter()
-            .enumerate()
-            .map(|(i, (counted, passed))| trial(name, &format!("t{i}"), *counted, *passed))
-            .collect()
-    }
-
-    #[test]
-    fn a_complete_arm_pair_is_decided() {
-        let base = arm("base", &[(true, false); 12]);
-        let cand = arm("cand", &[(true, true); 12]);
-        let (decision, stats) = decide(&base, &cand, 0.05, 0.0);
-        assert_eq!(decision, Decision::Improved);
-        assert_eq!(stats["unpaired_slots"], 0);
-        assert_eq!(stats["incomplete"], false);
-    }
-
-    #[test]
-    fn a_slot_one_arm_never_counted_makes_the_verdict_inconclusive() {
-        // Twelve slots, the candidate passing all it counted and winning every pair,
-        // but one candidate slot timed out on every retry: not a verdict.
-        let base = arm("base", &[(true, false); 12]);
-        let mut outcomes = vec![(true, true); 11];
-        outcomes.push((false, false));
-        let cand = arm("cand", &outcomes);
-        let (decision, stats) = decide(&base, &cand, 0.05, 0.0);
-        assert_eq!(decision, Decision::Inconclusive);
-        assert_eq!(stats["unpaired_slots"], 1);
-        assert_eq!(stats["incomplete"], true);
-    }
-
-    #[test]
-    fn the_rate_over_all_trials_counts_an_uncounted_trial_as_not_passed() {
-        let mut trials = arm("cand", &[(true, true); 3]);
-        trials.push(trial("cand", "t3", false, false));
-        let result = arm_result("candidate", "m", &trials, Digest::of(b"x"));
-        assert_eq!(result.counted, 3);
-        assert_eq!(result.pass_rate, Some(1.0));
-        assert_eq!(result.pass_rate_of_trials, Some(0.75));
-    }
-}
+mod tests;
