@@ -104,6 +104,9 @@ serde = { version = "1", features = ["derive"] }
 # The harness optimiser edits sven harness documents (YAML); sven already uses this crate.
 serde_yaml = "0.9"
 serde_json = { version = "1", features = ["float_roundtrip"] }
+# Run state of the learning factory (one controller, WAL mode). The version and the
+# bundled SQLite sven uses, so the lock file gains no new crate.
+rusqlite = { version = "0.31", features = ["bundled"] }
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"

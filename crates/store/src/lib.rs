@@ -39,8 +39,10 @@
 //! decision. The sources, tasks, experiences and annotations themselves are
 //! `splinter-core`'s vocabulary. [`campaign`] is a continuous campaign's
 //! resumable state and its experiment ledger; [`stage_ledger`] a run
-//! directory's record of which stages are done under which inputs. [`error`] is the error every
-//! store reports.
+//! directory's record of which stages are done under which inputs. [`factory`]
+//! is the learning factory's durable state, independent of the experience
+//! database: an immutable content-addressed product store and the controller's
+//! run state in SQLite. [`error`] is the error every store reports.
 
 #![warn(missing_docs)]
 
@@ -53,6 +55,7 @@ pub mod decision;
 pub mod documents;
 pub mod error;
 pub mod experiences;
+pub mod factory;
 pub mod job_outputs;
 pub mod jobs;
 pub mod jsonl;

@@ -13,6 +13,8 @@ mod campaign;
 mod claim_store;
 mod documents;
 mod experience_store;
+mod factory_products;
+mod factory_runstate;
 mod identity;
 mod jsonl;
 mod lineage;
