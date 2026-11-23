@@ -16,10 +16,9 @@ use splinter_sdk::datasets::{
 };
 use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::learn::parse_budget;
-use splinter_sdk::lineage::Direction;
 use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::annotation::Strength;
-use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
+use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::UsagePolicy;
 
 /// A learning agent with its own model. Tell it what to learn - a document,
@@ -78,8 +77,30 @@ pub enum Command {
     Corrections(Box<CorrectionsArgs>),
     /// Answer a question with a model, closed-book unless --open-book.
     Ask(AskArgs),
-    /// Show the policy in use, recent runs and what the stores hold.
-    Status,
+    /// Show the policy in use, recent runs and what the stores hold; with a
+    /// factory run directory, the run's stages and slots.
+    Status(RunStatusArgs),
+    /// Check a factory recipe and everything it names, reporting every
+    /// problem at once; runs nothing.
+    Validate(RecipeArgs),
+    /// Show the graph of stages a factory recipe runs and the work each does.
+    Plan(RecipeArgs),
+    /// Run a factory recipe into a run directory, each stage reused when its
+    /// product is already committed.
+    Run(RunArgs),
+    /// Continue a factory run from what it recorded.
+    Resume(RunDirArgs),
+    /// Ask a running factory run to stop at its next stage or batch.
+    Cancel(RunDirArgs),
+    /// Show a factory run's products and reports, or open its trials.
+    Inspect(InspectArgs),
+    /// Start a factory run on a changed recipe, reusing the products of an
+    /// earlier run that the change leaves unchanged.
+    Fork(ForkArgs),
+    /// Print a factory run's report.
+    Report(RunDirArgs),
+    /// Write a factory run's products as a portable bundle.
+    Export(ExportArgs),
     /// Check that a run can start here: the state root is writable with room
     /// to spare, the policy's weights fit on a GPU, and every role's model
     /// resolves to weights on disk. Loads no model and uses no network. Exits 1
@@ -602,134 +623,12 @@ fn usage_policy(text: &str) -> Result<UsagePolicy, String> {
     UsagePolicy::parse(text)
 }
 
-/// `release`.
+/// `status`.
 #[derive(Debug, Args)]
-#[command(args_conflicts_with_subcommands = true)]
-pub struct ReleaseArgs {
-    /// The candidate, by id or unique prefix.
-    #[arg(value_name = "CANDIDATE-ID")]
-    pub candidate: Option<String>,
-    /// The alias it replaces the champion of.
-    #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
-    pub alias: String,
-    /// The calibrated model that judges the tasks a judge decides.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-    /// Release for distribution and commercial use: refused unless the terms
-    /// of everything the candidate was made from allow both. Without it the
-    /// release is restricted: it records the terms and stays local.
-    #[arg(long)]
-    pub unrestricted: bool,
-    /// The seed the gate's bootstrap intervals are resampled with (drawn and
-    /// printed when not given; the same outcomes and seed give the same
-    /// intervals).
-    #[arg(long, value_name = "N")]
-    pub interval_seed: Option<Seed>,
-    /// A task set of canaries (`tasks canaries`) the candidate attempts beside
-    /// the exam: a pass on any one refuses it, whatever else it passed.
-    #[arg(long, value_name = "TASKSET-ID")]
-    pub canaries: Option<String>,
-    /// The gate's statistical settings.
-    #[command(flatten)]
-    pub gate: GateArgs,
-    /// `list`.
-    #[command(subcommand)]
-    pub command: Option<ReleaseCommand>,
-}
-
-/// `release ...`.
-#[derive(Debug, Subcommand)]
-pub enum ReleaseCommand {
-    /// List the releases and the aliases pointing at them.
-    List,
-}
-
-/// `eval`.
-#[derive(Debug, Args)]
-#[command(args_conflicts_with_subcommands = true)]
-pub struct EvalArgs {
-    /// A candidate id (or prefix) or a model reference; none shows the
-    /// anchor suite.
-    #[arg(value_name = "REF")]
-    pub model: Option<String>,
-    /// held-out, retention, anchor, or an anchor-format file of tasks.
-    #[arg(long, default_value = "held-out", value_parser = suite, value_name = "SUITE")]
-    pub suite: SuiteChoice,
-    /// With --suite anchor: make these files' tasks (repeat the flag for
-    /// several) the anchor suite's next version first. JSON Lines:
-    /// {"instruction", "reference", "kind"?}.
-    #[arg(long, value_name = "FILE")]
-    pub freeze: Vec<PathBuf>,
-    /// The calibrated model that judges the tasks a judge decides.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-    /// `matrix`.
-    #[command(subcommand)]
-    pub command: Option<EvalCommand>,
-}
-
-/// `experiment ...`.
-#[derive(Debug, Subcommand)]
-pub enum ExperimentCommand {
-    /// Validate a plan against the catalog of families and show its schedule:
-    /// families disjoint by domain, no sealed family scheduled for training or
-    /// retention, retention only on families an earlier generation trained.
-    /// A plan that is not valid is refused with every violation. A valid plan
-    /// records its sealed final exam in the state root, so a later run that is
-    /// not given the plan cannot read those families either.
-    Check {
-        /// The plan file.
-        #[arg(value_name = "PLAN")]
-        plan: PathBuf,
-        /// The catalog of families (default: catalog.toml beside the plan).
-        #[arg(long, value_name = "FILE")]
-        catalog: Option<PathBuf>,
-    },
-}
-
-/// `eval ...`.
-#[derive(Debug, Subcommand)]
-pub enum EvalCommand {
-    /// The continual-learning results matrix of a lineage: what each gate
-    /// measured of each release on each earlier release's suite, with the
-    /// metrics read from it. A cell no gate measured is shown absent.
-    Matrix {
-        /// The alias whose releases are the generations.
-        #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
-        alias: String,
-    },
-}
-
-/// `lineage`.
-#[derive(Debug, Args)]
-pub struct LineageArgs {
-    /// Any artifact's id - a source, task, experience, dataset, candidate,
-    /// release, answer, ... - or a unique prefix of it.
-    #[arg(value_name = "ID")]
-    pub id: String,
-    /// Only where it came from.
-    #[arg(long, conflicts_with_all = ["down", "both"])]
-    pub up: bool,
-    /// Only what came from it.
-    #[arg(long, conflicts_with = "both")]
-    pub down: bool,
-    /// Both ways (the default).
-    #[arg(long)]
-    pub both: bool,
-    /// The most edges walked from it (default: all the way).
-    #[arg(long, value_name = "N")]
-    pub depth: Option<usize>,
-}
-
-impl LineageArgs {
-    /// The direction the flags ask for.
-    pub fn direction(&self) -> Direction {
-        match (self.up, self.down) {
-            (true, _) => Direction::Up,
-            (_, true) => Direction::Down,
-            _ => Direction::Both,
-        }
-    }
+pub struct RunStatusArgs {
+    /// A factory run directory; none shows the policy.
+    #[arg(value_name = "RUN")]
+    pub run: Option<PathBuf>,
 }
 
 mod absorb;
@@ -741,8 +640,10 @@ mod control;
 mod corrections;
 mod dataset;
 mod env;
+mod eval;
 mod exam;
 mod experiences;
+mod factory;
 mod gate;
 mod generation;
 mod global;
@@ -770,11 +671,15 @@ pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
 pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
+pub use eval::{
+    EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseArgs, ReleaseCommand,
+};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{
     CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, HintFramingArg, ImportArgs, RationaliseArgs,
     RepairArgs, StrataArgs,
 };
+pub use factory::{ExportArgs, ForkArgs, InspectArgs, RecipeArgs, RunArgs, RunDirArgs};
 pub use gate::GateArgs;
 pub use generation::GenerationCommand;
 pub use global::Global;
@@ -796,5 +701,7 @@ use train::positive_count;
 /// A sampling temperature a provider accepts: 0 to 2.
 pub use train::{MonitoringArgs, OptimiserArgs, RehearseArgs, TrainArgs};
 
+#[cfg(test)]
+mod factory_tests;
 #[cfg(test)]
 mod tests;

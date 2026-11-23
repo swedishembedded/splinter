@@ -58,6 +58,7 @@
 #![warn(missing_docs)]
 
 pub mod device;
+pub mod factory;
 pub mod jobs;
 pub mod seed;
 pub mod served_host;

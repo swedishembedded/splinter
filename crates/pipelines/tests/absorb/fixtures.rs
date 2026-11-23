@@ -93,6 +93,7 @@ fn write_json(path: &Path, trajectory: &Trajectory) -> anyhow::Result<()> {
 pub fn world(reply: impl Fn(&str) -> String + Send + Sync + 'static) -> anyhow::Result<World> {
     let dir = tempfile::tempdir()?;
     let config = Config {
+        factory: Default::default(),
         state_root: StateRoot::new(dir.path().join("state")),
         jobs: Default::default(),
         model_store: dir.path().join("models"),

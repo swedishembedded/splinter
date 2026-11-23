@@ -40,6 +40,9 @@ pub const DEFAULT_SOLVE_DEADLINE: Duration = Duration::from_secs(300);
 pub struct Config {
     /// Where every store, run and candidate lives.
     pub state_root: StateRoot,
+    /// How the learning factory reaches model providers and executes
+    /// attempts.
+    pub factory: FactorySettings,
     /// How jobs are submitted and reconciled.
     pub jobs: JobSettings,
     /// brain's model store: where `local:<org>/<model>` names a checkpoint.
@@ -389,6 +392,18 @@ pub const DOCKER_CLIENT_ENV: &[&str] = &[
     "XDG_RUNTIME_DIR",
 ];
 
+/// What the learning factory needs from the machine it runs on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FactorySettings {
+    /// The connections file: how models are reached
+    /// (`$XDG_CONFIG_HOME/splinter/connections.yaml`, else
+    /// `~/.config/splinter/connections.yaml`).
+    pub connections: PathBuf,
+    /// The execution worker (`$SPLINTER_HARBOR_WORKER`, else the first
+    /// `splinter-harbor-worker` on `PATH`).
+    pub harbor_worker: Option<PathBuf>,
+}
+
 /// [`Config::min_calibration_controls`] when nothing names one.
 pub const DEFAULT_MIN_CALIBRATION_CONTROLS: usize = 16;
 
@@ -420,8 +435,19 @@ impl Config {
             || home.join(".local/share/brain/models"),
             |data| PathBuf::from(data).join("brain/models"),
         );
+        let config_home =
+            var("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from);
+        let factory = FactorySettings {
+            connections: config_home.join("splinter/connections.yaml"),
+            harbor_worker: var("SPLINTER_HARBOR_WORKER")
+                .map(PathBuf::from)
+                .or_else(|| {
+                    var("PATH").and_then(|path| find_executable(&path, "splinter-harbor-worker"))
+                }),
+        };
         Self {
             state_root: StateRoot::under_home(&home),
+            factory,
             jobs: JobSettings::default(),
             policy_base: model_store.join(DEFAULT_POLICY_MODEL),
             policy_context_tokens: None,

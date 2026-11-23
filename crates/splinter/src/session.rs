@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::ask::{ask, ask_retrieving, RetrievingQuestion};
 use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::doctor::doctor;
@@ -24,7 +23,6 @@ use splinter_sdk::lineage::{lineage, LineageRequest};
 use splinter_sdk::measure::gate::GateConfig;
 use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE};
 use splinter_sdk::release::{self, ReleaseRequest};
-use splinter_sdk::rerank::ModelReranker;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
 use splinter_sdk::router::{interpret, Routed};
 use splinter_sdk::runs::{self, record};
@@ -43,7 +41,7 @@ use crate::absorb_session;
 use crate::baseline_report;
 use crate::cli::{
     Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
-    Global, JudgeCommand, ReleaseCommand, RetrieveArgs, RunsCommand, SourceCommand, StateCommand,
+    Global, JudgeCommand, ReleaseCommand, RunsCommand, SourceCommand, StateCommand,
 };
 use crate::compare_session;
 use crate::conversation_dataset;
@@ -237,6 +235,10 @@ impl Session {
         let context = self.context();
         let ctx = &context;
         let json = self.global.json;
+        let command = match crate::factory_session::route(ctx.config(), json, command) {
+            Ok(done) => return done,
+            Err(other) => *other,
+        };
         match command {
             Command::Learn(args) => {
                 return crate::learn_session::learn_command(&self.splinter, ctx, json, *args)
@@ -270,47 +272,22 @@ impl Session {
             }
             Command::Objects(command) => crate::objects_output::run(ctx, json, command)?,
             Command::Env(command) => crate::env_output::run(ctx, json, command)?,
-            Command::Ask(args) => {
-                let retrieve = &args.retrieval;
-                if retrieve.sources.is_empty() {
-                    emit(
-                        json,
-                        &ask(ctx, &args.question, args.open_book.as_deref(), &args.policy)?,
-                    );
-                } else {
-                    if args.open_book.is_some() {
-                        return Err(Error::Refused(
-                            "--open-book shows one whole source and --retrieve passages of \
-                             several: name one of them"
-                                .into(),
-                        ));
-                    }
-                    let embedder = ctx.embedder()?;
-                    let reader = reader_of(ctx, retrieve)?;
-                    let rerank = reader.as_ref().map(|reader| Rerank {
-                        reranker: reader,
-                        candidates: candidates_for(retrieve.passages),
-                    });
-                    emit(
-                        json,
-                        &ask_retrieving(
-                            ctx,
-                            &RetrievingQuestion {
-                                question: &args.question,
-                                sources: &retrieve.sources,
-                                passages: retrieve.passages,
-                                rerank,
-                                policy: &args.policy,
-                            },
-                            &*embedder,
-                        )?,
-                    );
-                }
-            }
+            Command::Ask(args) => return crate::ask_session::ask_command(ctx, json, &args),
             Command::Baseline(args) => {
                 return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
             }
-            Command::Status => emit(json, &status(ctx)?),
+            Command::Status(_) => emit(json, &status(ctx)?),
+            Command::Validate(_)
+            | Command::Plan(_)
+            | Command::Run(_)
+            | Command::Resume(_)
+            | Command::Cancel(_)
+            | Command::Inspect(_)
+            | Command::Fork(_)
+            | Command::Report(_)
+            | Command::Export(_) => {
+                unreachable!("the factory's commands are routed before this match")
+            }
             Command::Serve => {
                 let serving = splinter_sdk::serving::start(ctx)?;
                 emit(json, &serving);
@@ -703,7 +680,7 @@ impl Session {
                 } else {
                     embedder = ctx.embedder()?;
                     library = library_of(ctx, &retrieve.sources, &*embedder)?.1;
-                    reader = reader_of(ctx, retrieve)?;
+                    reader = crate::ask_session::reader_of(ctx, retrieve)?;
                     Some(Retrieval {
                         library: &library,
                         embedder: &*embedder,
@@ -783,16 +760,4 @@ impl Session {
         }
         Ok(Exit::Ok)
     }
-}
-
-/// The model that reads retrieval's candidates, when one was named.
-fn reader_of<'a>(
-    ctx: &'a Context,
-    retrieve: &RetrieveArgs,
-) -> Result<Option<ModelReranker<'a>>, Error> {
-    retrieve
-        .reranker
-        .as_ref()
-        .map(|reference| ModelReranker::new(ctx, reference))
-        .transpose()
 }

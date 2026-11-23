@@ -51,6 +51,7 @@ impl Drop for Scratch {
 
 fn runtime(scratch: &Scratch, workspace: WorkspaceSettings) -> Runtime {
     let config = Config {
+        factory: Default::default(),
         state_root: StateRoot::new(scratch.0.join("state")),
         jobs: Default::default(),
         model_store: scratch.0.join("models"),

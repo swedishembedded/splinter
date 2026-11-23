@@ -114,6 +114,7 @@ impl Drop for Scratch {
 /// network opt-in.
 pub fn config(scratch: &Scratch) -> Config {
     Config {
+        factory: Default::default(),
         state_root: scratch.state(),
         jobs: Default::default(),
         model_store: scratch.0.join("models"),

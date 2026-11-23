@@ -49,6 +49,7 @@ impl Drop for Scratch {
 
 fn context(scratch: &Scratch) -> Context {
     let config = Config {
+        factory: Default::default(),
         state_root: StateRoot::new(scratch.0.join("state")),
         jobs: Default::default(),
         model_store: scratch.0.join("models"),

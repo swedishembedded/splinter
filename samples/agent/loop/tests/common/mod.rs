@@ -213,6 +213,7 @@ impl Fixture {
     pub fn splinter(&self, model: Arc<Scripted>) -> Splinter {
         let state = StateRoot::under_home(self.home.path());
         let config = Config {
+            factory: Default::default(),
             state_root: state,
             jobs: splinter_sdk::config::JobSettings::default(),
             model_store: self.home.path().join("models"),

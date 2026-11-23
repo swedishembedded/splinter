@@ -33,6 +33,7 @@ fn context(test: &str) -> (Context, Reported) {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let config = Config {
+        factory: Default::default(),
         state_root: StateRoot::new(root.join("state")),
         jobs: Default::default(),
         model_store: root.join("models"),

@@ -23,6 +23,7 @@ use splinter_sdk::{Config, Splinter};
 
 fn config(dir: &std::path::Path) -> Config {
     Config {
+        factory: Default::default(),
         state_root: StateRoot::new(dir.join("state")),
         jobs: Default::default(),
         model_store: dir.join("models"),

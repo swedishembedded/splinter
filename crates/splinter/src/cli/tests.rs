@@ -5,6 +5,7 @@
 
 use super::*;
 use clap::CommandFactory;
+use splinter_sdk::{lineage::Direction, vocabulary::model_ref::POLICY_DEFAULT};
 
 fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("splinter").chain(args.iter().copied()))
@@ -95,7 +96,6 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         ModelRef::policy_default(),
         "closed-book on the policy"
     );
-    assert!(matches!(command(&["status"]), Command::Status));
 
     let Command::Source(SourceCommand::Add { target, .. }) =
         command(&["source", "add", "cmd:ls", "-la", "/tmp"])

@@ -155,6 +155,7 @@ fn config(cli: &Cli) -> Result<Config> {
         .clone()
         .unwrap_or_else(|| Config::from_env().model_store);
     Ok(Config {
+        factory: Default::default(),
         state_root: StateRoot::under_home(&home),
         jobs: splinter_sdk::config::JobSettings::default(),
         policy_base: model_store.join("Qwen/Qwen3-0.6B"),

@@ -28,6 +28,7 @@ use splinter_store::StateRoot;
 
 fn config() -> Config {
     Config {
+        factory: Default::default(),
         state_root: StateRoot::new("state"),
         jobs: Default::default(),
         model_store: PathBuf::from("/models"),

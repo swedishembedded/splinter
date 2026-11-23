@@ -122,6 +122,7 @@ impl Run {
             .with_context(|| format!("creating {}", root.path().display()))?;
         let unused = self.dir.join("unused");
         let config = Config {
+            factory: Default::default(),
             state_root: root,
             jobs: splinter_sdk::config::JobSettings::default(),
             model_store: unused.join("models"),

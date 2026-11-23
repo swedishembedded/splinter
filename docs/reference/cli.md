@@ -85,6 +85,15 @@ Every command takes these.
 - [splinter corrections](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [splinter ask](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [splinter status](#splinter-status) - Show the policy in use, recent runs and what the stores hold
+- [splinter validate](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
+- [splinter plan](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
+- [splinter run](#splinter-run) - Run a factory recipe into a run directory, each stage reused when its product is already committed
+- [splinter resume](#splinter-resume) - Continue a factory run from what it recorded
+- [splinter cancel](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
+- [splinter inspect](#splinter-inspect) - Show a factory run's products and reports, or open its trials
+- [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+- [splinter report](#splinter-report) - Print a factory run's report
+- [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
 - [splinter doctor](#splinter-doctor) - Check that a run can start here
 - [splinter serve](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
 - [splinter baseline](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
@@ -237,6 +246,15 @@ Subcommands:
 - [`corrections`](#splinter-corrections) - Continue the attempts that failed or got stuck of an existing experience set with a teacher, from the state the student actually reached, and keep the continuations the task's own hidden checks verify as an experience set a dataset can be built from
 - [`ask`](#splinter-ask) - Answer a question with a model, closed-book unless --open-book
 - [`status`](#splinter-status) - Show the policy in use, recent runs and what the stores hold
+- [`validate`](#splinter-validate) - Check a factory recipe and everything it names, reporting every problem at once
+- [`plan`](#splinter-plan) - Show the graph of stages a factory recipe runs and the work each does
+- [`run`](#splinter-run) - Run a factory recipe into a run directory, each stage reused when its product is already committed
+- [`resume`](#splinter-resume) - Continue a factory run from what it recorded
+- [`cancel`](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
+- [`inspect`](#splinter-inspect) - Show a factory run's products and reports, or open its trials
+- [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+- [`report`](#splinter-report) - Print a factory run's report
+- [`export`](#splinter-export) - Write a factory run's products as a portable bundle
 - [`doctor`](#splinter-doctor) - Check that a run can start here
 - [`serve`](#splinter-serve) - Start the brain servers (one per usable node of a multi-node allocation, else one here), print where they are and keep them until interrupted
 - [`baseline`](#splinter-baseline) - Print the `baseline-v1` record of what a registered run runs on
@@ -478,11 +496,141 @@ Options:
 
 ### splinter status
 
-Show the policy in use, recent runs and what the stores hold
+Show the policy in use, recent runs and what the stores hold; with a factory run directory, the run's stages and slots
 
 ```text
-splinter status [OPTIONS]
+splinter status [OPTIONS] [RUN]
 ```
+
+Arguments:
+
+- `<RUN>`: A factory run directory; none shows the policy.
+
+### splinter validate
+
+Check a factory recipe and everything it names, reporting every problem at once; runs nothing
+
+```text
+splinter validate [OPTIONS] <RECIPE>
+```
+
+Arguments:
+
+- `<RECIPE>` (required): The recipe, relative to the task repository (the working directory)
+
+### splinter plan
+
+Show the graph of stages a factory recipe runs and the work each does
+
+```text
+splinter plan [OPTIONS] <RECIPE>
+```
+
+Arguments:
+
+- `<RECIPE>` (required): The recipe, relative to the task repository (the working directory)
+
+### splinter run
+
+Run a factory recipe into a run directory, each stage reused when its product is already committed
+
+```text
+splinter run [OPTIONS] --out <DIR> <RECIPE>
+```
+
+Arguments:
+
+- `<RECIPE>` (required): The recipe, relative to the task repository (the working directory)
+
+Options:
+
+- `--out <DIR>` (required): The run directory; an existing run of the same recipe is continued.
+
+### splinter resume
+
+Continue a factory run from what it recorded
+
+```text
+splinter resume [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+### splinter cancel
+
+Ask a running factory run to stop at its next stage or batch
+
+```text
+splinter cancel [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+### splinter inspect
+
+Show a factory run's products and reports, or open its trials
+
+```text
+splinter inspect [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+Options:
+
+- `--stage <STAGE>`: Only the stages whose key starts with this (`rollouts`, `datasets/sft`)
+- `--viewer <VIEWER>`: Open the stage's trials in a viewer instead (`harbor`)
+
+### splinter fork
+
+Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+
+```text
+splinter fork [OPTIONS] --recipe <RECIPE> --out <DIR> <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run whose products are reused.
+
+Options:
+
+- `--recipe <RECIPE>` (required): The changed recipe, relative to the task repository.
+- `--out <DIR>` (required): The new run directory.
+
+### splinter report
+
+Print a factory run's report
+
+```text
+splinter report [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+### splinter export
+
+Write a factory run's products as a portable bundle
+
+```text
+splinter export [OPTIONS] --out <FILE> <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+Options:
+
+- `--out <FILE>` (required): The bundle to write (`.tar.zst`)
 
 ### splinter doctor
 
@@ -2244,6 +2392,8 @@ Options:
 - `--suite <SUITE>`: held-out, retention, anchor, or an anchor-format file of tasks. Default: `held-out`.
 - `--freeze <FILE>...`: With --suite anchor: make these files' tasks (repeat the flag for several) the anchor suite's next version first. JSON Lines: {"instruction", "reference", "kind"?}.
 - `--judge <REF>`: The calibrated model that judges the tasks a judge decides.
+- `--plan <PLAN>`: With a factory run directory as REF: the evaluation plan to evaluate the run's candidates under, reusing them (a fork of the run into --out with the recipe's plan replaced)
+- `--out <DIR>`: With --plan: the new run directory.
 
 Subcommands:
 

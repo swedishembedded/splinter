@@ -72,6 +72,7 @@ fn context(scratch: &Scratch) -> Context {
     .unwrap();
     std::fs::write(base.join("tokenizer.json"), b"{}").unwrap();
     let config = Config {
+        factory: Default::default(),
         state_root: StateRoot::new(scratch.0.join("state")),
         jobs: Default::default(),
         model_store: scratch.0.join("models"),
