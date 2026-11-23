@@ -58,6 +58,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         base: &base,
         method: "lora",
         params: &params,
+        objective: "sft",
         train: &train,
         validation: &validation,
         // seed: the test checks the seed it was given is the one brain is asked for.
@@ -147,6 +148,34 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         service.jobs().created().len(),
         jobs.len() + 4,
         "the refused request reached no job"
+    );
+
+    // A preference dataset is a preference job.
+    let pairs = dir.path().join("pairs.jsonl");
+    let pair = json!({
+        "prompt": [{"role": "user", "content": "edit"}],
+        "chosen": {"role": "assistant", "content": "done"},
+        "rejected": {"role": "assistant", "content": "gave up"},
+        "metadata": {"view": "preference", "objective": "preference"},
+    });
+    std::fs::write(&pairs, format!("{pair}\n{pair}\n")).unwrap();
+    let no_pairs = dir.path().join("no-pairs.jsonl");
+    std::fs::write(&no_pairs, "").unwrap();
+    let out_pairs = dir.path().join("lora-r4-pairs");
+    std::fs::create_dir_all(&out_pairs).unwrap();
+    trainer
+        .train(&TrainRequest {
+            objective: "preference",
+            train: &pairs,
+            validation: &no_pairs,
+            out: &out_pairs,
+            resume_key: "lora-r4-pairs",
+            ..request.clone()
+        })
+        .unwrap();
+    assert_eq!(
+        service.jobs().created().last().unwrap()["objective"],
+        "preference"
     );
 }
 

@@ -421,6 +421,8 @@ pub struct FakeTrainer {
     pub trained: Mutex<Vec<serde_json::Value>>,
     /// Whether each training request trained reasoning.
     pub thinking: Mutex<Vec<bool>>,
+    /// The objective of each training request's dataset.
+    pub objectives: Mutex<Vec<String>>,
 }
 
 impl Trainer for FakeTrainer {
@@ -447,6 +449,10 @@ impl Trainer for FakeTrainer {
             .count();
         self.trained.lock().unwrap().push(request.params.clone());
         self.thinking.lock().unwrap().push(request.thinking);
+        self.objectives
+            .lock()
+            .unwrap()
+            .push(request.objective.to_owned());
         let adapter = request.out.join("adapter.safetensors");
         std::fs::write(
             &adapter,

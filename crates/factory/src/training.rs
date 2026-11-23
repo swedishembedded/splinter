@@ -21,8 +21,12 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use splinter_core::digest::Digest;
 use splinter_model::endpoint::BrainEndpoints;
-use splinter_model::served_train::{check_dataset, fine_tune_served, CheckSpec};
-use splinter_model::train::{BasePrecision, FineTune};
+use splinter_model::policy_gradient::PolicyGradientTune;
+use splinter_model::served_train::{
+    check_dataset, fine_tune_served, train_feedback_served, train_policy_gradient_served,
+    train_preference_served, CheckSpec, DEFAULT_DPO_BETA,
+};
+use splinter_model::train::{BasePrecision, FeedbackTune, FineTune, PairLoss, PreferenceTune};
 use splinter_model::LocalWeights;
 
 use crate::recipe::ModelRef;
@@ -41,6 +45,9 @@ pub struct TrainRequest<'a> {
     pub method: &'a str,
     /// The trainer's own parameters, as the recipe wrote them.
     pub params: &'a Value,
+    /// The dataset's objective (`sft`, `cpt`, `preference`, `feedback`,
+    /// `policy-gradient`): the regime it is trained by.
+    pub objective: &'a str,
     /// The training records.
     pub train: &'a Path,
     /// The validation records (may be empty).
@@ -169,6 +176,170 @@ impl BrainTrainer {
     fn base_dir(&self, base: &ModelRef) -> PathBuf {
         self.models.join(&base.model)
     }
+
+    /// The held-out records of `request`: its validation file, else its
+    /// training file when it held none out.
+    fn held_out<'r>(request: &TrainRequest<'r>) -> &'r Path {
+        let empty = std::fs::metadata(request.validation)
+            .map(|m| m.len() == 0)
+            .unwrap_or(true);
+        if empty {
+            request.train
+        } else {
+            request.validation
+        }
+    }
+
+    fn precision(params: &LoraParams) -> Result<BasePrecision, TrainError> {
+        match &params.base_precision {
+            Some(text) => text
+                .parse::<BasePrecision>()
+                .map_err(|e| TrainError(format!("lora params: base_precision: {e}"))),
+            None => Ok(BasePrecision::default()),
+        }
+    }
+
+    fn trained(
+        params: &LoraParams,
+        adapter: PathBuf,
+        record: PathBuf,
+        report: Value,
+    ) -> Result<Trained, TrainError> {
+        Ok(Trained {
+            files: vec![adapter.clone(), record],
+            adapter: Some(adapter),
+            params: serde_json::to_value(params).map_err(error)?,
+            report,
+        })
+    }
+
+    /// Direct preference optimisation on the dataset's pairs, against the
+    /// base as the frozen reference.
+    fn preference(
+        &self,
+        request: &TrainRequest<'_>,
+        params: &LoraParams,
+    ) -> Result<Trained, TrainError> {
+        let model_dir = self.base_dir(request.base);
+        let trained = train_preference_served(
+            &self.endpoints,
+            &PreferenceTune {
+                model_dir: &model_dir,
+                train: request.train,
+                held_out: Self::held_out(request),
+                attempt_dir: request.out,
+                steps: params.steps,
+                rank: params.rank,
+                alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
+                beta: DEFAULT_DPO_BETA,
+                nll_weight: 0.0,
+                loss: PairLoss::Dpo,
+                gamma: None,
+                grad_accum: params.grad_accum,
+                learning_rate: params.learning_rate,
+                seed: request.seed,
+                continue_from: None,
+                cancel: None,
+            },
+        )
+        .map_err(error)?;
+        let report = serde_json::json!({
+            "regime": "preference", "records": trained.records, "block": trained.block,
+            "beta": trained.beta, "adapter_sha256": trained.adapter_digest,
+            "base_digest": trained.base_digest,
+        });
+        Self::trained(params, trained.adapter, trained.training_record, report)
+    }
+
+    /// KTO on the dataset's judged completions, the smaller class weighed
+    /// up so both weigh the same in all.
+    fn feedback(
+        &self,
+        request: &TrainRequest<'_>,
+        params: &LoraParams,
+    ) -> Result<Trained, TrainError> {
+        let text = std::fs::read_to_string(request.train).map_err(error)?;
+        let (mut desirable, mut undesirable) = (0usize, 0usize);
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let record: Value = serde_json::from_str(line).map_err(error)?;
+            match record.get("desirable").and_then(Value::as_bool) {
+                Some(true) => desirable += 1,
+                Some(false) => undesirable += 1,
+                None => {
+                    return Err(TrainError(
+                        "a feedback record says not whether it is desirable".into(),
+                    ))
+                }
+            }
+        }
+        let balance = splinter_data::FeedbackBalance::of(desirable, undesirable);
+        let model_dir = self.base_dir(request.base);
+        let trained = train_feedback_served(
+            &self.endpoints,
+            &FeedbackTune {
+                model_dir: &model_dir,
+                train: request.train,
+                attempt_dir: request.out,
+                steps: params.steps,
+                rank: params.rank,
+                alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
+                beta: None,
+                desirable_weight: balance.desirable_weight as f32,
+                undesirable_weight: balance.undesirable_weight as f32,
+                grad_accum: params.grad_accum,
+                learning_rate: params.learning_rate,
+                seed: request.seed,
+                continue_from: None,
+                cancel: None,
+            },
+        )
+        .map_err(error)?;
+        let report = serde_json::json!({
+            "regime": "feedback", "records": trained.records, "summary": trained.summary,
+            "desirable": desirable, "undesirable": undesirable,
+            "adapter_sha256": trained.adapter_digest, "base_digest": trained.base_digest,
+        });
+        Self::trained(params, trained.adapter, trained.training_record, report)
+    }
+
+    /// The clipped policy gradient on the dataset's rollout records, on the
+    /// advantages brain computes from each group's rewards.
+    fn policy_gradient(
+        &self,
+        request: &TrainRequest<'_>,
+        params: &LoraParams,
+    ) -> Result<Trained, TrainError> {
+        let model_dir = self.base_dir(request.base);
+        let trained = train_policy_gradient_served(
+            &self.endpoints,
+            &PolicyGradientTune {
+                model_dir: &model_dir,
+                train: request.train,
+                attempt_dir: request.out,
+                steps: params.steps,
+                rank: params.rank,
+                alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
+                weight_decay: params.weight_decay,
+                grad_accum: params.grad_accum,
+                continue_from: None,
+                cancel: None,
+                base: Self::precision(params)?,
+                learning_rate: params.learning_rate,
+                seed: request.seed,
+                max_block: params.max_block,
+                thinking: request.thinking,
+                pack_answers: true,
+                options: Default::default(),
+            },
+        )
+        .map_err(error)?;
+        let report = serde_json::json!({
+            "regime": "policy-gradient", "records": trained.records, "block": trained.block,
+            "statistics": trained.statistics, "adapter_sha256": trained.adapter_digest,
+            "base_digest": trained.base_digest,
+        });
+        Self::trained(params, trained.adapter, trained.training_record, report)
+    }
 }
 
 fn error(e: impl ToString) -> TrainError {
@@ -229,6 +400,19 @@ impl Trainer for BrainTrainer {
         let resolved = self.resolve(request.method, request.params)?;
         let params: LoraParams = serde_json::from_value(resolved)
             .map_err(|e| TrainError(format!("lora params: {e}")))?;
+        match request.objective {
+            // A text is one supervised turn: continued pretraining trains as
+            // chat records do.
+            "sft" | "cpt" => {}
+            "preference" => return self.preference(request, &params),
+            "feedback" => return self.feedback(request, &params),
+            "policy-gradient" => return self.policy_gradient(request, &params),
+            other => {
+                return Err(TrainError(format!(
+                    "brain trainer: a {other} dataset has no LoRA regime here"
+                )))
+            }
+        }
         let validation_empty = std::fs::metadata(request.validation)
             .map(|m| m.len() == 0)
             .unwrap_or(true);

@@ -511,9 +511,11 @@ compiles its collection evaluates on the same compiled tasks:
   its verdicts and the sources its evidence is in. A policy-gradient record is an action of a graded attempt carrying
   the attempt's reward and its group; a group whose attempts all earned the
   same is left out. Hinted, continued and harnessed attempts are refused: they
-  would teach what the target is never shown. `model.train` trains SFT
-  datasets, so these are refused as its input until a trainer of their
-  regime is wired.
+  would teach what the target is never shown. `model.train` trains each
+  dataset by its objective's Brain job: chat and text records by supervised
+  fine-tuning, pairs by DPO against the base, judged completions by KTO (the
+  smaller class weighed up), rollout records by the clipped policy gradient.
+  A retrieval dataset trains an embedder and is refused as its input.
 
   ```yaml
   - id: preferred
@@ -534,7 +536,7 @@ compiles its collection evaluates on the same compiled tasks:
   rate strictly inside 0 to 1, or inside `min_pass_rate`..`max_pass_rate`),
   each task's folder as the run pinned it, for `tasks.pin`; `rlvr.json` lists
   every attempted task's counts, rate and whether it was kept.
-- **Training** (`model.train`). Each candidate is one brain job, resumable under a key derived from
+- **Training** (`model.train`). Each candidate is one brain job of its dataset's regime, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   stage's parameters trains a new candidate and reuses the dataset and attempts.
 - **Evaluation** (`evaluation`). A development plan runs a baseline arm (once,

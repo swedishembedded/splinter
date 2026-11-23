@@ -184,25 +184,23 @@ pub(crate) fn projection_problems(
     out
 }
 
-/// A `model.train` stage given a dataset of an objective it does not train.
+/// A `model.train` stage given a dataset no LoRA regime trains: a
+/// retrieval dataset's contrastive triples train an embedder.
 pub(crate) fn trained_objective_problems(
     stage: &PlannedStage,
     compiled: &CompiledPlan,
 ) -> Vec<String> {
     let mut out = Vec::new();
-    // The trainer fine-tunes on chat records; a dataset of another
-    // objective needs the trainer of its regime.
     for source in stage.sources("dataset") {
-        let objective = compiled
+        let retrieval = compiled
             .stages
             .iter()
             .find(|s| s.id == source && s.operation == names::PROJECT)
             .and_then(|s| ops::params::<ProjectParams>(&s.params).ok())
-            .map(|p| p.objective)
-            .filter(|o| o != "sft");
-        if let Some(objective) = objective {
+            .is_some_and(|p| p.objective == "retrieval");
+        if retrieval {
             out.push(format!(
-                "{source} is a {objective} dataset; model.train trains SFT datasets"
+                "{source} is a retrieval dataset; a retrieval dataset trains an embedder, not a model.train LoRA"
             ));
         }
     }

@@ -125,6 +125,7 @@ pub(crate) fn produce(
             base: &variant.base,
             method: &variant.method,
             params: &variant.params,
+            objective: &dataset.objective,
             train: &view.join(&dataset.train.path),
             validation: &view.join(&dataset.validation.path),
             seed: variant.seed,

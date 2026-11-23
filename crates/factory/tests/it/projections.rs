@@ -139,6 +139,46 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
     assert_eq!(groups.len(), 2, "a group per task");
 }
 
+/// Each dataset is trained by its objective's regime: Brain trains chat,
+/// preference, judged-completion and rollout records, each by its own job.
+#[test]
+fn each_dataset_is_trained_by_its_objectives_regime() {
+    let repo = Repo::new();
+    // seed: a training stage states its seed; the fake trainer draws nothing.
+    let trained: String = ["sft", "preferred", "judged", "rewarded"]
+        .iter()
+        .map(|d| {
+            format!(
+                "  - id: lora-{d}\n    uses: model.train\n    inputs: {{ dataset: $stages.{d}.dataset }}\n    with: {{ base: student, method: lora, params: {{ rank: 8 }}, seed: 1 }}\n"
+            )
+        })
+        .collect();
+    let resolved = resolve(&repo.root, &(RECIPE.to_owned() + &trained), connections()).unwrap();
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    for task in ["train/001-first", "train/002-second"] {
+        backend.script(task, &[Outcome::Pass, Outcome::Fail]);
+    }
+    let trainer = crate::fakes::FakeTrainer::default();
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    assert_eq!(
+        *trainer.objectives.lock().unwrap(),
+        ["sft", "preference", "feedback", "policy-gradient"]
+    );
+}
+
 #[test]
 fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
     let repo = Repo::new();
@@ -149,11 +189,11 @@ fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
             .map(|e| format!("{e:?}"))
             .unwrap_or_default()
     };
-    // seed: a training stage states its seed; the refusal is at plan time.
+    // seed: a dataset and a training stage state their seeds; the refusal is at plan time.
     assert!(refused(
-        "  - id: lora\n    uses: model.train\n    inputs: { dataset: $stages.preferred.dataset }\n    with: { base: student, method: lora, params: { rank: 8 }, seed: 1 }\n"
+        "  - id: retrieved\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: retrieval, target: student, seed: 13 }\n  - id: lora\n    uses: model.train\n    inputs: { dataset: $stages.retrieved.dataset }\n    with: { base: student, method: lora, params: { rank: 8 }, seed: 1 }\n"
     )
-    .contains("model.train trains SFT datasets"));
+    .contains("a retrieval dataset trains an embedder"));
     assert!(refused(
         "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: policy-gradient, preference: { pairs_per_task: 2 }, target: student, seed: 13 }\n"
     )
