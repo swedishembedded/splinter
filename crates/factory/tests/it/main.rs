@@ -25,6 +25,7 @@ mod import;
 mod interventions;
 mod knowledge;
 mod native;
+mod qualify;
 mod repo;
 mod resolve;
 mod reuse;

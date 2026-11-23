@@ -114,6 +114,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `task.generate` | `documents` (one or more) | `tasks` |
 | `answer.collect` | `task` | `answers` |
 | `environment.build` | `documents` (optional) | `environments` |
+| `environment.qualify` | `environments`, `attempts` | `environments` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -352,11 +353,30 @@ instances as Harbor task folders by split, which `tasks.pin` pins like a
 compiled collection, and `compile.json`, the report of every environment, the
 rejected and quarantined ones with their reasons:
 
+An environment whose gates all passed still waits for its band: a base model it
+always solves, or never solves, gives a group-relative trainer nothing to learn
+from. `environment.qualify` measures each environment's base pass rate from the
+counted attempts an attempt stage made at its dev instances (one model's), and
+re-judges its admission report (`admission/ENV.json` in the build's product)
+against its band. Its product holds the instances of the environments admitted
+now, by split, and `qualify.json`, every re-judged report; with none admitted,
+the stage is rejected with each one's reasons:
+
 ```yaml
   - id: built
     uses: environment.build
     with: { objective: objectives/python.md, environments: 4, instances: 8, seed: 7 }
-  - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.built.environments },
+  - { id: dev, uses: tasks.pin, inputs: { collection: $stages.built.environments },
+      with: { split: dev } }
+  - id: base
+    uses: attempt.collect
+    inputs: { tasks: $stages.dev.tasks }
+    with: { agent: sven, model: base, environment: environments/python.yaml,
+            attempts: 8, seed: 11 }
+  - id: qualified
+    uses: environment.qualify
+    inputs: { environments: $stages.built.environments, attempts: $stages.base.attempts }
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $stages.qualified.environments },
       with: { split: train } }
 ```
 

@@ -390,6 +390,7 @@ pub fn registry() -> Registry {
         .with(crate::task_ops::Generate)
         .with(crate::task_ops::Answer)
         .with(crate::env_ops::Build)
+        .with(crate::env_ops::Qualify)
         .with(Builtin::<PinParams> {
             name: names::PIN,
             summary: "pin a collection's tasks (one split) into the run",
