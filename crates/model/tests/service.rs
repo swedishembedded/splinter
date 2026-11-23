@@ -373,13 +373,16 @@ exec sleep 600
     #[test]
     fn a_node_whose_server_does_not_start_is_named_and_the_others_are_stopped() {
         let dir = tempfile::tempdir().unwrap();
-        let settings = fleet(dir.path(), &["localhost", "fail"]);
-        // `fail` resolves nowhere: the refusal names it before any step starts.
+        // `fail.invalid.` resolves nowhere: RFC 6761 reserves `.invalid`, and the
+        // final dot keeps a resolver's search domains (whose wildcard records
+        // can answer any name) from being tried. The refusal names it before
+        // any step starts.
+        let settings = fleet(dir.path(), &["localhost", "fail.invalid."]);
         let refused = ManagedBrain::start_fleet(&settings, &CancelToken::default())
             .err()
             .expect("refused")
             .to_string();
-        assert!(refused.contains("fail"), "{refused}");
+        assert!(refused.contains("fail.invalid."), "{refused}");
 
         // A node that resolves but whose server exits before it is ready,
         // after the other node's server started.
