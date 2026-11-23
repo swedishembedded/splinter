@@ -46,6 +46,10 @@ STAGING="${ROOT}/target/debian-staging/${PACKAGE}"
 rm -rf "$STAGING"
 install -d "${STAGING}/DEBIAN" "${STAGING}/usr/bin" "${STAGING}/usr/share/doc/splinter"
 install -m 0755 "$BINARY" "${STAGING}/usr/bin/splinter"
+# The launcher a sandbox confines commands with where the host has no containers or namespaces.
+CONFINE="$(dirname "$BINARY")/splinter-confine"
+[[ -f "$CONFINE" ]] || { printf 'error: %s not found (build it with make build/crate/splinter-sandbox)\n' "$CONFINE" >&2; exit 1; }
+install -m 0755 "$CONFINE" "${STAGING}/usr/bin/splinter-confine"
 
 SHLIBS="$(mktemp -d)"
 trap 'rm -rf "$SHLIBS"' EXIT

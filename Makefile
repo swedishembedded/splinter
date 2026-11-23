@@ -423,8 +423,8 @@ install:
 ## package/deb - default: package/deb/release (output in target/debian/)
 package/deb: package/deb/release
 
-## package/deb/release - Debian package of the release build of the splinter binary
-package/deb/release: build/crate/splinter
+## package/deb/release - Debian package of the release build of the splinter binary and its splinter-confine launcher
+package/deb/release: build/crate/splinter build/crate/splinter-sandbox
 	bash scripts/package/build-deb.sh
 
 ## package/deb/publish - sign the release package and attach it to the GitHub release of v<version> (created if missing; an earlier upload is replaced); needs gh, a GnuPG key and the tag on GitHub (RELEASE_REMOTE, default origin)
