@@ -113,7 +113,9 @@ freeze() { # NAME FULLREV BINARY... -> $dir/bin/BINARY for each
     rm -rf "$frozen"; mv "$frozen.tmp" "$frozen"
     rm -rf "$dir/target/$name"
   fi
-  for b in "$@"; do cp "$frozen/$b" "$dir/bin/$b"; done
+  for b in "$@"; do
+    cmp -s "$frozen/$b" "$dir/bin/$b" || { cp "$frozen/$b" "$dir/bin/$b.new" && mv -f "$dir/bin/$b.new" "$dir/bin/$b"; }
+  done
   say "$name ${full:0:9} ready"
 }
 
@@ -186,8 +188,16 @@ chmod 700 "\$srv"
 [ -s "\$srv/key" ] || head -c 24 /dev/urandom | base64 | tr -d '/+=' >"\$srv/key"
 seed=\$(od -An -N4 -tu4 /dev/urandom | tr -d ' '); echo "run.sh: brain seed \$seed" >&2
 backend=(); case "\$device" in gpu*) backend=(--backend cuda) ;; esac
-port=\$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+# The port is kept with the run: a run refuses to continue when its connections changed.
+[ -s "\$srv/port" ] || python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])' >"\$srv/port"
+port=\$(cat "\$srv/port")
 rm -f "\$srv/ready"
+# The task repository's recipes reach brain by the connection named "brain"; point it at this run's server, with
+# the key in the environment variable the connection names (a per-run override of the repository's default).
+mkdir -p "\$srv/xdg/splinter"
+printf 'connections:\\n  brain: { protocol: openai, url: "http://127.0.0.1:%s/v1", token: "env:SPLINTER_BRAIN_KEY" }\\n' \\
+  "\$port" >"\$srv/xdg/splinter/connections.yaml"
+export XDG_CONFIG_HOME="\$srv/xdg" SPLINTER_BRAIN_KEY=\$(cat "\$srv/key")
 $dir/bin/brain serve --openai \$port --device "\$device" "\${backend[@]}" --seed "\$seed" --max-batch 128 --training \\
   --artifact-store "\$srv/artifacts" --serve-adapters "\$srv/adapters" --adapter-targets all \\
   --api-key-file "\$srv/key" --ready-file "\$srv/ready" --runtime-dir "\$srv/rt" --cache-dir $dir/cache/brain \\
