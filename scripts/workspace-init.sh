@@ -209,7 +209,14 @@ for _ in \$(seq 1 600); do
   kill -0 \$brain_pid 2>/dev/null || { tail -n 20 "\$srv/brain.log" >&2; echo "brain exited before it was ready" >&2; exit 1; }
   sleep 1
 done
-[ -e "\$srv/ready" ] || { echo "brain was not ready within 600 s (\$srv/brain.log)" >&2; exit 1; }
+[ -e "\$srv/ready" ] || { echo "brain was not ready in time (\$srv/brain.log)" >&2; exit 1; }
+# A GPU run that silently fell back to another backend is a different (much slower) experiment: refuse it.
+case "\$device" in gpu*)
+  if grep -q "falling back to the" "\$srv/brain.log"; then
+    grep "falling back to the" "\$srv/brain.log" | head -n 1 >&2
+    echo "brain did not start on CUDA (\$srv/brain.log)" >&2; exit 1
+  fi ;;
+esac
 $dir/bin/splinter run "\$recipe" --out $dir/runs/\$name --state $dir/state/\$name \\
   --brain-endpoint http://127.0.0.1:\$port/v1 --brain-key-file "\$srv/key" \\
   --brain-artifact-store "\$srv/artifacts" --brain-adapter-dir "\$srv/adapters" "\$@"
