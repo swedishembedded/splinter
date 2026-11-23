@@ -18,9 +18,9 @@ make test/e2e                      # lists the end-to-end targets
 - `make test/e2e/brain-sven` has brain serve Qwen3-0.6B and sven complete a tool-using task with it, judged on a
   number only a file holds. It runs on the CPU backend and exits 3, never 0, when a binary or the model is missing, so a
   skipped run is never read as a pass. Name the binaries with `BRAIN_BIN`, `SVEN_BIN` and the store with `MODELS_DIR`.
-- `make test/e2e/turn` runs one full turn on a small model: practice on a tiny fixture, experiences with verdicts, a
-  trained candidate, the release gate, and the candidate served and driven by sven. Its spec, run against fakes, is
-  `make test/e2e/turn/spec`.
+- A whole learning-factory run (attempts through the Harbor worker, training and evaluation on a served model) is a
+  [run workspace](../guides/workspace.md)'s: `run.sh RECIPE DEVICE` runs a recipe against its own brain server, and
+  `scripts/run-metrics.py RUN_DIR` reads what its evaluation arms did.
 
 Write the test from the specification first and see it fail, then implement. An algorithm's test holds it to an
 independent reference, never to a copy of its own arithmetic; [validation](validation.md) maps each algorithm to the

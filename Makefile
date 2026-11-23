@@ -136,14 +136,6 @@ test/e2e:
 test/e2e/brain-sven:
 	bash scripts/e2e/brain-sven.sh $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR)
 
-## test/e2e/turn - one full turn on Qwen3-0.6B: practice on a tiny fixture, experiences with verdicts, a trained candidate, the release gate, the candidate served and driven by sven (SPLINTER_BIN, BRAIN_BIN, SVEN_BIN, MODELS_DIR; DEVICE in brain's grammar, e.g. DEVICE=cpu for the CPU backend; for the short GPU variant run it under `make lease/gpu/run`; exit 3 means a prerequisite is missing and nothing was tested)
-test/e2e/turn:
-	bash scripts/e2e/turn.sh $(SPLINTER_BIN) $(BRAIN_BIN) $(SVEN_BIN) $(MODELS_DIR) tasks/acceptance-tiny $(DEVICE)
-
-## test/e2e/turn/spec - the spec of test/e2e/turn against a fake splinter, brain and sven: each missing artifact fails the run with its name
-test/e2e/turn/spec:
-	python3 -I scripts/e2e/test-turn.py
-
 # ---------------------------------------------------------------------------
 ## schemas - default: schemas/generate
 schemas: schemas/generate
@@ -548,7 +540,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/e2e/turn test/e2e/turn/spec test/families test/methods test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

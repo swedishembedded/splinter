@@ -30,8 +30,7 @@ results = ""         # where the registered runs wrote their result files
 device = "gpu0"
 backend = "cuda"
 card = ""            # the GPU reservation helper; a check that needs a card is BLOCKED without it
-manual = ""          # a documented domain: a URL or a path
-objective = ""
+manual = ""          # a documented domain: a file or a directory of documents
 experiments = ""     # improvement experiments, one file per failure cluster
 experiment_plan = "" # the experiment plan: families per generation, the sealed exam
 
@@ -56,7 +55,7 @@ exit_is_evidence = true
 [[check]]
 id = "isolation"
 title = "Hidden material is isolated: the confinement fixtures prevent, not detect"
-command = ["cargo", "test", "-p", "splinter-sandbox", "--test", "confinement"]
+command = ["cargo", "test", "-p", "splinter-sandbox", "--test", "it", "confinement"]
 cwd = "{splinter_dir}"
 timeout_s = 3600
 exit_is_evidence = true
@@ -64,17 +63,17 @@ exit_is_evidence = true
 [[check]]
 id = "failed-candidate-never-champion"
 title = "A candidate that loses or ties is never released and the alias does not move"
-command = ["cargo", "test", "-p", "splinter-pipelines", "--test", "release_workspace"]
+command = ["cargo", "test", "-p", "splinter-factory", "--test", "it", "promotion"]
 cwd = "{splinter_dir}"
 timeout_s = 3600
 exit_is_evidence = true
 
 [[check]]
 id = "autonomous-curriculum"
-title = "An unfamiliar documented domain becomes skills, probes, rounds and an assessment that decided nothing"
+title = "An unfamiliar documented domain becomes admitted tasks, verified answers and a trained candidate (the knowledge-learning template)"
 command = [
-  "{splinter}", "--json", "--state", "{state}/acquire", "--device", "{device}", "--backend", "{backend}",
-  "learn", "{objective}", "--source", "{manual}", "--no-release",
+  "bash", "{splinter_dir}/scripts/qualify/knowledge-run.sh", "{splinter}", "{manual}", "{state}/knowledge",
+  "--device", "{device}", "--backend", "{backend}",
 ]
 card_gb = 40
 timeout_s = 43200
@@ -83,9 +82,13 @@ path = "accepted"
 op = "=="
 value = true
 [[check.assert]]
-path = "assessment.improved"
+path = "admitted_tasks"
 op = ">="
 value = 3
+[[check.assert]]
+path = "passed_answers"
+op = ">="
+value = 1
 
 [[check]]
 id = "intervention-choice"
