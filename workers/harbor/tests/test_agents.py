@@ -256,3 +256,21 @@ def test_auto_runs_a_trial_on_the_strongest_sandbox_a_daemonless_host_has_and_re
     validator.validate(report)
     assert report["sandbox"] == {"provider": expected, "guarantees": list(choice.GUARANTEES[expected])}
     assert report["evidence"]["result"]["verifier_result"]["rewards"] == {"reward": 1.0}
+
+
+def test_specifications_kept_in_the_output_directory_are_run_and_run_again(tmp_path, monkeypatch, local_images,
+                                                                           confine):
+    # The factory writes its specifications into the job's own output directory, where the worker keeps its copy,
+    # resolved: the copy of a rerun is the resolution of the same input.
+    from splinter_harbor_worker.sandbox import choice
+
+    available = {**choice.probe(), "docker": "no reachable Docker daemon"}
+    monkeypatch.setattr(choice, "probe", lambda: available)
+    make_task(tmp_path, TASK)
+    out = tmp_path / "out"
+    out.mkdir()
+    specs = write_specs(out / "specs.jsonl", [make_spec(TASK, provider="auto", network="none")])
+    argv = ["run", "--specs", str(specs), "--tasks", str(tmp_path), "--out", str(out),
+            "--image-cache", str(tmp_path / "cache")]
+    assert main(argv) == 0
+    assert main(argv) == 0, "a rerun of the kept, resolved specifications"

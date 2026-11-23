@@ -121,13 +121,14 @@ def _register_models(gateway: ModelGateway, specs: list[ExecutionSpec], out: Pat
         gateway.register(trial_name(spec), upstream, trial_dir(out, spec) / "gateway" / REQUEST_LOG)
 
 
-def _copy_specs(out: Path, specs: list[ExecutionSpec]) -> None:
+def _copy_specs(out: Path, specs_path: Path, specs: list[ExecutionSpec]) -> None:
     """Keep the specifications beside the results, each with the sandbox it runs on here, so ``reconcile`` needs
     nothing else and reports the provider that ran; a directory that already holds another run's is refused rather
-    than mixed."""
+    than mixed. The copy already there is this run's when it is the input itself (a caller that writes its
+    specifications into the output directory) or the input's resolution (a rerun)."""
     target = out / SPECS_COPY
     text = "".join(spec.model_dump_json(by_alias=True) + "\n" for spec in specs)
-    if target.is_file() and target.read_text() != text:
+    if target.is_file() and target.read_text() not in (text, specs_path.read_text()):
         raise UsageError(f"{out} already holds the results of different specifications; use a new --out")
     out.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
@@ -151,7 +152,7 @@ def run(specs_path: Path, tasks_root: Path, out: Path, *, concurrency: int = DEF
             raise UsageError("--concurrency must be at least 1")
         specs = resolve_sandboxes(specs)
         checked = preflight(specs, tasks_root, files_root)
-        _copy_specs(out, specs)
+        _copy_specs(out, specs_path, specs)
         return asyncio.run(run_job(specs, tasks_root, files_root, out, concurrency, image_cache, checked, events))
     except WorkerError as exc:
         events.emit("error", detail=str(exc))
