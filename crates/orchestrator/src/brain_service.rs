@@ -203,8 +203,10 @@ mod tests {
         );
         assert_eq!(staged.unwrap(), Some(scratch.join("brain-models")));
 
-        std::fs::remove_dir(scratch.join("brain-models")).unwrap();
-        std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0o500)).unwrap();
+        // A scratch no node can write, even as root: a file where the
+        // directory was announced (permission bits do not stop root).
+        std::fs::remove_dir_all(&scratch).unwrap();
+        std::fs::write(&scratch, "").unwrap();
         let dropped = stage_dir(
             &config(dir.path(), StageModels::Auto, &scratch),
             &steps,
@@ -219,7 +221,6 @@ mod tests {
             &steps,
             &nodes,
         );
-        std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0o700)).unwrap();
         assert_eq!(
             dropped.unwrap(),
             None,

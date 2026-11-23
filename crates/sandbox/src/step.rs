@@ -526,7 +526,6 @@ mod tests {
 
     #[test]
     fn a_directory_is_checked_where_the_step_runs_and_a_refusal_names_the_node() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let steps = NodeSteps {
             srun: local_srun(dir.path()),
@@ -543,11 +542,13 @@ mod tests {
             "made where it is missing"
         );
 
-        fs::set_permissions(&scratch, fs::Permissions::from_mode(0o500)).unwrap();
+        // A directory nobody can make, root included (file modes do not stop
+        // root): one below a file.
+        let blocked = dir.path().join("blocked");
+        fs::write(&blocked, "").unwrap();
         let refused = steps
-            .check_writable(&nodes, &scratch.join("other"), dir.path())
+            .check_writable(&nodes, &blocked.join("other"), dir.path())
             .unwrap_err();
-        fs::set_permissions(&scratch, fs::Permissions::from_mode(0o700)).unwrap();
         assert!(refused.contains("cannot write"), "{refused}");
         assert!(refused.contains("other"), "{refused}");
     }

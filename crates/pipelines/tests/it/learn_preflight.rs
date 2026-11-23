@@ -19,24 +19,14 @@ use common::scratch_context;
 use splinter_orchestrator::OrchestratorError;
 use splinter_pipelines::learn::{learn, LearnRequest};
 
-#[cfg(unix)]
 #[test]
 fn a_run_on_an_unwritable_state_root_is_refused_before_it_starts() {
-    use std::os::unix::fs::PermissionsExt;
     let (scratch, ctx) = scratch_context("learn-preflight", policy(), false);
     let manual = std::env::temp_dir().join(format!("preflight-manual-{}.md", std::process::id()));
     std::fs::write(&manual, MANUAL).unwrap();
-    std::fs::set_permissions(&scratch.0, std::fs::Permissions::from_mode(0o555)).unwrap();
-    // Root ignores the mode, and then nothing here can be provoked: the test
-    // fails rather than pass without having checked anything.
-    let ignored = std::fs::write(scratch.0.join("probe"), b"x").is_ok();
-    if ignored {
-        std::fs::set_permissions(&scratch.0, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    assert!(
-        !ignored,
-        "the file mode is ignored for this user (root?): run this test as an ordinary user"
-    );
+    // A state root nobody can write, root included (file modes do not stop
+    // root): a file where the directory would be made.
+    std::fs::write(scratch.0.join("state"), b"").unwrap();
 
     let outcome = learn(
         &ctx,
@@ -47,7 +37,7 @@ fn a_run_on_an_unwritable_state_root_is_refused_before_it_starts() {
         },
         &FakeTrainer::knowing(&[]),
     );
-    std::fs::set_permissions(&scratch.0, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::remove_file(scratch.0.join("state")).unwrap();
     std::fs::remove_file(&manual).ok();
 
     let Err(OrchestratorError::Refused(why)) = outcome else {
