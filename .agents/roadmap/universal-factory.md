@@ -218,7 +218,7 @@ templates (`knowledge-learning`, `repository-practice`, `harness-search`,
 | U2 | Recipe v2 compiler: references, ports, subrecipes, roles, static validation, extended lock | branching graphs, missing dependencies, type mismatches, cycles handled | done: `graph::compile_partly` reports every problem; a stage consumes only stages above it, so declaration order is execution order and no cycle can be written; subrecipes expand under the stage id; `foreach`/`$item` parse (U4 runs them) |
 | U3 | Controller dispatches operations; v1 stages become operations; v1 and `StageKind` deleted; Bench recipes rewritten | every existing factory test passes through v2 | done: the controller dispatches on the operation name, parameters are typed per operation (`ops.rs`), `RolloutPass` is internal to `run/pass.rs`, lock `splinter.lock/v2`; the golden test passes unchanged; Bench's four recipes rewritten and validated; `play --pass` is `play --stage` |
 | U4 | Collections, `foreach`, work-item ledger, shards, reduction, item-level reuse | fan-outs survive worker crashes; one changed item recomputes only itself | done: `execute::Execute` (an operation that only computes: frozen inputs in, one staged product out); recipe inputs pinned as `_inputs/NAME` (copied, checked against the lock); `foreach` commits each item as `_items/STAGE/ID` keyed by the item's content, at most `concurrency` (1-64) on scoped workers while only the controller thread touches run state and store; reduction = `splinter.items/1` index of produced and rejected items plus each output under its id. Tested with test operations: crash and resume, one changed item after a fork, bounded concurrency, refusals. No built-in computes yet: the first are U5 (`agent`) and U6 (external operators), so the user guide documents `foreach` with them |
-| U5 | `agent` and `harness` operations; native backend; harness per pass; intervention plans (all repair modes) | a prompt, a harness and an executable task run with traces, limits, cancellation, publication | |
+| U5 | `agent` and `harness` operations; native backend; harness per pass; intervention plans (all repair modes) | a prompt, a harness and an executable task run with traces, limits, cancellation, publication | in progress: `agent` done (`agent_op.rs` on `splinter_agent::schema_call`: instruction + JSON Schema files pinned in the lock and the identity, replies validated and corrected, never-valid input rejected, `output.json` + `call.json`; models reached in process through the host's `Models` with the connection's key, lazily, so a reuse reaches none; live on the hosted model with `foreach`, resume and verify). Remaining: `harness` operation, `harness:` per attempt stage, intervention plans |
 | U6 | Knowledge, synthesis, environment operations; external operators; Bench compilers and examiner as operators; Bench CLI removed | a real document yields grounded knowledge and admitted tasks | |
 | U7 | Typed dataset projections over `splinter-data`; privileged-context provenance; family splits | one source gives SFT, preference and RLVR products with no upstream rerun | |
 | U8 | Training, evaluation, promotion operations; harness search; generations campaign; templates and `splinter init`; `learn`, `practice`, `harness optimise` deleted | a generated task collection trains through Brain's job API and promotion needs transfer and retention | |
@@ -253,6 +253,11 @@ now and live on a GPU host later.
   (`drop_headers`).
 
 ## Open
+
+- The `agent` operation's schema is in the brief and checked on every reply,
+  but the provider is not asked to constrain decoding to it: sven's `Method`
+  derives its response format from a Rust type. A runtime schema on `Method`
+  (a sven SDK addition) would let it.
 
 - The task repository's user documentation still describes the retired `bench run`
   workflow: the `tasks/sven-smoke/*` and `tasks/goalbench` READMEs,

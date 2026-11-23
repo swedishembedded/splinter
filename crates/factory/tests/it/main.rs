@@ -5,6 +5,7 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod agent_op;
 mod brain_trainer;
 mod factory_run;
 mod fakes;

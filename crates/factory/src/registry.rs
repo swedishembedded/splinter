@@ -33,6 +33,15 @@ pub trait OperationSpec: Send + Sync {
     fn model_roles(&self, _params: &Value) -> Vec<String> {
         Vec::new()
     }
+    /// The repository files `params` name, which the lock pins and the
+    /// implementation is given.
+    fn files(&self, _params: &Value) -> Vec<String> {
+        Vec::new()
+    }
+    /// Problems with the files `params` name, read (by path).
+    fn check_files(&self, _params: &Value, _files: &BTreeMap<String, String>) -> Vec<String> {
+        Vec::new()
+    }
     /// Its implementation, when the controller runs it as a plain
     /// computation ([`Execute`]); only such an operation runs once per item.
     fn executor(&self) -> Option<&dyn Execute> {

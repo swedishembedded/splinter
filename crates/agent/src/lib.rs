@@ -94,6 +94,7 @@ pub mod replay;
 pub mod retry;
 pub mod run_code;
 pub mod runner;
+pub mod schema_call;
 pub mod skill_planner;
 pub mod solve;
 mod system_prompt;

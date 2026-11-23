@@ -140,20 +140,34 @@ pub(crate) fn binding_of(
 /// The binding an arm's agent is given: a champion served from its base and
 /// adapter through the trainer.
 fn served(factory: &Factory<'_>, arm: &Arm<'_>) -> Result<Option<ModelBinding>, RunError> {
-    let (Some(champion), Some(binding)) = (&arm.champion, &arm.model) else {
-        return Ok(arm.model.clone());
+    arm.model
+        .as_ref()
+        .map(|binding| serve(factory, &arm.key, binding, arm.champion.as_ref()))
+        .transpose()
+}
+
+/// `binding` as a model is reached: itself, or the champion it is, served
+/// from its base and adapter through the trainer.
+pub(crate) fn serve(
+    factory: &Factory<'_>,
+    key: &str,
+    binding: &ModelBinding,
+    champion: Option<&Champion>,
+) -> Result<ModelBinding, RunError> {
+    let Some(champion) = champion else {
+        return Ok(binding.clone());
     };
     let trainer = factory
         .services
         .trainer
-        .ok_or_else(|| stage_error(&arm.key, "a champion is served through the trainer"))?;
+        .ok_or_else(|| stage_error(key, "a champion is served through the trainer"))?;
     let id = trainer
         .serve(&champion.record.base, champion.adapter.as_deref())
-        .map_err(|e| stage_error(&arm.key, e))?;
-    Ok(Some(ModelBinding {
+        .map_err(|e| stage_error(key, e))?;
+    Ok(ModelBinding {
         model: id,
         ..binding.clone()
-    }))
+    })
 }
 
 /// A file pinned by its SHA-256, which the worker checks before it runs.

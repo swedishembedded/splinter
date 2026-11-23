@@ -497,6 +497,15 @@ impl Config {
     }
 }
 
+/// The credential a connection names (`token: env:NAME`), read from this
+/// process's environment when a model is reached in process; `None` when
+/// it is unset or empty. Credentials are read here, the one place the
+/// environment is, and only when they are used.
+#[must_use]
+pub fn credential(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
 /// The batch allocation this process runs inside, as the scheduler's
 /// [`SLURM_VARS`] describe it, with the `srun` and `scancel` on `PATH` that
 /// start and stop work on its nodes. Outside an allocation it detects none; a

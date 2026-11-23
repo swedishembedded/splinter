@@ -17,6 +17,7 @@
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
 //! | `promotion` | `evaluations` (many) | `release` |
+//! | `agent` | `input` (files, many) | `output` ([`crate::agent_op`]) |
 //!
 //! Each operation's parameters are one struct that refuses unknown fields;
 //! the descriptor's parameter schema is generated from that struct, so the
@@ -308,6 +309,7 @@ impl<P: JsonSchema + DeserializeOwned + Send + Sync> OperationSpec for Builtin<P
 #[must_use]
 pub fn registry() -> Registry {
     Registry::default()
+        .with(crate::agent_op::Agent)
         .with(Builtin::<PinParams> {
             name: names::PIN,
             summary: "pin a collection's tasks (one split) into the run",

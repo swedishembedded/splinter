@@ -104,6 +104,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model) | `evaluation` |
 | `promotion` | `evaluations` (one or more) | `release` |
+| `agent` | `input` (files, one or more) | `output` |
 
 A stage consumes only stages above it, so a recipe reads top to bottom and runs
 in that order. A stage that `uses: recipe` (`with: { recipe: PATH }`) is a
@@ -142,6 +143,42 @@ wrong kind, a credential written as a literal.
   with `hint: solution` works each task from the run's own copy of it whose
   instruction carries the task's reference solution (`solution/solve.sh`), in
   the task's own sandbox and graded by its own verifier (below).
+
+## Structured extraction: `agent` and `foreach`
+
+An `agent` stage asks a model for one value of a JSON Schema: the model is
+given the instruction file, the schema and the stage's inputs as text. A reply
+that breaks the schema goes back to the model with the validator's complaint
+(`repairs`, two by default); an input the model never answers validly is
+rejected, with the reason. A stage with `foreach` runs once per item of a
+collection - here each file of a recipe input - at most `concurrency` (1 to
+64) at once:
+
+```yaml
+schema: splinter.recipe/v2
+name: facts
+inputs:
+  notes: { kind: files, path: notes }
+models:
+  writer: "hosted:deepseek/deepseek-v4.1-flash"
+stages:
+  - id: facts
+    uses: agent
+    foreach: $inputs.notes
+    concurrency: 4
+    inputs: { input: $item }
+    with: { instruction: prompts/extract.md, output_schema: schemas/fact.json,
+            model: writer, deadline_seconds: 120 }
+```
+
+Each item is committed on its own, under its content: a run stopped halfway
+resumes without asking again for a finished item, and a fork after one note
+changed asks only for that note. The stage's product lists every item in
+`items.json` (`splinter.items/1`), the rejected ones with their reasons, and
+holds each answered item's `output.json` and `call.json` (the model that
+answered and the tokens it spent) under the item's id. The model is called
+from Splinter's own process, with the key the connection names read from its
+environment; a resume that recomputes nothing reaches no model.
 
 ## What each stage guarantees
 

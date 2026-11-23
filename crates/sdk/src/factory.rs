@@ -14,16 +14,59 @@
 
 use std::path::Path;
 
+use splinter_agent::solve::Model;
+use splinter_core::factory::execution::{ModelBinding, Protocol};
 use splinter_factory::backend::HarborWorker;
 use splinter_factory::connections::Connections;
+use splinter_factory::execute::Models;
 use splinter_factory::resolve::{resolve, Resolved};
 use splinter_factory::training::BrainTrainer;
+use splinter_model::selection::{ModelSelection, RemoteModel};
+use splinter_orchestrator::config::credential;
 use splinter_orchestrator::config::Config;
 
 pub use splinter_factory::{
     backend, collection, connections, environment, eval_plan, execute, graph, ops, plan, recipe,
     registry, resolve as resolution, run, training, tree,
 };
+
+/// The models a run's computed stages call in process: each binding's
+/// endpoint and model, with the credential its connection names read from
+/// this process's environment.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HostModels;
+
+/// The key sent to an endpoint whose connection names no credential, so
+/// that sven never falls back to a key it keeps for another endpoint.
+const NO_CREDENTIAL: &str = "no-credential";
+
+impl Models for HostModels {
+    fn model(&self, binding: &ModelBinding) -> Result<Model, String> {
+        let provider = match binding.protocol {
+            Protocol::Openai => "openai",
+            Protocol::Anthropic => "anthropic",
+        };
+        let api_key = match &binding.token_env {
+            Some(name) => credential(name).ok_or_else(|| {
+                format!(
+                    "connection {} reads its key from {name}, which is not set",
+                    binding.connection
+                )
+            })?,
+            None => NO_CREDENTIAL.to_owned(),
+        };
+        let remote = RemoteModel {
+            spec: format!("{provider}/{}", binding.model),
+            base_url: binding.url.clone(),
+            api_key: Some(api_key),
+            ..RemoteModel::default()
+        };
+        let loaded = ModelSelection::Remote(remote)
+            .load_remote()
+            .map_err(|e| e.to_string())?;
+        Ok(Model::new(loaded.provider(), loaded.identity()))
+    }
+}
 
 /// Why the factory could not be set up.
 #[derive(Debug, thiserror::Error)]

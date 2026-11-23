@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde_json::Value;
+use splinter_agent::solve::Model;
+use splinter_core::factory::execution::ModelBinding;
 
 /// One computation of an operation.
 pub struct Call<'a> {
@@ -27,8 +29,25 @@ pub struct Call<'a> {
     pub inputs: BTreeMap<String, Vec<PathBuf>>,
     /// The stage's parameters, already checked against the operation's.
     pub params: &'a Value,
+    /// The repository files the parameters name, by path, as the lock
+    /// pinned them.
+    pub files: &'a BTreeMap<String, String>,
+    /// The model each role the parameters name is bound to.
+    pub models: &'a BTreeMap<String, Model>,
     /// Where the product is written: an empty directory.
     pub out: PathBuf,
+}
+
+/// How the run reaches a model in process: a binding (a connection's
+/// endpoint and model, a champion served) made a model to call. The host
+/// supplies it, since only the host reads the credentials a connection
+/// names.
+pub trait Models: Send + Sync {
+    /// The model `binding` names.
+    ///
+    /// # Errors
+    /// It cannot be reached (no credential, an endpoint that refuses).
+    fn model(&self, binding: &ModelBinding) -> Result<Model, String>;
 }
 
 /// What a computation came to.

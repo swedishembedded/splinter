@@ -23,6 +23,7 @@
 
 mod compute;
 pub mod dataset;
+mod directory;
 pub mod eval;
 pub mod import;
 mod pass;
@@ -49,6 +50,8 @@ use crate::plan::PlannedStage;
 use crate::resolve::{Lock, Resolved};
 use crate::training::Trainer;
 use crate::tree::TreeError;
+
+pub use directory::{fork, report_of, status, verify, StageStatus};
 
 /// The file a run's lock is kept in.
 pub const LOCK_FILE: &str = "recipe.lock.json";
@@ -193,6 +196,9 @@ pub struct Services<'a> {
     pub backend: &'a dyn ExecutionBackend,
     /// Trains and serves candidates; needed when the recipe trains.
     pub trainer: Option<&'a dyn Trainer>,
+    /// Reaches models in process; needed when a computed stage names a
+    /// model role.
+    pub models: Option<&'a dyn crate::execute::Models>,
 }
 
 /// One stage as the run recorded it.
@@ -658,147 +664,4 @@ pub(crate) fn identity_of(
         Factory::implementation(extra),
         seed,
     )
-}
-
-/// Reuse every product committed in the run `source` in the run `run`
-/// (normally a new directory), so the stages a changed recipe leaves
-/// unchanged are not computed again. Returns how many products were
-/// brought over.
-///
-/// # Errors
-/// A product cannot be imported.
-pub fn fork(source: &Path, run: &Path) -> Result<usize, RunError> {
-    require_run(source)?;
-    std::fs::create_dir_all(run).map_err(io(run))?;
-    let from = ProductStore::new(source, Box::new(SystemClock));
-    let into = ProductStore::new(run, Box::new(SystemClock));
-    let mut imported = 0;
-    for manifest in from.list()? {
-        into.import(&from, &manifest.stage, &run.join(&manifest.name))?;
-        imported += 1;
-    }
-    Ok(imported)
-}
-
-/// Check every committed product of the run in `run` against its blobs and
-/// its view; one line per problem, empty when the run is intact.
-///
-/// # Errors
-/// The products cannot be listed.
-pub fn verify(run: &Path) -> Result<Vec<String>, RunError> {
-    require_run(run)?;
-    let store = ProductStore::new(run, Box::new(SystemClock));
-    let mut problems = Vec::new();
-    for manifest in store.list()? {
-        // Every product's files must match their blobs; a view is checked
-        // against the product it shows (a stage key a fork reused holds
-        // several products, and its view shows one of them).
-        for file in &manifest.files {
-            if let Err(e) = store.verify(&file.digest) {
-                problems.push(format!("{} {}: {e}", manifest.name, file.path));
-            }
-        }
-        let view = run.join(&manifest.name);
-        let shown: Option<ProductManifest> = std::fs::read(view.join("manifest.json"))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        if shown.as_ref().is_some_and(|m| m.stage == manifest.stage) {
-            if let Err(e) = store.verify_product(&manifest.stage, &view) {
-                problems.push(format!("{}: {e}", manifest.name));
-            }
-        }
-    }
-    Ok(problems)
-}
-
-/// One stage's state as the run state records it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct StageStatus {
-    /// The stage key.
-    pub key: String,
-    /// Its state.
-    pub state: String,
-    /// Its product, when committed.
-    pub product: Option<Digest>,
-    /// Why it failed, when it did.
-    pub error: Option<String>,
-    /// Its rollout slots by state, for a rollout or eval arm.
-    pub slots: BTreeMap<String, usize>,
-}
-
-/// What the run in `run` has done, stage by stage, from its run state alone.
-///
-/// # Errors
-/// The run state cannot be read.
-pub fn status(run: &Path) -> Result<Vec<StageStatus>, RunError> {
-    require_run(run)?;
-    let state = RunState::open(run)?;
-    let mut out = Vec::new();
-    for record in state.list()? {
-        let pass = record.key_pass();
-        let mut slots = BTreeMap::new();
-        if let Some(pass) = pass {
-            for slot in state.list_slots(&pass)? {
-                *slots.entry(slot.state.to_string()).or_default() += 1;
-            }
-        }
-        out.push(StageStatus {
-            key: record.name.clone(),
-            state: record.state.to_string(),
-            product: record.product.clone(),
-            error: record.error.clone(),
-            slots,
-        });
-    }
-    Ok(out)
-}
-
-/// The slot namespace of a stage record, for the stages that have slots.
-trait SlotNamespace {
-    fn key_pass(&self) -> Option<String>;
-}
-
-impl SlotNamespace for splinter_store::factory::runstate::StageRecord {
-    fn key_pass(&self) -> Option<String> {
-        if let Some(pass) = self.name.strip_prefix("rollouts/") {
-            return Some(pass.to_owned());
-        }
-        self.name
-            .strip_prefix("eval/_arms/")
-            .map(|arm| format!("eval-{arm}"))
-    }
-}
-
-/// The run's report: every stage with its product, then each stage's own
-/// report, in plan order.
-#[must_use]
-pub fn report_of(run: &Path, manifest: &RunManifest) -> String {
-    let mut out = format!(
-        "# Run of {}\n\n| stage | product | this invocation |\n|---|---|---|\n",
-        manifest.recipe
-    );
-    for stage in &manifest.stages {
-        let short = &stage.product.hex()[..12];
-        let how = if stage.computed { "computed" } else { "reused" };
-        out.push_str(&format!("| {} | {short} | {how} |\n", stage.key));
-    }
-    for stage in &manifest.stages {
-        if let Ok(text) = std::fs::read_to_string(run.join(&stage.key).join("report.md")) {
-            // A stage's headings move one level down under the run's.
-            let demoted: Vec<String> = text
-                .lines()
-                .map(|l| {
-                    if l.starts_with('#') {
-                        format!("#{l}")
-                    } else {
-                        l.to_owned()
-                    }
-                })
-                .collect();
-            out.push('\n');
-            out.push_str(demoted.join("\n").trim_end());
-            out.push('\n');
-        }
-    }
-    out
 }

@@ -25,18 +25,23 @@
 //! id, and an item index listing every item produced and every item
 //! rejected.
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use splinter_agent::solve::Model;
 use splinter_core::digest::Digest;
+use splinter_core::factory::execution::ModelBinding;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::items::{Item, ItemIndex, Rejection, ITEMS_FILE};
 use splinter_store::factory::products::{ProductManifest, Staging};
 
+use super::rollout::{binding_of, serve};
 use super::{io, stage_error, write_json, Begun, Factory, RunError};
+use crate::champion::Champion;
 use crate::execute::{Call, Execute, Outcome};
 use crate::graph::Source;
 use crate::plan::PlannedStage;
@@ -64,23 +69,19 @@ pub(super) fn stage(
     factory: &Factory<'_>,
     stage: &PlannedStage,
 ) -> Result<(StageIdentity, (ProductManifest, bool)), RunError> {
-    let executor = factory
-        .resolved
-        .registry
-        .get(&stage.operation)
-        .and_then(|o| o.executor())
-        .ok_or_else(|| stage_error(&stage.key, format!("no operation {}", stage.operation)))?;
-    let bound = Bound::of(factory, stage)?;
+    let ctx = Context::of(factory, stage)?;
     match &stage.foreach {
         None => {
-            let identity = identity(factory, stage, executor, &stage.key, bound.digests(None));
+            let identity = ctx.identity(&stage.key, ctx.bound.digests(None));
             let produce = |_: &Factory<'_>, staging: &Staging| {
                 let call = Call {
-                    inputs: bound.paths(None),
+                    inputs: ctx.bound.paths(None),
                     params: &stage.params,
+                    files: &ctx.files,
+                    models: ctx.models()?,
                     out: staging.path().to_path_buf(),
                 };
-                match executor.execute(&call) {
+                match ctx.executor.execute(&call) {
                     Ok(Outcome::Produced) => Ok(()),
                     Ok(Outcome::Rejected(why)) => Err(stage_error(
                         &stage.key,
@@ -92,7 +93,117 @@ pub(super) fn stage(
             let committed = factory.commit(&stage.key, &stage.operation, &identity, &produce)?;
             Ok((identity, committed))
         }
-        Some(collection) => fan_out(factory, stage, executor, &bound, collection),
+        Some(collection) => fan_out(&ctx, collection),
+    }
+}
+
+/// What every computation of one stage shares.
+struct Context<'f, 'a> {
+    factory: &'f Factory<'a>,
+    stage: &'f PlannedStage,
+    executor: &'f dyn Execute,
+    bound: Bound,
+    /// The files the parameters name, checked against the lock.
+    files: BTreeMap<String, String>,
+    /// Their digests, as identities name them.
+    file_digests: Vec<(String, Digest)>,
+    /// Each model role's binding, as identities see it, and its champion.
+    bindings: BTreeMap<String, (ModelBinding, Option<Champion>)>,
+    /// The models, reached once something must be computed.
+    models: OnceCell<BTreeMap<String, Model>>,
+}
+
+impl<'f, 'a> Context<'f, 'a> {
+    fn of(factory: &'f Factory<'a>, stage: &'f PlannedStage) -> Result<Self, RunError> {
+        let operation = factory
+            .resolved
+            .registry
+            .get(&stage.operation)
+            .ok_or_else(|| stage_error(&stage.key, format!("no operation {}", stage.operation)))?;
+        let executor = operation.executor().ok_or_else(|| {
+            stage_error(&stage.key, format!("{} does not compute", stage.operation))
+        })?;
+        let (mut files, mut file_digests) = (BTreeMap::new(), Vec::new());
+        for path in operation.files(&stage.params) {
+            let pinned = factory
+                .resolved
+                .lock
+                .files
+                .get(&path)
+                .ok_or_else(|| stage_error(&stage.key, format!("{path} is not in the lock")))?;
+            let full = factory.resolved.repository.join(&path);
+            let text = std::fs::read_to_string(&full).map_err(io(&full))?;
+            if &Digest::of(text.as_bytes()) != pinned {
+                return Err(stage_error(
+                    &stage.key,
+                    format!("{path} changed since the run was resolved"),
+                ));
+            }
+            file_digests.push((format!("file:{path}"), pinned.clone()));
+            files.insert(path, text);
+        }
+        let mut bindings = BTreeMap::new();
+        for role in operation.model_roles(&stage.params) {
+            let model = factory.resolved.model(&role).ok_or_else(|| {
+                stage_error(&stage.key, format!("model role {role} is not bound"))
+            })?;
+            bindings.insert(role, binding_of(factory, &stage.key, model)?);
+        }
+        Ok(Self {
+            factory,
+            stage,
+            executor,
+            bound: Bound::of(factory, stage)?,
+            files,
+            file_digests,
+            bindings,
+            models: OnceCell::new(),
+        })
+    }
+
+    /// The models of the stage's roles, reached through the host on first
+    /// use: a run that reuses every product reaches none.
+    fn models(&self) -> Result<&BTreeMap<String, Model>, RunError> {
+        if let Some(models) = self.models.get() {
+            return Ok(models);
+        }
+        let mut models = BTreeMap::new();
+        for (role, (binding, champion)) in &self.bindings {
+            let host = self.factory.services.models.ok_or_else(|| {
+                stage_error(
+                    &self.stage.key,
+                    format!(
+                        "model role {role} is called in process, and the run was given no models"
+                    ),
+                )
+            })?;
+            let served = serve(self.factory, &self.stage.key, binding, champion.as_ref())?;
+            let model = host
+                .model(&served)
+                .map_err(|e| stage_error(&self.stage.key, format!("model role {role}: {e}")))?;
+            models.insert(role.clone(), model);
+        }
+        Ok(self.models.get_or_init(|| models))
+    }
+
+    /// A computation's identity: the operation, its parameters, the models
+    /// its roles are bound to, the files it reads, its inputs and its
+    /// implementation.
+    fn identity(&self, name: &str, mut inputs: Vec<(String, Digest)>) -> StageIdentity {
+        let models: BTreeMap<&String, &ModelBinding> = self
+            .bindings
+            .iter()
+            .map(|(role, (b, _))| (role, b))
+            .collect();
+        inputs.extend(self.file_digests.iter().cloned());
+        super::identity_of(
+            &self.stage.versioned_operation(),
+            name,
+            json!({ "params": self.stage.params, "models": models }),
+            inputs,
+            &self.executor.implementation(),
+            None,
+        )
     }
 }
 
@@ -218,37 +329,6 @@ fn input(factory: &Factory<'_>, name: &str) -> Result<(PathBuf, Digest), RunErro
     Ok((factory.view(&key), manifest.digest()))
 }
 
-/// A computed stage's identity: its operation, parameters, the models its
-/// roles are bound to, its inputs and its implementation.
-fn identity(
-    factory: &Factory<'_>,
-    stage: &PlannedStage,
-    executor: &dyn Execute,
-    name: &str,
-    inputs: Vec<(String, Digest)>,
-) -> StageIdentity {
-    let models: BTreeMap<String, String> = factory
-        .resolved
-        .registry
-        .get(&stage.operation)
-        .map(|o| o.model_roles(&stage.params))
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|role| {
-            let model = factory.resolved.model(&role)?.to_string();
-            Some((role, model))
-        })
-        .collect();
-    super::identity_of(
-        &stage.versioned_operation(),
-        name,
-        json!({ "params": stage.params, "models": models }),
-        inputs,
-        &executor.implementation(),
-        None,
-    )
-}
-
 /// One item of a fan-out, before it runs.
 struct Pending {
     id: String,
@@ -259,12 +339,10 @@ struct Pending {
 
 /// Every item of `collection` computed (or reused), then reduced.
 fn fan_out(
-    factory: &Factory<'_>,
-    stage: &PlannedStage,
-    executor: &dyn Execute,
-    bound: &Bound,
+    ctx: &Context<'_, '_>,
     collection: &Source,
 ) -> Result<(StageIdentity, (ProductManifest, bool)), RunError> {
+    let (factory, stage) = (ctx.factory, ctx.stage);
     let (view, _) = product_of(factory, collection)?;
     let index_path = view.join(ITEMS_FILE);
     let index: ItemIndex = std::fs::read(&index_path)
@@ -285,30 +363,22 @@ fn fan_out(
         pending.push(Pending {
             id: item.id.clone(),
             key: format!("_items/{name}"),
-            identity: identity(
-                factory,
-                stage,
-                executor,
-                &name,
-                bound.digests(Some(&digest)),
-            ),
+            identity: ctx.identity(&name, ctx.bound.digests(Some(&digest))),
             path,
         });
     }
-    let committed = run_items(factory, stage, executor, bound, pending)?;
-    reduce(factory, stage, executor, &committed)
+    let committed = run_items(ctx, pending)?;
+    reduce(factory, stage, ctx.executor, &committed)
 }
 
 /// Every item committed, at most `concurrency` computing at once; the
 /// first failure stops new items from starting, lets the running ones
 /// finish (and commit), and is the result.
 fn run_items(
-    factory: &Factory<'_>,
-    stage: &PlannedStage,
-    executor: &dyn Execute,
-    bound: &Bound,
+    ctx: &Context<'_, '_>,
     pending: Vec<Pending>,
 ) -> Result<Vec<(String, ProductManifest)>, RunError> {
+    let (factory, stage, executor) = (ctx.factory, ctx.stage, ctx.executor);
     let workers = stage.concurrency.max(1) as usize;
     let mut committed = Vec::new();
     let mut failure = None;
@@ -328,10 +398,26 @@ fn run_items(
                 match factory.begin(&item.key, &stage.operation, &item.identity)? {
                     Begun::Reused(manifest) => committed.push((item.id, manifest)),
                     Begun::Fresh { version, staging } => {
+                        let models = match ctx.models() {
+                            Ok(models) => models,
+                            Err(e) => {
+                                let failed = factory.finish(
+                                    &item.key,
+                                    &item.identity,
+                                    version,
+                                    staging,
+                                    Err(e),
+                                );
+                                failure = failed.err();
+                                break;
+                            }
+                        };
                         let out = staging.path().join(OUT);
                         let call = Call {
-                            inputs: bound.paths(Some(&item.path)),
+                            inputs: ctx.bound.paths(Some(&item.path)),
                             params: &stage.params,
+                            files: &ctx.files,
+                            models,
                             out: out.clone(),
                         };
                         let done = done.clone();

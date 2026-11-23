@@ -30,10 +30,12 @@
 
 #![warn(missing_docs)]
 
+pub mod agent_op;
 pub mod backend;
 pub mod champion;
 pub mod collection;
 pub mod connections;
+mod describe;
 pub mod environment;
 pub mod eval_plan;
 pub mod execute;

@@ -11,6 +11,7 @@ publish.workspace = true
 
 [dependencies]
 atif = { workspace = true }
+splinter-agent = { workspace = true }
 splinter-core = { workspace = true }
 splinter-data = { workspace = true }
 splinter-eval = { workspace = true }
@@ -26,9 +27,13 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 ed25519-dalek = { workspace = true }
+futures = { workspace = true }
 splinter-eval = { workspace = true }
 splinter-model = { workspace = true, features = ["scripted"] }
+sven-sdk = { workspace = true }
 
 [lints]
 workspace = true

@@ -20,6 +20,7 @@ splinter-store = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+jsonschema = { workspace = true }
 libc = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
