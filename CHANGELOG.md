@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (an evaluation counts the trials that never finished)
+- An evaluation arm reports `pass_rate_of_trials` beside `pass_rate`: passed over every trial, a trial that timed out on every retry in the denominator as not passed. The rate over counted trials alone drops exactly the trials a looping policy loses. The report shows both. The paired decision is `Inconclusive` whenever a slot of either arm never counted (`statistics.unpaired_slots`, `incomplete`), where it used to be decided on the slots that finished.
+
 ### Added (model.train keeps the best monitored step)
 - `model.train` takes `eval_every` and `patience` in a LoRA variant's `params`: the validation records are scored every `eval_every` steps, the run stops after `patience` evaluations without improvement, and the adapter exported is the best evaluation's, not the last step's. Without them nothing is monitored, as before, and a variant's identity is unchanged.
 

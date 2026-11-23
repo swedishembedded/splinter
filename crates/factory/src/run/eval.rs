@@ -295,11 +295,18 @@ fn arm_result(arm: &str, model: &str, trials: &[TrialResult], product: Digest) -
         counted,
         passed,
         pass_rate: (counted > 0).then(|| passed as f64 / counted as f64),
+        pass_rate_of_trials: (!trials.is_empty()).then(|| passed as f64 / trials.len() as f64),
         trials_product: product,
     }
 }
 
 /// The paired sign test's decision over the slots both arms counted.
+///
+/// A slot that either arm never counted is no evidence for either side, and
+/// dropping it quietly shrinks the sample toward the trials that finished. So
+/// such a slot makes the verdict `Inconclusive` whatever the counted slots
+/// show; `statistics` says how many there were (`unpaired_slots`) and that
+/// the evaluation was `incomplete`.
 #[must_use]
 pub fn decide(
     baseline: &[TrialResult],
@@ -313,11 +320,14 @@ pub fn decide(
         .collect();
     let (mut wins, mut losses, mut pairs, mut base_pass, mut cand_pass) =
         (0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut unpaired = 0usize;
     for trial in candidate {
         let Some(base) = by_slot.get(&(trial.task.as_str(), trial.slot.slot)) else {
+            unpaired += 1;
             continue;
         };
         if !(trial.grade.counted && base.grade.counted) {
+            unpaired += 1;
             continue;
         }
         pairs += 1;
@@ -333,7 +343,7 @@ pub fn decide(
     } else {
         (cand_pass as f64 - base_pass as f64) / pairs as f64
     };
-    let decision = if pairs == 0 {
+    let decision = if pairs == 0 || unpaired > 0 {
         Decision::Inconclusive
     } else if p < alpha && difference >= min_difference && difference > 0.0 {
         Decision::Improved
@@ -345,6 +355,7 @@ pub fn decide(
     let statistics = json!({
         "test": "exact one-sided paired sign test", "pairs": pairs, "wins": wins, "losses": losses,
         "p": p, "alpha": alpha, "difference": difference, "min_difference": min_difference,
+        "unpaired_slots": unpaired, "incomplete": unpaired > 0,
     });
     (decision, statistics)
 }
@@ -648,15 +659,18 @@ fn report(result: &EvalResult) -> String {
     let mut out = format!("# Evaluation of {}\n\n", result.name);
     if let (Some(baseline), Some(candidate)) = (&result.baseline, &result.candidate) {
         out.push_str(
-            "| arm | model | trials | counted | passed | pass rate |\n|---|---|---|---|---|---|\n",
+            "| arm | model | trials | counted | passed | pass rate (counted) | pass rate (all trials) |\n|---|---|---|---|---|---|---|\n",
         );
         for (arm, a) in [("baseline", baseline), ("candidate", candidate)] {
-            let rate = a
-                .pass_rate
-                .map_or_else(|| "-".into(), |r| format!("{r:.3}"));
+            let rate = |r: Option<f64>| r.map_or_else(|| "-".into(), |r| format!("{r:.3}"));
             out.push_str(&format!(
-                "| {arm} | {} | {} | {} | {} | {rate} |\n",
-                a.model, a.trials, a.counted, a.passed
+                "| {arm} | {} | {} | {} | {} | {} | {} |\n",
+                a.model,
+                a.trials,
+                a.counted,
+                a.passed,
+                rate(a.pass_rate),
+                rate(a.pass_rate_of_trials)
             ));
         }
         out.push('\n');
@@ -679,4 +693,72 @@ fn report(result: &EvalResult) -> String {
 /// It cannot be read.
 pub fn result_of(view: &Path) -> Result<EvalResult, RunError> {
     read_json(&view.join(RESULT_FILE))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ZERO: &str = "blake3:0000000000000000000000000000000000000000000000000000000000000000";
+
+    /// A trial of slot 0 of `task` in the given arm, counted or not, passed or not.
+    fn trial(arm: &str, task: &str, counted: bool, passed: bool) -> TrialResult {
+        serde_json::from_value(json!({
+            "schema": "splinter.trial/1",
+            "slot": { "pass": arm, "task": task, "slot": 0 },
+            "attempt": 1, "task": task, "task_digest": ZERO,
+            "agent": { "name": "sven", "version": null, "invocation": ZERO },
+            "grade": {
+                "status": if counted { "graded" } else { "infra_timeout" },
+                "cause": null, "counted": counted,
+                "score": counted.then_some(if passed { 1.0 } else { 0.0 }),
+                "passed": counted.then_some(passed),
+                "metrics": {}, "vetoes": []
+            },
+            "native_dir": "x"
+        }))
+        .expect("a trial")
+    }
+
+    fn arm(name: &str, outcomes: &[(bool, bool)]) -> Vec<TrialResult> {
+        outcomes
+            .iter()
+            .enumerate()
+            .map(|(i, (counted, passed))| trial(name, &format!("t{i}"), *counted, *passed))
+            .collect()
+    }
+
+    #[test]
+    fn a_complete_arm_pair_is_decided() {
+        let base = arm("base", &[(true, false); 12]);
+        let cand = arm("cand", &[(true, true); 12]);
+        let (decision, stats) = decide(&base, &cand, 0.05, 0.0);
+        assert_eq!(decision, Decision::Improved);
+        assert_eq!(stats["unpaired_slots"], 0);
+        assert_eq!(stats["incomplete"], false);
+    }
+
+    #[test]
+    fn a_slot_one_arm_never_counted_makes_the_verdict_inconclusive() {
+        // Twelve slots, the candidate passing all it counted and winning every pair,
+        // but one candidate slot timed out on every retry: not a verdict.
+        let base = arm("base", &[(true, false); 12]);
+        let mut outcomes = vec![(true, true); 11];
+        outcomes.push((false, false));
+        let cand = arm("cand", &outcomes);
+        let (decision, stats) = decide(&base, &cand, 0.05, 0.0);
+        assert_eq!(decision, Decision::Inconclusive);
+        assert_eq!(stats["unpaired_slots"], 1);
+        assert_eq!(stats["incomplete"], true);
+    }
+
+    #[test]
+    fn the_rate_over_all_trials_counts_an_uncounted_trial_as_not_passed() {
+        let mut trials = arm("cand", &[(true, true); 3]);
+        trials.push(trial("cand", "t3", false, false));
+        let result = arm_result("candidate", "m", &trials, Digest::of(b"x"));
+        assert_eq!(result.counted, 3);
+        assert_eq!(result.pass_rate, Some(1.0));
+        assert_eq!(result.pass_rate_of_trials, Some(0.75));
+    }
 }

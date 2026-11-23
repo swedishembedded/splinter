@@ -10,6 +10,7 @@
   "counted": 398,
   "passed": 120,
   "pass_rate": 0.3015075376884422,
+  "pass_rate_of_trials": 0.3,
   "trials_product": "blake3:1111111111111111111111111111111111111111111111111111111111111111"
  },
  "candidate": {
@@ -19,6 +20,7 @@
   "counted": 400,
   "passed": 170,
   "pass_rate": 0.425,
+  "pass_rate_of_trials": 0.425,
   "trials_product": "blake3:2222222222222222222222222222222222222222222222222222222222222222"
  },
  "decision": "improved",

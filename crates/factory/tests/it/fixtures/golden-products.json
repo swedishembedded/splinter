@@ -15,11 +15,13 @@
       "statistics": {
         "alpha": 0.025,
         "difference": 1.0,
+        "incomplete": false,
         "losses": 0,
         "min_difference": 0.0,
         "p": 0.0039062499999999974,
         "pairs": 8,
         "test": "exact one-sided paired sign test",
+        "unpaired_slots": 0,
         "wins": 8
       }
     },
@@ -38,11 +40,13 @@
       "statistics": {
         "alpha": 0.025,
         "difference": 1.0,
+        "incomplete": false,
         "losses": 0,
         "min_difference": 0.0,
         "p": 0.0039062499999999974,
         "pairs": 8,
         "test": "exact one-sided paired sign test",
+        "unpaired_slots": 0,
         "wins": 8
       }
     }

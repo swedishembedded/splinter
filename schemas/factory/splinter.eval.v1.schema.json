@@ -94,6 +94,15 @@
           "format": "double",
           "default": null
         },
+        "pass_rate_of_trials": {
+          "description": "Trials passed over every trial of the arm, a trial that never counted\n(it timed out on every retry) in the denominator as not passed. The\nrate over counted trials alone drops exactly the trials a failing\npolicy loses, so it flatters a policy that loops; this one does not.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
         "passed": {
           "description": "Trials passed.",
           "type": "integer",

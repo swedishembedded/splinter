@@ -241,6 +241,12 @@ pub struct ArmResult {
     /// The pass rate over counted trials; absent when none was counted.
     #[serde(default)]
     pub pass_rate: Option<f64>,
+    /// Trials passed over every trial of the arm, a trial that never counted
+    /// (it timed out on every retry) in the denominator as not passed. The
+    /// rate over counted trials alone drops exactly the trials a failing
+    /// policy loses, so it flatters a policy that loops; this one does not.
+    #[serde(default)]
+    pub pass_rate_of_trials: Option<f64>,
     /// The rollout product holding its trials.
     pub trials_product: Digest,
 }
