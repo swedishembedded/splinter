@@ -148,3 +148,36 @@ fn blobs_are_stored_once_by_sha256_address() {
     assert_eq!(store.put_file(&file).unwrap(), first);
     assert!(dir.path().join("blobs/sha256").join(first.hex()).is_file());
 }
+
+#[test]
+fn a_product_imported_into_another_run_is_the_same_product_and_is_listed() {
+    let source_dir = tempfile::tempdir().unwrap();
+    let target_dir = tempfile::tempdir().unwrap();
+    let source = store(source_dir.path());
+    let id = stage("rollout");
+    let staging = stage_output(
+        &source,
+        &[("trials.jsonl", "a\n"), ("batches/0/x.txt", "x")],
+    );
+    let published = source
+        .publish(
+            &id,
+            "rollouts/local",
+            staging,
+            &source_dir.path().join("rollouts/local"),
+        )
+        .unwrap();
+
+    let target = store(target_dir.path());
+    let view = target_dir.path().join("rollouts/local");
+    let imported = target.import(&source, &id, &view).unwrap();
+    assert_eq!(imported, published);
+    assert_eq!(
+        fs::read_to_string(view.join("batches/0/x.txt")).unwrap(),
+        "x"
+    );
+    target.verify_product(&id, &view).unwrap();
+    assert_eq!(target.list().unwrap(), vec![published.clone()]);
+    // Importing again changes nothing.
+    assert_eq!(target.import(&source, &id, &view).unwrap(), published);
+}
