@@ -51,3 +51,4 @@ __pycache__/
 /workers/harbor/.venv/
 /workers/harbor/*.egg-info/
 .pytest_cache/
+/workers/harbor/build/

@@ -92,6 +92,9 @@ struct PlanReport<'a> {
 
 impl Report for PlanReport<'_> {
     fn human(&self) -> String {
+        if self.stages.is_empty() {
+            return format!("{}: valid; {} tasks\n", self.recipe, self.tasks);
+        }
         let mut out = format!(
             "{}: {} tasks, {} stages\n",
             self.recipe,
