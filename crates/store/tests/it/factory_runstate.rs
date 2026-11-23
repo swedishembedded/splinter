@@ -200,3 +200,24 @@ fn unfinished_attempts_are_listed_after_reopen_and_events_are_appended() {
         .iter()
         .all(|l| l.get("kind").is_some() && l.get("at").is_some()));
 }
+
+#[test]
+fn a_released_lease_is_taken_at_once_and_a_dead_holders_is_taken_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = RunState::open(dir.path()).unwrap();
+    let first = state.acquire("alpha", 600, 10).unwrap();
+    state.release(&first, 11).unwrap();
+    let second = state.acquire("beta", 600, 11).unwrap();
+    assert!(second.token > first.token);
+    // beta is gone (its caller knows); gamma takes over before the expiry.
+    let third = state.take_over("gamma", "beta", 600, 12).unwrap();
+    assert!(third.token > second.token);
+    assert!(matches!(
+        state.take_over("delta", "beta", 600, 13),
+        Err(RunStateError::LeaseHeld { .. })
+    ));
+    assert!(matches!(
+        state.release(&second, 14),
+        Err(RunStateError::StaleFence { .. })
+    ));
+}

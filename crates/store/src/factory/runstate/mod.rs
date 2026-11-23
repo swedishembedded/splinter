@@ -282,6 +282,77 @@ impl RunState {
         })
     }
 
+    /// Gives up `fence`'s lease at `now`: any controller may acquire it
+    /// after, with a higher token.
+    ///
+    /// # Errors
+    /// The fence is stale (someone else holds the lease).
+    pub fn release(&self, fence: &Fence, now: u64) -> Result<(), RunStateError> {
+        let tx = self.begin_fenced(fence)?;
+        tx.execute(
+            "UPDATE lease SET expires_at = ?1 WHERE id = 1",
+            params![now],
+        )?;
+        tx.commit()?;
+        self.emit(
+            now,
+            "lease.released",
+            fence.owner.clone(),
+            serde_json::json!({ "token": fence.token }),
+        )?;
+        Ok(())
+    }
+
+    /// Takes the lease from `holder`, which the caller has established no
+    /// longer runs (a process of this host that has exited), as if it had
+    /// expired: the token rises. Refused when the lease is no longer
+    /// `holder`'s.
+    ///
+    /// # Errors
+    /// Another controller holds the lease.
+    pub fn take_over(
+        &self,
+        owner: &str,
+        holder: &str,
+        ttl_secs: u64,
+        now: u64,
+    ) -> Result<Fence, RunStateError> {
+        let tx = self.begin()?;
+        let current: Option<(String, u64, u64)> = optional(tx.query_row(
+            "SELECT owner, token, expires_at FROM lease WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ))?;
+        let token = match current {
+            Some((current, token, _)) if current == holder => token + 1,
+            Some((current, _, until)) if until > now => {
+                return Err(RunStateError::LeaseHeld {
+                    owner: current,
+                    expires_at: until,
+                });
+            }
+            Some((_, token, _)) => token + 1,
+            None => 1,
+        };
+        let expires_at = now.saturating_add(ttl_secs);
+        tx.execute(
+            "INSERT INTO lease (id, owner, token, expires_at) VALUES (1, ?1, ?2, ?3)
+             ON CONFLICT(id) DO UPDATE SET owner = ?1, token = ?2, expires_at = ?3",
+            params![owner, token, expires_at],
+        )?;
+        tx.commit()?;
+        self.emit(
+            now,
+            "lease.taken_over",
+            owner.to_string(),
+            serde_json::json!({ "token": token, "from": holder }),
+        )?;
+        Ok(Fence {
+            owner: owner.to_string(),
+            token,
+        })
+    }
+
     /// A write transaction that holds the database's write lock from the start.
     fn begin(&self) -> Result<Transaction<'_>, RunStateError> {
         Ok(Transaction::new_unchecked(
