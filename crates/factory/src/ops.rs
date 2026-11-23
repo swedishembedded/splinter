@@ -12,6 +12,7 @@
 //! |---|---|---|
 //! | `tasks.pin` | `collection` (files) | `tasks` |
 //! | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional, many) | `attempts` |
+//! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
 //! | `dataset.project` | `attempts` (many) | `dataset` |
 //! | `model.train` | `dataset` | `model` |
 //! | `evaluation` | `candidate` (model) | `evaluation` |
@@ -111,6 +112,22 @@ pub struct AttemptParams {
     /// A hinted pass ([`crate::hint`]).
     #[serde(default)]
     pub hint: Option<Hint>,
+}
+
+/// `attempt.import`: the trials of Harbor jobs run elsewhere, as attempts
+/// of the pinned tasks, running nothing ([`crate::run::import`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ImportParams {
+    /// The model the jobs' trials ran on, recorded on each trial as given.
+    /// Not a role: nothing is served, and Harbor records only the agent's
+    /// own model name, which may be a gateway's alias. Without it, Harbor's
+    /// `provider/name`.
+    #[serde(default)]
+    pub model_label: Option<String>,
+    /// Only these task ids.
+    #[serde(default)]
+    pub tasks: Vec<String>,
 }
 
 fn sft() -> String {
@@ -221,6 +238,8 @@ pub mod names {
     pub const PIN: &str = "tasks.pin";
     /// `attempt.collect`.
     pub const ATTEMPTS: &str = "attempt.collect";
+    /// `attempt.import`.
+    pub const IMPORT: &str = "attempt.import";
     /// `dataset.project`.
     pub const PROJECT: &str = "dataset.project";
     /// `model.train`.
@@ -313,6 +332,22 @@ pub fn registry() -> Registry {
             reproducibility: Reproducibility::Nondeterministic,
             isolation: Isolation::Any,
             roles: |p| p.model.iter().cloned().collect(),
+        })
+        .with(Builtin::<ImportParams> {
+            name: names::IMPORT,
+            summary: "the trials of Harbor jobs run elsewhere, matched to the pinned tasks and \
+                      graded by the one classifier; runs nothing",
+            inputs: vec![
+                port("tasks", ArtifactKind::Tasks),
+                Port {
+                    many: true,
+                    ..port("jobs", ArtifactKind::Files)
+                },
+            ],
+            output: port("attempts", ArtifactKind::Attempts),
+            reproducibility: Reproducibility::Deterministic,
+            isolation: Isolation::Any,
+            roles: |_| Vec::new(),
         })
         .with(Builtin::<ProjectParams> {
             name: names::PROJECT,

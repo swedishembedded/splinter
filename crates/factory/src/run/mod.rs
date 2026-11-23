@@ -24,6 +24,7 @@
 mod compute;
 pub mod dataset;
 pub mod eval;
+pub mod import;
 mod pass;
 pub mod play;
 pub mod release;
@@ -373,6 +374,7 @@ impl<'a> Factory<'a> {
         let (identity, (manifest, computed)) = match stage.operation.as_str() {
             names::PIN
             | names::ATTEMPTS
+            | names::IMPORT
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
@@ -399,6 +401,7 @@ impl<'a> Factory<'a> {
         let identity = match stage.operation.as_str() {
             names::PIN => tasks::identity(self, stage)?,
             names::ATTEMPTS => rollout::identity(self, stage)?,
+            names::IMPORT => import::identity(self, stage)?,
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
@@ -407,6 +410,7 @@ impl<'a> Factory<'a> {
         let produce = |factory: &Self, staging: &Staging| match stage.operation.as_str() {
             names::PIN => tasks::produce(factory, stage, staging),
             names::ATTEMPTS => rollout::produce(factory, stage, &identity, staging),
+            names::IMPORT => import::produce(factory, stage, staging),
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),

@@ -244,6 +244,7 @@ fn dataset_made(
                 teacher_context: Vec::new(),
             },
             metadata: RecordMetadata {
+                trial: None,
                 group: None,
                 split: None,
                 split_draw: None,
@@ -314,6 +315,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
                 identity: None,
             },
             metadata: RecordMetadata {
+                trial: None,
                 task: Some(task.task.id.clone()),
                 ..RecordMetadata::of("preference", Objective::Preference)
             },

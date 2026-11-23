@@ -74,10 +74,21 @@ impl PlannedStage {
     /// The recipe input bound to `port`, when it is one.
     #[must_use]
     pub fn input(&self, port: &str) -> Option<&str> {
-        self.inputs.get(port)?.iter().find_map(|s| match s {
-            Source::Input(name) => Some(name.as_str()),
-            _ => None,
-        })
+        self.inputs_of(port).into_iter().next()
+    }
+
+    /// Every recipe input bound to `port`, in the order bound.
+    #[must_use]
+    pub fn inputs_of(&self, port: &str) -> Vec<&str> {
+        self.inputs
+            .get(port)
+            .into_iter()
+            .flatten()
+            .filter_map(|s| match s {
+                Source::Input(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Its parameters as the operation's type.

@@ -130,6 +130,7 @@ pub fn project(
                 projection.records.push(Record {
                     body: RecordBody::chat(messages).with_outcome(outcome.clone()),
                     metadata: RecordMetadata {
+                        trial: None,
                         experiences: Vec::new(),
                         task: None,
                         sources: Vec::new(),

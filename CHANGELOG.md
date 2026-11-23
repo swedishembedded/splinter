@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Harbor jobs imported into a recipe)
+- `attempt.import`, a recipe operation that reads the trials of Harbor jobs run elsewhere as attempts and runs nothing (`inputs: { tasks, jobs: [$inputs.JOB...] }`, `with: { model_label, tasks }`). The execution worker's new `import` command matches each trial to a pinned task by Harbor's content digest of the task directory (the trial's `lock.json`, else its `task_checksum`) and reports it exactly as a trial it ran; the controller grades it with the one classifier. A trial of a changed or unpinned task, or one Harbor never finished, is listed in the stage's `refused.jsonl` with its reason. `dataset.project`, `unsolved_by` and `splinter index` read its attempts like any attempt stage's, and each job is pinned in the lock by its tree digest, so a changed job is a changed input. `ExecutionBackend::import` is the seam; a trial records where it was imported from (`TrialResult::imported`, `splinter.trial/1`).
+- Every record a factory dataset writes names the trial it came from in `metadata.trial`: the pass, slot, agent and model, whether the pass was hinted or guided, and for an imported trial its Harbor job and trial name (`splinter_data::TrialSource`). The reference recipe's records change only by this field.
+
 ### Added (install)
 - `make install` installs this checkout's splinter from its Debian package, as sven's does (`scripts/package/install-deb.sh`, specified by `scripts/package/install-deb.bats` in `make test/package`). As a user it builds the release package when none is current and unpacks it under `PREFIX` (default `~/.local`), with no sudo. Under `sudo make install` it installs the package already built with `dpkg -i` and builds nothing. As root with no sudo (a container whose only user is root) it builds the package itself and installs it with `dpkg -i`. Running it again changes nothing once the package is current.
 

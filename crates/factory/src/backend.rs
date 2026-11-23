@@ -14,6 +14,8 @@
 //! never grades. [`ExecutionBackend::reconcile`] reads back what an earlier,
 //! interrupted call to the same output directory finished, without running
 //! anything again: the controller calls it before it launches replacements.
+//! [`ExecutionBackend::import`] reports the trials of Harbor jobs run
+//! elsewhere the same way, running nothing.
 //!
 //! [`HarborWorker`] is the production backend: the `splinter-harbor-worker`
 //! program on Harbor's job API, run as a subprocess.
@@ -21,8 +23,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde::{Deserialize, Serialize};
 use splinter_core::factory::attempt::{AttemptReport, ATTEMPT_SCHEMA};
 use splinter_core::factory::execution::ExecutionSpec;
+use splinter_core::factory::task::TaskRef;
 
 /// Why a backend could not execute or read back a batch.
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +59,43 @@ pub struct Batch<'a> {
     pub concurrency: u32,
 }
 
+/// What an import reads and where it writes.
+#[derive(Clone, Copy, Debug)]
+pub struct Import<'a> {
+    /// The pass whose slots the trials fill.
+    pub pass: &'a str,
+    /// The Harbor job directories, in order: a task's trials fill its slots
+    /// in this order, then by trial name.
+    pub jobs: &'a [PathBuf],
+    /// The tasks a trial may be of.
+    pub tasks: &'a [TaskRef],
+    /// The directory the tasks' ids are relative to.
+    pub task_root: &'a Path,
+    /// The backend's output directory: new or empty. The trial of job `n`
+    /// named `t` is copied to `harbor/<n>/<t>` below it.
+    pub out: &'a Path,
+}
+
+/// A trial an import did not take, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportRefusal {
+    /// The job's index in [`Import::jobs`].
+    pub job: usize,
+    /// The trial's directory name in the job.
+    pub trial: String,
+    /// Why.
+    pub reason: String,
+}
+
+/// What an import found.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Imported {
+    /// One report per trial taken, sorted by slot.
+    pub reports: Vec<AttemptReport>,
+    /// The trials refused, in the order met.
+    pub refused: Vec<ImportRefusal>,
+}
+
 /// What executes attempts.
 pub trait ExecutionBackend: Send + Sync {
     /// The backend's identity, part of every rollout stage's implementation.
@@ -73,6 +114,23 @@ pub trait ExecutionBackend: Send + Sync {
     /// # Errors
     /// The output cannot be read.
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError>;
+
+    /// Report the trials of Harbor jobs run elsewhere as attempts of
+    /// `import.tasks`, running nothing: each trial is matched to its task by
+    /// Harbor's own content digest of the task directory, copied under
+    /// `import.out`, and reported exactly as a trial the backend ran would
+    /// be. A trial that matches no task, or that Harbor never finished, is
+    /// refused with its reason.
+    ///
+    /// # Errors
+    /// The backend cannot import, or failed itself.
+    fn import(&self, import: Import<'_>) -> Result<Imported, BackendError> {
+        let _ = import;
+        Err(BackendError::Worker(format!(
+            "{} cannot import Harbor jobs",
+            self.identity()
+        )))
+    }
 
     /// Run one attempt interactively on the caller's terminal: a person
     /// drives the agent, and the finished session is graded like any
@@ -131,6 +189,24 @@ pub fn read_reports(out: &Path) -> Result<Vec<AttemptReport>, BackendError> {
     }
     reports.sort_by(|a, b| (&a.slot, a.attempt).cmp(&(&b.slot, b.attempt)));
     Ok(reports)
+}
+
+/// The refusals an import wrote to `out/refused.jsonl`.
+///
+/// # Errors
+/// The file is missing or a line is not a refusal.
+pub fn read_refusals(out: &Path) -> Result<Vec<ImportRefusal>, BackendError> {
+    let path = out.join("refused.jsonl");
+    let fail = |message: String| BackendError::Report {
+        path: path.clone(),
+        message,
+    };
+    std::fs::read_to_string(&path)
+        .map_err(|e| fail(e.to_string()))?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| fail(e.to_string())))
+        .collect()
 }
 
 /// The Harbor worker program.
@@ -241,6 +317,40 @@ impl ExecutionBackend for HarborWorker {
             .into_iter()
             .next()
             .ok_or_else(|| BackendError::Worker("the played session left no report".into()))
+    }
+
+    fn import(&self, import: Import<'_>) -> Result<Imported, BackendError> {
+        let worker = |e: std::io::Error| BackendError::Worker(e.to_string());
+        std::fs::create_dir_all(import.out).map_err(worker)?;
+        // The task list lives beside the output, which the worker wants empty.
+        let listing = import.out.with_extension("tasks.jsonl");
+        let mut lines = String::new();
+        for task in import.tasks {
+            lines.push_str(
+                &serde_json::to_string(task).map_err(|e| BackendError::Worker(e.to_string()))?,
+            );
+            lines.push('\n');
+        }
+        std::fs::write(&listing, lines).map_err(worker)?;
+        let mut command = Command::new(&self.program);
+        command
+            .arg("import")
+            .arg("--pass")
+            .arg(import.pass)
+            .arg("--tasks")
+            .arg(import.task_root)
+            .arg("--task-list")
+            .arg(&listing)
+            .arg("--out")
+            .arg(import.out);
+        for job in import.jobs {
+            command.arg("--job").arg(job);
+        }
+        self.run(&mut command)?;
+        Ok(Imported {
+            reports: read_reports(import.out)?,
+            refused: read_refusals(import.out)?,
+        })
     }
 
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError> {

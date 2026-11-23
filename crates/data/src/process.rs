@@ -71,6 +71,7 @@ fn record(messages: Vec<WireMessage>, group: &str) -> Record {
     Record {
         body: RecordBody::chat(messages),
         metadata: RecordMetadata {
+            trial: None,
             experiences: Vec::new(),
             task: None,
             sources: Vec::new(),

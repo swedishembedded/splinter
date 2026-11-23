@@ -100,6 +100,15 @@ recovery and protected eval.
   (`campaign`, `generation`, the Bench practice and repair drivers); `learn`,
   `practice` (a repository's tests), `corrections` and `absorb` build their tasks
   from documents, repositories and sessions and stay outside the factory.
+- 2026-11-23: trials run elsewhere join a recipe through `attempt.import`, an
+  operation that runs nothing: the worker matches each Harbor trial to a pinned
+  task by Harbor's own content digest of the task directory and reports it as a
+  trial it ran, the controller grades it with the one classifier, and each job (a
+  recipe input) is pinned by its tree digest. It replaces reading Harbor jobs
+  through `experiences ingest-harbor`, which needs tasks imported into the
+  experience database (refused for a task image built with `RUN`). Every factory
+  record names its trial's stage, agent, model and import origin
+  (`metadata.trial`).
 
 ## Design
 

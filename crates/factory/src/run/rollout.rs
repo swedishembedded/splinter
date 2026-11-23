@@ -420,14 +420,7 @@ impl Running<'_, '_> {
         })?;
         let prefix = format!("batches/{batch}");
         let out = self.batch_dir(batch);
-        let pinned = |relative: &str| -> Result<FileRef, RunError> {
-            let path = out.join(relative);
-            let file = std::fs::File::open(&path).map_err(io(&path))?;
-            Ok(FileRef {
-                path: format!("{prefix}/{relative}"),
-                digest: Digest::of_reader(file).map_err(io(&path))?,
-            })
-        };
+        let pinned = |relative: &str| pin_file(&out, &prefix, relative);
         Ok(TrialResult {
             schema: TRIAL_SCHEMA.into(),
             slot: report.slot.clone(),
@@ -453,13 +446,25 @@ impl Running<'_, '_> {
             usage: report.usage.clone(),
             guided: guided(report),
             sandbox: report.sandbox.clone(),
+            imported: None,
         })
     }
 }
 
+/// The file `relative` below a backend's output `out`, pinned by its digest
+/// under the path it has in the product: `prefix/relative`.
+pub(crate) fn pin_file(out: &Path, prefix: &str, relative: &str) -> Result<FileRef, RunError> {
+    let path = out.join(relative);
+    let file = std::fs::File::open(&path).map_err(io(&path))?;
+    Ok(FileRef {
+        path: format!("{prefix}/{relative}"),
+        digest: Digest::of_reader(file).map_err(io(&path))?,
+    })
+}
+
 /// Whether a person typed into the attempt: the worker marks a played
 /// trial in its Harbor config (`config.agent.kwargs.human_guided`).
-fn guided(report: &AttemptReport) -> bool {
+pub(crate) fn guided(report: &AttemptReport) -> bool {
     report
         .evidence
         .result

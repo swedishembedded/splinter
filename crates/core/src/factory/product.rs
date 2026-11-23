@@ -103,6 +103,20 @@ pub struct TrialResult {
     /// The sandbox it ran in, as its worker reported it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox: Option<super::execution::SandboxRecord>,
+    /// Where the trial was run, when the run imported it instead of running
+    /// it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported: Option<ImportedFrom>,
+}
+
+/// The trial of a Harbor job run elsewhere that a run imported.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ImportedFrom {
+    /// The job directory, as the recipe names it (relative to the task
+    /// repository).
+    pub harbor_job: String,
+    /// The trial's directory name in that job.
+    pub trial: String,
 }
 
 impl TrialResult {

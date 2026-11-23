@@ -31,6 +31,17 @@
       "type": "boolean",
       "default": false
     },
+    "imported": {
+      "description": "Where the trial was run, when the run imported it instead of running\nit.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ImportedFrom"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "model": {
       "description": "The model, `connection:model`, when the recipe bound one.",
       "type": [
@@ -257,6 +268,24 @@
         "counted",
         "metrics",
         "vetoes"
+      ]
+    },
+    "ImportedFrom": {
+      "description": "The trial of a Harbor job run elsewhere that a run imported.",
+      "type": "object",
+      "properties": {
+        "harbor_job": {
+          "description": "The job directory, as the recipe names it (relative to the task\nrepository).",
+          "type": "string"
+        },
+        "trial": {
+          "description": "The trial's directory name in that job.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "harbor_job",
+        "trial"
       ]
     },
     "SandboxRecord": {

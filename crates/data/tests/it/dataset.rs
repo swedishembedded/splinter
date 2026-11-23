@@ -197,6 +197,7 @@ fn a_preference_candidate_carries_the_tool_calls_of_its_final_turn() {
 #[test]
 fn objectives_without_a_chat_or_preference_shape_are_exported() {
     let metadata = |objective| RecordMetadata {
+        trial: None,
         group: None,
         split: None,
         split_draw: None,
@@ -282,6 +283,7 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
                 text: "abc=bcd".into(),
             },
             metadata: RecordMetadata {
+                trial: None,
                 group: None,
                 split: None,
                 split_draw: None,

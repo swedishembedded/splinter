@@ -99,6 +99,7 @@ outputs: { dataset: $stages.sft.dataset }
 |---|---|---|
 | `tasks.pin` | `collection` (a recipe input) | `tasks` |
 | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional) | `attempts` |
+| `attempt.import` | `tasks`, `jobs` (Harbor job directories, recipe inputs) | `attempts` |
 | `dataset.project` | `attempts` (one or more) | `dataset` |
 | `model.train` | `dataset` | `model` |
 | `evaluation` | `candidate` (a model) | `evaluation` |
@@ -130,6 +131,8 @@ wrong kind, a credential written as a literal.
   full machine and in a hardened container; each trial records the sandbox it
   ran in and what it enforced, the run report lists them per pass, and an
   environment no sandbox here can honour is refused, never run weaker.
+- **Import stages** (`attempt.import`) read the trials of Harbor jobs run
+  elsewhere as attempts and run nothing ([below](#importing-harbor-jobs)).
 - **Attempt stages** (`attempt.collect`) name an agent and its own argv (`args`, passed as given,
   never through a shell), the files those arguments refer to, an appended system
   prompt, environment variables (`env:NAME` passes this machine's variable), a
@@ -194,6 +197,50 @@ recipe and fork the run: every product the change leaves alone is reused.
 splinter fork runs/vim-mastery --recipe recipes/vim-mastery-r32.yaml --out runs/vim-mastery-r32
 splinter eval runs/vim-mastery --plan eval/vim-sealed.yaml --out runs/vim-mastery-sealed
 ```
+
+## Importing Harbor jobs
+
+Trials an agent already ran elsewhere - a Harbor job of a benchmark, a teacher run from before the factory - join a
+recipe through `attempt.import`, a stage that runs nothing. Its `jobs` are recipe inputs naming Harbor job
+directories in the task repository; its product is attempts that `dataset.project`, `unsolved_by` and `splinter
+index` read like any attempt stage's.
+
+```yaml
+inputs:
+  course: { kind: files, path: collections/vim-headless-mastery.yaml }
+  deepseek-job: { kind: files, path: jobs/20261122-unsolved-deepseek-v4.1-flash-k4 }
+stages:
+  - id: tasks
+    uses: tasks.pin
+    inputs: { collection: $inputs.course }
+    with: { split: train }
+  - id: deepseek-unsolved
+    uses: attempt.import
+    inputs: { tasks: $stages.tasks.tasks, jobs: [$inputs.deepseek-job] }
+    with: { model_label: deepseek/deepseek-v4.1-flash }   # optional; tasks: [ids] narrows it
+  - id: teacher
+    uses: attempt.collect
+    inputs: { tasks: $stages.tasks.tasks, unsolved_by: [$stages.deepseek-unsolved.attempts] }
+    with: { agent: sven, model: teacher, environment: environments/vim/environment.yaml,
+            attempts: 4, seed: 2 }
+```
+
+- **Matching.** The execution worker matches every trial to a task the stage's `tasks` pin by Harbor's own content
+  digest of the task directory (the trial's `lock.json`, else its `task_checksum`). A trial of a task that changed
+  since it ran, of a task the pin does not hold (another split, examination material included), or one Harbor never
+  finished is refused and listed in the stage's `refused.jsonl` with its reason; `report.md` counts them.
+- **Grading.** Each trial is reported as a trial the worker ran would be and graded by the one classifier, so a
+  trial the infrastructure decided is no verdict, never a 0. A task's trials fill its slots in the order of the jobs,
+  then by trial name; every trial of a job is kept.
+- **Pinning.** Each job is part of the run's lock by the digest of its whole tree: a trial added to a job is a
+  changed input, so fork the run (above). An import has no environment, agent or seed of its own.
+- **The model** is recorded as `model_label` states it (not a role: nothing is served). Harbor records the agent's
+  own model name, which may be a gateway's alias (`bench/sven-hosted-sft`); name the model that answered when you
+  know it.
+
+**Telling records apart.** Every record `dataset.project` writes carries `metadata.trial`: the stage that holds its
+trial, the slot, the agent and model, `hinted` and `guided` when they apply, and for an imported trial `imported:
+{harbor_job, trial}`. Records of one dataset can be filtered or weighed by their source from the JSONL alone.
 
 ## Hinted passes
 

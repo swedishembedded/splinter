@@ -65,6 +65,7 @@ fn record(pair: &Pair) -> Record {
             identity: None,
         },
         metadata: RecordMetadata {
+            trial: None,
             experiences: Vec::new(),
             task: None,
             sources: Vec::new(),

@@ -12,10 +12,12 @@ use std::sync::Mutex;
 
 use serde_json::json;
 use splinter_core::factory::attempt::{AttemptReport, ATTEMPT_SCHEMA};
-use splinter_core::factory::execution::{ExecutionSpec, SandboxRecord};
+use splinter_core::factory::execution::{ExecutionSpec, SandboxRecord, SlotKey};
 use splinter_core::factory::product::TrialUsage;
 use splinter_core::factory::trial::{ModelRequest, TrialEvidence};
-use splinter_factory::backend::{read_reports, BackendError, Batch, ExecutionBackend};
+use splinter_factory::backend::{
+    read_reports, BackendError, Batch, ExecutionBackend, Import, ImportRefusal, Imported,
+};
 use splinter_factory::recipe::ModelRef;
 use splinter_factory::training::{TrainError, TrainRequest, Trained, Trainer};
 
@@ -100,6 +102,44 @@ impl FakeBackend {
 fn write(path: &Path, bytes: &[u8]) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            copy_tree(&path, &to.join(entry.file_name()));
+        } else {
+            std::fs::copy(&path, to.join(entry.file_name())).unwrap();
+        }
+    }
+}
+
+/// A finished Harbor trial of `task` (its `task.toml` name) under `job`,
+/// carrying a real Sven trial's request log and trajectory, with `reward`.
+pub fn harbor_trial(job: &Path, trial: &str, task: &str, reward: f64) {
+    let dir = job.join(trial);
+    write(&dir.join("config.json"), b"{}");
+    let result = json!({
+        "trial_name": trial, "task_name": task,
+        "agent_info": {"name": "sven", "version": "5.9.2",
+                       "model_info": {"name": "sven-hosted-sft", "provider": "bench"}},
+        "config": {"agent": {"name": "agents.sven:SvenAgent", "model_name": "bench/sven-hosted-sft"}},
+        "agent_execution": {"started_at": "2026-11-22T10:00:00Z", "finished_at": "2026-11-22T10:01:00Z"},
+        "verifier": {"started_at": "2026-11-22T10:01:00Z"},
+        "verifier_result": {"rewards": {"reward": reward}},
+        "exception_info": null,
+    });
+    write(&dir.join("result.json"), result.to_string().as_bytes());
+    for name in ["agent/requests.jsonl", "agent/trajectory.json"] {
+        write(&dir.join(name), &fixture_file(name, None));
+    }
+}
+
+/// A trial Harbor started under `job` and never finished.
+pub fn unfinished_harbor_trial(job: &Path, trial: &str) {
+    write(&job.join(trial).join("config.json"), b"{}");
 }
 
 /// Write the trial directory and report of one attempt.
@@ -248,6 +288,76 @@ impl ExecutionBackend for FakeBackend {
 
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError> {
         read_reports(out)
+    }
+
+    /// As the worker imports, except that a trial is matched to its task by
+    /// the name its result records (the worker matches by Harbor's content
+    /// digest of the task directory, which only Harbor computes).
+    fn import(&self, import: Import<'_>) -> Result<Imported, BackendError> {
+        let mut refused = Vec::new();
+        let mut slots: BTreeMap<String, u32> = BTreeMap::new();
+        for (index, job) in import.jobs.iter().enumerate() {
+            let mut trials: Vec<PathBuf> = std::fs::read_dir(job)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.join("config.json").is_file())
+                .collect();
+            trials.sort();
+            for trial in trials {
+                let name = trial.file_name().unwrap().to_str().unwrap().to_owned();
+                let refuse = |reason: &str| ImportRefusal {
+                    job: index,
+                    trial: name.clone(),
+                    reason: reason.into(),
+                };
+                let Ok(text) = std::fs::read_to_string(trial.join("result.json")) else {
+                    refused.push(refuse("unfinished: no result.json"));
+                    continue;
+                };
+                let result: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let Some(task) = import
+                    .tasks
+                    .iter()
+                    .find(|t| Some(t.name.as_str()) == result["task_name"].as_str())
+                else {
+                    refused.push(refuse("not a task the import selects"));
+                    continue;
+                };
+                let slot = slots.entry(task.id.clone()).or_insert(0);
+                let native = format!("harbor/{index}/{name}");
+                copy_tree(&trial, &import.out.join(&native));
+                let report = AttemptReport {
+                    schema: ATTEMPT_SCHEMA.into(),
+                    slot: SlotKey::new(import.pass, &task.id, *slot),
+                    attempt: 0,
+                    evidence: TrialEvidence {
+                        result: result.clone(),
+                        ..TrialEvidence::default()
+                    },
+                    native_dir: native.clone(),
+                    trace: Some(format!("{native}/agent/trajectory.json")),
+                    native_files: vec![format!("{native}/result.json")],
+                    agent_version: result["agent_info"]["version"].as_str().map(Into::into),
+                    started_at: None,
+                    finished_at: None,
+                    usage: TrialUsage::default(),
+                    sandbox: None,
+                };
+                *slot += 1;
+                let path = import
+                    .out
+                    .join("attempts")
+                    .join(import.pass)
+                    .join(task.id.replace('/', "__"))
+                    .join(format!("{}-0.json", report.slot.slot));
+                write(&path, serde_json::to_string(&report).unwrap().as_bytes());
+            }
+        }
+        Ok(Imported {
+            reports: read_reports(import.out)?,
+            refused,
+        })
     }
 
     fn play(

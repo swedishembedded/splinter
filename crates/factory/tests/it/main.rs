@@ -13,6 +13,7 @@ mod generations;
 mod golden;
 mod graph;
 mod hinted;
+mod import;
 mod native;
 mod repo;
 mod resolve;

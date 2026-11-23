@@ -116,6 +116,7 @@ fn record_with_experience(
             teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {
+            trial: None,
             group: None,
             split: None,
             split_draw: None,

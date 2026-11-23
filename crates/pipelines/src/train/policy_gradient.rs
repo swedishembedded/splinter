@@ -169,6 +169,7 @@ mod tests {
             }])
             .with_outcome(RolloutOutcome::of(reward, &["task"], at)),
             metadata: RecordMetadata {
+                trial: None,
                 experiences: Vec::new(),
                 task: None,
                 sources: Vec::new(),

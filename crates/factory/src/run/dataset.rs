@@ -24,6 +24,11 @@
 //! the exact reason; so is one whose record is longer than `max_block`
 //! tokens of the target when a bound is set (counted by the trainer).
 //!
+//! **Source**: every record's `metadata.trial` names the pass that holds its
+//! trial, the slot, the agent and model, whether the pass was hinted or a
+//! person guided it, and, for an imported trial, the Harbor job and trial
+//! it came from: the records of one dataset are told apart by it.
+//!
 //! **Validation**: whole groups (tasks, or task families) are held out, so
 //! no task is in both files; the groups held out are drawn by the dataset's
 //! seed.
@@ -45,7 +50,7 @@ use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, TrialResult, WaterfallStep, DATASET_SCHEMA};
 use splinter_data::request_log::read_request_log;
 use splinter_data::{
-    native_record, portable_record, Objective, Record, RecordBody, RecordMetadata,
+    native_record, portable_record, Objective, Record, RecordBody, RecordMetadata, TrialSource,
 };
 use splinter_store::factory::products::Staging;
 
@@ -362,7 +367,16 @@ pub(crate) fn produce(
                 Ok(found)
             });
             match learned {
-                Ok((record, actions, tools)) => {
+                Ok((mut record, actions, tools)) => {
+                    record.metadata.trial = Some(TrialSource {
+                        pass: source.clone(),
+                        slot: trial.slot.to_string(),
+                        agent: trial.agent.name.clone(),
+                        model: trial.model.clone(),
+                        hinted: hint_of(factory, source).is_some(),
+                        guided: trial.guided,
+                        imported: trial.imported.clone(),
+                    });
                     projected.push((source.clone(), trial, record, actions, tools))
                 }
                 Err((reason, detail)) => excluded.push(exclude(reason, detail)),

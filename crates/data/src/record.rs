@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::chat::WireMessage;
 use splinter_core::digest::{digest_of, Digest};
 use splinter_core::experience::ExperienceId;
+use splinter_core::factory::product::ImportedFrom;
 
 use crate::sampled::SampledTurns;
 use crate::Objective;
@@ -291,7 +292,7 @@ pub enum Side {
 
 impl RecordMetadata {
     /// The metadata of a record `view` made for `objective` from nothing it
-    /// names: no experience, task or source, no group, side or draw.
+    /// names: no experience, task or source, no group, side, draw or trial.
     #[must_use]
     pub fn of(view: &str, objective: Objective) -> Self {
         Self {
@@ -301,6 +302,7 @@ impl RecordMetadata {
             group: None,
             split: None,
             split_draw: None,
+            trial: None,
             view: view.into(),
             objective,
         }
@@ -350,10 +352,40 @@ pub struct RecordMetadata {
     /// by seed, or by a producer that leaves the split to the newest end.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub split_draw: Option<SplitDraw>,
+    /// The trial of a learning-factory run it was projected from: the pass
+    /// that holds the trial and who acted, so the records of one dataset
+    /// can be told apart by where they came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trial: Option<TrialSource>,
     /// The view that projected it.
     pub view: String,
     /// The objective it serves.
     pub objective: Objective,
+}
+
+/// Where a factory record's trial came from.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrialSource {
+    /// The rollout pass (or import) that holds the trial.
+    pub pass: String,
+    /// The trial's slot, `pass/task/slot`.
+    pub slot: String,
+    /// The agent that acted.
+    pub agent: String,
+    /// The model it ran on, as the trial records it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// The pass showed the task's reference solution (the record is learned
+    /// without it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hinted: bool,
+    /// A person guided the agent.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub guided: bool,
+    /// The Harbor job and trial it was imported from, when the run imported
+    /// it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported: Option<ImportedFrom>,
 }
 
 /// Which attempts a preference pair or a judged completion comes from: the

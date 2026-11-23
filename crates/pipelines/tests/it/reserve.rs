@@ -285,6 +285,7 @@ fn reserving_twice_over_a_lineage_with_fresh_seeds_never_examines_what_was_train
             text: content.to_string(),
         },
         metadata: RecordMetadata {
+            trial: None,
             experiences: Vec::new(),
             task: None,
             sources: vec![content.clone()],

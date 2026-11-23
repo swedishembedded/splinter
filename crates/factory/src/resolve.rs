@@ -11,8 +11,9 @@
 //! [`resolve`] compiles the recipe against the built-in operations
 //! ([`crate::ops`]), then reads what each stage's parameters name: a
 //! `tasks.pin` stage's collection, an `attempt.collect` stage's environment,
-//! agent files and prompt, an `evaluation` stage's plan with its own
-//! environment and collection; and binds every model role to a connection
+//! agent files and prompt, an `attempt.import` stage's Harbor job
+//! directories (pinned by their tree digest), an `evaluation` stage's plan
+//! with its own environment and collection; and binds every model role to a connection
 //! or a champion. Every problem is reported at once, so `splinter validate`
 //! shows them all. The [`Lock`] records the digest of each input: a resumed
 //! run compares the repository against it and refuses to continue on inputs
@@ -33,12 +34,13 @@ use crate::environment::Environment;
 use crate::eval_plan::EvalPlan;
 use crate::graph::{self, CompiledPlan};
 use crate::ops::{
-    self, names, AttemptParams, EvaluationParams, PinParams, ProjectParams, PromotionParams,
-    TrainParams,
+    self, names, AttemptParams, EvaluationParams, ImportParams, PinParams, ProjectParams,
+    PromotionParams, TrainParams,
 };
 use crate::plan::{Plan, PlannedStage};
 use crate::recipe::{ModelRef, RecipeError};
 use crate::registry::Registry;
+use crate::tree::tree_digest;
 
 /// The schema of a [`Lock`].
 pub const LOCK_SCHEMA: &str = "splinter.lock/v2";
@@ -50,7 +52,8 @@ pub struct Lock {
     pub schema: String,
     /// The recipe's digest.
     pub recipe: Digest,
-    /// Every file the recipe names, by repository-relative path, and every
+    /// Every file the recipe names, and every imported Harbor job directory
+    /// (by its tree digest), by repository-relative path, and every
     /// champion, by reference.
     pub files: BTreeMap<String, Digest>,
     /// The pinned tasks of every `tasks.pin` stage.
@@ -128,6 +131,29 @@ impl Reader<'_> {
                 self.problems.push(format!("{relative}: {e}"));
                 None
             }
+        }
+    }
+
+    /// Pin the Harbor job directory `relative` by the digest of its whole
+    /// tree: a trial added to or changed in it is a changed input.
+    fn harbor_job(&mut self, relative: &str) {
+        if !plain_relative(relative) {
+            self.problems.push(format!(
+                "{relative:?} is not a plain path relative to the repository"
+            ));
+            return;
+        }
+        let path = self.repository.join(relative);
+        if !path.is_dir() {
+            self.problems
+                .push(format!("{relative} is not a Harbor job directory"));
+            return;
+        }
+        match tree_digest(&path) {
+            Ok(digest) => {
+                self.files.insert(relative.to_owned(), digest);
+            }
+            Err(e) => self.problems.push(e.to_string()),
         }
     }
 
@@ -430,6 +456,35 @@ fn check(
                 }
             }
         }
+        names::IMPORT => {
+            let Ok(params) = stage.params::<ImportParams>() else {
+                return;
+            };
+            let jobs = stage.inputs_of("jobs");
+            if jobs.is_empty() {
+                problem(
+                    reader,
+                    "imports no Harbor job: bind `jobs` to the recipe's inputs (job directories)",
+                );
+            }
+            for input in jobs {
+                if let Some(path) = compiled.inputs.get(input).map(|i| i.path.clone()) {
+                    reader.harbor_job(&path);
+                }
+            }
+            if let Some(pin) = stage.source("tasks").and_then(|s| found.collections.get(s)) {
+                for task in params
+                    .tasks
+                    .iter()
+                    .filter(|t| pin.collection.task(t).is_none())
+                {
+                    problem(
+                        reader,
+                        &format!("names task {task}, which its tasks do not hold"),
+                    );
+                }
+            }
+        }
         names::PROJECT => {
             let Ok(params) = stage.params::<ProjectParams>() else {
                 return;
@@ -557,6 +612,26 @@ fn work(
                     p.attempts, p.agent, p.concurrency
                 )
             }
+        }
+        names::IMPORT => {
+            let Ok(p) = stage.params::<ImportParams>() else {
+                return String::new();
+            };
+            let selected = if p.tasks.is_empty() {
+                "its tasks".to_owned()
+            } else {
+                format!("{} named tasks", p.tasks.len())
+            };
+            let jobs: Vec<&str> = stage
+                .inputs_of("jobs")
+                .into_iter()
+                .filter_map(|i| compiled.inputs.get(i))
+                .map(|i| i.path.as_str())
+                .collect();
+            format!(
+                "import the trials of {selected} from Harbor jobs {}, running nothing",
+                jobs.join(", ")
+            )
         }
         names::PROJECT => stage.params::<ProjectParams>().map_or_else(
             |_| String::new(),

@@ -545,6 +545,7 @@ fn chat(claim: &Claim, user: &str, assistant: &str) -> Record {
             teacher_context: Vec::new(),
         },
         metadata: RecordMetadata {
+            trial: None,
             experiences: Vec::new(),
             task: None,
             sources: claim.quotes.iter().map(|q| q.span.source.clone()).collect(),

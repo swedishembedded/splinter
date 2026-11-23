@@ -122,7 +122,7 @@ pub use exclusion::Exclusion;
 pub use markers::{has_human_turn, is_human_turn};
 pub use record::{
     PairSource, Record, RecordBody, RecordMetadata, RolloutIdentity, RolloutOutcome, Side,
-    SplitDraw, TeacherMessage,
+    SplitDraw, TeacherMessage, TrialSource,
 };
 pub use replay::{replay_sample, select_replay, ReplayPolicy};
 pub use requests::{native_record, NativeRecord};
@@ -574,6 +574,7 @@ impl Projection {
         self.records.push(Record {
             body: system_turn::under_system_prompt(body),
             metadata: RecordMetadata {
+                trial: None,
                 experiences: provenance.experiences,
                 task: provenance.task,
                 sources: provenance.sources,
