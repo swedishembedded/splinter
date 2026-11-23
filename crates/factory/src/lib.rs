@@ -52,6 +52,7 @@ pub mod plan;
 pub mod recipe;
 pub mod registry;
 pub mod resolve;
+pub mod rlvr_op;
 pub mod run;
 mod stage_checks;
 pub mod task_ops;

@@ -22,6 +22,14 @@
 //! | `agent` | `input` (files, many) | `output` ([`crate::agent_op`]) |
 //! | `attempts.failures` | `tasks`, `attempts` (many) | `failures` ([`crate::failures_op`]) |
 //! | `harness` | `input` (files, many, optional) | `output` ([`crate::harness_op`]) |
+//! | `dataset.rlvr` | `tasks`, `attempts` (many) | `tasks` ([`crate::rlvr_op`]) |
+//! | `source.ingest` | `documents` (files) | `sections` ([`crate::knowledge_ops`]) |
+//! | `knowledge.admit` | `sections`, `proposals` | `knowledge` ([`crate::knowledge_ops`]) |
+//! | `knowledge.query` | `sections` | `passages` ([`crate::knowledge_ops`]) |
+//! | `task.generate` | `documents` (files, many) | `tasks` ([`crate::task_ops`]) |
+//! | `answer.collect` | `task` | `answers` ([`crate::task_ops`]) |
+//! | `environment.build` | `documents` (files, optional) | `environments` ([`crate::env_ops`]) |
+//! | `environment.qualify` | `environments`, `attempts` | `environments` ([`crate::env_ops`]) |
 //!
 //! Each operation's parameters are one struct that refuses unknown fields;
 //! the descriptor's parameter schema is generated from that struct, so the
@@ -400,6 +408,7 @@ pub fn registry() -> Registry {
     Registry::default()
         .with(crate::agent_op::Agent)
         .with(crate::failures_op::Failures)
+        .with(crate::rlvr_op::Rlvr)
         .with(crate::harness_op::HarnessOp)
         .with(crate::knowledge_ops::Ingest)
         .with(crate::knowledge_ops::Admit)

@@ -109,6 +109,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `agent` | `input` (files, one or more) | `output` |
 | `harness` | `input` (files, any number) | `output` |
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
+| `dataset.rlvr` | `tasks`, `attempts` (one or more) | `tasks` |
 | `source.ingest` | `documents` (files) | `sections` |
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
 | `knowledge.query` | `sections` | `passages` |
@@ -513,6 +514,13 @@ compiles its collection evaluates on the same compiled tasks:
     inputs: { attempts: [$stages.local.attempts] }
     with: { objective: preference, preference: { pairs_per_task: 4 }, target: student, seed: 13 }
   ```
+- **RLVR tasks** (`dataset.rlvr`). An online trainer rolls a task out again and
+  grades each rollout by the task's own verifier; a task the policy always or
+  never solves gives it no gradient. `dataset.rlvr` keeps the pinned tasks whose
+  counted attempts (at least `min_attempts`, 2) passed only sometimes (a pass
+  rate strictly inside 0 to 1, or inside `min_pass_rate`..`max_pass_rate`),
+  each task's folder as the run pinned it, for `tasks.pin`; `rlvr.json` lists
+  every attempted task's counts, rate and whether it was kept.
 - **Training** (`model.train`). Each candidate is one brain job, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   stage's parameters trains a new candidate and reuses the dataset and attempts.

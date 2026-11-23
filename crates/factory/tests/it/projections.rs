@@ -144,3 +144,52 @@ fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
     )
     .contains("gives preference options to another objective"));
 }
+
+// seed: a recipe states every seed; the fake backend's outcomes are scripted, so none draws.
+const LEARNABLE: &str = "  - id: rlvr
+    uses: dataset.rlvr
+    inputs: { tasks: $stages.tasks.tasks, attempts: [$stages.local.attempts] }
+  - { id: online, uses: tasks.pin, inputs: { collection: $stages.rlvr.tasks }, with: { split: train } }
+";
+
+/// RLVR: the tasks a policy-gradient trainer can learn from are those the
+/// attempts show a spread on (passed sometimes, failed sometimes), kept as
+/// an executable collection with their own verifiers for an online trainer
+/// to roll out again.
+#[test]
+fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
+    let repo = Repo::new();
+    let resolved = resolve(&repo.root, &(RECIPE.to_owned() + LEARNABLE), connections()).unwrap();
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    backend.script("train/001-first", &[Outcome::Pass, Outcome::Fail]);
+    backend.script("train/002-second", &[Outcome::Pass, Outcome::Pass]);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    // SFT, preference, policy-gradient and RLVR products of one set of
+    // attempts, made once.
+    assert_eq!(backend.executed().len(), 4);
+    let online = splinter_factory::run::tasks::tasks_of(&dir.path().join("online")).unwrap();
+    let ids: Vec<&str> = online.tasks.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["train/001-first"]);
+    assert!(dir
+        .path()
+        .join("online/train/001-first/tests/test.sh")
+        .is_file());
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("rlvr/rlvr.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["train/002-second"]["kept"], false, "{report:#}");
+    assert_eq!(report["train/001-first"]["pass_rate"], 0.5, "{report:#}");
+}
