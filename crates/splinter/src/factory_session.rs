@@ -89,20 +89,22 @@ fn owner(config: &Config) -> String {
 struct PlanReport<'a> {
     recipe: &'a str,
     tasks: usize,
+    /// The pins whose tasks the run compiles: counted when it runs.
+    compiled: usize,
     stages: &'a [splinter_sdk::factory::plan::PlannedStage],
 }
 
 impl Report for PlanReport<'_> {
     fn human(&self) -> String {
+        let tasks = match (self.tasks, self.compiled) {
+            (_, 0) => format!("{} tasks", self.tasks),
+            (0, _) => "the tasks the run compiles".to_owned(),
+            (n, _) => format!("{n} tasks and the tasks the run compiles"),
+        };
         if self.stages.is_empty() {
-            return format!("{}: valid; {} tasks\n", self.recipe, self.tasks);
+            return format!("{}: valid; {tasks}\n", self.recipe);
         }
-        let mut out = format!(
-            "{}: {} tasks, {} stages\n",
-            self.recipe,
-            self.tasks,
-            self.stages.len()
-        );
+        let mut out = format!("{}: {tasks}, {} stages\n", self.recipe, self.stages.len());
         for stage in self.stages {
             let after = if stage.depends_on.is_empty() {
                 String::new()
@@ -137,6 +139,13 @@ pub fn plan(
                 .values()
                 .map(|c| c.collection.tasks.len())
                 .sum(),
+            compiled: resolved
+                .plan
+                .stages
+                .iter()
+                .filter(|s| s.operation == splinter_sdk::factory::ops::names::PIN)
+                .filter(|s| !resolved.collections.contains_key(&s.key))
+                .count(),
             stages,
         },
     );

@@ -32,16 +32,26 @@ pub(crate) fn work(
             .map_or_else(|| role.to_owned(), ToString::to_string)
     };
     match stage.operation.as_str() {
-        names::PIN => {
-            let count = collections
-                .get(&stage.key)
-                .map_or(0, |c| c.collection.tasks.len());
-            let file = stage
-                .input("collection")
-                .and_then(|i| compiled.inputs.get(i))
-                .map_or("?", |i| i.path.as_str());
-            format!("pin {count} tasks of {file}")
-        }
+        names::PIN => match collections.get(&stage.key) {
+            Some(loaded) => {
+                let file = stage
+                    .input("collection")
+                    .and_then(|i| compiled.inputs.get(i))
+                    .map_or("?", |i| i.path.as_str());
+                format!("pin {} tasks of {file}", loaded.collection.tasks.len())
+            }
+            None => {
+                let split = stage
+                    .params::<crate::ops::PinParams>()
+                    .ok()
+                    .and_then(|p| p.split)
+                    .map_or_else(String::new, |s| format!("{s} "));
+                format!(
+                    "pin the {split}tasks that stage {} makes",
+                    stage.source("collection").unwrap_or("?")
+                )
+            }
+        },
         names::ATTEMPTS => {
             let Ok(p) = stage.params::<AttemptParams>() else {
                 return String::new();
