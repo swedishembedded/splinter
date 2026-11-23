@@ -28,7 +28,7 @@ Point it at shared storage and a second node starts in seconds instead of rebuil
   recipe's `train.jsonl` and its `eval.jsonl` its `validation.jsonl`.
 - `run.sh RECIPE DEVICE [args]` starts a brain server for the run on DEVICE (training on, adapters served hot), runs
   the recipe against it, and stops the server when splinter ends. Several recipes run side by side on other cards;
-  running the same command again continues the run.
+  running the same command again continues the run. `run.sh --fork PARENT RECIPE DEVICE` forks a run of the workspace and serves on the parent's port: a stage that reaches a model carries the connection's address in its identity, so a fork on another port would recompute the stages it means to reuse.
 - `workspace.json` records the commits and the records the workspace was built from.
 
 `scripts/run-metrics.py RUN_DIR` reads what a run's evaluation arms did: counted and never-counted slots, passes
