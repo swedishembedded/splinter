@@ -438,3 +438,61 @@ fn a_cancelled_run_stops_at_a_boundary_and_resumes_from_what_it_recorded() {
         4
     );
 }
+
+#[test]
+fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_reused() {
+    let repo = Repo::new();
+    // seed: a recipe states every seed; nothing here draws from them.
+    let recipe = "schema: splinter.factory/v1\nname: play\ntasks: { collection: collections/vim.yaml, split: train }\n\
+                  rollouts:\n  - { name: local, agent: sven, environment: environments/vim.yaml, seed: 1 }\n\
+                  \x20 - { name: guided, agent: sven, environment: environments/vim.yaml, interactive: true, seed: 2 }\n\
+                  dataset: { name: sft, sources: [local, guided], target: \"brain:Qwen/Qwen3-4B\", seed: 3 }\n";
+    let resolved = resolved(&repo, recipe);
+    let backend = FakeBackend::with(Outcome::Fail);
+    backend.script("train/001-first", &[Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &trainer).unwrap();
+    assert!(
+        trials_of(&dir.path().join("rollouts/guided"))
+            .unwrap()
+            .is_empty(),
+        "nobody has played yet"
+    );
+
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+    };
+    let first = {
+        let mut factory = Factory::open(&resolved, dir.path(), services, OWNER).unwrap();
+        let first = factory.play("guided", "train/002-second", None).unwrap();
+        let second = factory.play("guided", "train/002-second", Some(0)).unwrap();
+        assert_eq!(second.slot.slot, 1);
+        assert!(
+            factory.play("local", "train/002-second", None).is_err(),
+            "only an interactive pass is played"
+        );
+        first
+    };
+    assert!(first.guided && first.verified_success());
+    let played = backend.played.lock().unwrap().clone();
+    assert!(
+        played[0].1.is_none() && played[1].1.is_some(),
+        "the second session continues the first"
+    );
+
+    let stages = run(&resolved, dir.path(), &backend, &trainer).unwrap();
+    let computed: Vec<&str> = stages
+        .iter()
+        .filter(|(_, c)| *c)
+        .map(|(k, _)| k.as_str())
+        .collect();
+    assert_eq!(computed, ["rollouts/guided", "datasets/sft"]);
+    let accepted = std::fs::read_to_string(dir.path().join("datasets/sft/accepted.jsonl")).unwrap();
+    assert_eq!(
+        accepted.lines().count(),
+        3,
+        "the unattended success and both played sessions"
+    );
+}

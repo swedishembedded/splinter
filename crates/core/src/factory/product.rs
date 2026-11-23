@@ -96,6 +96,10 @@ pub struct TrialResult {
     /// What it consumed.
     #[serde(default)]
     pub usage: TrialUsage,
+    /// A person typed into the session (an interactive pass): its actions
+    /// are the agent's under a person's guidance.
+    #[serde(default)]
+    pub guided: bool,
 }
 
 impl TrialResult {

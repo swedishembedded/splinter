@@ -43,5 +43,6 @@
   "completion_tokens": 61,
   "cached_tokens": 200,
   "cost_usd": null
- }
+ },
+ "guided": false
 }

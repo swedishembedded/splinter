@@ -26,6 +26,11 @@
       "description": "The classified, scored outcome.",
       "$ref": "#/$defs/Grade"
     },
+    "guided": {
+      "description": "A person typed into the session (an interactive pass): its actions\nare the agent's under a person's guidance.",
+      "type": "boolean",
+      "default": false
+    },
     "model": {
       "description": "The model, `connection:model`, when the recipe bound one.",
       "type": [

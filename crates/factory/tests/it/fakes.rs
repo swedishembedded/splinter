@@ -52,6 +52,8 @@ pub struct FakeBackend {
     pub crash_after: Mutex<Option<usize>>,
     /// Every spec executed, in order.
     pub executed: Mutex<Vec<ExecutionSpec>>,
+    /// Every played session: its spec and the trial it continued.
+    pub played: Mutex<Vec<(ExecutionSpec, Option<PathBuf>)>>,
 }
 
 impl FakeBackend {
@@ -97,6 +99,10 @@ fn write(path: &Path, bytes: &[u8]) {
 
 /// Write the trial directory and report of one attempt.
 fn attempt(out: &Path, spec: &ExecutionSpec, outcome: Outcome) {
+    attempt_as(out, spec, outcome, false);
+}
+
+fn attempt_as(out: &Path, spec: &ExecutionSpec, outcome: Outcome, guided: bool) {
     let name = format!(
         "{}__{}-{}",
         spec.task.id.replace('/', "__"),
@@ -116,6 +122,9 @@ fn attempt(out: &Path, spec: &ExecutionSpec, outcome: Outcome) {
         "verifier_result": {"rewards": {"reward": reward}},
         "exception_info": null,
     });
+    if guided {
+        result["config"] = json!({"agent": {"kwargs": {"human_guided": true}}});
+    }
     if outcome == Outcome::ModelError {
         result["verifier_result"] = serde_json::Value::Null;
         result["exception_info"] =
@@ -190,6 +199,26 @@ impl ExecutionBackend for FakeBackend {
 
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError> {
         read_reports(out)
+    }
+
+    fn play(
+        &self,
+        spec: &ExecutionSpec,
+        batch: Batch<'_>,
+        continue_from: Option<&Path>,
+    ) -> Result<AttemptReport, BackendError> {
+        if let Some(trial) = continue_from {
+            assert!(
+                trial.join("result.json").is_file(),
+                "the continued trial exists"
+            );
+        }
+        self.played
+            .lock()
+            .unwrap()
+            .push((spec.clone(), continue_from.map(Path::to_path_buf)));
+        attempt_as(batch.out, spec, Outcome::Pass, true);
+        Ok(read_reports(batch.out)?.remove(0))
     }
 }
 

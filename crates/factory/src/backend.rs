@@ -73,6 +73,27 @@ pub trait ExecutionBackend: Send + Sync {
     /// # Errors
     /// The output cannot be read.
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError>;
+
+    /// Run one attempt interactively on the caller's terminal: a person
+    /// drives the agent, and the finished session is graded like any
+    /// attempt. `continue_from` is an earlier played trial's directory whose
+    /// conversation the session continues (the earlier trial is left as it
+    /// is).
+    ///
+    /// # Errors
+    /// The backend cannot play, refused the spec, or failed.
+    fn play(
+        &self,
+        spec: &ExecutionSpec,
+        batch: Batch<'_>,
+        continue_from: Option<&Path>,
+    ) -> Result<AttemptReport, BackendError> {
+        let _ = (spec, batch, continue_from);
+        Err(BackendError::Worker(format!(
+            "{} cannot play interactively",
+            self.identity()
+        )))
+    }
 }
 
 /// Every attempt report under `out/attempts`, sorted by slot and attempt.
@@ -188,6 +209,38 @@ impl ExecutionBackend for HarborWorker {
                 .arg(batch.concurrency.to_string()),
         )?;
         read_reports(batch.out)
+    }
+
+    fn play(
+        &self,
+        spec: &ExecutionSpec,
+        batch: Batch<'_>,
+        continue_from: Option<&Path>,
+    ) -> Result<AttemptReport, BackendError> {
+        std::fs::create_dir_all(batch.out.parent().unwrap_or(batch.out))
+            .map_err(|e| BackendError::Worker(e.to_string()))?;
+        let spec_file = batch.out.with_extension("spec.json");
+        let text = serde_json::to_string(spec).map_err(|e| BackendError::Worker(e.to_string()))?;
+        std::fs::write(&spec_file, text).map_err(|e| BackendError::Worker(e.to_string()))?;
+        let mut command = Command::new(&self.program);
+        command
+            .arg("play")
+            .arg("--spec")
+            .arg(&spec_file)
+            .arg("--tasks")
+            .arg(batch.tasks)
+            .arg("--files")
+            .arg(batch.files)
+            .arg("--out")
+            .arg(batch.out);
+        if let Some(trial) = continue_from {
+            command.arg("--continue").arg(trial);
+        }
+        self.run(&mut command)?;
+        read_reports(batch.out)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| BackendError::Worker("the played session left no report".into()))
     }
 
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError> {

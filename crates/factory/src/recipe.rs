@@ -184,6 +184,11 @@ pub struct RolloutPass {
     pub retries: u32,
     /// The pass's seed; attempt seeds are drawn from it.
     pub seed: u64,
+    /// An interactive pass: nothing runs it unattended; its trials are the
+    /// sessions people play with `splinter play`, each graded like any
+    /// trial and marked guided.
+    #[serde(default)]
+    pub interactive: bool,
 }
 
 fn one() -> u32 {

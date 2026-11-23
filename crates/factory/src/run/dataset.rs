@@ -80,6 +80,8 @@ pub struct Accepted {
     pub actions: usize,
     /// The split it went to.
     pub split: String,
+    /// A person typed into the session.
+    pub guided: bool,
 }
 
 /// One trial the dataset excluded, with the exact reason.
@@ -310,9 +312,18 @@ pub(crate) fn produce(
         projected = kept;
     }
     if projected.is_empty() {
+        let mut reasons: BTreeMap<&str, u64> = BTreeMap::new();
+        for e in &excluded {
+            *reasons.entry(e.reason.as_str()).or_default() += 1;
+        }
+        let first = excluded
+            .iter()
+            .find(|e| !e.reason.starts_with("not_a_success"))
+            .map(|e| e.detail.as_str())
+            .unwrap_or("");
         return Err(stage_error(
             &stage.key,
-            format!("no trial of {raw} became a record; see the exclusions"),
+            format!("no trial of {raw} became a record; excluded: {reasons:?} {first}"),
         ));
     }
     let group_of = |trial: &TrialResult| -> String {
@@ -368,7 +379,8 @@ pub(crate) fn produce(
             "trace": trial.trace.as_ref().map(|t| &t.path), "supervised_messages": supervised,
         }));
         let agent = format!(
-            "{} {}",
+            "{}{} {}",
+            if trial.guided { "guided " } else { "" },
             trial.agent.name,
             trial.agent.version.as_deref().unwrap_or("?")
         );
@@ -380,6 +392,7 @@ pub(crate) fn produce(
             model: trial.model.clone(),
             actions: *actions,
             split: split.into(),
+            guided: trial.guided,
         });
         for tool in tools {
             *tool_counts.entry(tool.clone()).or_default() += 1;

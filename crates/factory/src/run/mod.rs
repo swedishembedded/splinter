@@ -23,6 +23,7 @@
 
 pub mod dataset;
 pub mod eval;
+pub mod play;
 pub mod release;
 pub mod rollout;
 pub mod tasks;

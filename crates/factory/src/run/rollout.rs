@@ -215,7 +215,7 @@ fn pass<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<&'r Rollou
 
 /// The arm of the rollout pass `stage`, its tasks frozen from the committed
 /// upstream products.
-fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<Arm<'r>, RunError> {
+pub(crate) fn arm<'r>(factory: &'r Factory<'_>, stage: &PlannedStage) -> Result<Arm<'r>, RunError> {
     let pass = pass(factory, stage)?;
     let tasks = &factory.resolved.collection.collection.tasks;
     let selected: Vec<&TaskRef> = if pass.tasks.ids.is_empty() {
@@ -258,6 +258,9 @@ pub(crate) fn identity(
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
     let arm = arm(factory, stage)?;
+    if arm.pass.interactive {
+        return super::play::identity(factory, &arm);
+    }
     let mut inputs = vec![("tasks".to_owned(), factory.product("tasks")?.1.digest())];
     for upstream in &arm.pass.tasks.unsolved_by {
         let key = stage_key(StageKind::Rollout, upstream);
@@ -279,7 +282,11 @@ pub(crate) fn produce(
     _identity: &StageIdentity,
     staging: &Staging,
 ) -> Result<(), RunError> {
-    run_arm(factory, &arm(factory, stage)?, staging)
+    let arm = arm(factory, stage)?;
+    if arm.pass.interactive {
+        return super::play::produce(factory, &arm, staging);
+    }
+    run_arm(factory, &arm, staging)
 }
 
 /// The handle a batch's attempts carry in the run state.
@@ -289,17 +296,40 @@ struct Handle {
 }
 
 /// An arm with everything resolved for execution.
-struct Running<'a, 'r> {
-    arm: &'a Arm<'r>,
-    work: PathBuf,
+pub(crate) struct Running<'a, 'r> {
+    pub(crate) arm: &'a Arm<'r>,
+    pub(crate) work: PathBuf,
     tasks: BTreeMap<String, &'r TaskRef>,
     agent: AgentInvocation,
     sandbox: SandboxSpec,
     policy: GradingPolicy,
 }
 
+impl<'a, 'r> Running<'a, 'r> {
+    /// `arm` resolved to run with its work (batches, pinned files) under
+    /// `work`.
+    pub(crate) fn new(
+        factory: &Factory<'_>,
+        arm: &'a Arm<'r>,
+        work: PathBuf,
+    ) -> Result<Self, RunError> {
+        let (sandbox, _) = arm.sandbox(factory)?;
+        Ok(Self {
+            arm,
+            work,
+            tasks: arm.tasks.iter().map(|t| (t.id.clone(), *t)).collect(),
+            agent: arm.invocation(factory)?,
+            sandbox,
+            policy: GradingPolicy {
+                timeout: arm.pass.timeout_policy,
+                budget: arm.pass.budget,
+            },
+        })
+    }
+}
+
 impl Running<'_, '_> {
-    fn spec(&self, slot: &SlotKey, attempt: u32) -> ExecutionSpec {
+    pub(crate) fn spec(&self, slot: &SlotKey, attempt: u32) -> ExecutionSpec {
         let task = self.tasks[&slot.task];
         ExecutionSpec {
             schema: EXECUTION_SCHEMA.into(),
@@ -316,12 +346,16 @@ impl Running<'_, '_> {
         }
     }
 
-    fn batch_dir(&self, batch: u64) -> PathBuf {
+    pub(crate) fn batch_dir(&self, batch: u64) -> PathBuf {
         self.work.join("batches").join(batch.to_string())
     }
 
     /// The graded trial of `report`, with paths relative to the product.
-    fn trial(&self, report: &AttemptReport, batch: u64) -> Result<TrialResult, RunError> {
+    pub(crate) fn trial(
+        &self,
+        report: &AttemptReport,
+        batch: u64,
+    ) -> Result<TrialResult, RunError> {
         let task = self.tasks.get(&report.slot.task).ok_or_else(|| {
             stage_error(
                 &self.arm.key,
@@ -364,8 +398,20 @@ impl Running<'_, '_> {
             started_at: report.started_at.clone(),
             finished_at: report.finished_at.clone(),
             usage: report.usage.clone(),
+            guided: guided(report),
         })
     }
+}
+
+/// Whether a person typed into the attempt: the worker marks a played
+/// trial in its Harbor config (`config.agent.kwargs.human_guided`).
+fn guided(report: &AttemptReport) -> bool {
+    report
+        .evidence
+        .result
+        .pointer("/config/agent/kwargs/human_guided")
+        .and_then(Value::as_bool)
+        == Some(true)
 }
 
 /// Record what `reports` say about the attempts of one batch. An attempt
@@ -464,18 +510,7 @@ pub(crate) fn run_arm(
     arm: &Arm<'_>,
     staging: &Staging,
 ) -> Result<(), RunError> {
-    let (sandbox, _) = arm.sandbox(factory)?;
-    let run = Running {
-        arm,
-        work: factory.work(&arm.key),
-        tasks: arm.tasks.iter().map(|t| (t.id.clone(), *t)).collect(),
-        agent: arm.invocation(factory)?,
-        sandbox,
-        policy: GradingPolicy {
-            timeout: arm.pass.timeout_policy,
-            budget: arm.pass.budget,
-        },
-    };
+    let run = Running::new(factory, arm, factory.work(&arm.key))?;
     std::fs::create_dir_all(&run.work).map_err(io(&run.work))?;
     pin_files(factory, &run)?;
     let ids: Vec<String> = arm.tasks.iter().map(|t| t.id.clone()).collect();
@@ -550,7 +585,7 @@ fn next_batch(work: &Path) -> u64 {
 
 /// Copy the agent files, prompt and mount sources into the arm's work, at
 /// their repository paths, so the worker reads the run's copy.
-fn pin_files(factory: &Factory<'_>, run: &Running<'_, '_>) -> Result<(), RunError> {
+pub(crate) fn pin_files(factory: &Factory<'_>, run: &Running<'_, '_>) -> Result<(), RunError> {
     let repository = &factory.resolved.repository;
     let files = run.work.join("files");
     let wanted = run
@@ -648,7 +683,7 @@ fn publish_into(
 }
 
 /// The pass's report for a person.
-fn report(name: &str, trials: &[TrialResult], attempts: &[AttemptEntry]) -> String {
+pub(crate) fn report(name: &str, trials: &[TrialResult], attempts: &[AttemptEntry]) -> String {
     let mut by_status: BTreeMap<String, usize> = BTreeMap::new();
     for trial in trials {
         let status = serde_json::to_value(trial.grade.status)
