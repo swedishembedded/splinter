@@ -25,9 +25,11 @@
 //! tokens of the target when a bound is set (counted by the trainer).
 //!
 //! **Source**: every record's `metadata.trial` names the pass that holds its
-//! trial, the slot, the agent and model, whether the pass was hinted or a
-//! person guided it, and, for an imported trial, the Harbor job and trial
-//! it came from: the records of one dataset are told apart by it.
+//! trial, the slot, the agent and model, whether a person guided it, what
+//! the target was produced with that the record leaves out (`withheld`: a
+//! hint, a fork's guidance; privileged context is never supervised
+//! silently), and, for an imported trial, the Harbor job and trial it came
+//! from: the records of one dataset are told apart by it.
 //!
 //! **Validation**: whole groups (tasks, or task families) are held out, so
 //! no task is in both files; the groups held out are drawn by the dataset's
@@ -299,6 +301,22 @@ fn fork_of(factory: &Factory<'_>, source: &str) -> Option<std::path::PathBuf> {
     stage.source("briefs").map(|b| factory.view(b))
 }
 
+/// What the attempt stage `source` showed its targets that a record of
+/// them leaves out: its hint, the guidance a fork added.
+fn withheld(factory: &Factory<'_>, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some((hint, _)) = hint_of(factory, source) {
+        out.push(match hint {
+            Hint::Solution => "hint:solution".to_owned(),
+            Hint::Brief => "hint:brief".to_owned(),
+        });
+    }
+    if fork_of(factory, source).is_some() {
+        out.push("continuation".to_owned());
+    }
+    out
+}
+
 /// The hint the attempt stage `source` showed, and the view of its briefs.
 fn hint_of(factory: &Factory<'_>, source: &str) -> Option<(Hint, Option<std::path::PathBuf>)> {
     let stage = factory.resolved.plan.stage(source)?;
@@ -409,7 +427,7 @@ pub(crate) fn produce(
                         slot: trial.slot.to_string(),
                         agent: trial.agent.name.clone(),
                         model: trial.model.clone(),
-                        hinted: hint_of(factory, source).is_some(),
+                        withheld: withheld(factory, source),
                         guided: trial.guided,
                         imported: trial.imported.clone(),
                     });
@@ -519,7 +537,7 @@ pub(crate) fn produce(
         supervision.push(json!({
             "split": split, "line": index, "pass": source, "slot": trial.slot.to_string(), "task": trial.task,
             "trace": trial.trace.as_ref().map(|t| &t.path), "supervised_messages": supervised,
-            "hinted": hint_of(factory, source).is_some(),
+            "withheld": withheld(factory, source),
         }));
         let agent = format!(
             "{}{} {}",

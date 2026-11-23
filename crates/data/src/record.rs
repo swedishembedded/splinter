@@ -375,10 +375,13 @@ pub struct TrialSource {
     /// The model it ran on, as the trial records it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-    /// The pass showed the task's reference solution (the record is learned
-    /// without it).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub hinted: bool,
+    /// What the target was produced with that the record does not show
+    /// (it is learned without it): `hint:solution` (the task's reference
+    /// solution), `hint:brief` (a teacher's brief), `continuation` (the
+    /// guidance a fork correction added). Empty for a target produced in
+    /// the context it is learned in.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withheld: Vec<String>,
     /// A person guided the agent.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub guided: bool,

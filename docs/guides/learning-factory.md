@@ -614,7 +614,8 @@ stages:
   know it.
 
 **Telling records apart.** Every record `dataset.project` writes carries `metadata.trial`: the stage that holds its
-trial, the slot, the agent and model, `hinted` and `guided` when they apply, and for an imported trial `imported:
+trial, the slot, the agent and model, `guided` when a person guided it, `withheld` (what the target was produced
+with that the record leaves out: `hint:solution`, `hint:brief`, `continuation`), and for an imported trial `imported:
 {harbor_job, trial}`. Records of one dataset can be filtered or weighed by their source from the JSONL alone.
 
 ## Hinted passes

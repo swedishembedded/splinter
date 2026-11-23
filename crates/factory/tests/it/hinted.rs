@@ -94,8 +94,21 @@ fn a_hinted_pass_teaches_the_task_without_its_hint_and_never_a_trial_that_repeat
         !train.contains("Hello world' > main.txt"),
         "the hint is in no record"
     );
+    // Each record says what its target was produced with that it does not
+    // show: the solution the hinted pass was given.
     let supervision = std::fs::read_to_string(dir.path().join("sft/supervision.jsonl")).unwrap();
-    assert!(supervision.contains("\"hinted\":true"), "{supervision}");
+    assert!(
+        supervision.contains("\"withheld\":[\"hint:solution\"]"),
+        "{supervision}"
+    );
+    for line in train.lines() {
+        let record: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(
+            record["metadata"]["trial"]["withheld"],
+            serde_json::json!(["hint:solution"]),
+            "{record:#}"
+        );
+    }
 }
 
 #[test]
