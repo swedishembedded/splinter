@@ -26,6 +26,7 @@ mod import;
 mod interventions;
 mod knowledge;
 mod native;
+mod operator_security;
 mod practice;
 mod projections;
 mod promotion;
