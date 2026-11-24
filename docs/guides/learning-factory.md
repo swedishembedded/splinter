@@ -836,6 +836,12 @@ stages:
     with: { promote: true, requires: [target] }
 ```
 
+A candidate may also *continue* the champion's adapter: `model.train` with
+`start: champion` begins from the champion's weights rather than from the base,
+which is how a preference objective (`loss`, `beta`, `nll_weight`) refines an
+adapter that already works. The champion must be served from the candidate's
+base model.
+
 ```sh
 splinter fork runs/vim-g1 --recipe recipes/vim-g2.yaml --out runs/vim-g2
 ```

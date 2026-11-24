@@ -60,6 +60,8 @@ pub struct TrainRequest<'a> {
     /// interrupted run continues and a completed one is answered from its
     /// record.
     pub resume_key: &'a str,
+    /// The adapter the candidate continues (a champion's), if it continues one.
+    pub start: Option<&'a Path>,
     /// Where the trained files go; its name tags the candidate.
     pub out: &'a Path,
 }
@@ -138,6 +140,20 @@ pub struct LoraParams {
     /// a CPU backend trains `fp32` only).
     #[serde(default)]
     pub base_precision: Option<String>,
+    /// For pairs: the pair loss (`dpo`, `ipo`, `simpo`, `orpo`; `dpo` when
+    /// absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loss: Option<String>,
+    /// For pairs: the loss's beta (brain's default for the loss when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beta: Option<f32>,
+    /// For pairs: the weight of the chosen answer's likelihood beside the
+    /// pair loss, which keeps what supervised training taught (0 when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nll_weight: Option<f32>,
+    /// For pairs, SimPO only: the target margin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gamma: Option<f32>,
     /// Steps between evaluations of the validation records, which then
     /// pick the step the adapter is exported at; 0 evaluates nothing and
     /// exports the last step.
@@ -220,6 +236,13 @@ impl BrainTrainer {
         request: &TrainRequest<'_>,
         params: &LoraParams,
     ) -> Result<Trained, TrainError> {
+        let loss = params
+            .loss
+            .as_deref()
+            .map(str::parse::<PairLoss>)
+            .transpose()
+            .map_err(TrainError)?
+            .unwrap_or_default();
         let model_dir = self.base_dir(request.base);
         let trained = train_preference_served(
             &self.endpoints,
@@ -231,14 +254,14 @@ impl BrainTrainer {
                 steps: params.steps,
                 rank: params.rank,
                 alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
-                beta: DEFAULT_DPO_BETA,
-                nll_weight: 0.0,
-                loss: PairLoss::Dpo,
-                gamma: None,
+                beta: params.beta.unwrap_or(DEFAULT_DPO_BETA),
+                nll_weight: params.nll_weight.unwrap_or(0.0),
+                loss,
+                gamma: params.gamma,
                 grad_accum: params.grad_accum,
                 learning_rate: params.learning_rate,
                 seed: request.seed,
-                continue_from: None,
+                continue_from: request.start,
                 cancel: None,
             },
         )

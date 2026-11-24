@@ -66,6 +66,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         thinking: false,
         resume_key: "lora-r4-abc",
         out: &out,
+        start: None,
     };
     let trained = trainer.train(&request).unwrap();
     let jobs = service.jobs().created();

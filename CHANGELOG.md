@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (a candidate may continue a champion's adapter)
+- `model.train` takes `start: <champion role>`: the trained variant begins from that champion's adapter instead of a fresh one, so a preference or feedback objective refines what the champion already learned. The champion must be served from the same base; the champion's identity enters the variant's identity. Preference runs also take `loss`, `beta`, `nll_weight` and `gamma`.
+
 ### Fixed (a reply whose connection dropped while it streamed is asked again)
 - A bare model reply (the `agent` stage, a measurement's direct ask) was asked again only when the request failed before the reply started. A connection that dropped in the middle of the reply (`connection closed before message completed`) failed the stage instead, after one item of a hundred and fifty had been answered by the same server a minute before. The reply is used whole, so it is now asked again from the start, with the same bounded retries; the structured `agent` stage (a schema call) was a second path with no retry at all and gets the same.
 

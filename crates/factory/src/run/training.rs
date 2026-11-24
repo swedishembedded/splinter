@@ -37,6 +37,8 @@ pub const CANDIDATE_FILE: &str = "candidate.json";
 
 /// A `model.train` stage with its base resolved.
 pub(crate) struct Variant {
+    /// The champion whose adapter the candidate continues (`start`).
+    pub(crate) start: Option<crate::champion::Champion>,
     pub(crate) name: String,
     pub(crate) engine: String,
     pub(crate) base: ModelRef,
@@ -57,7 +59,36 @@ pub(crate) fn variant(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Var
                 format!("model role {} is not bound", params.base),
             )
         })?;
+    let start = params
+        .start
+        .as_deref()
+        .map(|role| {
+            let reference = factory.resolved.model(role).ok_or_else(|| {
+                stage_error(&stage.key, format!("model role {role} is not bound"))
+            })?;
+            let champion = factory
+                .resolved
+                .champions
+                .get(&reference.to_string())
+                .cloned()
+                .ok_or_else(|| stage_error(&stage.key, format!("start {role} is not a champion")))?;
+            if champion.record.base != base {
+                return Err(stage_error(
+                    &stage.key,
+                    format!(
+                        "start {role} is served from {}, not from the base {base} the candidate trains on",
+                        champion.record.base
+                    ),
+                ));
+            }
+            if champion.adapter.is_none() {
+                return Err(stage_error(&stage.key, format!("start {role} has no adapter to continue")));
+            }
+            Ok(champion)
+        })
+        .transpose()?;
     Ok(Variant {
+        start,
         name: stage.key.clone(),
         engine: params.engine,
         base,
@@ -90,6 +121,8 @@ pub(crate) fn identity(
     let inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
     let parameters = json!({
         "engine": variant.engine, "base": variant.base, "method": variant.method,
+        // By content: the same adapter continued is the same input, wherever its run is.
+        "start": variant.start.as_ref().map(|c| c.digest.hex()),
         // As the trainer will train them: a changed default is a new candidate.
         "params": trainer(factory, stage)?.resolve(&variant.method, &variant.params).map_err(|e| stage_error(&stage.key, e))?,
     });
@@ -133,6 +166,7 @@ pub(crate) fn produce(
             thinking: dataset.thinking,
             resume_key: &tag,
             out: &out,
+            start: variant.start.as_ref().and_then(|c| c.adapter.as_deref()),
         })
         .map_err(|e| stage_error(&stage.key, e))?;
     let mut artifacts = Vec::new();

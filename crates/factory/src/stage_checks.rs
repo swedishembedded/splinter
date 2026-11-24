@@ -194,6 +194,21 @@ pub(crate) fn trained_objective_problems(
     compiled: &CompiledPlan,
 ) -> Vec<String> {
     let mut out = Vec::new();
+    // `start` names a champion served from the base the candidate trains on.
+    if let Ok(params) = ops::params::<crate::ops::TrainParams>(&stage.params) {
+        if let Some(role) = &params.start {
+            let start = compiled.models.get(role);
+            let base = compiled.models.get(&params.base);
+            if !start.is_some_and(crate::champion::is_champion) {
+                out.push(format!("start {role} is not a champion model role"));
+            } else if base.is_some_and(crate::champion::is_champion) {
+                out.push(
+                    "a candidate continues a champion's adapter on a base model: name the base"
+                        .into(),
+                );
+            }
+        }
+    }
     for source in stage.sources("dataset") {
         let retrieval = compiled
             .stages

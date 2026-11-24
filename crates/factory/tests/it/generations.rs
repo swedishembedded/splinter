@@ -124,6 +124,51 @@ fn a_generation_is_a_fork_whose_champion_plays_the_frontier_and_is_the_baseline_
 }
 
 #[test]
+fn a_candidate_may_continue_a_champions_adapter_when_it_is_served_from_the_same_base() {
+    let repo = Repo::new();
+    decisive(&repo);
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    backend.script("train/001-first", &[Outcome::Pass, Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let first = tempfile::tempdir().unwrap();
+    let (one, two) = generations(first.path());
+    run(&resolved(&repo, &one), first.path(), &backend, &trainer).unwrap();
+    let g1 = release(first.path());
+    let adapter = first
+        .path()
+        .join("release")
+        .join(g1["champion"]["adapter"].as_str().unwrap());
+
+    // seed: a recipe states every stage's seed; the fake trainer draws nothing from it.
+    // A stage that polishes the champion: it trains on the base, starting from the champion's adapter.
+    let polish = format!(
+        "{}\n  - id: polish\n    uses: model.train\n    inputs: {{ dataset: $stages.sft.dataset }}\n    \
+         with: {{ base: student, method: lora, start: champion, params: {{ rank: 4 }}, seed: 5 }}\n",
+        two.trim_end()
+    );
+    assert!(
+        polish.contains("start: champion"),
+        "the recipe has the stage"
+    );
+    let second = tempfile::tempdir().unwrap();
+    fork(first.path(), second.path()).unwrap();
+    run(&resolved(&repo, &polish), second.path(), &backend, &trainer).unwrap();
+    let starts = trainer.starts.lock().unwrap().clone();
+    assert!(
+        starts.iter().any(|s| s
+            .as_deref()
+            .map(std::fs::read)
+            .is_some_and(|b| b.ok() == std::fs::read(&adapter).ok())),
+        "the trainer is handed the champion's adapter: {starts:?}"
+    );
+    // Without start, nothing continues an adapter.
+    assert!(starts.iter().filter(|s| s.is_none()).count() >= 1);
+}
+
+#[test]
 fn a_champion_is_served_never_trained_from_and_must_name_a_finished_run() {
     let repo = Repo::new();
     let nowhere = tempfile::tempdir().unwrap();

@@ -321,6 +321,11 @@ pub struct TrainParams {
     /// The trainer's own parameters, validated by the trainer.
     #[serde(default)]
     pub params: Value,
+    /// A champion role whose adapter the candidate continues instead of
+    /// starting a fresh one on the base: a preference run polishes the policy
+    /// that made its pairs. The champion must be served from the same base.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
     /// The training seed.
     pub seed: u64,
 }
@@ -747,7 +752,11 @@ pub fn registry() -> Registry {
             output: port("model", ArtifactKind::Model),
             reproducibility: Reproducibility::Seeded,
             isolation: Isolation::Any,
-            roles: |p| vec![p.base.clone()],
+            roles: |p| {
+                std::iter::once(p.base.clone())
+                    .chain(p.start.clone())
+                    .collect()
+            },
         })
         .with(Builtin::<EvaluationParams> {
             name: names::EVALUATION,

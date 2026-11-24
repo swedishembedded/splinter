@@ -436,6 +436,8 @@ pub struct FakeTrainer {
     pub thinking: Mutex<Vec<bool>>,
     /// The objective of each training request's dataset.
     pub objectives: Mutex<Vec<String>>,
+    /// The adapter each training request continues, if it continues one.
+    pub starts: Mutex<Vec<Option<std::path::PathBuf>>>,
 }
 
 impl Trainer for FakeTrainer {
@@ -462,6 +464,10 @@ impl Trainer for FakeTrainer {
             .count();
         self.trained.lock().unwrap().push(request.params.clone());
         self.thinking.lock().unwrap().push(request.thinking);
+        self.starts
+            .lock()
+            .unwrap()
+            .push(request.start.map(Path::to_path_buf));
         self.objectives
             .lock()
             .unwrap()
