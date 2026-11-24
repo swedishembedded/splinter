@@ -19,6 +19,8 @@ slots that never counted, the physical attempts the infrastructure retried, and 
   - thinking: replies that carry reasoning (an arm run in no-think mode must have none);
   - emptied_files: results that report a file written empty.
 
+An arm run with several attempts per task also reports the tasks solved within the first k attempts.
+
 With `--by-kind` the passes are also split by the kind of task, the word its name starts with after the split
 (`train/composite-007-x` is `composite`; a name that starts with a number is `numbered`).
 
@@ -60,10 +62,11 @@ def arm_metrics(run, name, product):
     slots = set()
     for line in blob(run, product, 'attempts.jsonl').splitlines():
         trial = json.loads(line)['trial']
-        slots.add(trial['task'])
+        key = (trial['task'], trial['slot']['slot'])
+        slots.add(key)
         physical[trial['grade']['status']] += 1
         if trial['grade']['counted']:
-            last[trial['task']] = trial
+            last[key] = trial
     after_error = repeats = loops = h400 = thinking = emptied = 0
     for trial in last.values():
         trace = trial.get('trace') or {}
@@ -90,11 +93,18 @@ def arm_metrics(run, name, product):
             loops += 1
     passed = sum(1 for t in last.values() if t['grade']['passed'])
     kinds = collections.defaultdict(lambda: [0, 0])
-    for task in slots:
-        kind = kind_of(task)
+    for key in slots:
+        kind = kind_of(key[0])
         kinds[kind][1] += 1
-        kinds[kind][0] += bool(last.get(task) and last[task]['grade']['passed'])
+        kinds[kind][0] += bool(last.get(key) and last[key]['grade']['passed'])
+    # Of an arm run with several attempts per task: pass@1 is the first attempt, solved-within-k a pass in
+    # any of the first k attempts (a slot that never counted is not a pass).
+    tasks = {key[0] for key in slots}
+    attempts = max(key[1] for key in slots) + 1 if slots else 0
+    within = [sum(1 for t in tasks if any(last.get((t, a)) and last[(t, a)]['grade']['passed'] for a in range(k)))
+              for k in range(1, attempts + 1)]
     return {
+        'tasks': len(tasks), 'solved_within_k': within,
         'by_kind': {k: {'passed': v[0], 'slots': v[1]} for k, v in sorted(kinds.items())},
         'arm': name, 'slots': len(slots), 'counted': len(last), 'passed': passed,
         'never_counted': len(slots) - len(last),
@@ -123,6 +133,8 @@ def main(argv):
               f"(rate {r['pass_rate_all_slots']}, counted-only {r['pass_rate_counted']}) never-counted {r['never_counted']:3d} "
               f"attempts {r['physical_attempts']:3d} infra-timeouts {r['infra_timeouts']:3d} "
               f"repeat-after-error {share} http400 {r['http_400']} loops {r['loop_stops']} reasoning {r['reasoning_replies']}")
+        if r['solved_within_k'] and len(r['solved_within_k']) > 1:
+            print(f"    solved within k=1..{len(r['solved_within_k'])} of {r['tasks']} tasks: {r['solved_within_k']}")
         if '--by-kind' in argv:
             print('    ' + ', '.join(f"{k} {v['passed']}/{v['slots']}" for k, v in r['by_kind'].items()))
     return 0
