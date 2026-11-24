@@ -805,9 +805,13 @@ gaps:
     neither effect is covered by the golden (only quality is).
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: cost-per-verified intervals are conditional on a verified attempt in the resample and clamped to include the
-    point; needs a stated estimand and a golden for autonomy and cost
+  status: fixed
+  resolution: 'the estimand is stated (competence.rs CostMeasure): the cost per verified over resampled families, a resample
+    that verified nothing counting as an unbounded cost instead of being dropped, so the interval is not conditional on
+    a verification; an end that falls on such a draw is absent and the measure says unbounded. Each end is widened to hold
+    the point estimate, a stated choice (a percentile interval of a skewed ratio need not hold its point). Both are specified:
+    competence::a_cost_per_verified_whose_resamples_often_verify_nothing_has_no_finite_upper_end and competence::every_interval_holds_its_value_and_a_cost_with_every_family_verified_is_bounded
+    (autonomy and cost included)'
 - id: G-EK-23
   source_id: null
   where: crates/pipelines/src/powered/analysis.rs:467, model/src/stats.rs:176

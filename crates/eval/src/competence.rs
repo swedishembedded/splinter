@@ -168,8 +168,16 @@ pub struct CostMeasure {
     pub total: Option<f64>,
     /// Attempts counted that did not record it.
     pub missing: usize,
-    /// The total over the number verified.
+    /// The total over the number verified. Its interval is over the
+    /// resamples of families, a resample in which nothing verified counting as
+    /// an unbounded cost, never left out: leaving it out would make the
+    /// interval one conditional on something being verified.
     pub per_verified: Estimate,
+    /// Whether the interval's upper end is unbounded: in more than the upper
+    /// tail's share of the resamples nothing was verified, so `per_verified`
+    /// has no finite `high`.
+    #[serde(default)]
+    pub unbounded: bool,
 }
 
 /// The cost measures, each kept raw.
@@ -218,7 +226,8 @@ fn counted(o: &TaskOutcome) -> bool {
     !o.failure.is_some_and(FailureClass::exonerates_agent)
 }
 
-/// The shares and per-verified costs over `pool`, the outcomes counted.
+/// The shares and per-verified costs over `pool`, the outcomes counted. A
+/// cost every outcome recorded is infinite per verified when none verified.
 fn measures(pool: &[&TaskOutcome]) -> ([Option<f64>; 2], [Option<f64>; 5]) {
     let attempted = pool.len() as f64;
     let verified = pool.iter().filter(|o| o.verified_success).count() as f64;
@@ -226,9 +235,13 @@ fn measures(pool: &[&TaskOutcome]) -> ([Option<f64>; 2], [Option<f64>; 5]) {
     let share = |n: f64| (attempted > 0.0).then(|| n / attempted);
     let per_verified = PICKS.map(|pick| {
         let costs: Option<Vec<f64>> = pool.iter().map(|o| pick(o)).collect();
-        costs
-            .filter(|_| verified > 0.0)
-            .map(|c| c.iter().sum::<f64>() / verified)
+        costs.filter(|c| !c.is_empty()).map(|c| {
+            if verified > 0.0 {
+                c.iter().sum::<f64>() / verified
+            } else {
+                f64::INFINITY
+            }
+        })
     });
     ([share(verified), share(human_free)], per_verified)
 }
@@ -248,6 +261,8 @@ pub fn competence(attempts: &[Attempt], seed: u64) -> Competence {
     let groups: Vec<Vec<&TaskOutcome>> = families.into_values().collect();
     let pool: Vec<&TaskOutcome> = groups.iter().flatten().copied().collect();
     let (shares, per_verified) = measures(&pool);
+    // Nothing verified over all attempts has no cost per verified at all.
+    let per_verified = per_verified.map(|v| v.filter(|v| v.is_finite()));
 
     let mut rng = SplitMix64::new(seed);
     let mut share_draws: [Vec<f64>; 2] = Default::default();
@@ -272,7 +287,7 @@ pub fn competence(attempts: &[Attempt], seed: u64) -> Competence {
     };
     let mut measure = |at: usize| {
         let costs: Vec<Option<f64>> = pool.iter().map(|o| PICKS[at](o)).collect();
-        CostMeasure {
+        let mut measured = CostMeasure {
             total: costs
                 .iter()
                 .copied()
@@ -280,7 +295,11 @@ pub fn competence(attempts: &[Attempt], seed: u64) -> Competence {
                 .filter(|_| !pool.is_empty()),
             missing: costs.iter().filter(|c| c.is_none()).count(),
             per_verified: estimate(per_verified[at], std::mem::take(&mut cost_draws[at])),
-        }
+            unbounded: false,
+        };
+        measured.unbounded =
+            measured.per_verified.value.is_some() && measured.per_verified.high.is_none();
+        measured
     };
     Competence {
         counts: Counts {
@@ -302,8 +321,9 @@ pub fn competence(attempts: &[Attempt], seed: u64) -> Competence {
     }
 }
 
-/// The percentile interval of `draws`, widened to hold `value`; absent when
-/// there is no value or no draw.
+/// The percentile interval of `draws`, widened to hold `value` (a percentile
+/// interval of a skewed ratio need not hold its point); absent when there is
+/// no value or no draw. An end that falls on an infinite draw is absent.
 fn interval(value: Option<f64>, draws: &mut [f64]) -> (Option<f64>, Option<f64>) {
     let Some(value) = value else {
         return (None, None);
@@ -314,5 +334,9 @@ fn interval(value: Option<f64>, draws: &mut [f64]) -> (Option<f64>, Option<f64>)
     draws.sort_by(f64::total_cmp);
     let tail = (1.0 - INTERVAL_LEVEL) / 2.0;
     let at = |q: f64| splinter_core::quantile::nearest_rank(draws, q).unwrap_or(f64::NAN);
-    (Some(at(tail).min(value)), Some(at(1.0 - tail).max(value)))
+    let finite = |end: f64| end.is_finite().then_some(end);
+    (
+        finite(at(tail)).map(|low| low.min(value)),
+        finite(at(1.0 - tail)).map(|high| high.max(value)),
+    )
 }

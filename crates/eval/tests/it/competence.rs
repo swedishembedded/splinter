@@ -191,3 +191,58 @@ fn a_cost_missing_from_one_attempt_has_no_total_and_nothing_verified_has_no_cost
     assert_eq!(only_environment.quality.value, None);
     assert_eq!(only_environment.counts.excluded_environment, 1);
 }
+
+/// The cost per verified attempt of a resample in which nothing verified is
+/// unbounded, not missing: one verified family among ten leaves nothing
+/// verified in about a third of the resamples, so the interval has no finite
+/// upper end, and the report says so instead of an end computed only from
+/// the resamples that verified something.
+#[test]
+fn a_cost_per_verified_whose_resamples_often_verify_nothing_has_no_finite_upper_end() {
+    let mut attempts = vec![attempt("v", true, Some(10.0), 100, None)];
+    attempts.extend((0..9).map(|f| attempt(&format!("u{f}"), false, Some(10.0), 100, None)));
+    let wall = competence(&attempts, 3).cost.wall_seconds;
+    assert_eq!(wall.per_verified.value, Some(100.0));
+    assert!(wall.unbounded, "{wall:?}");
+    assert_eq!(wall.per_verified.high, None);
+    assert!(
+        wall.per_verified.low.is_some_and(|low| low <= 100.0),
+        "{wall:?}"
+    );
+}
+
+/// Where every family verifies, no resample is at risk: the interval is
+/// bounded, and every interval holds its point estimate, which a percentile
+/// interval of a skewed ratio need not, so each end is widened to it.
+#[test]
+fn every_interval_holds_its_value_and_a_cost_with_every_family_verified_is_bounded() {
+    let attempts: Vec<Attempt> = (0..12)
+        .flat_map(|f| {
+            let family = format!("f{f}");
+            [
+                attempt(
+                    &family,
+                    true,
+                    Some(f64::from(f) + 1.0),
+                    100,
+                    (f % 3 == 0).then_some(4.0),
+                ),
+                attempt(&family, f % 2 == 0, Some(5.0), 50, None),
+            ]
+        })
+        .collect();
+    for seed in 0..16 {
+        let report = competence(&attempts, seed);
+        let wall = report.cost.wall_seconds;
+        assert!(!wall.unbounded, "{wall:?}");
+        for e in [
+            report.quality,
+            report.autonomy,
+            wall.per_verified,
+            report.cost.tool_calls.per_verified,
+        ] {
+            let (v, low, high) = (e.value.unwrap(), e.low.unwrap(), e.high.unwrap());
+            assert!(low <= v && v <= high, "seed {seed}: {e:?}");
+        }
+    }
+}
