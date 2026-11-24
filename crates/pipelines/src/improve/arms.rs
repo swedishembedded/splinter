@@ -18,10 +18,10 @@
 //!
 //! * a **protocol** arm solves with the incumbent under another episode
 //!   protocol (follow-up turns, tool-call caps);
-//! * a **samples** arm solves each task `samples` times and counts a task
-//!   solved when any attempt is verified: pass@k, which in use needs
-//!   something that picks the verified attempt (a visible check, a search),
-//!   and the arm says so;
+//! * a **samples** arm solves each task `samples` times and counts it by
+//!   the unbiased pass@k of its graded attempts (a task with fewer than k
+//!   graded has none), which in use needs something that picks the verified
+//!   attempt (a visible check, a search), and the arm says so;
 //! * a **candidate** arm solves with a model trained by an intervention (a
 //!   teacher's demonstrations and training, for one), its one-time cost
 //!   given with it.
@@ -96,8 +96,9 @@ fn read(ctx: &Context, set: &SetId) -> Result<Attempts, OrchestratorError> {
 enum Counting {
     /// The share of its graded attempts that passed.
     Rate,
-    /// One when any graded attempt passed.
-    Any,
+    /// The unbiased pass@k of its graded attempts; not measured with fewer
+    /// than `k` graded (any of fewer would be a smaller k's pass rate).
+    AtK(usize),
 }
 
 impl Counting {
@@ -106,10 +107,10 @@ impl Counting {
             return None;
         }
         let passes = graded.iter().filter(|p| **p).count();
-        Some(match self {
-            Self::Rate => passes as f64 / graded.len() as f64,
-            Self::Any => f64::from(passes > 0),
-        })
+        match self {
+            Self::Rate => Some(passes as f64 / graded.len() as f64),
+            Self::AtK(k) => splinter_model::stats::pass_at_k(graded.len(), passes, k),
+        }
     }
 }
 
@@ -246,7 +247,7 @@ impl ArmRunner for SolveArms<'_> {
                 experiment.incumbent.clone(),
                 *samples,
                 protocol.into(),
-                Counting::Any,
+                Counting::AtK(*samples),
                 0.0,
                 *samples,
                 Some(
@@ -306,23 +307,26 @@ mod tests {
         1.0 - choose(n - c, k) / choose(n, k)
     }
 
-    /// A samples arm counts a task solved when any of its `k` graded
-    /// attempts passed: with every attempt graded that is exactly the
-    /// unbiased pass@k, `1 - C(n - c, k) / C(n, k)` at `n = k`; the rate arm
-    /// is pass@1's estimate `c / n`.
+    /// A samples arm's task is the unbiased pass@k of its graded attempts,
+    /// `1 - C(n - c, k) / C(n, k)`, and the rate arm's pass@1's estimate
+    /// `c / n`; a task with fewer than `k` graded attempts has no pass@k (an
+    /// any-of-fewer would be pass@(n < k), smaller than the arm's), and no
+    /// graded attempt is no measurement.
     #[test]
-    fn any_of_k_graded_attempts_is_the_unbiased_pass_at_k_and_the_rate_is_pass_at_one() {
+    fn a_samples_arm_is_the_unbiased_pass_at_k_and_never_any_of_fewer() {
         for k in 1..=8u64 {
             for c in 0..=k {
                 let graded: Vec<bool> = (0..k).map(|i| i < c).collect();
-                let any = Counting::Any.of(&graded).unwrap();
-                assert!((any - unbiased(k, c, k)).abs() < 1e-12, "k {k} c {c}");
+                let at_k = Counting::AtK(k as usize).of(&graded).unwrap();
+                assert!((at_k - unbiased(k, c, k)).abs() < 1e-12, "k {k} c {c}");
                 let rate = Counting::Rate.of(&graded).unwrap();
                 assert!((rate - unbiased(k, c, 1)).abs() < 1e-12, "k {k} c {c}");
             }
         }
+        // One of four samples ungraded: three graded are not pass@4.
+        assert_eq!(Counting::AtK(4).of(&[true, false, false]), None);
         assert_eq!(
-            Counting::Any.of(&[]),
+            Counting::AtK(1).of(&[]),
             None,
             "no graded attempt is no measurement"
         );
