@@ -278,7 +278,9 @@ gaps:
     own implementation, hand-built fixtures).
   severity: medium
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: the data views now have spec tests for every fixed defect, but source mutants exist only for rewards, groups,
+    masks and curation
 - id: G-DC-25
   source_id: F25
   where: docs/contributing/validation.md row 'Held-out splits' vs crates/data/src/holdout.rs
@@ -288,7 +290,9 @@ gaps:
     doc.
   severity: low
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: the map row now states the refusal of unreadable records; its 'held out whole' is true of groups, and the
+    growth to a minimum held-out size is the code's, documented in holdout.rs
 - id: G-DC-26
   source_id: F26
   where: crates/data/src/views/policy_gradient.rs:300 (rollout reward check) and :430
@@ -340,7 +344,9 @@ gaps:
     OutcomeView and Retrieval datasets have no downstream consumer in brain; candidates for ablation or documentation.'
   severity: low
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: 'the Reward and Contrastive objectives are written in a format no trainer reads: export-only, to be marked
+    so or removed (plan 6C: unsupported objective is an explicit error or export-only)'
 - id: G-FS-01
   source_id: F-01
   where: crates/factory/src/run/compute.rs:387,427,440
@@ -423,7 +429,9 @@ gaps:
     in core); different failure/ordering semantics, tested separately.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: 'two bounded fan-outs (factory''s scoped threads, core''s fan_out): one implementation is a Phase 16 cleanup;
+    the factory''s now handles a panicking item'
 - id: G-FS-08
   source_id: F-08
   where: crates/store/src/stage_ledger.rs vs crates/store/src/factory/{products,runstate} ; used by crates/pipelines/src/served/*
@@ -432,7 +440,9 @@ gaps:
     commit points and corruption policies; candidate for ablation if served pipelines are superseded.'
   severity: high
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: 'StageLedger (served pipelines) beside the factory''s ProductStore and RunState: removing the legacy pipelines
+    (G-AS-11) removes the ledger'
 - id: G-FS-09
   source_id: F-09
   where: crates/factory/src/run/release.rs:197-260 (Point/lineage) vs crates/store/src/lineage.rs and crates/orchestrator/src/{generation,release_manifest}.rs
@@ -441,7 +451,9 @@ gaps:
     not appear to write the store/orchestrator release store.'
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: 'three lineage notions (release.json lineage, store lineage, orchestrator generations): the factory''s is
+    the live one; the others go with the legacy pipelines'
 - id: G-FS-10
   source_id: F-10
   where: crates/factory/tests/it/templates.rs:20; crates/factory/src/templates.rs:121-207
@@ -471,7 +483,10 @@ gaps:
     ExpDB is required for those flows.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: 'the store''s doc says factory state is independent of the experience database; true for products and run
+    state, but the knowledge, task, text-dataset and view operations build throwaway ExpDB stores in temporary directories:
+    the doc should say so (plan 10D: ExpDB stays optional)'
 - id: G-FS-13
   source_id: F-13
   where: crates/orchestrator/src/jobs.rs:~170 (reconcile_at `if let Ok(record) = self.workspace.update_job(...)`)
@@ -521,7 +536,9 @@ gaps:
     not correctness; no independent oracle recomputes dataset records or statistics.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: golden products are blessed from the implementation's own output, so they guard regressions only; an independent
+    recomputation of a dataset's records (plan 6B) is the oracle they lack
 - id: G-FS-18
   source_id: F-18
   where: crates/orchestrator/src/config.rs (629 lines, 2 unit tests)
@@ -529,7 +546,9 @@ gaps:
     values and defaults untested.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: orchestrator config.rs is the one reader of the environment with few specs; the state-root refusal and SPLINTER_CONFIG
+    are now specified, the precedence of the rest is not
 - id: G-EK-01
   source_id: null
   where: crates/model/src/stats.rs:176, crates/eval/src/competence.rs:316, crates/pipelines/src/powered/analysis.rs:467,
@@ -539,7 +558,9 @@ gaps:
     and Resampled share a golden; competence.rs does not reuse Resampled. A fix in one will not reach the others.
   severity: high
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: 'four copies of the percentile rule and three resamplers: a Phase 16 consolidation into splinter-model''s
+    stats (one rule, one golden)'
 - id: G-EK-02
   source_id: null
   where: crates/eval/src/pilot.rs:53 vs crates/knowledge/src/factory/band.rs:72
@@ -573,7 +594,9 @@ gaps:
     above; Holm exists once (analysis.rs re-exports).
   severity: low
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: 'four routes to the sign test, all ending in stats::binomial tails (one implementation of the arithmetic):
+    naming one entry point is a Phase 16 cleanup'
 - id: G-EK-05
   source_id: null
   where: crates/knowledge/src/tasks/dedup.rs:208, goal/facts.rs:126, claims/task.rs:161, claims/pairing.rs:45, retrieve/lexical.rs:20,
@@ -583,7 +606,9 @@ gaps:
     each needs its own golden.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: 'eight word splitters with different rules: one tokenizer module per purpose, each with its golden, is a Phase
+    16 cleanup'
 - id: G-EK-06
   source_id: null
   where: crates/pipelines/src/release/statistics.rs:54-55
@@ -613,7 +638,9 @@ gaps:
     by anything (documented in the comment but weakens any check built on it).
   severity: low
   confidence: high
-  status: unverified
+  status: rejected
+  resolution: 'documented in skills.rs: a skill that names no symbols cannot be checked by symbols, and is said to be exercised
+    by any code'
 - id: G-EK-09
   source_id: null
   where: crates/eval/src/power.rs:101
@@ -632,7 +659,9 @@ gaps:
     that an absent measurement is never zero (other fields are Option).
   severity: low
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: 'Agreement.agreement reads 0.0 with no labelled pairs, against the repository''s absent-is-never-zero convention:
+    an Option, with its callers'
 - id: G-EK-11
   source_id: null
   where: crates/eval/src/intervention.rs:73,196
@@ -654,7 +683,10 @@ gaps:
     graph, redaction.'
   severity: high
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: '12 source mutants added (release gate, harness search, Student t, Wilson, skill order, signature, seal, power,
+    repository credential, socket filter): 44 of 44 killed. Still without one: the e-process gate, budget allocation, campaign
+    gate decisions, dedup'
 - id: G-EK-13
   source_id: null
   where: crates/eval/tests/it/evidence_gate.rs:31, eval/src/campaign/dev_pool.rs:134, campaign/sampling.rs:356, eval/tests/it/golden.rs:69,
@@ -664,7 +696,9 @@ gaps:
     not documented as a false-failure probability.
   severity: low
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'the repository''s deliberate convention: a default seed is drawn and printed, so a failure is reproducible
+    from its output (the seed-literals gate enforces it)'
 - id: G-EK-14
   source_id: null
   where: crates/pipelines/tests/methods/*.rs, world.rs:15-17
@@ -673,7 +707,9 @@ gaps:
     so a +0.05 gain is within one binomial sd (~0.05) of 100 items.'
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: the smokes are blocked (G-NEW-06); beyond that they lack repeated seeds, negative controls and stored baselines
+    (plan 12B-12C)
 - id: G-EK-15
   source_id: null
   where: docs/contributing/validation.md ('Not yet certified' vs map row for pass@k of a samples arm); crates/knowledge/src/factory/band.rs:53
@@ -702,7 +738,9 @@ gaps:
     has no coverage in default or conformance tiers.'
   severity: medium
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: the firmware-emulator plugin's three specs need vemu and clang and run nowhere by default; a CPU tier with
+    those tools is the fix
 - id: G-EK-18
   source_id: null
   where: crates/knowledge/src/tasks/dedup.rs:226,74
@@ -721,7 +759,10 @@ gaps:
     conformance seed, bootstrap and dev-pool draw depends on it.
   severity: low
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'between(0, u64::MAX) panicked on a remainder by zero and a reversed range wrapped; the whole range now draws,
+    a reversed one is refused by name (core: a draw over the whole range...). The modulo bias is below n / 2^64 for the
+    sizes drawn: negligible'
 - id: G-EK-20
   source_id: null
   where: crates/eval/src/campaign/sampling.rs:36 vs crates/eval/src/campaign/learning_signal.rs:59
@@ -729,7 +770,9 @@ gaps:
     signal); a group can be informative to one and flat to the other.'
   severity: low
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: two spread thresholds (1e-9 batch builder, 1e-12 learning signal); one constant would make one rule, together
+    with G-NEW-05's classifier
 - id: G-EK-21
   source_id: null
   where: crates/pipelines/src/powered/analysis.rs:p_tasks, crates/pipelines/src/release/statistics.rs:36,45
@@ -738,7 +781,9 @@ gaps:
     that reports label it non-primary.
   severity: low
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: the family-level p is the primary and the task-level p is reported beside it as not what decides (the release
+    report says 'by task (not what decides)')
 - id: G-EK-22
   source_id: null
   where: crates/eval/src/competence.rs:240-246
@@ -747,7 +792,9 @@ gaps:
     neither effect is covered by the golden (only quality is).
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: cost-per-verified intervals are conditional on a verified attempt in the resample and clamped to include the
+    point; needs a stated estimand and a golden for autonomy and cost
 - id: G-EK-23
   source_id: null
   where: crates/pipelines/src/powered/analysis.rs:467, model/src/stats.rs:176
@@ -756,7 +803,9 @@ gaps:
     at the 0.025 quantile of 10_000 resamples carry Monte Carlo error unaccounted for in the decision.
   severity: medium
   confidence: medium
-  status: unverified
+  status: confirmed
+  resolution: nearest-rank quantiles with a five-Monte-Carlo-error tolerance admit another convention; an exact enumeration
+    golden at a small size would pin the rule
 - id: G-EK-24
   source_id: null
   where: crates/knowledge/src/retrieve/lexical.rs:90
@@ -827,7 +876,9 @@ gaps:
     where namespaces exist so the fallback may be unexercised.
   severity: medium
   confidence: medium (design reading; escape not executed)
-  status: unverified
+  status: rejected
+  resolution: 'by design and documented in tagged.rs: the tag guards against ordinary programs'' accidents, not one that
+    clears its environment to hide; a private pid namespace is the strong form where the host has one'
 - id: G-AS-05
   source_id: F5
   where: 'crates/agent/src/runner/claude_code.rs:88-90 (SYSTEM_READ), :268-289 (confinement: private_proc false, read_write
@@ -887,7 +938,10 @@ gaps:
     validate against.
   severity: medium
   confidence: medium (grep-based; verify struct attributes)
-  status: unverified
+  status: fixed
+  resolution: 'the experiment plan''s file refuses an unknown key (pipelines: an experiment plan refuses a key it does not
+    know); the catalog stays tolerant by design, shared with the family tools, and says so; machine configuration is the
+    typed config.yaml'
 - id: G-AS-10
   source_id: F10
   where: crates/factory/src/run/harness_search.rs:209-215 (decide(&baseline, &trials, params.alpha, 0.0) per candidate;
@@ -910,7 +964,10 @@ gaps:
     stay by decision'' (git log 9549e5e8); candidates for ablation or an explicit deprecation list.'
   severity: medium
   confidence: high (reference counts by grep)
-  status: unverified
+  status: confirmed
+  resolution: 'duplicate pipelines: the legacy CLI verbs (tasks generate, solve, verify, dataset build, train, release,
+    eval) beside the factory''s operations; the runner module is deleted, the verbs remain (kept by the user''s decision
+    for U9; Phase 16 to revisit)'
 - id: G-AS-12
   source_id: F12
   where: workers/harbor/splinter_harbor_worker/audit.py (84 lines); workers/harbor/tests/test_run.py:60 asserts leaks ==
@@ -943,7 +1000,9 @@ gaps:
     loses write access.
   severity: medium
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'a grant path that does not exist confines more strictly, never less (Landlock grants nothing for it); the
+    recorded spec keeps the asked-for path, which a reader of the record should know: noted here'
 - id: G-AS-15
   source_id: F15
   where: crates/sandbox/src/seccomp.rs:108-186; landlock.rs:139-160
@@ -986,7 +1045,8 @@ gaps:
     the stated rule 'a run can never use a hosted router' relies on the loopback check alone.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'moot: the Claude Code runner and its key-prefix check were deleted with the dead runner module'
 - id: G-AS-19
   source_id: F19
   where: workers/harbor/splinter_harbor_worker/spec.py:32 (KEY TOKEN SECRET PASSWORD CREDENTIAL) vs crates/sandbox/src/host.rs:70-80
@@ -1074,11 +1134,15 @@ gaps:
     so the core binary refuses it; (2) the lab serves the toy as `--checkpoint <dir>` and asks for it by its store path
     (`toy/chat`), while brain serve now serves a checkpoint as `brain/qwen3` (and wants its tokenizer beside a checkpoint
     file), and finds no card-less `local/<name>` in the store. Measured here: toy/chat model_not_found; brain/qwen3 ''no
-    tokenizer''; local/toychat model_not_found.'
-  severity: high
+    tokenizer''; local/toychat model_not_found. Underneath: Splinter matches a served base by the card id brain lists (crates/model/src/endpoint.rs
+    Wanted::Base: card.id must equal the store name, toy/chat or Qwen/Qwen3-4B), and current brain lists provider ids only
+    (brain/qwen3), its card carrying no identity of the checkpoint --checkpoint loaded; a compound brain.manifest.json is
+    refused for the qwen family (''compound family not servable''). So every path that serves a local base by name is broken
+    against current brain, not only the smokes; adapters still match, by digest.'
+  severity: critical
   confidence: 'high (run: brain qwen3: no action ''toy'')'
   status: confirmed
-  resolution: 'open, a cross-project contract: brain to say how a consumer''s tests serve a local, card-less checkpoint
-    by name (a card written by the toy action, as import writes one, would let the store serve it), and Splinter''s fixture
-    to call the sample''s toy action and request the id brain reports. A duplicate toy action in brain''s core was tried
-    and taken back (one implementation: the sample''s)'
+  resolution: 'open, a cross-project contract: brain to state the served checkpoint''s identity on its card (a store name
+    or a weights digest), so Splinter can match a base as it matches an adapter. Accepting the provider id in Splinter without
+    it would let another checkpoint pass for the one asked for, and is not done. The toy itself is the qwen3 sample''s action;
+    a duplicate in brain''s core was tried and taken back'

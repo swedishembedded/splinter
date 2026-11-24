@@ -102,7 +102,7 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 - [x] Capability inventory `validation/capabilities.yaml` from source (340 capabilities: 250 SPECIFIED,
       31 ADVERSARIAL_PASS, 29 GOLDEN_PASS, 21 INTEGRATION_PASS, 9 UNMAPPED; agents' strict reading, every
       state to be re-earned against an independent oracle) and the gap register `validation/gaps.yaml`
-      (93 findings, each verified before it is fixed or rejected).
+      (99 findings, each verified before it is fixed or rejected: 56 fixed, 17 rejected, 26 confirmed and open, none unverified).
 
 ## Phase 1 - golden-reference infrastructure
 
