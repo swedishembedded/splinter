@@ -47,7 +47,8 @@ use splinter_core::harness::RecordedCalls;
 use splinter_core::model_ref::ModelRef;
 use splinter_data::calls::{project_calls, CallProjection, Sampler};
 use splinter_factory::online::seams::{
-    ExecutorError, FinishedRollout, RolloutEnd, RolloutExecutor, RolloutRequest, RunClock,
+    ExecutorError, FinishedRollout, OnlineRollouts, RolloutEnd, RolloutExecutor, RolloutRequest,
+    RolloutsRequest, RunClock, SystemRunClock,
 };
 use splinter_orchestrator::context::Context;
 
@@ -380,4 +381,74 @@ pub fn run_online<R>(
         executor.cancel();
         out
     }))
+}
+
+/// Practice episodes as the factory's online rollouts
+/// ([`OnlineRollouts`]): an online stage's tasks (a pinned collection of
+/// task folders) are imported and rolled out by [`run_online`] against the
+/// policy the learner serves.
+pub struct FactoryRollouts<'c> {
+    ctx: &'c Context,
+    episode: EpisodeSettings,
+    policy: Box<dyn Fn(&str) -> ModelRef + Send + Sync + 'c>,
+}
+
+impl<'c> FactoryRollouts<'c> {
+    /// Rollouts in `ctx`, each bounded as `episode` says (its seed and
+    /// temperature are each stage's), the served policy named `id` reached
+    /// as `policy(id)` says.
+    #[must_use]
+    pub fn new(
+        ctx: &'c Context,
+        episode: EpisodeSettings,
+        policy: impl Fn(&str) -> ModelRef + Send + Sync + 'c,
+    ) -> Self {
+        Self {
+            ctx,
+            episode,
+            policy: Box::new(policy),
+        }
+    }
+}
+
+impl OnlineRollouts for FactoryRollouts<'_> {
+    fn identity(&self) -> String {
+        format!(
+            "sven practice episodes ({}; deadline {}s, {:?} tool calls, {:?} output tokens)",
+            super::RECORD_FORMAT,
+            self.episode.deadline.as_secs(),
+            self.episode.max_tool_calls,
+            self.episode.max_output_tokens
+        )
+    }
+
+    fn run(
+        &self,
+        request: &RolloutsRequest<'_>,
+        body: &mut dyn FnMut(&mut dyn RolloutExecutor, &[String]),
+    ) -> Result<(), String> {
+        let tasks = super::load_collection(self.ctx, request.tasks).map_err(|e| e.to_string())?;
+        let ids: Vec<String> = tasks.iter().map(|t| t.task.to_string()).collect();
+        let settings = OnlineSettings {
+            episode: EpisodeSettings {
+                seed: request.seed,
+                ..self.episode.clone()
+            },
+            sampling: OnlineSampling::untruncated(request.temperature),
+            top_logprobs: request.top_logprobs,
+            scratch: request.scratch.to_path_buf(),
+        };
+        let policy = (self.policy)(request.policy);
+        run_online(
+            self.ctx,
+            tasks,
+            &policy,
+            settings,
+            &SystemRunClock,
+            |executor| {
+                body(executor, &ids);
+            },
+        )
+        .map_err(|e| e.to_string())
+    }
 }

@@ -93,12 +93,36 @@ re-sent until brain reports it committed (applied is not durable).
       identity a provider reports of its reply` (sven branch `agrpo-exec`), plus sven's per-request identity and
       top-K; the lock pins the public sven remote, which has none of them, so this builds with `make deps/local`
       until those commits are published and the lock is re-pinned.
-- [ ] Learner adapter for brain's streaming policy-gradient job (scripted double first, then the real API).
-- [ ] The `train.online` factory operation (A24) over an executable task collection (`dataset.rlvr` frozen as the
-      first curriculum); its candidate goes through the existing evaluation and promotion stages.
-- [ ] The GPU-free toy end to end (A31), then Qwen3-0.6B and Qwen3-4B on one card (A34-A36): synchronous against
-      asynchronous at equal generated tokens, trained tokens, updates, GPU hours and wall time; useful throughput,
-      experience utilisation, held-out and retention.
+- [x] Learner adapter for brain's streaming policy-gradient job: the client `splinter_model::served_train::StreamJob`
+      (create with the stream document, offer complete groups with `?epoch=N`, events read on a thread and resumed
+      with Last-Event-ID, finish; 404/409/410 or another epoch is `StreamError::Restarted`), its scripted double
+      (`splinter_model::scripted_stream`: steps taken when events are read, publish/commit cadence, 429 only while
+      a step is queued, a restart at a step, a pause), and `splinter_factory::online::brain::BrainLearner` on the
+      controller's seam (`BrainTrainer::stream`). A duplicate of a key this job did not accept in its own epoch is
+      reported committed (a resumed job reports its checkpoint's keys only as duplicates). Built against the
+      scripted double; brain `agrpo-stream` not yet exercised (open: run `make test/contract/brain`-style checks
+      once it lands). A truncated rollout is no longer trainable (brain trains none of it, so it could leave a
+      group of one).
+- [x] The `train.online` factory operation (A24): `splinter_factory::run::online`, over a pinned executable
+      collection; params `base, groups, group_size, max_concurrent_attempts, max_staleness, rollout_tokens,
+      step_tokens, queue_tokens, publish_every, max_updates, estimator, temperature, top_logprobs,
+      checkpoint_every, max_failures, seed, params`; the rollouts through the `OnlineRollouts` seam
+      (`splinter_pipelines::episodes::online::FactoryRollouts` on the sven executor), the learner through
+      `Trainer::stream`, every group in the run state under a namespace per stage identity, a restarted learner
+      resumed up to 8 times. Product: `candidate.json` (the newest published version a checkpoint holds,
+      load-checked), `report.json` (online statistics, learner telemetry, tokens generated and trained,
+      experience utilisation, useful tokens per second), `experiences.jsonl` (committed groups). Its candidate
+      goes to `evaluation` unchanged (the evaluation's base lookup now takes either training operation). Open:
+      the command line does not yet hand a factory run its online rollouts (`Services::online` is `None` there;
+      it needs a context and the served-id-to-model mapping for brain), and the candidate is the last committed
+      published version (a finish that commits steps past the last publication is not served yet).
+- [x] The GPU-free toy end to end (A31): `splinter-pipelines/it/online_factory`: dataset.rlvr -> train.online ->
+      evaluation on a scripted brain streaming job and a scripted sven policy, the controller killed mid-stage and
+      resumed, no group trained twice, the experience manifest equal to the committed groups, the candidate
+      evaluated.
+- [ ] Qwen3-0.6B and Qwen3-4B on one card (A34-A36): synchronous against asynchronous at equal generated tokens,
+      trained tokens, updates, GPU hours and wall time; useful throughput, experience utilisation, held-out and
+      retention.
 - [ ] Merging append-only calls of one session into one sample (A15), against the per-call reference, once the
       re-forwarded context is measured.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.

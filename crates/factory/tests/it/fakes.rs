@@ -37,7 +37,8 @@ pub enum Outcome {
 }
 
 fn fixture() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/fixtures/sven-5.9-reasoning")
+    // From this crate or another one that includes this kit.
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../factory/tests/it/fixtures/sven-5.9-reasoning")
 }
 
 /// A scripted execution backend.

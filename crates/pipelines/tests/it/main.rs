@@ -48,6 +48,7 @@ mod lineage;
 mod model_refs;
 mod monitoring;
 mod online_episodes;
+mod online_factory;
 mod pipeline_seeds;
 mod powered;
 mod practice_episodes;
