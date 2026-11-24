@@ -54,7 +54,11 @@ use splinter_core::factory::trial::{RunBudget, TimeoutPolicy};
 
 use crate::registry::{OperationSpec, Registry};
 
-pub use crate::ops_dataset::{ExtendDatasetParams, PreferenceOptions, RewardOptions};
+mod dataset;
+pub use dataset::{
+    DocumentSplit, ExtendDatasetParams, ImportDatasetParams, PreferenceOptions, ProjectParams,
+    RewardOptions, TextDatasetParams, ValidationSplit, OBJECTIVES,
+};
 
 /// `tasks.pin`: the tasks of a collection, pinned into the run.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -154,115 +158,6 @@ pub struct ImportParams {
     /// Only these task ids.
     #[serde(default)]
     pub tasks: Vec<String>,
-}
-
-/// `dataset.import`: training records made elsewhere, as a dataset
-/// ([`crate::run::dataset_import`]).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ImportDatasetParams {
-    /// The model role the records are for.
-    pub target: String,
-    /// The longest record, in the target's tokens, when bounded: a longer
-    /// one is excluded and listed.
-    #[serde(default)]
-    pub max_block: Option<u64>,
-    /// The records keep the target's reasoning (it is trained to reason
-    /// before it answers); off: no-think mode, and a record that carries
-    /// reasoning is refused.
-    #[serde(default)]
-    pub thinking: bool,
-}
-
-/// How a text dataset holds documents out for validation.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DocumentSplit {
-    /// The share of documents held out, in percent.
-    pub percent: u32,
-}
-
-/// `dataset.text`: documents as a continued-pretraining dataset
-/// ([`crate::run::dataset_text`]).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TextDatasetParams {
-    /// The model role the records are for.
-    pub target: String,
-    /// How documents are held out for validation; none when unset.
-    #[serde(default)]
-    pub validation: Option<DocumentSplit>,
-    /// The seed the held-out documents are drawn by.
-    pub seed: u64,
-}
-
-fn sft() -> String {
-    "sft".into()
-}
-fn verified_success() -> String {
-    "verified-success".into()
-}
-fn native_sft() -> String {
-    "native-sft".into()
-}
-fn by_task() -> String {
-    "task".into()
-}
-
-/// How validation records are held out.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ValidationSplit {
-    /// Group records by this before splitting (`task`, `task_family`).
-    #[serde(default = "by_task")]
-    pub group_by: String,
-    /// The fraction of groups held out, in percent.
-    pub percent: u32,
-}
-
-/// The objectives `dataset.project` projects attempts for.
-pub const OBJECTIVES: &[&str] = &[
-    "sft",
-    "preference",
-    "feedback",
-    "policy-gradient",
-    "distill",
-    "retrieval",
-];
-
-/// `dataset.project`: training records projected from attempts.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ProjectParams {
-    /// The objective (`sft`, `preference`, `feedback`, `policy-gradient`,
-    /// `distill`, `retrieval`).
-    #[serde(default = "sft")]
-    pub objective: String,
-    /// The admission rule of an SFT dataset.
-    #[serde(default = "verified_success")]
-    pub admission: String,
-    /// The projection of an SFT dataset.
-    #[serde(default = "native_sft")]
-    pub projection: String,
-    /// How a preference dataset pairs attempts.
-    #[serde(default)]
-    pub preference: Option<PreferenceOptions>,
-    /// How a policy-gradient dataset rewards an attempt beyond its grade.
-    #[serde(default)]
-    pub reward: Option<RewardOptions>,
-    /// The model role the records are for.
-    pub target: String,
-    /// The longest record, in the target's tokens, when bounded.
-    #[serde(default)]
-    pub max_block: Option<u64>,
-    /// Train the target to reason before it answers (off: no-think mode).
-    #[serde(default)]
-    pub thinking: bool,
-    /// How validation records are held out.
-    #[serde(default)]
-    pub validation: Option<ValidationSplit>,
-    /// The split's seed.
-    pub seed: u64,
 }
 
 fn brain() -> String {
