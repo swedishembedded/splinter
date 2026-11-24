@@ -58,7 +58,7 @@
 //! Packed ([`SftStep::packed`]), the actions an experience admits are one
 //! record, not one each.
 
-use splinter_core::annotation::{AnnotationBody, Label, Outcome, Strength};
+use splinter_core::annotation::{AnnotationBody, Label, Strength};
 use splinter_core::chat::WireMessage;
 use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
@@ -309,20 +309,11 @@ impl View for SftStep {
     }
 }
 
-/// Admits `entry` whatever its verdict unless an exposure audit failed it: a
-/// failed constraint means the trajectory touched material it must not.
+/// Admits `entry` whatever its verdict unless it broke a constraint
+/// (`breaks_a_constraint`: the exposure audit's, for one): a failed
+/// constraint means the trajectory touched material it must not.
 fn admit_unverified(entry: &Entry) -> Result<(), Exclusion> {
-    let exposed = entry.notes.iter().any(|n| {
-        matches!(
-            n.body,
-            AnnotationBody::Verdict {
-                outcome: Outcome::Fail,
-                strength: Strength::Constraint,
-                ..
-            }
-        )
-    });
-    if exposed {
+    if super::breaks_a_constraint(entry) {
         Err(Exclusion::Failed)
     } else {
         Ok(())

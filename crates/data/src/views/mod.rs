@@ -50,6 +50,24 @@ use splinter_store::experiences::StoreError;
 
 use crate::{Exclusion, ViewError};
 
+/// Whether a verdict at constraint strength failed `entry`: a hard rule of
+/// the material was broken (the exposure audit's, for one). Such an attempt
+/// is never training material, whatever else was decided about it; the one
+/// rule every view that admits an undecided attempt holds it to.
+fn breaks_a_constraint(entry: &crate::Entry) -> bool {
+    use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
+    entry.notes.iter().any(|n| {
+        matches!(
+            n.body,
+            AnnotationBody::Verdict {
+                outcome: Outcome::Fail,
+                strength: Strength::Constraint,
+                ..
+            }
+        )
+    })
+}
+
 /// Source content read from the store, as text: an exclusion when the
 /// store does not hold it or it is not non-empty UTF-8, an error for any
 /// other failure (corruption is never a reason to skip quietly).

@@ -44,7 +44,6 @@
 
 use std::collections::BTreeMap;
 
-use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
 use splinter_core::chat::{LossWeight, WireMessage};
 use splinter_core::harness::HarnessConversation;
 use splinter_core::rng::SplitMix64;
@@ -151,7 +150,7 @@ impl Transition {
         if entry.experience.provenance.teacher {
             return projection.exclude(Exclusion::OpenBook);
         }
-        if exposed(entry) {
+        if super::breaks_a_constraint(entry) {
             return projection.exclude(Exclusion::Failed);
         }
         let conversation = match self.rendering.conversation_of(entry, conversation.as_ref()) {
@@ -260,19 +259,6 @@ impl View for Transition {
 }
 
 /// Whether an exposure audit failed `entry`: it touched material it must not.
-fn exposed(entry: &Entry) -> bool {
-    entry.notes.iter().any(|n| {
-        matches!(
-            n.body,
-            AnnotationBody::Verdict {
-                outcome: Outcome::Fail,
-                strength: Strength::Constraint,
-                ..
-            }
-        )
-    })
-}
-
 /// The supervised messages of every record, in order.
 fn targets(projection: &mut Projection) -> Vec<&mut WireMessage> {
     projection
