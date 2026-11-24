@@ -120,6 +120,52 @@ pub struct SolveOptions {
     /// model; one that cannot honour a control refuses the request. `None`
     /// leaves the provider's own sampling.
     pub request_sampling: Option<sven_sdk::model::SamplingParams>,
+    /// Besides the policy trace, the `K` most probable token ids and their
+    /// log-probabilities at every generated position (implies
+    /// [`Self::want_logprobs`]); a provider that cannot return them refuses
+    /// the request. `None` asks for none.
+    pub top_logprobs: Option<u32>,
+    /// Where every model request of the run is recorded exactly as sent,
+    /// with its response: a log of the run's own, so the records of each of
+    /// several runs at once are built from that run's requests alone.
+    pub request_log: Option<RequestRecording>,
+}
+
+/// A run's own request log (`sven.request-log/1`): every model request as
+/// sent and what came back, one JSON line each.
+#[derive(Clone)]
+pub struct RequestRecording {
+    log: Arc<sven_sdk::drivers::request_log::RequestLog>,
+    path: PathBuf,
+}
+
+impl RequestRecording {
+    /// A log at `path`, created or appended to.
+    ///
+    /// # Errors
+    /// The file cannot be opened.
+    pub fn open(path: &Path) -> std::io::Result<Self> {
+        let log = sven_sdk::drivers::request_log::RequestLog::open(path)
+            .map_err(|e| std::io::Error::other(format!("{e:#}")))?;
+        Ok(Self {
+            log,
+            path: path.to_path_buf(),
+        })
+    }
+
+    /// Where the log is.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl std::fmt::Debug for RequestRecording {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestRecording")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SolveOptions {
@@ -140,6 +186,8 @@ impl SolveOptions {
             audit_log: None,
             want_logprobs: false,
             request_sampling: None,
+            top_logprobs: None,
+            request_log: None,
         }
     }
 
@@ -172,15 +220,26 @@ impl SolveOptions {
         if let Some(sampling) = self.request_sampling {
             options = options.sampling(sampling);
         }
+        if let Some(k) = self.top_logprobs {
+            options = options.top_logprobs(k);
+        }
         options
     }
 
     /// `model`, asked again when a request fails transiently
     /// ([`crate::retry`]), and limited to this call's output budget a reply
     /// where a request names no limit of its own when there is a budget. See
-    /// [`crate::budget`].
+    /// [`crate::budget`]. With a [`Self::request_log`], every request is
+    /// recorded as the model receives it, each retry its own request.
     #[must_use]
     pub fn provider(&self, model: Arc<dyn ModelProvider>) -> Arc<dyn ModelProvider> {
+        let model: Arc<dyn ModelProvider> = match &self.request_log {
+            Some(recording) => Arc::new(sven_sdk::drivers::request_log::RecordingProvider::new(
+                model,
+                Arc::clone(&recording.log),
+            )),
+            None => model,
+        };
         let model = crate::retry::Retrying::wrap(model);
         match self.max_output_tokens {
             Some(tokens) => crate::budget::OutputCap::wrap(model, tokens),
