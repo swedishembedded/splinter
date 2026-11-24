@@ -133,6 +133,9 @@ struct Rollout {
     digest: Option<String>,
     /// What the attempt's requests processed, as its score counts them.
     usage: Option<TokenUsage>,
+    /// The completion tokens the attempt wrote: what the over-length penalty
+    /// reads and the group report prints.
+    completion_tokens: Option<u64>,
     /// The evidence of the deciding verdict: what the verifier recorded.
     evidence: Value,
 }
@@ -144,6 +147,7 @@ struct TrialSeen {
     passed: bool,
     conversations: usize,
     usage: Option<TokenUsage>,
+    completion_tokens: Option<u64>,
 }
 
 /// What an attempt becomes in the dataset.
@@ -325,11 +329,13 @@ impl PolicyGradient {
             .or_else(|| provenance.policy.clone())
             .unwrap_or_else(|| provenance.solver.clone());
         let digest = text(evidence, "/task/digest");
+        let usage = TokenUsage::of_trial(evidence);
+        let completion_tokens = completion_tokens(usage, &entry.experience.trajectory);
         let reward = self.reward.reward(
             decision.passed,
             evidence.get("metrics"),
             digest.as_deref(),
-            completion_tokens(evidence, &entry.experience.trajectory),
+            completion_tokens,
             &trial,
         )?;
         Ok(Ok(Rollout {
@@ -342,21 +348,22 @@ impl PolicyGradient {
             reward,
             passed: decision.passed,
             digest,
-            usage: TokenUsage::of_trial(evidence),
+            usage,
+            completion_tokens,
             evidence: evidence.clone(),
         }))
     }
 }
 
 /// The completion tokens the attempt an experience is part of wrote, as
-/// recorded: the trial's count on its verdict (a benchmark's `tokens`, or its
-/// score's usage), else the trajectory's own total (sven's final metrics),
-/// else the sum over its agent steps when every one recorded its count.
-fn completion_tokens(evidence: &Value, trajectory: &atif::Trajectory) -> Option<u64> {
-    evidence
-        .pointer("/tokens/completion")
-        .or_else(|| evidence.pointer("/score/usage/completion_tokens"))
-        .and_then(Value::as_u64)
+/// recorded: the trial's `usage` on its verdict (its score's, else its
+/// manifest's, the one source the group report's cost also reads), else the
+/// trajectory's own total (sven's final metrics), else the sum over its agent
+/// steps when every one recorded its count. A source that states no
+/// completion count is passed over, never read as zero.
+fn completion_tokens(usage: Option<TokenUsage>, trajectory: &atif::Trajectory) -> Option<u64> {
+    usage
+        .and_then(|usage| usage.completion)
         .or_else(|| {
             trajectory
                 .final_metrics
@@ -464,6 +471,7 @@ impl View for PolicyGradient {
                     passed: rollout.passed,
                     conversations: 0,
                     usage: rollout.usage,
+                    completion_tokens: rollout.completion_tokens,
                 });
             if let Some(digest) = &rollout.digest {
                 digests
@@ -522,7 +530,7 @@ impl View for PolicyGradient {
                     baseline_only: false,
                     conversations: seen.conversations,
                     cost: seen.usage.and_then(|u| u.cost()),
-                    completion_tokens: seen.usage.and_then(|u| u.completion),
+                    completion_tokens: seen.completion_tokens,
                 });
                 treatment_of.insert((key, trial), treatment);
             }

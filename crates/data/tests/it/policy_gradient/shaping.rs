@@ -108,6 +108,96 @@ fn a_trial_over_the_budget_earns_less_by_the_completion_tokens_it_recorded() {
     assert!(error.to_string().contains("completion token"), "{error}");
 }
 
+/// One number is the trial's completion count: the examiner's score usage,
+/// else the manifest's count. The penalty reads it and the group report prints
+/// it, so the report audits the reward even where the two sources differ; a
+/// usage that states no completion count leaves it unmeasured, never zero.
+#[test]
+fn the_penalty_reads_the_completion_count_the_group_report_prints() {
+    let shape = RewardShape::unshaped().with_overlong(Overlong::new(100, 20).unwrap());
+    let mut corpus = Corpus::new();
+    for (trial, evidence) in [
+        (
+            Trial::pass("scored"),
+            // The examiner counted 200 where the manifest says 50.
+            json!({"score": {"usage": {"completion_tokens": 200, "prompt_tokens": 5}},
+                "tokens": {"prompt": 5, "completion": 50}}),
+        ),
+        (
+            Trial::pass("manifest"),
+            json!({"tokens": {"prompt": 5, "completion": 50}}),
+        ),
+    ] {
+        let mut full = json!({"trial": trial.name, "model": trial.model,
+            "task": {"id": "cad/bracket", "version": trial.version}, "metrics": {}});
+        for (key, value) in evidence.as_object().unwrap() {
+            full[key] = value.clone();
+        }
+        add(&mut corpus, &trial, Some(full));
+    }
+    let projection = view().rewards(shape.clone()).project(&corpus).unwrap();
+    let report: Vec<(String, Option<u64>)> = projection.groups[0]
+        .trials
+        .iter()
+        .map(|t| (t.trial.clone(), t.completion_tokens))
+        .collect();
+    assert_eq!(
+        report,
+        [
+            ("manifest".to_string(), Some(50)),
+            ("scored".to_string(), Some(200))
+        ]
+    );
+    let reward = |name: &str| {
+        rewards_by_trial(&projection)
+            .into_iter()
+            .find(|t| t.0 == name)
+    };
+    assert!(
+        close(reward("scored").unwrap().1, 0.0),
+        "1 - 1 for 200 > 100"
+    );
+    assert!(close(reward("manifest").unwrap().1, 1.0));
+
+    let mut prompt_only = Corpus::new();
+    for trial in [Trial::pass("t1"), Trial::fail("t2", &[])] {
+        let evidence = json!({"trial": trial.name, "model": trial.model, "metrics": {},
+            "task": {"id": "cad/bracket", "version": trial.version},
+            "score": {"usage": {"prompt_tokens": 5}}});
+        add(&mut prompt_only, &trial, Some(evidence));
+    }
+    let error = view().rewards(shape).project(&prompt_only).unwrap_err();
+    assert!(error.to_string().contains("completion token"), "{error}");
+}
+
+/// Without a count on the verdict, the penalty reads sven's total, else the
+/// agent steps' own counts, and only when every step recorded one: a sum over
+/// some of them would under-count and let a long attempt off.
+#[test]
+fn without_a_verdict_count_the_penalty_reads_the_trajectory() {
+    let shape = RewardShape::unshaped().with_overlong(Overlong::new(100, 20).unwrap());
+    let counted = |per_step: [Option<u64>; 2]| {
+        let mut corpus = Corpus::new();
+        for trial in [Trial::pass("t1"), Trial::fail("t2", &[])] {
+            add_with(&mut corpus, &trial, None, false, None, |steps| {
+                for (step, tokens) in steps[2..].iter_mut().zip(per_step) {
+                    step.metrics = Some(atif::StepMetrics {
+                        completion_tokens: tokens,
+                        ..atif::StepMetrics::default()
+                    });
+                }
+            });
+        }
+        view().rewards(shape.clone()).project(&corpus)
+    };
+    // 70 + 60 tokens over two steps is past the budget of 100.
+    let projection = counted([Some(70), Some(60)]).unwrap();
+    assert!(close(projection.groups[0].trials[0].reward, 0.0));
+    assert_eq!(projection.groups[0].trials[0].completion_tokens, Some(130));
+    let error = counted([Some(70), None]).unwrap_err();
+    assert!(error.to_string().contains("completion token"), "{error}");
+}
+
 #[test]
 fn positive_writes_every_attempt_and_asks_brain_to_floor_the_advantages_at_zero() {
     // Shaped rewards 1, 0.4 and 0: every attempt sets the group's baseline,
