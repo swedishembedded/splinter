@@ -60,15 +60,15 @@ scripts/validation/
 
 | Milestone | Phases | State |
 |---|---|---|
-| M0 Baseline | 0 | in progress |
-| M1 Golden infrastructure | 1-2 | not started |
-| M2 Trustworthy learning data | 3-6 | not started |
-| M3 Correct mathematics and decisions | 7-8 | not started |
-| M4 Reliable factory | 9-11 | not started |
-| M5 CPU learning certification | 12 | not started |
-| M6 GPU certification | 13-14 | out of this session (no GPU) |
-| M7 Learning-performance evidence | 15 | out of this session (GPU campaigns) |
-| M8 Permanent quality system | 16 | not started |
+| M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
+| M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles; the independent projector, exhaustive masks, task-kind and plugin matrices not built |
+| M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
+| M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement; recompute enumeration, storage fault injection and formal models not built |
+| M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
+| M6 GPU certification | 13-14 | not possible here: no GPU |
+| M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
+| M8 Permanent quality system | 16 | partly: 44 source mutants, evidence with fixture provenance, gates widened; property tests and fuzzing not added |
 
 Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
@@ -77,7 +77,7 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 - [x] Revisions (2026-11-23): splinter `aaaebd4d` (11 local commits over origin/main `1dd7c62e`, the plan's revision),
       brain `b33abe91`, sven `75a7a800` (1 local), bench `79e7daf8`; rustc 1.100.0, Python 3.14.4, Linux 7.0 x86_64,
       22 CPUs, 30 GB, no GPU.
-- [ ] Baseline of every target (`scripts/validation/baseline.py`, at `aaaebd4d`); missing prerequisites recorded
+- [x] Baseline of every target (`scripts/validation/baseline.py`, at `aaaebd4d`); missing prerequisites recorded
       apart. `test/e2e/turn/spec` no longer exists (the turn scripts were removed with U9). So far:
       - agent 177, core 135, data 254 (1 ignored), eval 315, expdb 217, factory 119 (1 ignored), hub 2, model 194,
         orchestrator 71: pass.
@@ -91,6 +91,14 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
         (`process_runner::nothing_outlives_a_supervisor_that_is_killed_mid_run`,
         `process_sandbox::a_sleeping_call_is_stopped_by_the_wall_clock`).
       - `make check`: failed on the roadmap index this ledger added (regenerated).
+      - sdk 26, splinter 111, store 136: pass. test/conformance: 25/25 rows. test/worker: 74 passed.
+      - test/conformance/integration failed before applying a mutant (no integration row in the runner's form); the
+        tier is now the mutants. test/families: a timing budget missed under a load of 60, passing on a quiet machine.
+        test/package: the staging modes followed the caller's umask (0000 here). test/methods: the driver's relative
+        brain path and log directory, then G-NEW-06. All but G-NEW-06 fixed.
+- [x] The tiers after both waves, on the validation head: test/conformance 31/31 rows; external fixtures hold;
+      the runner's self-specification passes; test/conformance/integration kills 44 of 44 source mutants;
+      test/families passes; test/contract/brain passes against the CPU brain; test/methods blocked (G-NEW-06).
 - [x] Capability inventory `validation/capabilities.yaml` from source (340 capabilities: 250 SPECIFIED,
       31 ADVERSARIAL_PASS, 29 GOLDEN_PASS, 21 INTEGRATION_PASS, 9 UNMAPPED; agents' strict reading, every
       state to be re-earned against an independent oracle) and the gap register `validation/gaps.yaml`
@@ -112,15 +120,46 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
 ## Carried-in requests
 
-- **`splinter config get/set/show/schema/reset`** (user, 2026-11-23): one command over the machine configuration,
-  every write validated against the file's schema, few files for a user to manage. Today: `connections.yaml` and
-  `operators.yaml` under `$XDG_CONFIG_HOME/splinter`, each with its own parser (`crates/factory/src/connections.rs`,
-  `grants.rs`). Belongs with Phase 2 (configuration contracts: strict unknown fields, invalid connections and paths)
-  and Phase 16 (consolidation).
-- **No machine-specific paths in the repository** (user, 2026-11-23): `~/project/shared/...` is hardcoded in
-  `scripts/workspace-init.sh` (models dir), `Makefile` (`LEASE_ROOT`) and `docs/guides/workspace.md`; such a location
-  is configuration, not a default.
+- [x] **`splinter config get/set/show/schema/reset`** (user, 2026-11-23): one machine file,
+      `$XDG_CONFIG_HOME/splinter/config.yaml` (`splinter.config/v1`: `connections:` and `operators:`), replacing
+      `connections.yaml` and `operators.yaml`; `splinter config show | get | set | reset | schema | path | import`,
+      every write checked against the typed schema and written atomically, a refused write leaving the file as it
+      was; `--config FILE` and `SPLINTER_CONFIG`; the old files refused with `splinter config import` named.
+- [x] **No machine-specific paths in the repository** (user, 2026-11-23): the Makefile, `workspace-init.sh`, the
+      workspace guide and the goal-selection sample no longer assume `~/project/shared` or `~/code`; the
+      no-machine-paths gate refuses a home-relative project or code tree outside the history records.
+
+## The first two waves (2026-11-23/24)
+
+Defects found by the inventory, the baseline and the new adversarial specs, each fixed with a specification that
+was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` holds every one):
+
+- decisions: a signed or unmeasured retention evaluation passed the release gate; a harness search crowned a
+  useless candidate four times in ten; an intervention's bound used the normal quantile over four units; a
+  samples arm's pass@k was any-of-fewer; a one-family interval read as zero-wide; an impossible exam plan was
+  powered under another lead's name.
+- controller: a panicking operation hung the run; a stage longer than ten minutes lost its lease; a crashed
+  holder was judged by pid alone; a corrupted product or view was reused.
+- data: an HTTP 499 endpoint was not a rejection; one bad metric emptied all; impossible log-probabilities and an
+  empty prompt were labelled the policy's sample; a replaced system prompt kept its stale ids; a short duplicate
+  escaped the leakage gate; an unreadable record became a free sample.
+- security: a task repository could send any of the controller's variables to its own URL; a hub token went in
+  clear to any host; an operator could read files its identity did not pin; a confined command reached any
+  daemon's Unix socket (found by the new spec); a process budget that could not bind was recorded as binding;
+  three credential-name rules disagreed; dead code held the weakest agent confinement.
+- portability: HOME unset wrote state into the working directory; the integration tier never reached its
+  mutants; the methods smokes and the package build failed on a machine unlike their author's.
+- templates: the generations template could never promote (four paired attempts cannot reach the level).
 
 ## Open
 
-- Pre-existing: the sandbox fork-bomb spec fails when run as root (RLIMIT_NPROC does not bind root).
+- Confirmed and open (decisions or larger work, each in `validation/gaps.yaml` with its proposal): the learning-method smokes cannot run against the current brain (G-NEW-06: its toy checkpoint moved to the qwen3 sample, and its server no longer serves a local checkpoint by store name); the legacy
+  `dataset build` seal's reserved families are never recorded (G-NEW-01); the factory's examination check compares
+  exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
+  a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
+  Harbor's ATIF validator (G-AS-13).
+- Not built: the independent Python projector of every view (6B), exhaustive supervision-mask enumeration (6D),
+  the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
+  benchmarks (3A-3C), recompute enumeration (9C), storage fault injection and formal models (10), deterministic
+  learning environments and negative controls (12A-12E), property tests and fuzzing (16C).
+- Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

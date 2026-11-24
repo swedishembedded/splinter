@@ -84,6 +84,9 @@ of the package) or an integration test binary; filter a substring of the test na
 
 ## Not yet certified
 
+- Learning effectiveness (`make test/methods`): the smokes cannot run against the current brain, whose toy checkpoint
+  moved to its qwen3 sample and whose server no longer serves a local, card-less checkpoint by its store name; the
+  row has had no live evidence since brain's capabilities became actions (`validation/gaps.yaml`, G-NEW-06).
 - brain's advantage normalisation, losses, gradients and updates on CUDA, bf16 and quantised paths: brain's
   validation, not Splinter's.
 - Results computed outside Splinter (the paired task bootstraps, sign tests and pass@k tables of experiment ledgers

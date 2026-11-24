@@ -13,7 +13,8 @@ gaps:
     and falls through to rule 7-9, possibly graded as the agent''s failure.'
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 4xx is 400..=499 (7c5bd250; classify spec red for 499 before)
 - id: G-DC-02
   source_id: F02
   where: crates/core/src/factory/trial.rs:687
@@ -22,7 +23,9 @@ gaps:
     or, with no shaping configured, produces a Grade with no metrics and no diagnostic that a metric was malformed.'
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: a metric that is no valid measurement makes the trial a verifier error (malformed_reward) instead of a metric-less
+    grade (f1c9f50a)
 - id: G-DC-03
   source_id: F03
   where: crates/core/src/factory/trial.rs:371
@@ -31,7 +34,9 @@ gaps:
     passed=true if it is 1.0.'
   severity: medium
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: Harbor's own aggregate_reward_dicts takes the sole value of a one-key rewards dict; reward_of's doc says so;
+    several keys without reward are already refused
 - id: G-DC-04
   source_id: F04
   where: crates/data/src/views/policy_gradient.rs:357 vs crates/core/src/usage.rs:71 and policy_gradient.rs:525
@@ -41,7 +46,9 @@ gaps:
     the reward and the token count reported in the manifest disagree, and the report cannot be used to audit the reward.'
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'the penalty and the group report read one completion count, one precedence (data: the over-length penalty
+    reads the completion count the group report prints)'
 - id: G-DC-05
   source_id: F05
   where: crates/core/src/usage.rs:42-44,61
@@ -50,7 +57,9 @@ gaps:
     then shows 0 for a trial whose completion count was never measured.
   severity: low
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'TokenUsage''s counts are Option; cost and processed are absent, never zero, without them (core: a token count
+    the score record does not state is unmeasured, never zero)'
 - id: G-DC-06
   source_id: F06
   where: crates/data/src/views/rewards.rs:140
@@ -60,7 +69,9 @@ gaps:
     underflows if cached > prompt via Deserialize.
   severity: low
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: Overlong's fields are private and deserialisation goes through new(), which refuses a buffer longer than the
+    budget
 - id: G-DC-07
   source_id: F07
   where: crates/data/src/views/sft_step.rs:314 and crates/data/src/views/transition.rs:263
@@ -70,7 +81,9 @@ gaps:
     maps 'exposure exclusion' without a mutant.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'one rule (views::breaks_a_constraint) for both views that admit undecided attempts; named for what it checks:
+    any failed verdict at constraint strength, the exposure audit''s among them, which disqualifies material by design'
 - id: G-DC-08
   source_id: F08
   where: crates/data/src/conversation_pg.rs:91 vs crates/data/src/views/policy_gradient.rs:497
@@ -80,7 +93,8 @@ gaps:
     two producers disagree.'
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: GroupKind::of is the one classifier of both policy-gradient projections
 - id: G-DC-09
   source_id: F09
   where: crates/data/src/views/policy_gradient.rs:497
@@ -89,7 +103,9 @@ gaps:
     drives self-distillation (Distill::Cliff).
   severity: low
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'by design, now documented on GroupKind::AllPass: a no-signal group with a pass is not a cliff and is not
+    distilled'
 - id: G-DC-10
   source_id: F10
   where: crates/data/src/views/policy_gradient.rs:316-326 and crates/data/src/views/attempts.rs:96-102
@@ -101,7 +117,9 @@ gaps:
     (reward mismatch error or silent merge).'
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'attempts::identify names group and trial for policy-gradient, preference and feedback by one rule. Open:
+    attempt-N trial names of separate passes of one task and policy can still merge (provenance carries no pass id)'
 - id: G-DC-11
   source_id: F11
   where: crates/data/src/views/policy_gradient.rs:286-340
@@ -111,7 +129,9 @@ gaps:
     of a fail-reward member of its group; a sealed/exposed attempt thus vanishes from the baseline silently.
   severity: high
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'a constraint-failed attempt is excluded as Failed by every view (no group member, no baseline): contaminated
+    material is never training material, the plan''s 6C rule'
 - id: G-DC-12
   source_id: F12
   where: crates/data/src/views/rehearsal.rs:46
@@ -120,7 +140,10 @@ gaps:
     as 'the model's own good answers' (ungraded treated as acceptable). The view has no test in crates/data.
   severity: medium
   confidence: high
-  status: unverified
+  status: rejected
+  resolution: 'documented and specified: a rehearsal record is what the model answered, an ungradeable general request included
+    (views/rehearsal.rs module doc, pipelines rehearsal spec). Open as a spec question: an entry with conflicting strongest
+    verdicts is admitted too'
 - id: G-DC-13
   source_id: F13
   where: crates/data/src/wire.rs:231
@@ -128,7 +151,8 @@ gaps:
     with no counter or error. Training-data loss without accounting; every other view counts exclusions per reason.
   severity: low
   confidence: high
-  status: unverified
+  status: rejected
+  resolution: documented contract of episode_lines (wire.rs), its only caller the minimind sample
 - id: G-DC-14
   source_id: F14
   where: crates/data/src/lib.rs:384,456 (Projection::with_system_prompt, thinned_to) used from crates/pipelines/src/datasets.rs:412-415
@@ -139,7 +163,9 @@ gaps:
     of a trial or its baseline_only record) without re-establishing group baselines.
   severity: high
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'with_system_prompt: a record whose prompt is replaced drops its sampled ids, counted as prompt_replaced (6d272032);
+    thinning (thinned_to, within_block) drops whole records, never ids in part, and is left as is'
 - id: G-DC-15
   source_id: F15
   where: crates/data/src/sampled.rs:100-131
@@ -149,7 +175,9 @@ gaps:
     be written as ''exact'' sampled tokens.'
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: trace_of refuses NaN, infinite or positive logprobs (ProxyReason::InvalidLogprobs) and an empty prompt (NoTrace)
+    (54b11c70); the end-of-turn marker is not enforceable from ids alone, the doc corrected
 - id: G-DC-16
   source_id: F16
   where: crates/data/src/holdout.rs:406 and :384-392
@@ -159,7 +187,8 @@ gaps:
     error or count.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: an unknown side or a record that is not a JSON object is refused (ViewError::MalformedRecord) (472ce51b)
 - id: G-DC-17
   source_id: F17
   where: crates/data/src/overlap.rs:58-70
@@ -169,7 +198,8 @@ gaps:
     asserts the behaviour but nothing surfaces it in the manifest).
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: short records duplicating each other across parts are reported at similarity 1.0 (d2182b2f)
 - id: G-DC-18
   source_id: F18
   where: crates/data/src/dataset.rs:523-532
@@ -179,7 +209,9 @@ gaps:
     Also no fsync.
   severity: low
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: the manifest is written to a temporary file and renamed; the lossy UTF-8 pass is gone (a crash between the
+    two renames still leaves a dataset without a manifest, which readers refuse loudly)
 - id: G-DC-19
   source_id: F19
   where: crates/core/src/digest.rs:199
@@ -188,7 +220,9 @@ gaps:
     UTF-16; ryu float spelling) although docs call it canonical.
   severity: low
   confidence: high
-  status: unverified
+  status: rejected
+  resolution: 'negligible: no f64 in a content-addressed type reaches the hash; the form is documented and never claimed
+    RFC 8785'
 - id: G-DC-20
   source_id: F20
   where: crates/data/src/curation.rs:185-215
@@ -198,7 +232,8 @@ gaps:
     is used; behaviour is consistent with the doc wording but surprising and untested.
   severity: low
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'by design: docs/reference/datasets.md says pure-answer passes are one under --distinct-calls'
 - id: G-DC-21
   source_id: F21
   where: crates/data/src/trajectory.rs:194
@@ -207,7 +242,9 @@ gaps:
     the last action was not offered. (rendering.rs rejects mixed sets for packed, mitigating.)
   severity: low
   confidence: low
-  status: unverified
+  status: rejected
+  resolution: 'negligible: packing across mixed tool sets is refused (rendering.rs), so every packed action shares its tools
+    index'
 - id: G-DC-22
   source_id: F22
   where: crates/core/src/tool_calls.rs:84-107 and crates/data/src/trajectory.rs:413
@@ -216,7 +253,9 @@ gaps:
     different outputs to the same call; core fallback silently assigns the whole step output to every call.'
   severity: low
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: repeated-action detection pairs results to calls by core's outputs_by_call (the id-only pairing called a differently
+    answered call a repeat)
 - id: G-DC-23
   source_id: F23
   where: crates/core/src/factory/execution.rs:309
@@ -258,7 +297,9 @@ gaps:
     are ignored. Low practical risk but not stated.
   severity: low
   confidence: low
-  status: unverified
+  status: rejected
+  resolution: 'negligible: a trial''s conversations are graded from identical inputs by a deterministic function, so their
+    rewards are bit-identical'
 - id: G-DC-27
   source_id: F27
   where: crates/data/src/views/sft_step.rs:~196 (project_entry any_good path)
@@ -267,7 +308,9 @@ gaps:
     it, but the exception means failed attempts feed supervised training, relying on step-label quality that has no oracle.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: step-level credit is by design and documented (the map row now says so); the real gap, a good step of an attempt
+    that broke a constraint admitted by the default control, is closed
 - id: G-DC-28
   source_id: F28
   where: crates/data/src/request_log.rs:44-76
@@ -276,7 +319,9 @@ gaps:
     Dropped or misattributed model calls change which conversation is rendered; module has no unit tests.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: read_request_log refuses a request or response without seq, duplicate seqs and a response without its request,
+    naming the line
 - id: G-DC-29
   source_id: F29
   where: crates/data/src/views/policy_gradient.rs:355-380 completion_tokens fallback
@@ -285,7 +330,9 @@ gaps:
     branch uses trajectory.final_metrics.total_completion_tokens which may include non-sampled/compacted turns.
   severity: low
   confidence: low
-  status: unverified
+  status: fixed
+  resolution: the trajectory-sum branch and its error are tested; whether sven's total includes non-sampled turns is unverified
+    here
 - id: G-DC-30
   source_id: F30
   where: crates/data/src/lib.rs:Objective::line_format and views Reward/Contrastive
@@ -403,7 +450,10 @@ gaps:
     `splinter init --template knowledge-learning` starting a working run, which no test proves.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'templates spec holds exactly the five; template_runs runs every template''s recipes end to end on the fakes
+    and checks their artifacts (69af5c22). Found: the generations template could never promote (4 paired attempts cannot
+    reach p < 0.05; the shared plan now has 8) and its header named a champion line that does not exist (4ca851bd)'
 - id: G-FS-11
   source_id: F-11
   where: crates/factory/src/ops.rs:1-30 (doc table) / no test of op registry cardinality
@@ -788,7 +838,9 @@ gaps:
     The preflight only probes the account home and one other TCP port.
   severity: high
   confidence: medium-high
-  status: unverified
+  status: fixed
+  resolution: 'the Claude Code runner with the weak confinement had no production caller and is deleted (agent: the runner
+    module nothing ran is gone); Claude Code starts only through the worker''s adapter, in the trial''s sandbox'
 - id: G-AS-06
   source_id: F6
   where: crates/sandbox/src/host.rs:215-224 (private_proc() = !host_proc && (require || namespace::available())); crates/orchestrator/src/environments.rs:275-291
@@ -923,7 +975,10 @@ gaps:
     Needs a pids cgroup or a documented non-root requirement.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'a budget that cannot bind (euid 0, no user namespace: RLIMIT_NPROC exempts initial-namespace root) refuses
+    the command (SandboxError::UnboundedProcesses); the spec asserts each outcome under its condition. A pids cgroup would
+    let the budget bind for root too: not implemented'
 - id: G-AS-18
   source_id: F18
   where: 'crates/agent/src/runner/claude_code.rs:84 (REAL_KEY_PREFIXES: sk-ant-, sk-or-, sk-proj-)'
@@ -978,3 +1033,52 @@ gaps:
   resolution: 'open, a policy decision: refuse a training task of an examined family where the eval plan declares family
     hold-out (task.mutate''s held-out families do), and a content-overlap check (normalised instruction and file shingles,
     splinter-data overlap) for near copies'
+- id: G-NEW-03
+  source_id: null
+  where: brain (crates/sdk dataset_report / chat rendering), seen through crates/pipelines/tests/contract_brain
+  what: On a plain conversation (no tool turn in context, no tool call in the answers) brain supervises the assistant header
+    '<|im_start|>assistant\n' before each answer; with tools in play the header is context. brain's README says a supervised
+    answer is its text plus the end marker. Brain's to decide; the contract test pins the behaviour as observed so a change
+    either way is seen.
+  severity: medium
+  confidence: 'high (measured: trained 14 for ''yo'' = 2 + 1 + 11)'
+  status: confirmed
+  resolution: 'brain''s: reported, not changed here (Splinter never edits brain)'
+- id: G-NEW-04
+  source_id: null
+  where: crates/data/src/views/sft_final.rs (dialogue rule)
+  what: SftFinal writes a dialogue with a user correction with every assistant reply supervised, the reply the user then
+    corrected included ('It uses port 8080.'). That is the documented dialogue rule, but it trains a reply a later turn
+    says was wrong. A later user turn is not always a correction, so telling them apart needs a judgement (a claim gate
+    or a labelled correction), not a rule on roles.
+  severity: medium
+  confidence: high (observed in the contract test)
+  status: confirmed
+  resolution: 'open, a spec decision: supervise a reply only when no later turn of the dialogue corrects it, with the correction
+    identified by the session''s correction claims (corrections_session / claim gates)'
+- id: G-NEW-05
+  source_id: null
+  where: crates/eval/src/campaign/sampling.rs:95-105
+  what: 'A third group classifier: it labels a no-signal group holding both a pass and a fail all-fail, where splinter-data''s
+    GroupKind labels it all-pass; the campaign''s batch builder and the dataset''s report disagree on the same group.'
+  severity: low
+  confidence: high (reported by the data-cluster-2 pass, read)
+  status: confirmed
+  resolution: 'open: route the campaign''s sampling through GroupKind, or document why a batch builder classifies differently'
+- id: G-NEW-06
+  source_id: null
+  where: crates/model/src/fixture.rs (toy_chat_checkpoint) against brain 87dbd8a32
+  what: 'The learning-method smokes cannot run against current brain, so the validation map''s learning row has had no live
+    evidence since 2026-11-14 (brain 87dbd8a32, capabilities as actions). Two contract drifts: (1) the toy base is written
+    by `brain qwen3 toy`, which brain moved to its qwen3 sample''s `toy` action (samples/models/qwen3/src/toy_action.rs),
+    so the core binary refuses it; (2) the lab serves the toy as `--checkpoint <dir>` and asks for it by its store path
+    (`toy/chat`), while brain serve now serves a checkpoint as `brain/qwen3` (and wants its tokenizer beside a checkpoint
+    file), and finds no card-less `local/<name>` in the store. Measured here: toy/chat model_not_found; brain/qwen3 ''no
+    tokenizer''; local/toychat model_not_found.'
+  severity: high
+  confidence: 'high (run: brain qwen3: no action ''toy'')'
+  status: confirmed
+  resolution: 'open, a cross-project contract: brain to say how a consumer''s tests serve a local, card-less checkpoint
+    by name (a card written by the toy action, as import writes one, would let the store serve it), and Splinter''s fixture
+    to call the sample''s toy action and request the id brain reports. A duplicate toy action in brain''s core was tried
+    and taken back (one implementation: the sample''s)'
