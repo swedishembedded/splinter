@@ -202,13 +202,13 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - claims and evidence (3B, G-NEW-17 found): the existing specs cover verbatim quotes, the agent's words, missing
   terms, supersession and reinforcement; the planted-instruction case found that a fact could rest on tool output
   alone, and such a claim is now refused.
-- scripted agent transcripts (5A, in part): an audit mapped the twelve scenarios to existing specs (two covered,
-  ten in part); several calls recorded once each and malformed arguments failing openly are now specified. Still
-  without a spec after that: a run its deadline ends kept as a timeout with its partial trajectory, two concurrent
-  trials of one task each in their own tree, and an eighty-call run kept whole are now specified too. Still without
-  one (a tool's own timeout is now specified: the command is stopped and the model told; and an agent that crashed
-  partway keeps its partial trajectory, its subagent's turns and Harbor's result in its report,
-  workers/harbor/tests/test_evidence.py): re-run tool calls of a continued session having no duplicate effect.
+- scripted agent transcripts (5A): an audit mapped the twelve scenarios to existing specs (two covered, ten in
+  part); now also specified: several calls recorded once each, malformed arguments failing openly, a run its
+  deadline ends kept as a timeout with its partial trajectory, two concurrent trials of one task each in their own
+  tree, an eighty-call run kept whole, a command past its time limit stopped and the model told, and a crashed
+  agent's report keeping its partial trajectory, its subagent's turns and Harbor's result
+  (workers/harbor/tests/test_evidence.py). Still without a spec: re-run tool calls of a continued session having no
+  duplicate effect.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
