@@ -50,12 +50,6 @@ questions about each task of a set, into a task set of their own. Each keeps the
 reference and evidence, so the same verifiers grade it. Variants are measured by the release
 gate and never trained on.
 
-## Canaries
-
-`tasks canaries TASKSET-ID` makes canaries of the workspace tasks of a set: each task with
-its hidden assertions also required to fail, so that no honest change passes it. A candidate
-that passes one has not been graded honestly.
-
 ## Picking and dividing sets
 
 `tasks check-requests TASKSET-ID` drops the workspace tasks whose request does not state the

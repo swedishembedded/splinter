@@ -22,7 +22,6 @@ mod bench_ingest;
 mod bench_pairs;
 mod bench_policy_gradient;
 mod bench_request_records;
-mod canary_sets;
 mod capability_curriculum;
 mod clusters;
 mod compare_sets;

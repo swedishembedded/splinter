@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! `tasks`: generate, vary, seed canaries into, combine, pick from, list and show task
+//! `tasks`: generate, vary, combine, pick from, list and show task
 //! sets, as recorded runs where they write state.
 
 use serde::Serialize;
 use serde_json::json;
-use splinter_sdk::canaries;
 use splinter_sdk::history;
 use splinter_sdk::knowledge::tasks::workspace::{
     CombinePlan, HistoryRecord, HistoryReport, HistoryRequest, DEFAULT_MAX_COMMITS,
@@ -175,14 +174,6 @@ pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, E
                 )
             })?;
             emit(json, &varied);
-        }
-        TasksCommand::Canaries { task_set, count } => {
-            let set = resolve_task_set(ctx, &task_set)?;
-            let arguments = json!({ "task_set": set, "count": count });
-            let made = record(ctx, "tasks canaries", &arguments, |_| {
-                canaries::make(ctx, &set, Some(count))
-            })?;
-            emit(json, &made);
         }
         TasksCommand::CheckRequests { task_set } => {
             let set = resolve_task_set(ctx, &task_set)?;

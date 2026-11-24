@@ -79,12 +79,12 @@ pub use splinter_orchestrator::{
 
 // The commands.
 pub use splinter_pipelines::{
-    absorb, arm_compare, ask, bench, brain_server, budget, canaries, checkpoints, claim_quality,
-    claims, compare, conversation_policy_gradient, critique, curriculum, datasets,
-    decision_fixtures, describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences,
-    experiment, factory_index, goal, graded, harbor, history, hub, improve, judge, lineage,
-    objects, policy_used, powered, preflight, raft, rehearsal, release, rerank, reserve, retrieval,
-    router, sealed, served, serving, sessions, set_import, solving, sources, state, status, tasks,
+    absorb, arm_compare, ask, bench, brain_server, budget, checkpoints, claim_quality, claims,
+    compare, conversation_policy_gradient, critique, curriculum, datasets, decision_fixtures,
+    describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences, experiment,
+    factory_index, goal, graded, harbor, history, hub, improve, judge, lineage, objects,
+    policy_used, powered, preflight, raft, rehearsal, release, rerank, reserve, retrieval, router,
+    sealed, served, serving, sessions, set_import, solving, sources, state, status, tasks,
     timeline, train, variants, verify,
 };
 

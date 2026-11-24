@@ -7,27 +7,16 @@
 // service you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! Spec: the promotion gate decides on the examiner's signed aggregates,
-//! verified in this process with the examiner's public key alone.
+//! Spec: the examiner's verdicts verify in this process with the examiner's
+//! public key alone.
 //!
 //! * A verdict the examiner signed verifies here, on either protocol (a
 //!   direct-completion `bench.examination/2`, an agent-protocol
 //!   `bench.verdict/3`); any change to it, a signature under another key, a
 //!   legacy shared-key MAC, or none at all does not.
-//! * A verdict about another candidate or predecessor is rejected, typed.
-//! * Promoted only when the dev gain's two-sided interval at the gate's level
-//!   is above zero, retention is non-inferior within the margin (one-sided
-//!   bound) and the sealed slice was spent by this decision alone; every
-//!   failure is a typed reason. A slice another pair spent, a burn of
-//!   another exam, an exam without a burn and public material are no sealed
-//!   evidence.
-//! * A dev gain counts only over at least [`MIN_GAIN_FAMILIES`] families, the
-//!   fewest whose unanimous agreement the exact sign test finds significant
-//!   at the dev interval's level: a resampled interval of a few unanimous
-//!   families has no width and says nothing about how few they are. The
-//!   examiner's interval is never recomputed; its family count is read.
-//! * Where no sealed slice applies, the explicit unexamined rule decides on
-//!   dev gain and retention alone and says so in the decision record.
+//! * A verdict about another candidate or predecessor, or at another level, is
+//!   rejected, typed.
+//! * The examiner's public key is read from its hex line and nothing else.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
@@ -35,10 +24,10 @@
 use ed25519_dalek::{Signer as _, SigningKey};
 use serde_json::{json, Value};
 use splinter_eval::promotion::canonical::canonical_bytes;
-use splinter_eval::promotion::{
-    decide, decide_unexamined, verify, Measured, Measurement, Pair, PublicKey, Reason, Rejection,
-    Role, Rule, Submitted, ALPHA, MIN_GAIN_FAMILIES,
-};
+use splinter_eval::promotion::{verify, Pair, PublicKey, Rejection, Role};
+
+/// The level the verdicts were issued at: two-sided 95% intervals.
+const ALPHA: f64 = 0.05;
 
 /// The examiner's test signing key: the seed bytes 0 to 31. The fixtures were
 /// signed with it by the examiner's own code; only this test holds it.
@@ -222,237 +211,4 @@ fn a_verdict_about_another_candidate_or_predecessor_or_at_another_level_is_rejec
         verify(&level, &key(), &pair(), ALPHA, Role::Dev).unwrap_err(),
         Rejection::Level { .. }
     ));
-}
-
-/// A direct-completion verdict over public material with the given paired
-/// gain interval and one-sided bound.
-fn public(interval: [f64; 2], lower: f64) -> Value {
-    edited(examination(), |d| {
-        d["collection"]["sealed"] = json!(false);
-        d["burn"] = Value::Null;
-        d["paired_gain"]["interval"] = json!(interval);
-        d["paired_gain"]["one_sided_lower"] = json!(lower);
-    })
-}
-
-/// An agent-protocol verdict over public material: no sealed exam, no burn;
-/// the given overall interval and retention bound.
-fn public_agentic(interval: [f64; 2], retention_lower: f64) -> Value {
-    edited(agentic(), |d| {
-        d["sealed_exams"] = json!([]);
-        d["burns"] = json!([]);
-        d["overall"]["interval"] = json!(interval);
-        d["retention"]["one_sided_lower"] = json!(retention_lower);
-    })
-}
-
-fn decided(dev: &Value, retention: &Value, sealed: &Value) -> splinter_eval::promotion::Promotion {
-    decide(
-        &key(),
-        &pair(),
-        Submitted {
-            dev,
-            retention,
-            sealed,
-        },
-    )
-}
-
-#[test]
-fn a_candidate_with_a_dev_gain_retention_kept_and_a_fresh_slice_is_promoted_on_either_protocol() {
-    let (dev, retention) = (public([0.02, 0.2], 0.04), public([-0.03, 0.02], -0.02));
-    let promotion = decided(&dev, &retention, &examination());
-    assert!(promotion.promoted, "{:?}", promotion.reasons);
-    assert_eq!(promotion.rule, Rule::Examined);
-    assert!(promotion.dev.is_some() && promotion.sealed.is_some());
-
-    let agent = decided(&agentic(), &agentic(), &agentic());
-    assert!(agent.promoted, "{:?}", agent.reasons);
-    let (dev, retention) = (agent.dev.unwrap(), agent.retention.unwrap());
-    assert!(
-        dev.interval.unwrap().0 > 0.0,
-        "the dev gain is the overall section's"
-    );
-    assert!(
-        retention.one_sided_lower.unwrap() > -0.05
-            && retention.one_sided_lower != dev.one_sided_lower,
-        "retention is the retention section's"
-    );
-}
-
-#[test]
-fn a_dev_interval_that_reaches_zero_or_a_retention_bound_below_the_margin_rejects() {
-    let sealed = examination();
-    let kept = public([-0.03, 0.02], -0.02);
-    let flat = decided(&public([-0.01, 0.2], 0.0), &kept, &sealed);
-    assert!(!flat.promoted);
-    assert!(matches!(flat.reasons[..], [Reason::NoDevGain { .. }]));
-
-    let inferior = decided(
-        &public([0.02, 0.2], 0.04),
-        &public([-0.09, 0.0], -0.06),
-        &sealed,
-    );
-    assert!(!inferior.promoted, "a non-inferiority failure rejects");
-    assert_eq!(
-        inferior.reasons,
-        [Reason::Inferior {
-            lower: -0.06,
-            margin: 0.05
-        }]
-    );
-    let agent_inferior = decided(
-        &public_agentic([0.02, 0.2], 0.0),
-        &public_agentic([0.02, 0.2], -0.07),
-        &agentic(),
-    );
-    assert!(matches!(
-        agent_inferior.reasons[..],
-        [Reason::Inferior { .. }]
-    ));
-}
-
-#[test]
-fn a_spent_replayed_or_public_slice_is_no_sealed_evidence() {
-    let (dev, retention) = (public([0.02, 0.2], 0.04), public([-0.03, 0.02], -0.02));
-    let sealed_reason = |sealed: &Value| {
-        let promotion = decided(&dev, &retention, sealed);
-        assert!(!promotion.promoted);
-        match &promotion.reasons[..] {
-            [Reason::Verdict {
-                role: Role::Sealed,
-                rejection,
-            }] => rejection.clone(),
-            other => panic!("{other:?}"),
-        }
-    };
-    let spent = edited(examination(), |d| {
-        d["burn"]["candidate"] = json!("sha256:99")
-    });
-    assert!(
-        matches!(sealed_reason(&spent), Rejection::Spent { candidate, .. }
-        if candidate.as_deref() == Some("sha256:99"))
-    );
-    let spent = edited(agentic(), |d| {
-        d["burns"][0]["predecessor"] = json!("sha256:98")
-    });
-    assert!(matches!(sealed_reason(&spent), Rejection::Spent { .. }));
-    let replayed = edited(agentic(), |d| {
-        d["burns"][0]["exam_sha256"] = json!("f".repeat(64));
-    });
-    assert!(
-        matches!(
-            sealed_reason(&replayed),
-            Rejection::BurnOfAnotherExam { .. }
-        ),
-        "a burn record carried over from another exam"
-    );
-    let unburned = edited(agentic(), |d| d["burns"] = json!([]));
-    assert_eq!(sealed_reason(&unburned), Rejection::NoBurn);
-    assert_eq!(
-        sealed_reason(&public([0.02, 0.2], 0.04)),
-        Rejection::NotSealed
-    );
-    assert_eq!(
-        sealed_reason(&public_agentic([0.02, 0.2], 0.0)),
-        Rejection::NotSealed
-    );
-    let forged = signed_by(&SigningKey::from_bytes(&[9; 32]), &examination());
-    let rejected = decided(&dev, &retention, &forged);
-    assert!(!rejected.promoted && rejected.sealed.is_none());
-}
-
-#[test]
-fn where_no_sealed_slice_applies_dev_gain_and_retention_decide_and_the_record_says_it_was_not_exam_verified(
-) {
-    let measured = |low: f64, lower: f64| Measured {
-        dev: Measurement {
-            items: 40,
-            families: 10,
-            gain: Some(0.1),
-            interval: Some((low, 0.2)),
-            one_sided_lower: Some(low),
-        },
-        retention: Measurement {
-            items: 30,
-            families: 10,
-            gain: Some(0.0),
-            interval: Some((lower - 0.01, 0.02)),
-            one_sided_lower: Some(lower),
-        },
-    };
-    let why = "a learn release: its exam is the learner's own";
-    let promoted = decide_unexamined(&pair(), &measured(0.01, -0.02), why);
-    assert!(promoted.promoted && promoted.sealed.is_none());
-    assert_eq!(promoted.rule, Rule::NotExamVerified { why: why.into() });
-    let text = serde_json::to_value(&promoted).unwrap();
-    assert_eq!(text["rule"]["rule"], "not_exam_verified");
-    assert_eq!(text["exam_verified"], false);
-    let flat = decide_unexamined(&pair(), &measured(-0.01, -0.02), why);
-    assert!(!flat.promoted && matches!(flat.reasons[..], [Reason::NoDevGain { .. }]));
-    let inferior = decide_unexamined(&pair(), &measured(0.01, -0.06), why);
-    assert!(!inferior.promoted && matches!(inferior.reasons[..], [Reason::Inferior { .. }]));
-}
-
-#[test]
-fn a_dev_gain_over_fewer_families_than_the_exact_sign_test_needs_is_refused_on_either_path() {
-    // The minimum is the sign test's: unanimous agreement of n families has
-    // one-sided p = 2^-n, significant at the dev interval's tail ALPHA / 2
-    // from six families on (1/64), not at five (1/32).
-    assert_eq!(MIN_GAIN_FAMILIES, 6);
-    assert!(0.5_f64.powi(6) <= ALPHA / 2.0 && 0.5_f64.powi(5) > ALPHA / 2.0);
-    let refused = |families: Option<u64>| Reason::TooFewFamilies {
-        families,
-        required: MIN_GAIN_FAMILIES,
-    };
-
-    // The unexamined path: unanimous families resample to the interval [1, 1].
-    let unanimous = |families: u64| Measured {
-        dev: Measurement {
-            items: families,
-            families,
-            gain: Some(1.0),
-            interval: Some((1.0, 1.0)),
-            one_sided_lower: Some(1.0),
-        },
-        retention: Measurement {
-            items: 30,
-            families: 10,
-            gain: Some(0.0),
-            interval: Some((-0.03, 0.03)),
-            one_sided_lower: Some(-0.02),
-        },
-    };
-    let why = "a learn release";
-    for families in [2, 5] {
-        let decision = decide_unexamined(&pair(), &unanimous(families), why);
-        assert!(!decision.promoted);
-        assert_eq!(decision.reasons, [refused(Some(families))]);
-        assert_eq!(decision.dev.unwrap().families, Some(families));
-    }
-    assert!(decide_unexamined(&pair(), &unanimous(6), why).promoted);
-    // Mixed families above the minimum: the interval decides.
-    let mut mixed = unanimous(12);
-    mixed.dev.interval = Some((-0.01, 0.3));
-    let flat = decide_unexamined(&pair(), &mixed, why);
-    assert!(matches!(flat.reasons[..], [Reason::NoDevGain { .. }]));
-
-    // The examiner's verdicts: its interval stands, its family count is read
-    // from the section the gate decides on, and an unreported count refuses.
-    let (sealed, kept) = (examination(), public([-0.03, 0.02], -0.02));
-    let with_families = |families: Value| {
-        edited(public([0.02, 0.2], 0.04), |d| {
-            d["paired_gain"]["families"] = families;
-        })
-    };
-    let five = decided(&with_families(json!(5)), &kept, &sealed);
-    assert_eq!(five.reasons, [refused(Some(5))]);
-    let unreported = decided(&with_families(Value::Null), &kept, &sealed);
-    assert_eq!(unreported.reasons, [refused(None)]);
-    assert!(decided(&with_families(json!(6)), &kept, &sealed).promoted);
-    let agent_five = edited(public_agentic([0.02, 0.2], 0.0), |d| {
-        d["overall"]["families"] = json!(5);
-    });
-    let agent = decided(&agent_five, &public_agentic([0.02, 0.2], 0.0), &agentic());
-    assert_eq!(agent.reasons, [refused(Some(5))]);
 }

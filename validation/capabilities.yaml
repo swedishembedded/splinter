@@ -2869,24 +2869,6 @@ capabilities:
   state: SPECIFIED
   risk: medium
   tier: cpu
-- id: EVAL-014
-  crate: splinter-eval
-  entry: splinter_eval::promotion::decide / decide_unexamined / MIN_GAIN_FAMILIES
-  source: crates/eval/src/promotion/mod.rs:decide,decide_unexamined,dev_reason,retention_reason
-  contract: Promote only when dev interval lower bound >0 over >=6 families (least n with 2^-n <= 0.025), retention one-sided
-    lower bound > -0.05, and a fresh sealed slice verifies; unexamined decision recorded as not exam-verified.
-  tests:
-  - eval/it/promotion_gate (9 tests)
-  oracle: table-driven reference of the three rules (CUSTOM_ORACLE_REQUIRED); 2^-n arithmetic independent
-  missing:
-  - 'exact boundary: interval low == 0.0, lower == -0.05, families == 5/6'
-  - no source mutants listed for promotion in validation.md
-  - decide/decide_unexamined have no production caller since pipelines promotion::measurement was deleted (factory run/eval.rs uses only verify)
-  - NaN gain/interval
-  - decide_unexamined with attacker-supplied Measured (no signature)
-  state: SPECIFIED
-  risk: critical
-  tier: cpu
 - id: EVAL-015
   crate: splinter-eval
   entry: splinter_eval::promotion::verdict::verify / verify_signature / canonical_bytes
@@ -3141,19 +3123,16 @@ capabilities:
   tier: cpu
 - id: EVAL-030
   crate: splinter-eval
-  entry: splinter_eval::canary::canary_check / arms::attribute / strata
-  source: crates/eval/src/canary.rs, arms.rs, strata.rs
-  contract: Any pass on an unsolvable canary blocks the release; an effect is attributed to one varied treatment (weights
+  entry: splinter_eval::arms::attribute / strata
+  source: crates/eval/src/arms.rs, strata.rs
+  contract: An effect is attributed to one varied treatment (weights
     vs knowledge) and refused when both or neither varied; difficulty strata are report-only.
   tests:
-  - canary/tests.rs
   - eval/it/arms (4)
   - strata.rs unit tests (2)
   oracle: decision table
   missing:
   - strata proxy boundaries
-  - canary with zero canaries (vacuous pass?)
-  - no caller of canary_check outside eval/src/canary tests since the pipelines release canary was deleted
   state: SPECIFIED
   risk: medium
   tier: cpu

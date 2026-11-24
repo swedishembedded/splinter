@@ -36,8 +36,8 @@ families agree: two families, both won, resample to the interval [1, 1]. Six is 
 unanimous agreement the exact sign test finds significant at the interval's tail (2.5%: 1/64, where
 five give 1/32), so below it no exam outcome could show a gain at the stated level; a gain over
 fewer families is refused as `too_few_families`. The other
-checks (every assigned task counted for each arm, the anchor floor, the served candidate, the
-canaries) refuse beside the rule, never in its place.
+checks (every assigned task counted for each arm, the anchor floor, the served candidate)
+refuse beside the rule, never in its place.
 
 When the caller holds an examiner's signed verdicts on the candidate, the rule decides on them and
 a fresh sealed exam slice is part of the decision: the release is **exam-verified**. A release
@@ -63,8 +63,6 @@ lineage.
 
 - **Leakage.** A held-out task the candidate trained on, whether the same question, a near
   duplicate or its words inside a longer prompt, is left out of the measurement and counted.
-- **Canaries.** `release --canaries` hands the gate tasks the candidate must fail; passing one
-  refuses it whatever else it passed.
 - **The champion is fixed.** An alias moves only from the champion the gate measured against, and
   moves by compare-and-set; a run keeps the release it started with however the alias moves.
 - **Immutability.** A release is written once, with every number the gate measured, and is

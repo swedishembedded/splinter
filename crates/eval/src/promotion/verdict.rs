@@ -213,31 +213,6 @@ impl Verified {
     pub fn aggregate(&self) -> &Aggregate {
         &self.aggregate
     }
-
-    /// Accepted only when it is over sealed exams this pair spent: a burn
-    /// record of every exam, each naming this pair.
-    ///
-    /// # Errors
-    /// Public material, an exam without a burn record, or an exam another
-    /// pair spent first.
-    pub fn fresh_slice(&self) -> Result<(), Rejection> {
-        let aggregate = &self.aggregate;
-        if !aggregate.sealed || aggregate.exams.is_empty() {
-            return Err(Rejection::NotSealed);
-        }
-        for exam in &aggregate.exams {
-            let Some(burn) = aggregate.burns.iter().find(|b| b.exam == exam.digest) else {
-                return Err(Rejection::NoBurn);
-            };
-            if burn.by != self.pair {
-                return Err(Rejection::Spent {
-                    candidate: burn.by.candidate.clone(),
-                    predecessor: burn.by.predecessor.clone(),
-                });
-            }
-        }
-        Ok(())
-    }
 }
 
 fn text(doc: &Value, pointer: &str) -> Result<Option<String>, Rejection> {

@@ -52,7 +52,6 @@ mod short_answer;
 pub mod speech;
 pub mod test_report;
 pub mod workspace;
-pub mod workspace_canary;
 pub mod workspace_runner;
 mod workspace_scratch;
 

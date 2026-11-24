@@ -132,7 +132,6 @@ Every command takes these.
 - [splinter tasks](#splinter-tasks) - Generate and inspect task sets
   - [splinter tasks history](#splinter-tasks-history) - Read tasks from a repository's history
   - [splinter tasks variants](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
-  - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
   - [splinter tasks combine](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
   - [splinter tasks drills](#splinter-tasks-drills) - Make comprehension drills from a repository's clean snapshot
   - [splinter tasks pick](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
@@ -1017,7 +1016,6 @@ Subcommands:
 
 - [`history`](#splinter-tasks-history) - Read tasks from a repository's history
 - [`variants`](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
-- [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
 - [`combine`](#splinter-tasks-combine) - Make harder tasks of the admitted single-fault tasks of a task set
 - [`drills`](#splinter-tasks-drills) - Make comprehension drills from a repository's clean snapshot
 - [`pick`](#splinter-tasks-pick) - Divide the union of task sets into a picked set and the rest, by a stable hash of the seed and the task's family (the practice exam's ranking)
@@ -1061,22 +1059,6 @@ Options:
 
 - `--generator <REF>`: The model that writes the variants (the one that wrote the tasks) Default: `policy:default`.
 - `--per-task <N>`: The most variants one task is given. Default: `3`.
-
-#### splinter tasks canaries
-
-Make canaries of the workspace tasks of a task set: each task with its hidden assertions also required to fail, so that no honest change passes it. They go into a task set of their own, which `release --canaries` hands the gate: a candidate that passes one is refused
-
-```text
-splinter tasks canaries [OPTIONS] <TASKSET-ID>
-```
-
-Arguments:
-
-- `<TASKSET-ID>` (required): The task set, by id or unique prefix.
-
-Options:
-
-- `--count <N>`: The most canaries made. Default: `20`.
 
 #### splinter tasks combine
 

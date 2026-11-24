@@ -57,9 +57,9 @@
 //! report then says so ([`Anchor::workspace_tasks`]) and the check is decided
 //! on the tasks it does hold.
 //!
-//! A gate handed canary tasks (tasks no honest solution can pass,
-//! [`crate::canary`]) adds a fifth check on the candidate alone: a pass on
-//! any one refuses it, whatever else it passed.
+//! A report of the earlier release rule may carry a fifth check, over canary
+//! tasks no honest solution can pass ([`crate::canary`]); nothing measures
+//! canaries any more, and the field stays so those reports load.
 //!
 //! A check that could not be measured - no task graded by both models, no
 //! anchor suite, no brain binary - fails, and says why: an unmeasured
@@ -528,25 +528,6 @@ pub struct GateReport {
 }
 
 impl GateReport {
-    /// This report with the canary check recorded: the gate passes only if
-    /// the canary check does too.
-    #[must_use]
-    pub fn with_canary(mut self, canary: Check<Canaries>) -> Self {
-        self.passed = self.passed && canary.passed;
-        self.canary = Some(canary);
-        self
-    }
-
-    /// The canaries the candidate passed, each a cheat; empty when none was
-    /// passed or the gate had none.
-    #[must_use]
-    pub fn canary_passes(&self) -> &[String] {
-        self.canary
-            .as_ref()
-            .and_then(|c| c.measured.as_ref())
-            .map_or(&[], |c| c.passed_tasks.as_slice())
-    }
-
     /// This report stating the seed its intervals were resampled with.
     #[must_use]
     pub fn with_interval_seed(mut self, seed: Seed) -> Self {

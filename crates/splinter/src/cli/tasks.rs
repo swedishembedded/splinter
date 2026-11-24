@@ -7,12 +7,11 @@
 // services by sending an email to info@swedishembedded.com.
 
 //! `tasks ...`: generate task sets from sources or a repository's history,
-//! vary, seed canaries into, combine, pick, list and show them.
+//! vary, combine, pick, list and show them.
 
 use std::path::PathBuf;
 
 use clap::Subcommand;
-use splinter_sdk::canaries::CANARY_COUNT;
 use splinter_sdk::knowledge::tasks::workspace::{
     DEFAULT_MAX_TASKS, DEFAULT_PER_FUNCTION, MIN_COMBINED_FAULTS,
 };
@@ -65,19 +64,6 @@ pub enum TasksCommand {
         /// The most variants one task is given.
         #[arg(long, default_value_t = DEFAULT_VARIANTS_PER_TASK, value_name = "N")]
         per_task: usize,
-    },
-    /// Make canaries of the workspace tasks of a task set: each task with its
-    /// hidden assertions also required to fail, so that no honest change
-    /// passes it. They go into a task set of their own, which `release
-    /// --canaries` hands the gate: a candidate that passes one is refused.
-    Canaries {
-        /// The task set, by id or unique prefix.
-        #[arg(value_name = "TASKSET-ID")]
-        task_set: String,
-        /// The most canaries made.
-        #[arg(long, value_name = "N", default_value_t = CANARY_COUNT,
-            value_parser = positive_count)]
-        count: usize,
     },
     /// Make harder tasks of the admitted single-fault tasks of a task set:
     /// each holds several independent faults in different files of one
