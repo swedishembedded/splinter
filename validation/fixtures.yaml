@@ -19,3 +19,10 @@ fixtures:
     oracle_sha256: "593764a01a1f92b0d6596102dc278bc42376d3ecaf2d01ce2f9fd35858329697"
     references: ["scipy"]
     test: "splinter-eval/it/external_student"
+  statistics/wilson:
+    path: "validation/fixtures/statistics/wilson.json"
+    sha256: "50dd2c9fbc864183900f45dff6a3f9bb54668a819dbaddecbbda682326debe95"
+    oracle: "validation/oracles/statistics/wilson.py"
+    oracle_sha256: "0d330a42761e48fd38057271f4f4df7d878251d512ae8c1a10f1c861fae0df4a"
+    references: ["statsmodels"]
+    test: "splinter-eval/it/external_wilson"

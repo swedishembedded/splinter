@@ -50,7 +50,8 @@ pub struct BandMeasurement {
     pub passes: u32,
 }
 
-/// A measured pass rate with its Wilson score interval (two-sided, z = 1.96).
+/// A measured pass rate with its two-sided Wilson score interval
+/// ([`splinter_eval::pilot::Share::wilson`]).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BandResult {
     /// Who was measured.
@@ -70,21 +71,14 @@ impl BandMeasurement {
     /// passes than attempts.
     #[must_use]
     pub fn result(&self) -> Option<BandResult> {
-        if self.attempts == 0 || self.passes > self.attempts {
-            return None;
-        }
-        let n = f64::from(self.attempts);
-        let p = f64::from(self.passes) / n;
-        let z = 1.959_963_984_540_054_f64;
-        let denom = 1.0 + z * z / n;
-        let centre = (p + z * z / (2.0 * n)) / denom;
-        let half = z * (p * (1.0 - p) / n + z * z / (4.0 * n * n)).sqrt() / denom;
+        let share =
+            splinter_eval::pilot::Share::wilson(self.passes as usize, self.attempts as usize)?;
         Some(BandResult {
             model: self.model.clone(),
             attempts: self.attempts,
-            rate: p,
-            lower: (centre - half).max(0.0),
-            upper: (centre + half).min(1.0),
+            rate: share.value,
+            lower: share.low,
+            upper: share.high,
         })
     }
 }
