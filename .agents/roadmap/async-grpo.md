@@ -32,15 +32,34 @@ versions; Splinter decides which tasks are drawn, which groups qualify and when 
   dropped-stale and filtered counts, reward statistics; enough to say whether a run is generation- or
   training-bound.
 
+The plan this ledger implements, its package numbers (A01-A53) and the review of it against the code are in
+`.agents/research/async-grpo-plan.md`. Rules from it: asynchrony, estimator, packing and curriculum are never changed
+in the same experiment; online runs sample untruncated until brain replays the sampler's support; a group is
+re-sent until brain reports it committed (applied is not durable).
+
 ## Open
 
-- [ ] Pure controller core (no I/O): group state machine, staleness bound, token allowance, admission, statistics;
-      unit tests with a deterministic clock and scripted outcomes.
-- [ ] Durable group ledger in the run state with resume (kill mid-run, resume, no finished attempt repeated, no group
-      trained twice).
-- [ ] Rollout executor on the sven SDK (concurrent isolated sessions against the served policy, policy trace on every
-      request), and records from its per-request recording.
+- [ ] Revision manifest for cross-repository runs (A01): brain, sven and Splinter commits, the training-record
+      contract digest, model and tokenizer digests, hardware, resolved configuration; a run refuses mixed revisions.
+- [ ] Pure controller core (A23, A25-A26; no I/O): group state machine, staleness bound, token allowance gated when a
+      group starts (in-flight rollouts counted, so partial groups cannot deadlock the allowance), admission,
+      statistics; unit tests with a deterministic clock and scripted outcomes. Placement from the paused lane: shared
+      types in `splinter-core::factory::group`, the ledger in `splinter-store::factory::runstate::groups`, the
+      controller and seams in `splinter-factory::online` (design and trait signatures in that lane's notes).
+- [ ] Durable group ledger in the run state with resume (A28-A30): kill mid-run, resume, no finished attempt
+      repeated, no group trained twice, nothing committed lost.
+- [ ] Discrete-event simulation of the controller (A27): at least 100k simulated episodes across slow generation,
+      slow training, heavy-tailed durations, all-equal rewards, frequent publication, verifier outages, worker failures
+      and cancellation; queues bounded, no deadlock, every attempt reaches an accounted terminal state.
+- [ ] Rollout executor on the sven SDK (A22): concurrent isolated sessions against the served policy, the policy trace
+      on every request, infrastructure failures separated from verified failures (an unknown outcome is never reward
+      zero); records from sven's per-request recording, one per model call (A14).
 - [ ] Learner adapter for brain's streaming policy-gradient job (scripted double first, then the real API).
-- [ ] A recipe stage that runs the loop; the GPU-free toy end to end (`make test/methods`-style), then Qwen3-4B on one
-      card.
+- [ ] The `train.online` factory operation (A24) over an executable task collection (`dataset.rlvr` frozen as the
+      first curriculum); its candidate goes through the existing evaluation and promotion stages.
+- [ ] The GPU-free toy end to end (A31), then Qwen3-0.6B and Qwen3-4B on one card (A34-A36): synchronous against
+      asynchronous at equal generated tokens, trained tokens, updates, GPU hours and wall time; useful throughput,
+      experience utilisation, held-out and retention.
+- [ ] Merging append-only calls of one session into one sample (A15), against the per-call reference, once the
+      re-forwarded context is measured.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.
