@@ -21,8 +21,10 @@ cargo=${1:-cargo}
 profile=${2:---release}
 brain=${3:?usage: table.sh <cargo> <profile flag> <brain binary>}
 [ -x "$brain" ] || { echo "table.sh: no brain binary at $brain (BRAIN_BIN)" >&2; exit 3; }
+# The smokes run in their crate's directory: the binary's directory goes on PATH as an absolute path.
+brain=$(realpath "$brain")
 PATH="$(dirname "$brain"):$PATH"
-log=$(mktemp "${TMPDIR:-$HOME/tmp}/methods.XXXXXX")
+log=$(mktemp -t methods.XXXXXX)
 trap 'rm -f "$log"' EXIT
 
 

@@ -82,7 +82,7 @@ teardown() {
 # make_deb VERSION - a minimal real package named demo, printed path.
 make_deb() {
   local root="$T/deb-$1"
-  mkdir -p "$root/DEBIAN" "$root/usr/share/doc/demo"
+  install -d -m 0755 "$root/DEBIAN" "$root/usr/share/doc/demo"
   echo demo >"$root/usr/share/doc/demo/README"
   printf 'Package: demo\nVersion: %s\nArchitecture: amd64\nMaintainer: t <t@example.invalid>\nDescription: demo\n' "$1" >"$root/DEBIAN/control"
   mkdir -p "$T/out"

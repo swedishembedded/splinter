@@ -10,7 +10,7 @@ specification and the test that proves it, and says how the proof is run.
 
 ```bash
 make test/conformance              # per-PR tier: every per-PR row below, and the evidence file (seconds)
-make test/conformance/integration  # integration tier: the integration rows, then every mutant (minutes)
+make test/conformance/integration  # integration tier: every source mutant (minutes)
 make test/methods                  # integration tier: learning effectiveness on a toy model (needs BRAIN_BIN)
 ```
 
@@ -32,8 +32,7 @@ after each.
 ## Evidence
 
 `make test/conformance` builds the proving tests once, runs every per-PR row and writes
-`target/conformance/evidence.jsonl` (`make test/conformance/integration` writes the integration rows to
-`target/conformance/evidence-integration.jsonl`): one line per row with the algorithm, its kind, the backend and
+`target/conformance/evidence.jsonl`: one line per row with the algorithm, its kind, the backend and
 precision proven, the tests with how many ran and passed, and the commit. A filter that matches no test fails its row.
 Splinter's algorithms here are host arithmetic, so the evidence is `cpu`/`f64`. Model computation (losses, gradients,
 advantages from rewards, sampling) is brain's and is certified there, per backend and precision; a pass here certifies
@@ -43,7 +42,8 @@ none of it.
 
 A proving test is written `package/target/filter`: target `lib` (the crate's unit tests), `all` (every test binary
 of the package) or an integration test binary; filter a substring of the test names. `make test/conformance` and
-`make test/conformance/integration` read this table. Both tiers are also part of `make test`.
+`make test/conformance/integration` read this table (the integration tier's one row, the learning methods, is
+`make test/methods`; the tier itself runs the source mutants). The per-PR tier is also part of `make test`.
 
 | Algorithm | Kind | Spec | Proving tests | Tier | Mutants killed |
 |---|---|---|---|---|---|

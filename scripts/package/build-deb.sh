@@ -44,7 +44,8 @@ VERSION="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' "
 PACKAGE="splinter_${VERSION}_${ARCH}${FLAVOR:+-${FLAVOR}}"
 STAGING="${ROOT}/target/debian-staging/${PACKAGE}"
 rm -rf "$STAGING"
-install -d "${STAGING}/DEBIAN" "${STAGING}/usr/bin" "${STAGING}/usr/share/doc/splinter"
+# Modes are the package's, never the caller's umask: dpkg-deb refuses a control directory others may write.
+install -d -m 0755 "${STAGING}/DEBIAN" "${STAGING}/usr/bin" "${STAGING}/usr/share/doc/splinter"
 install -m 0755 "$BINARY" "${STAGING}/usr/bin/splinter"
 # The launcher a sandbox confines commands with where the host has no containers or namespaces.
 CONFINE="$(dirname "$BINARY")/splinter-confine"

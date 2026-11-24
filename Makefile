@@ -124,9 +124,8 @@ test/methods:
 test/conformance:
 	python3 -I scripts/conformance/evidence.py --cargo "$(CARGO)"
 
-## test/conformance/integration - the integration validation tier: the map's integration rows, then each defect of scripts/conformance/mutants.tsv applied to the source in turn with the kill rate printed; fails when a row fails or a mutant survives (no model, no GPU, minutes)
+## test/conformance/integration - the integration validation tier: each defect of scripts/conformance/mutants.tsv applied to the source in turn with the kill rate printed; fails when a mutant survives (no model, no GPU, minutes). The map's learning row is `make test/methods`.
 test/conformance/integration:
-	python3 -I scripts/conformance/evidence.py --cargo "$(CARGO)" --tier integration --out target/conformance/evidence-integration.jsonl
 	python3 -I scripts/conformance/mutants.py --cargo "$(CARGO)"
 
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
