@@ -36,9 +36,21 @@ impl SplitMix64 {
         (self.next_u64() % n.max(1) as u64) as usize
     }
 
-    /// A value in `low..=high`; `low` must not exceed `high`.
+    /// A value in `low..=high`.
+    ///
+    /// # Panics
+    /// `low` exceeds `high`: a reversed range is a caller's error, refused by
+    /// name rather than wrapped into another range.
     pub fn between(&mut self, low: u64, high: u64) -> u64 {
-        low + self.next_u64() % (high - low + 1)
+        assert!(
+            low <= high,
+            "SplitMix64::between: low {low} exceeds high {high}"
+        );
+        match (high - low).checked_add(1) {
+            Some(size) => low + self.next_u64() % size,
+            // The whole range of u64: every value is in it.
+            None => self.next_u64(),
+        }
     }
 
     /// A fair coin.

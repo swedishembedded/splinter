@@ -65,3 +65,16 @@ fn a_pick_is_one_of_the_items() {
     }
     assert!(rng.pick::<u8>(&[]).is_none());
 }
+
+/// The whole range of `u64` is a range like any other (its size does not fit
+/// in a `u64`), and a reversed range is refused by name, never wrapped into
+/// another one.
+#[test]
+fn between_takes_the_whole_range_and_refuses_a_reversed_one() {
+    let mut rng = SplitMix64::new(any_seed());
+    let _ = rng.between(0, u64::MAX);
+    let _ = rng.between(1, u64::MAX);
+    let seed = any_seed();
+    let reversed = std::panic::catch_unwind(move || SplitMix64::new(seed).between(9, 2));
+    assert!(reversed.is_err());
+}
