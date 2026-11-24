@@ -10,6 +10,7 @@
 mod artifacts;
 mod bundle;
 mod claim_store;
+mod crash;
 mod documents;
 mod experience_store;
 mod factory_products;

@@ -1198,3 +1198,18 @@ gaps:
   resolution: 'factory: a development plan''s tasks (id and digest) and its environment (the sandbox it makes and the
     environment''s digest, from the one function the rollout arms use) are part of the evaluation''s identity; a protected
     plan''s stay the authority''s. splinter-factory/it/recompute holds the twelve changes'
+- id: G-NEW-11
+  source_id: null
+  where: crates/store/src/factory/products/mod.rs (materialise_view, recover)
+  what: 'A view was built, and an old one moved aside, as hidden siblings of its final place; recovery removed them only
+    beside the view of a publish whose intent it found. A view made again for a committed product (ensure_view: a fork,
+    an edited file) records no intent, so a crash while it was built or swapped left the half-built or displaced directory
+    in the run for good. Never read as complete, but never removed. Found by the crash enumeration (plan 10B) at the
+    first view-building boundary of a repair.'
+  severity: medium
+  confidence: high (enumeration; recovery left the directory before the fix)
+  status: fixed
+  resolution: 'store: views are built and displaced under the store''s staging directory, which recovery empties, and the
+    per-view sibling sweep is gone. splinter-store/it/crash ends the writer at every durability boundary of a scenario
+    (a committed product, a publish with shared and new blobs and a program, a second publish, a repair over its view)
+    and holds what survives, what recovery removes and that the resumed scenario ends where an uninterrupted one does'

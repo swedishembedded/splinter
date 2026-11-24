@@ -50,9 +50,13 @@ pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         let _ = fs::remove_file(&temp);
         return Err(error);
     }
+    crate::faults::boundary("atomic write: temporary synced");
     if let Err(error) = fs::rename(&temp, path) {
         let _ = fs::remove_file(&temp);
         return Err(error);
     }
-    sync_dir(dir)
+    crate::faults::boundary("atomic write: renamed");
+    sync_dir(dir)?;
+    crate::faults::boundary("atomic write: directory synced");
+    Ok(())
 }

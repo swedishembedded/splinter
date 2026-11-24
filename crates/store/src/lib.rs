@@ -54,6 +54,7 @@ pub mod documents;
 pub mod error;
 pub mod experiences;
 pub mod factory;
+pub mod faults;
 pub mod job_outputs;
 pub mod jobs;
 pub mod jsonl;

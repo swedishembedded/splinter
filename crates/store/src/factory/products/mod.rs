@@ -311,6 +311,7 @@ impl ProductStore {
     fn seal_blob(&self, file: File, incoming: &Path, target: &Path) -> Result<(), ProductError> {
         let sealed = (|| {
             file.sync_all()?;
+            crate::faults::boundary("blob: synced");
             if target.exists() {
                 return fs::remove_file(incoming);
             }
@@ -318,6 +319,7 @@ impl ProductStore {
             perms.set_readonly(true);
             fs::set_permissions(incoming, perms)?;
             fs::rename(incoming, target)?;
+            crate::faults::boundary("blob: renamed");
             sync_dir(target.parent().unwrap_or(&self.root))
         })();
         if let Err(source) = sealed {
@@ -401,7 +403,9 @@ impl ProductStore {
         };
         // The product is committed; leftovers are recover()'s to clean if this fails.
         let _ = fs::remove_file(self.pending_path(stage_id));
+        crate::faults::boundary("publish: intent removed");
         let _ = fs::remove_dir_all(staging.path());
+        crate::faults::boundary("publish: staging removed");
         Ok(manifest)
     }
 
@@ -522,7 +526,17 @@ impl ProductStore {
         Ok(())
     }
 
-    /// Builds the view beside its final place and renames it into position.
+    /// A name under `<root>/staging/` nothing holds yet: where a view is built
+    /// and an old one moved aside, so whatever a crash leaves of either is
+    /// recovery's to remove with the rest of staging. Views lie inside the
+    /// root, so a rename between the two never crosses a file system.
+    fn scratch(&self, what: &str) -> Result<PathBuf, ProductError> {
+        let parent = self.root.join(STAGING_DIR);
+        fs::create_dir_all(&parent).map_err(io_error(format!("create {}", parent.display())))?;
+        Ok(temp_sibling(&parent.join(what)))
+    }
+
+    /// Builds the view in staging and renames it into position.
     fn materialise_view(
         &self,
         view: &Path,
@@ -530,7 +544,7 @@ impl ProductStore {
     ) -> Result<(), ProductError> {
         let parent = view.parent().unwrap_or(&self.root);
         fs::create_dir_all(parent).map_err(io_error(format!("create {}", parent.display())))?;
-        let building = temp_sibling(view);
+        let building = self.scratch("view")?;
         fs::create_dir(&building).map_err(io_error(format!("create {}", building.display())))?;
         let built = (|| {
             for file in &manifest.files {
@@ -559,6 +573,7 @@ impl ProductStore {
                         dest.display()
                     )))?;
                 }
+                crate::faults::boundary("view: file placed");
             }
             let manifest_path = building.join(VIEW_MANIFEST);
             write_atomic(&manifest_path, &pretty(manifest)?)
@@ -571,16 +586,19 @@ impl ProductStore {
         }
         // An earlier uncommitted or superseded view is moved aside, then dropped.
         let displaced = if view.exists() {
-            let aside = temp_sibling(view);
+            let aside = self.scratch("displaced")?;
             fs::rename(view, &aside).map_err(io_error(format!("replace {}", view.display())))?;
+            crate::faults::boundary("view: old view moved aside");
             Some(aside)
         } else {
             None
         };
         fs::rename(&building, view).map_err(io_error(format!("place {}", view.display())))?;
+        crate::faults::boundary("view: placed");
         sync_dir(parent).map_err(io_error(format!("sync {}", parent.display())))?;
         if let Some(aside) = displaced {
             let _ = fs::remove_dir_all(aside);
+            crate::faults::boundary("view: old view removed");
         }
         Ok(())
     }
@@ -702,7 +720,6 @@ impl ProductStore {
             } else {
                 remove_any(&view)?;
             }
-            remove_siblings_of(&view)?;
         }
         remove_any(intent)
     }
@@ -777,21 +794,4 @@ fn view_belongs_to_other_product(view: &Path, stage_hex: Option<&str>) -> bool {
     };
     serde_json::from_slice::<ProductManifest>(&bytes)
         .is_ok_and(|m| Some(m.stage.hex()) != stage_hex)
-}
-
-/// Removes the hidden temporary siblings a view build or replacement leaves.
-fn remove_siblings_of(view: &Path) -> Result<(), ProductError> {
-    let (Some(parent), Some(name)) = (view.parent(), view.file_name()) else {
-        return Ok(());
-    };
-    let prefix = format!(".{}.tmp-", name.to_string_lossy());
-    for entry in read_dir_if_exists(parent)? {
-        if entry
-            .file_name()
-            .is_some_and(|n| n.to_string_lossy().starts_with(&prefix))
-        {
-            remove_any(&entry)?;
-        }
-    }
-    Ok(())
 }

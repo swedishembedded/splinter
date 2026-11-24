@@ -5469,6 +5469,7 @@ dependencies = [
  "splinter-conformance",
  "splinter-core",
  "splinter-expdb",
+ "splinter-store",
  "tempfile",
  "thiserror 2.0.21",
  "zstd",
