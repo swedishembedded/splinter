@@ -312,11 +312,12 @@ output: { name: verdict, kind: evaluation, many: false, optional: false }
 parameters: { type: object, additionalProperties: false }
 reproducibility: nondeterministic
 command: [./eval/exam.sh]
-code: [eval/exam.sh]
+code: [eval/exam.sh, eval/verdict.json]
 ";
 
 /// The stand-in examiner: reads the candidate it is handed, then gives the
-/// verdict the test prepared.
+/// verdict the test prepared (part of its pinned code: what an operator
+/// reads of the repository is what its identity pins).
 const EXAM: &str = r#"#!/bin/sh
 exec python3 - "$2" <<'PY'
 import json, os, shutil, sys
@@ -444,4 +445,40 @@ stages:
             .join("task.toml")
             .is_file());
     }
+}
+
+/// What an operator can read of the repository is what its stage's identity
+/// pins: its own file and its `code`. A repository file it does not name is
+/// out of its reach, so a cached product never depends on a file whose
+/// change would not have invalidated it.
+#[test]
+fn an_operator_reads_only_what_its_identity_pins() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = repo();
+    repo.write("private/notes.txt", "not pinned by the operator");
+    program(
+        &repo,
+        "#!/bin/sh\nexec python3 - \"$2\" <<'PY'\nimport json, os, sys\nrequest = json.load(open(sys.argv[1]))\n\
+         peek = open(os.path.join(request['repository'], 'private/notes.txt')).read()\n\
+         open(os.path.join(request['out'], 'peek.txt'), 'w').write(peek)\nPY\n",
+    );
+    let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let ran = Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run();
+    let refused = ran
+        .expect_err("the unpinned file was out of reach")
+        .to_string();
+    assert!(refused.contains("text.upper"), "{refused}");
+    assert!(!dir.path().join("upper/a.txt/peek.txt").exists());
 }

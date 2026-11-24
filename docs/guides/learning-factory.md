@@ -495,15 +495,21 @@ code: [bin/upper.sh]
 Splinter runs the command with `--request FILE`, a `splinter.operator-request/1`
 naming its `params`, its `inputs` (each port's paths), the directory `out` it
 writes its product into, and the `repository`. It runs in the process sandbox:
-it reads its inputs, the request and the repository, writes only `out`, and
+it reads its inputs, the request, its own operator file and its `code` (what
+its stage's identity pins, nothing else of the repository: a cached product
+never depends on a file whose change would not have invalidated it), writes
+only `out`, and
 reaches the network only with `network: true`, within `timeout_seconds`. It
 exits 0 having written its product, 3 to reject its input (the reason on its
 last line of output), anything else when it failed. Its parameters are checked
 against `parameters` before anything runs, and `code` is pinned: a changed
-program is a changed input, which a run refuses and a fork recomputes.
+program is a changed input, which a run refuses and a fork recomputes. A
+program found on `PATH`, or a `./` program outside `code` (a virtualenv the
+repository keeps: its top directory is readable), is the machine's, like its
+toolchain, and is not pinned.
 
 An operator file is the same on every machine; what a machine lets an operator
-have beyond its inputs and the repository is the machine's to say, in
+have beyond its inputs and its code is the machine's to say, in
 `~/.config/splinter/operators.yaml`. An operator that declares `network: true`
 or needs variables (`env: [NAME]`) is refused before anything runs unless its
 grant says so; a grant may also let it read paths outside the repository, and

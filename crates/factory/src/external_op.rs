@@ -15,9 +15,13 @@
 //! of every product it made). The controller runs the command in the process
 //! sandbox with the request it is given (`--request FILE`, a
 //! `splinter.operator-request/1` naming its parameters, its inputs and the
-//! directory it writes into): it reads its inputs, the request and the
-//! repository, writes only its output directory, and reaches the network
-//! only when it declares `network: true`. It exits 0 having written its
+//! directory it writes into): it reads its inputs, the request, its own file
+//! and its code (what its identity pins, so a cached product never depends on
+//! a repository file whose change would not invalidate it) and, for a `./`
+//! program outside its code, that program's top directory (the machine's
+//! environment, as a virtualenv, unpinned like a program on PATH); it writes
+//! only its output directory, and reaches the network only when it declares
+//! `network: true`. It exits 0 having written its
 //! product, 3 to reject its input (the reason on its last line of standard
 //! output), anything else when it failed.
 
@@ -93,6 +97,10 @@ pub struct OperatorFile {
 pub struct External {
     file: OperatorFile,
     repository: PathBuf,
+    /// The repository paths it may read: its own file and its code (what its
+    /// identity pins), and the directory of a `./` program outside its code
+    /// (the machine's environment, as a virtualenv).
+    pinned_paths: Vec<PathBuf>,
     /// What this machine grants it.
     grant: Grant,
     /// The digest of the operator file and its code.
@@ -124,6 +132,20 @@ impl External {
             relative.to_owned(),
             splinter_core::digest::Digest::of(text.as_bytes()),
         )];
+        // A `./` program outside its code is the machine's (a virtualenv
+        // the repository keeps, like a program on PATH): readable whole,
+        // never pinned.
+        let environment = file.command[0].strip_prefix("./").and_then(|program| {
+            let covered = file.code.iter().any(|code| {
+                let code = code.trim_end_matches('/');
+                program == code || program.starts_with(&format!("{code}/"))
+            });
+            let top = program
+                .split('/')
+                .next()
+                .filter(|top| !top.is_empty() && *top != "..")?;
+            (!covered).then(|| repository.join(top))
+        });
         for code in &file.code {
             if code.starts_with('/') || code.split('/').any(|p| p == "..") {
                 return Err(format!("{relative}: code {code:?} leaves the repository"));
@@ -149,10 +171,16 @@ impl External {
                 ungranted.join(", ")
             ));
         }
+        let pinned_paths = pinned
+            .iter()
+            .map(|(path, _)| repository.join(path))
+            .chain(environment)
+            .collect();
         let external = Self {
             code: digest_of(&(pinned, &grant)),
             file,
             repository: repository.to_path_buf(),
+            pinned_paths,
             grant,
             validator,
         };
@@ -286,7 +314,8 @@ impl Execute for External {
             .values()
             .flatten()
             .cloned()
-            .chain([request_dir, self.repository.clone()])
+            .chain([request_dir])
+            .chain(self.pinned_paths.iter().cloned())
             .chain(self.grant.read.iter().cloned())
             .collect();
         let variables: BTreeMap<String, String> = self
