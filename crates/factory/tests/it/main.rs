@@ -31,6 +31,7 @@ mod practice;
 mod projections;
 mod promotion;
 mod qualify;
+mod registry;
 mod repo;
 mod resolve;
 mod reuse;
