@@ -3,13 +3,14 @@
 
 [package]
 name = "splinter-conformance"
-description = "Conformance test support: frozen reference fixtures checked against their recorded digests, and numerical comparison with stated tolerances. A dev-dependency only."
+description = "Conformance test support: frozen reference fixtures checked against their recorded digests, numerical comparison with stated tolerances, and damaged-input strategies for fuzzing parsers. A dev-dependency only."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [dependencies]
+proptest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }

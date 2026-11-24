@@ -30,6 +30,8 @@
 //! order and length always do) and numbers within a [`Tolerance`]; a
 //! disagreement names the first coordinate and the largest errors.
 
+pub mod fuzz;
+
 use std::fmt;
 use std::path::{Path, PathBuf};
 

@@ -5067,6 +5067,7 @@ dependencies = [
 name = "splinter-conformance"
 version = "0.2.0"
 dependencies = [
+ "proptest",
  "serde",
  "serde_json",
  "serde_yaml",
