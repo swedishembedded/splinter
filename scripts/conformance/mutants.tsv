@@ -60,3 +60,4 @@ corrected-reply-supervised	data	crates/data/src/trajectory.rs	            && spl
 near-copy-reaches-training	factory	crates/factory/src/stage_checks.rs	                !instruction.trim().is_empty()	                false	splinter-factory	it	resolve::a_near_copy
 online-stale-group-sent	online	crates/factory/src/online/control/rules.rs	    if staleness > max_staleness {	    if false && staleness > max_staleness {	splinter-factory	it	online::a_group_more_than_max_staleness
 online-zero-variance-trained	online	crates/factory/src/online/control/rules.rs	    if !differ(rewards.iter().copied()) {	    if false {	splinter-factory	it	online::reward_statistics
+online-inexact-tokens-queued	online	crates/factory/src/online/control/mod.rs	                self.hold_trainable(seq);	                let _ = seq;	splinter-factory	it	online::simulation

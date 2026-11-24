@@ -59,9 +59,17 @@ re-sent until brain reports it committed (applied is not durable).
       is terminal; `RunLedger` renews the lease. Kill-and-resume tests over the real run state: an executor killed
       mid-run, a learner connection dropped after it took a group, a cancel followed by a learner restart; no
       finished rollout started again, every group committed exactly once.
-- [ ] Discrete-event simulation of the controller (A27): at least 100k simulated episodes across slow generation,
-      slow training, heavy-tailed durations, all-equal rewards, frequent publication, verifier outages, worker failures
-      and cancellation; queues bounded, no deadlock, every attempt reaches an accounted terminal state.
+- [x] Discrete-event simulation (A27): `online::simulation`, at least 100k finished rollouts per run of the test
+      (seed drawn and printed) over drawn worlds: group size 2-8, 1-64 slots, staleness 0-4, slow or fast training,
+      Pareto(1.2) durations, all-equal rewards, publication every 1-3 steps, verifier outage windows, worker
+      failures, unscored and inexact rollouts, controller kills, learner restarts and cancellations; no deadlock
+      within the horizon, slots and the learner queue bounded, every group and rollout terminal and accounted, no
+      group committed twice; it asserts every scenario occurred (interruptions, commits, filters, stale drops,
+      failures, abandonments, full answers, resends). It found two deadlocks the unit tests did not (knowledge 217).
+      Contracts it relies on, for the learner adapter lane and brain's streaming job: the learner accepts while it
+      holds less than a step (a 429 only once it holds a step's worth); a learner that loses uncommitted work (a job
+      restart) fails the run's learner calls, so the resumed controller sends again (an unreported restart would
+      leave applied groups waiting).
 - [ ] Rollout executor on the sven SDK (A22): concurrent isolated sessions against the served policy, the policy trace
       on every request, infrastructure failures separated from verified failures (an unknown outcome is never reward
       zero); records from sven's per-request recording, one per model call (A14).

@@ -10,6 +10,7 @@
 //! driver over scripted doubles, killed and resumed.
 
 mod doubles;
+mod simulation;
 
 use splinter_core::factory::group::{GroupKey, GroupState, RolloutOutcome, VersionSpan};
 use splinter_factory::online::control::{reasons, Change, Controller};

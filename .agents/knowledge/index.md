@@ -202,3 +202,4 @@ in the same commit.
 | [214](214-a-train-client-can-wait-forever-on-a-training-server-that-has-run-several-jobs.md) | A train client waited forever once brain held its 32 ended jobs: it never forgot them and retried every 429 |
 | [215](215-at-about-a-hundred-records-own-verified-passes-teach-as-much-as-teacher-passes.md) | At about a hundred records, the base's own verified passes teach as much as teacher passes, and out-of-support teacher passes hurt |
 | [216](216-a-path-recorded-in-a-sandbox-names-the-sandboxs-paths.md) | A path recorded in a sandbox names the sandbox's paths; the host fork must take them as its own tree |
+| [217](217-a-token-bounded-producer-deadlocks-on-tokens-its-consumer-never-sees.md) | A token-bounded producer deadlocks on tokens its consumer never sees, or on a consumer that refuses below a step |
