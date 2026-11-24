@@ -49,27 +49,27 @@ fn bench_task(version: &str) -> Task {
 /// One trial of a task: what the verifier said, the metrics it measured, the
 /// model that ran it and the role of the conversation.
 struct Trial {
-    name: &'static str,
-    version: &'static str,
-    model: &'static str,
-    role: &'static str,
+    name: String,
+    version: String,
+    model: String,
+    role: String,
     verdict: Outcome,
     metrics: &'static [(&'static str, f64)],
 }
 
 impl Trial {
-    fn pass(name: &'static str) -> Self {
+    fn pass(name: &str) -> Self {
         Self {
-            name,
-            version: "1",
-            model: "m1",
-            role: "designer",
+            name: name.into(),
+            version: "1".into(),
+            model: "m1".into(),
+            role: "designer".into(),
             verdict: Outcome::Pass,
             metrics: PERFECT,
         }
     }
 
-    fn fail(name: &'static str, metrics: &'static [(&'static str, f64)]) -> Self {
+    fn fail(name: &str, metrics: &'static [(&'static str, f64)]) -> Self {
         Self {
             verdict: Outcome::Fail,
             metrics,
@@ -77,16 +77,25 @@ impl Trial {
         }
     }
 
-    fn version(self, version: &'static str) -> Self {
-        Self { version, ..self }
+    fn version(self, version: &str) -> Self {
+        Self {
+            version: version.into(),
+            ..self
+        }
     }
 
-    fn model(self, model: &'static str) -> Self {
-        Self { model, ..self }
+    fn model(self, model: &str) -> Self {
+        Self {
+            model: model.into(),
+            ..self
+        }
     }
 
-    fn role(self, role: &'static str) -> Self {
-        Self { role, ..self }
+    fn role(self, role: &str) -> Self {
+        Self {
+            role: role.into(),
+            ..self
+        }
     }
 }
 
@@ -177,7 +186,7 @@ fn conversation_of(
             splinter_core::harness::RecordedCalls::record("abc", calls).to_value();
     }
     let at = format!("2026-11-01T00:00:00.{:03}Z", corpus.entries().len());
-    experience(&bench_task(trial.version), trajectory, Some("Done."), &at)
+    experience(&bench_task(&trial.version), trajectory, Some("Done."), &at)
 }
 
 fn corpus(trials: &[Trial]) -> Corpus {
@@ -723,5 +732,6 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
 }
 
 mod exact_tokens;
+mod external;
 mod identity;
 mod shaping;

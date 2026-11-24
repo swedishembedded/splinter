@@ -5,6 +5,13 @@
 # `check` and, digest by digest, by every test that reads one (crates/conformance).
 schema: splinter.validation-fixtures/v1
 fixtures:
+  data/policy-gradient-groups:
+    path: "validation/fixtures/data/policy-gradient-groups.json"
+    sha256: "8bbf365c9a8f07396bc447ea81f836c083198b3b6ed61ed0cef418641e86fe9c"
+    oracle: "validation/oracles/data/policy_gradient_groups.py"
+    oracle_sha256: "81d4a58f2f96a337cee14b03b2afa27cc25f9e3ccb0b5862f3ed18bc5b4f9b2e"
+    references: ["reference-projector"]
+    test: "splinter-data/it/policy_gradient::external"
   data/sft-projection:
     path: "validation/fixtures/data/sft-projection.json"
     sha256: "a714903b5391a3dc4eb42690acb66565ba122695bb2f82b5edb82c9920b374b7"
