@@ -442,9 +442,10 @@ gaps:
     commit points and corruption policies; candidate for ablation if served pipelines are superseded.'
   severity: high
   confidence: high
-  status: confirmed
-  resolution: 'StageLedger (served pipelines) beside the factory''s ProductStore and RunState: removing the legacy pipelines
-    (G-AS-11) removes the ledger'
+  status: fixed
+  resolution: 'the stage ledger is out of the store: the minimind sample, its one user, owns it (samples/minimind/src/ledger,
+    with its spec); the store keeps one kind of run state, the factory''s; the served pipelines'' unconstructed Ledger error
+    variant is gone'
 - id: G-FS-09
   source_id: F-09
   where: crates/factory/src/run/release.rs:197-260 (Point/lineage) vs crates/store/src/lineage.rs and crates/orchestrator/src/{generation,release_manifest}.rs

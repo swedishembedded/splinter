@@ -20,11 +20,9 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::ledger::{Commit, KeyParts, OnCorrupt, StageKey, StageLedger, StageWork, Standing};
 use anyhow::{bail, Context as _};
 use serde_json::{json, Value};
-use splinter_sdk::store::stage_ledger::{
-    Commit, KeyParts, OnCorrupt, StageKey, StageLedger, StageWork, Standing,
-};
 use splinter_sdk::vocabulary::digest::Digest;
 
 use splinter_sdk::model::scratch::{
@@ -191,10 +189,7 @@ impl<'a> Run<'a> {
     /// Runs `work` as `unit` under `key` and shows the outcome.
     pub(crate) fn unit<F>(&mut self, unit: &str, key: &StageKey, work: F) -> anyhow::Result<Commit>
     where
-        F: FnOnce(
-            &mut Self,
-            &splinter_sdk::store::stage_ledger::Attempt,
-        ) -> anyhow::Result<StageWork>,
+        F: FnOnce(&mut Self, &crate::ledger::Attempt) -> anyhow::Result<StageWork>,
     {
         // The ledger is lent out of the run for the unit, so the work can use
         // the rest of the run; a unit never runs a unit inside itself.
@@ -728,7 +723,7 @@ pub(crate) fn reset(dir: &Path) -> anyhow::Result<()> {
 
 /// Writes `text` to `path` atomically.
 pub(crate) fn write(path: &Path, text: &str) -> anyhow::Result<()> {
-    splinter_sdk::store::stage_ledger::write_atomic(path, text.as_bytes())?;
+    crate::ledger::write_atomic(path, text.as_bytes())?;
     Ok(())
 }
 

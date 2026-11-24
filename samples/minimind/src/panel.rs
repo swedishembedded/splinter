@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
+use crate::ledger::Commit;
 use serde_json::Value;
-use splinter_sdk::store::stage_ledger::Commit;
 
 /// A task's family: the last segment of its id (`dev-00002-count`).
 fn family(task: &str) -> &str {

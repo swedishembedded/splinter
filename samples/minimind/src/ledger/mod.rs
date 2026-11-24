@@ -47,9 +47,10 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use splinter_core::digest::{digest_of, Digest};
+use splinter_sdk::vocabulary::digest::{digest_of, Digest};
 
-use crate::pack::{whole_lines, Locked};
+mod lock;
+use lock::{whole_lines, Locked};
 
 /// The ledger pack's file name inside a run directory.
 pub const LEDGER_FILE: &str = "ledger.jsonl";

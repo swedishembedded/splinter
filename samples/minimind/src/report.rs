@@ -18,8 +18,8 @@
 
 use std::fmt::Write as _;
 
+use crate::ledger::Commit;
 use serde_json::Value;
-use splinter_sdk::store::stage_ledger::Commit;
 
 fn find<'a>(commits: &'a [Commit], unit: &str) -> Option<&'a Commit> {
     commits.iter().rev().find(|c| c.unit == unit)

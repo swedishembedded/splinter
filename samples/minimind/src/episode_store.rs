@@ -12,8 +12,8 @@
 //! order when the stage is done ([`crate::pack`]). Readers take an episode's
 //! files from the tree while it exists and from the pack after it.
 
+use crate::ledger::Commit;
 use anyhow::{bail, Context as _};
-use splinter_sdk::store::stage_ledger::Commit;
 use splinter_sdk::vocabulary::digest::Digest;
 
 use crate::stages::Run;

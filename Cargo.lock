@@ -5273,12 +5273,14 @@ name = "splinter-minimind"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "libc",
  "minijinja 2.24.0",
  "serde",
  "serde_json",
  "serde_yaml",
  "splinter-sdk",
  "tempfile",
+ "thiserror 2.0.21",
  "tokio",
 ]
 

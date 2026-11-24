@@ -10,12 +10,12 @@
 use std::cell::Cell;
 
 use serde_json::json;
-use splinter_core::digest::Digest;
-use splinter_store::stage_ledger::{
+use splinter_minimind::ledger::{
     KeyParts, LedgerError, OnCorrupt, StageLedger, StageWork, Standing,
 };
+use splinter_sdk::vocabulary::digest::Digest;
 
-fn key(seed: u64) -> splinter_store::stage_ledger::StageKey {
+fn key(seed: u64) -> splinter_minimind::ledger::StageKey {
     KeyParts::new("generate")
         .config(&json!({ "seed": seed, "documents": 4 }))
         .input("world", &Digest::of(b"world"))

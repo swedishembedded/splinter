@@ -171,7 +171,7 @@ fn real_main() -> anyhow::Result<()> {
     let config = Config::load(&config_path, profile)?;
     match args.command.as_str() {
         "status" => {
-            let ledger = splinter_sdk::store::stage_ledger::StageLedger::open(&run_dir)?;
+            let ledger = splinter_minimind::ledger::StageLedger::open(&run_dir)?;
             print!("{}", splinter_minimind::report::status(&ledger.commits()?));
             Ok(())
         }

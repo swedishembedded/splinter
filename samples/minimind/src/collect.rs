@@ -32,9 +32,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use splinter_sdk::store::stage_ledger::{
-    Attempt, Commit, OnCorrupt, Ran, StageKey, StageWork, Standing,
-};
+use crate::ledger::{Attempt, Commit, OnCorrupt, Ran, StageKey, StageWork, Standing};
 use splinter_sdk::vocabulary::digest::{digest_of, Digest};
 
 use splinter_sdk::agent::policy_endpoint::{forward, Endpoint, Policy};

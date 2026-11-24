@@ -13,10 +13,10 @@
 
 use std::collections::BTreeMap;
 
+use crate::ledger::{Commit, StageWork};
 use anyhow::Context as _;
 use serde_json::Value;
 use splinter_sdk::model::scratch::Checkpoint;
-use splinter_sdk::store::stage_ledger::{Commit, StageWork};
 
 use crate::stages::{Run, Stage};
 use crate::template::Template;

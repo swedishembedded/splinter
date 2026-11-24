@@ -18,10 +18,10 @@
 
 use std::fmt::Write as _;
 
+use crate::ledger::{Commit, StageWork};
 use anyhow::Context as _;
 use serde_json::json;
 use splinter_sdk::model::scratch::Checkpoint;
-use splinter_sdk::store::stage_ledger::{Commit, StageWork};
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
 use crate::recipe;

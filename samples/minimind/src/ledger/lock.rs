@@ -23,14 +23,14 @@ use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 /// An exclusive lock on a pack, released when dropped.
-pub(crate) struct Locked {
-    pub(crate) file: File,
+pub(super) struct Locked {
+    pub(super) file: File,
 }
 
 impl Locked {
     /// The pack at `path` opened for reading and writing, created (with its
     /// parent directories) if absent, locked, with a torn last line cut off.
-    pub(crate) fn open(path: &Path) -> std::io::Result<Self> {
+    pub(super) fn open(path: &Path) -> std::io::Result<Self> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -71,7 +71,7 @@ impl Locked {
     }
 
     /// Every byte of the pack.
-    pub(crate) fn read_all(&mut self) -> std::io::Result<Vec<u8>> {
+    pub(super) fn read_all(&mut self) -> std::io::Result<Vec<u8>> {
         let mut bytes = Vec::new();
         self.file.seek(SeekFrom::Start(0))?;
         self.file.read_to_end(&mut bytes)?;
@@ -80,7 +80,7 @@ impl Locked {
 
     /// Appends `text` (whole lines, each ending in a newline) in one write and
     /// syncs it to disk.
-    pub(crate) fn append(&mut self, text: &str) -> std::io::Result<()> {
+    pub(super) fn append(&mut self, text: &str) -> std::io::Result<()> {
         debug_assert!(text.ends_with('\n'), "a pack holds whole lines only");
         self.file.seek(SeekFrom::End(0))?;
         self.file.write_all(text.as_bytes())?;
@@ -98,7 +98,7 @@ impl Drop for Locked {
 
 /// The whole lines of `bytes`: a last line without its newline is a torn
 /// write and is left out.
-pub(crate) fn whole_lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+pub(super) fn whole_lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
     let sound = bytes.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
     bytes[..sound]
         .split(|b| *b == b'\n')

@@ -37,8 +37,7 @@
 //! append-only annotations beside them, and named sets of experience ids;
 //! [`decision`] is the rule that turns an experience's verdicts into one
 //! decision. The sources, tasks, experiences and annotations themselves are
-//! `splinter-core`'s vocabulary. [`stage_ledger`] is a run
-//! directory's record of which stages are done under which inputs. [`factory`]
+//! `splinter-core`'s vocabulary. [`factory`]
 //! is the learning factory's durable state, independent of the experience
 //! database: an immutable content-addressed product store and the controller's
 //! run state in SQLite. [`error`] is the error every store reports.
@@ -61,14 +60,12 @@ pub mod jsonl;
 pub mod lineage;
 pub mod longitudinal;
 pub mod maintenance;
-mod pack;
 pub mod pointers;
 mod projection;
 pub mod recovery;
 pub mod runs;
 pub mod sources;
 pub mod space;
-pub mod stage_ledger;
 pub mod tasks;
 pub mod workspace;
 

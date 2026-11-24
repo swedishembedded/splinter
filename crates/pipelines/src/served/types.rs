@@ -45,9 +45,6 @@ pub enum ServedError {
     /// A stage that runs Splinter's own pipelines failed.
     #[error(transparent)]
     Orchestrator(Box<splinter_orchestrator::error::OrchestratorError>),
-    /// The campaign's stage ledger failed, or another process holds it.
-    #[error(transparent)]
-    Ledger(#[from] splinter_store::stage_ledger::LedgerError),
 }
 
 /// The policy rollouts are drawn from: the base model and, after the first

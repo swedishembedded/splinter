@@ -18,8 +18,8 @@ use std::sync::atomic::Ordering;
 
 use common::FakeBrain;
 use splinter_minimind::config::{Config, Profile};
+use splinter_minimind::ledger::{Commit, StageLedger};
 use splinter_minimind::stages::{run_all, Revisions, Run};
-use splinter_sdk::store::stage_ledger::{Commit, StageLedger};
 
 /// A directory for one spec, in memory when the machine has a memory-backed
 /// file system, removed when the spec ends, a failing one included.

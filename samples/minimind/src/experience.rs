@@ -11,9 +11,9 @@
 //! demonstrations it was fine-tuned on (rehearsal), so a few passes over a
 //! small set of its own successes teach without overwriting the rest.
 
+use crate::ledger::{Commit, StageWork};
 use anyhow::Context as _;
 use serde_json::json;
-use splinter_sdk::store::stage_ledger::{Commit, StageWork};
 use splinter_sdk::vocabulary::digest::Digest;
 use splinter_sdk::vocabulary::rng::SplitMix64;
 
