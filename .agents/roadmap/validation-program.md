@@ -62,13 +62,13 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step and sft-final (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), the program-output, db-workflow and firmware plugins against their tools (4B); the reference projector of the other views, the repository and document plugins against external references (4B) and the runtime, evidence and judged kinds' matrices not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step, sft-final and policy-gradient groups (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), the program-output, db-workflow and firmware plugins against their tools (4B); the reference projector of the other views, the repository and document plugins against external references (4B) and the runtime, evidence and judged kinds' matrices not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
 | M6 GPU certification | 13-14 | not possible here: no GPU |
 | M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
-| M8 Permanent quality system | 16 | partly: 50 source mutants, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C), the CPU targets of 16A (`test/conformance/external`, `test/storage/faults`, `test/factory/faults`); the Phase 16 consolidations, and the GPU and learning targets, not done |
+| M8 Permanent quality system | 16 | partly: 74 source mutants, all killed, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C), the CPU targets of 16A (`test/conformance/external`, `test/storage/faults`, `test/factory/faults`); the Phase 16 consolidations, and the GPU and learning targets, not done |
 
 Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
@@ -166,14 +166,32 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   only they used (G-AS-11), the legacy exam seal whose reserved families nothing recorded (G-NEW-01) and the
   release path of the third lineage notion (G-FS-09); the stage ledger moved to its one user (G-FS-08).
 
+## The third wave (2026-11-24)
+
+- cost per verified attempt (G-EK-22): a resample that verified nothing was dropped, so the interval was conditional
+  on a verification and too narrow where evidence is thinnest; it now counts as unbounded and the measure says so.
+- the configuration's environment precedence (G-FS-18) is specified through `Config::from_vars`.
+- one sign-test entry point (G-EK-04); one definition of a word for every text comparison (G-EK-05); the frontier
+  selection nothing called is gone; the two fan-outs are two contracts, the factory's stop on failure specified
+  (G-FS-07, rejected as a merge).
+- mutants for the e-process, its budget, the campaign gate, dedup, admission, exposure, held-out splits, the
+  preference and feedback views, serialisation, digests, the trial classifier and core (G-EK-12, G-DC-24): three
+  survived until specs held them (the campaign gate's spent level, the powered exam's p-value, the held-out
+  never-all rule); the map's stale test references (deleted promotion, dataset seal) and four stale mutants fixed.
+- an independent reference projector of policy-gradient groups (6B, part of G-FS-17).
+
 ## Open
 
-- Confirmed and open (decisions or larger work, each in `validation/gaps.yaml` with its proposal): the learning-method smokes cannot run against the current brain (G-NEW-06: its toy checkpoint moved to the qwen3 sample, and its server no longer serves a local checkpoint by store name); workspace episodes and Harbor ingestion still run through more than
-  one live path (G-NEW-14); the factory's examination check compares
-  exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
-  a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
-  Harbor's ATIF validator (G-AS-13).
-- Not built: the reference projector of the views beyond sft-step and sft-final (6B), the repository and document plugins against external references (4B) and the task-kind matrix of the kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and retrieval
-  benchmarks (3A-3C), TLA+ models and crash injection beyond the product store (10), deterministic
-  learning environments and negative controls (12A-12E).
+- Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 107; 84 fixed, 18 rejected):
+  the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
+  also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
+  header on plain conversations (G-NEW-03, brain's); workspace episodes and Harbor ingestion still run through more
+  than one live path (G-NEW-14, a refactor of live callers); the preference, feedback, distill and retrieval
+  projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
+- Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
+  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and
+  retrieval benchmarks (3A-3C), TLA+ models (10; waiting on approval to run a Java runtime) and crash injection
+  beyond the product store, deterministic learning environments and negative controls (12A-12E).
+- Waiting on a decision: `splinter_eval::promotion` (signed examiner verdicts) and `splinter_eval::canary` have no
+  production caller since the legacy release went; delete them, or wire them into the factory's promotion stage.
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
