@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# One-line defects of compaction, each of which TLC must find as a lost record.
+
+module = "Compaction"
+config = "Compaction.cfg"
+
+[[mutation]]
+id = "lossy-merge"
+find = "Merge(group) == UNION group"
+replace = "Merge(group) == (UNION group) \\ {CHOOSE r \\in UNION group : TRUE}"
+violates = "NoRecordLost"
+
+[[mutation]]
+id = "removes-everything-seen"
+find = "    /\\ removed' = removed \\cup (group \\ {Merge(group)})"
+replace = "    /\\ removed' = removed \\cup (snap[k] \\ {Merge(group)})"
+violates = "NoRecordLost"
+
+[[mutation]]
+id = "merged-removed-when-an-input"
+find = "    /\\ removed' = removed \\cup (group \\ {Merge(group)})"
+replace = "    /\\ removed' = removed \\cup group"
+violates = "NoRecordLost"

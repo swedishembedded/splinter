@@ -189,6 +189,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - collection beside a pin (G-NEW-16, found by modelling): a file set aside by a collection that began before a pin
   was unreadable through the verified pin until it was put back; reads now find a set-aside file in the trash,
   reproduced on both layouts and model-checked (`validation/tla/collection`).
+- compaction (10C): a stale or crashed compaction never destroys the only copy of a record, model-checked
+  (`validation/tla/compaction`); the guard that keeps a merge equal to one of its inputs is pinned by source mutants
+  in both compactors, the blob one by a new spec (it had none).
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
@@ -203,6 +206,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
   kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and
-  retrieval benchmarks (3A-3C), TLA+ models beyond the run-state protocol and the product commit (10C:
-  compaction) and crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  retrieval benchmarks (3A-3C), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

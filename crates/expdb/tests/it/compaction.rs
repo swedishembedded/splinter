@@ -362,6 +362,48 @@ fn a_merge_that_reproduces_one_of_its_inputs_does_not_remove_it() {
 }
 
 #[test]
+fn a_blob_repack_that_reproduces_one_of_its_inputs_does_not_remove_it() {
+    // One pack holds a chunk another pack holds too, and nothing else. The
+    // repack of the two is the larger pack itself, byte for byte, which must
+    // not be removed with its inputs.
+    let scratch = Scratch::new();
+    let db = scratch.open();
+    let (shared, own) = (noise(60_000, 7), noise(60_000, 8));
+    let mut larger = db
+        .collector(&WriterIdentity::new("exp", "job", "node", 0))
+        .unwrap();
+    let shared_ref = larger.content(&shared).unwrap();
+    let own_ref = larger.content(&own).unwrap();
+    larger.record(skill("larger".into())).unwrap();
+    larger.flush().unwrap();
+    let mut smaller = db
+        .collector(&WriterIdentity::new("exp", "job", "node", 1))
+        .unwrap();
+    smaller.content(&shared).unwrap();
+    smaller.record(skill("smaller".into())).unwrap();
+    smaller.flush().unwrap();
+    let before = db.snapshot().unwrap().blob_packs();
+    assert_eq!(before.len(), 2, "{before:?}");
+
+    db.compact_blobs().unwrap();
+    let packs: Vec<_> = db
+        .snapshot()
+        .unwrap()
+        .blob_packs()
+        .iter()
+        .map(|p| p.id)
+        .collect();
+    assert!(!packs.is_empty(), "every blob pack was removed");
+    let store = BlobStore::with_packs(&db, &packs).unwrap();
+    for (content, bytes) in [(shared_ref, &shared), (own_ref, &own)] {
+        let splinter_expdb::model::Content::Blob { blob } = content else {
+            panic!("a blob");
+        };
+        assert_eq!(&store.get(&blob).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn a_manifest_cannot_add_and_remove_the_same_file() {
     let scratch = Scratch::new();
     let db = scratch.open();
