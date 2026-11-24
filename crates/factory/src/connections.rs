@@ -18,6 +18,13 @@
 //! A credential is only ever named by the environment variable that holds
 //! it (`env:NAME`); a literal token in the file is refused, so the file can
 //! be shared and recorded with a run.
+//!
+//! A credential is the machine's to give. A task repository's
+//! `connections.yaml` may name a connection's credential variable as a
+//! shared default, but such a connection is bound only when this machine's
+//! file defines the connection too (its URL and its variable then being the
+//! machine's): otherwise a repository could have the gateway send any of the
+//! controller's variables to an endpoint of its choosing.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -57,6 +64,10 @@ pub struct Connections {
     /// identity.
     #[serde(skip)]
     pub looked_in: Vec<String>,
+    /// Connections whose credential only a task repository names, with the
+    /// machine file that would have to define them: refused when bound.
+    #[serde(skip)]
+    pub unvouched: BTreeMap<String, String>,
 }
 
 /// The connections file of a task repository: shared defaults (it can hold
@@ -73,6 +84,19 @@ pub enum ConnectionError {
     /// A literal credential.
     #[error("connection {0}: a token must be `env:NAME`, never the credential itself")]
     LiteralToken(String),
+    /// A connection whose credential only a task repository names.
+    #[error(
+        "connection {connection} sends the credential in {variable}, which only the task repository names; \
+         a credential is the machine's to give: define {connection} in {machine}"
+    )]
+    Unvouched {
+        /// The connection.
+        connection: String,
+        /// The variable it would send.
+        variable: String,
+        /// The machine's connections file.
+        machine: String,
+    },
     /// A model names a connection that does not exist.
     #[error("model {model} names connection {connection}, which no connections file defines ({looked_in})")]
     Unknown {
@@ -127,11 +151,23 @@ impl Connections {
     /// A file exists but cannot be read, or is refused by [`Self::parse`].
     pub fn layered(repository: &Path, machine: &Path) -> Result<Self, ConnectionError> {
         let mut layered = Self::default();
-        for path in [repository.join(REPOSITORY_FILE), machine.to_path_buf()] {
+        for (path, by_machine) in [
+            (repository.join(REPOSITORY_FILE), false),
+            (machine.to_path_buf(), true),
+        ] {
             match std::fs::read_to_string(&path) {
                 Ok(text) => {
                     let found = Self::parse(&text)
                         .map_err(|e| ConnectionError::Parse(format!("{}: {e}", path.display())))?;
+                    for (name, connection) in &found.connections {
+                        if by_machine {
+                            layered.unvouched.remove(name);
+                        } else if connection.token.is_some() {
+                            layered
+                                .unvouched
+                                .insert(name.clone(), machine.display().to_string());
+                        }
+                    }
                     layered.connections.extend(found.connections);
                     layered.looked_in.push(format!("read {}", path.display()));
                 }
@@ -161,6 +197,18 @@ impl Connections {
                         self.looked_in.join("; ")
                     },
                 })?;
+        if let Some(machine) = self.unvouched.get(&model.connection) {
+            return Err(ConnectionError::Unvouched {
+                connection: model.connection.clone(),
+                variable: connection
+                    .token
+                    .as_deref()
+                    .and_then(|t| t.strip_prefix("env:"))
+                    .unwrap_or_default()
+                    .to_owned(),
+                machine: machine.clone(),
+            });
+        }
         Ok(ModelBinding {
             connection: model.connection.clone(),
             model: model.model.clone(),

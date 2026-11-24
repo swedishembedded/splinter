@@ -312,6 +312,20 @@ fn a_task_repository_ships_its_connections_and_this_machine_overrides_them() {
     )
     .unwrap();
     assert!(Connections::layered(&repository, &machine).is_err());
+    // A credential is the machine's to give: a connection whose token only
+    // the task repository names (any variable, sent to any URL it chose) is
+    // refused when a model is bound to it, naming the machine's file.
+    std::fs::write(&machine, "connections: {}\n").unwrap();
+    let repository_only = Connections::layered(&repository, &machine).unwrap();
+    let refused = repository_only
+        .bind(&"hosted:m".parse().unwrap())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refused.contains("KEY") && refused.contains(&machine.display().to_string()),
+        "{refused}"
+    );
+    assert!(repository_only.bind(&"brain:m".parse().unwrap()).is_ok());
 }
 
 #[test]
