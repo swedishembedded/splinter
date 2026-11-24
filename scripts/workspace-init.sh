@@ -35,6 +35,7 @@ usage: workspace-init.sh --dir DIR [options]
   --bench-rev REV
   --records REPO       Hugging Face dataset of SFT records (default: swedishembedded/vim-headless-mastery-sft)
   --records-rev REV    its tag, branch or commit (default: main, resolved to the commit it names and recorded)
+  --records-config C   the configuration of the records to train on: data/C/ of the repository (default: data/)
   --build-env FILE     shell file sourced before any build (toolchain, CUDA paths)
   --jobs N             cargo build jobs (default: 32)
 EOF
@@ -42,7 +43,7 @@ EOF
 }
 
 dir="" cache="${WORKSPACE_CACHE:-$HOME/.cache/splinter-workspace}" models="" code="$HOME/code" jobs=32
-records="swedishembedded/vim-headless-mastery-sft" records_rev="main" build_env=""
+records="swedishembedded/vim-headless-mastery-sft" records_rev="main" records_config="" build_env=""
 declare -A rev=()
 [ -d "$HOME/project/shared/models" ] && models="$HOME/project/shared/models"
 while [ $# -gt 0 ]; do
@@ -57,6 +58,7 @@ while [ $# -gt 0 ]; do
     --bench-rev) rev[bench]=$2; shift 2 ;;
     --records) records=$2; shift 2 ;;
     --records-rev) records_rev=$2; shift 2 ;;
+    --records-config) records_config=$2; shift 2 ;;
     --build-env) build_env=$2; shift 2 ;;
     --jobs) jobs=$2; shift 2 ;;
     *) usage ;;
@@ -155,12 +157,14 @@ fi
 # A dataset that ships its own gate (tools/check_dataset.py with the served system prompt) must pass it.
 if [ -f "$recs/tools/check_dataset.py" ]; then
   say "checking the records"
-  python3 -I "$recs/tools/check_dataset.py" "$recs/data" --system-prompt "$recs/tools/system-prompt.txt" >"$dir/tmp/check-records.log" 2>&1 \
+  python3 -I "$recs/tools/check_dataset.py" "$recs/data${records_config:+/$records_config}" --system-prompt "$recs/tools/system-prompt.txt" >"$dir/tmp/check-records.log" 2>&1 \
     || { tail -n 20 "$dir/tmp/check-records.log" >&2; die "the records violate their own invariants"; }
 fi
 mkdir -p "$tasks/data/vim-sft"
-cp "$recs/data/train.jsonl" "$tasks/data/vim-sft/train.jsonl"
-cp "$recs/data/eval.jsonl" "$tasks/data/vim-sft/validation.jsonl"
+data="$recs/data${records_config:+/$records_config}"
+held="$data/validation.jsonl"; [ -f "$held" ] || held="$data/eval.jsonl"
+cp "$data/train.jsonl" "$tasks/data/vim-sft/train.jsonl"
+cp "$held" "$tasks/data/vim-sft/validation.jsonl"
 if [ ! -x "$tasks/.venv/bin/harbor" ]; then
   say "creating the task repository's Python environment (bench/sync)"
   (cd "$tasks" && make bench/sync) >"$dir/tmp/bench-sync.log" 2>&1 \
@@ -255,6 +259,6 @@ $dir/bin/splinter "\${verb[@]}" --out $dir/runs/\$name --state $dir/state/\$name
 EOF
 chmod 700 "$dir/run.sh"
 
-printf '{"brain":"%s","sven":"%s","splinter":"%s","bench":"%s","records":"%s","records_commit":"%s"}\n' \
-  "$brain_full" "$sven_full" "$splinter_full" "$bench_full" "$records" "$records_commit" >"$dir/workspace.json"
+printf '{"brain":"%s","sven":"%s","splinter":"%s","bench":"%s","records":"%s","records_config":"%s","records_commit":"%s"}\n' \
+  "$brain_full" "$sven_full" "$splinter_full" "$bench_full" "$records" "$records_config" "$records_commit" >"$dir/workspace.json"
 say "ready: $dir  (run: $dir/run.sh recipes/<recipe>.yaml gpuN)"
