@@ -6,12 +6,18 @@
 // agent's processes off the network then you can procure our services by
 // sending an email to info@swedishembedded.com.
 
-//! A seccomp filter that refuses to create sockets of the internet families.
+//! A seccomp filter that refuses to create the sockets a command could
+//! leave its confinement through.
 //!
 //! Landlock (ABI 4) denies TCP `bind` and `connect`, but not UDP and not raw
-//! or packet sockets. This filter closes them: `socket(2)` with domain
-//! `AF_INET`, `AF_INET6` or `AF_PACKET` fails with `EPERM`. Local
-//! (unix-domain) sockets and everything else are untouched. The filter is
+//! or packet sockets, and no Landlock right governs `connect` to a Unix
+//! socket that exists (searching a path needs none): a confined command
+//! reached any daemon's control socket it could name (a container runtime's,
+//! the session bus, an SSH agent). This filter closes them: `socket(2)` with
+//! domain `AF_INET`, `AF_INET6`, `AF_PACKET`, `AF_UNIX` or `AF_NETLINK`
+//! (which, run as root, reconfigures the host's network) fails with `EPERM`.
+//! `socketpair(2)`, the local pipes a program makes for itself, is left
+//! alone, and so is everything else. The filter is
 //! built in the parent (it allocates) and installed in the child with one
 //! system call.
 //!
@@ -43,8 +49,10 @@ const SOCK_STREAM: u32 = 1;
 /// `SOCK_NONBLOCK`/`SOCK_CLOEXEC`).
 const SOCK_TYPE_MASK: u32 = 0xf;
 
+const AF_UNIX: u32 = 1;
 const AF_INET: u32 = 2;
 const AF_INET6: u32 = 10;
+const AF_NETLINK: u32 = 16;
 const AF_PACKET: u32 = 17;
 
 /// The first system-call number of the x32 ABI, which no filter written for
@@ -103,13 +111,14 @@ const fn jump(code: u16, k: u32, jt: u8, jf: u8) -> SockFilter {
 }
 
 impl Filter {
-    /// The filter refusing `socket(2)` of the internet and packet families.
+    /// The filter refusing `socket(2)` of the internet, packet, Unix and
+    /// netlink families.
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     pub fn deny_inet_sockets() -> io::Result<Self> {
         // Indices of the three outcomes at the end of the program.
-        const ALLOW: u8 = 10;
-        const DENY: u8 = 11;
-        const KILL: u8 = 12;
+        const ALLOW: u8 = 12;
+        const DENY: u8 = 13;
+        const KILL: u8 = 14;
         // A jump offset counts from the instruction after the jump.
         const fn to(target: u8, at: u8) -> u8 {
             target - at - 1
@@ -125,21 +134,24 @@ impl Filter {
             /* 7 */ jump(BPF_JEQ_K, AF_INET, to(DENY, 7), 0),
             /* 8 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 8), 0),
             /* 9 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 9), 0),
-            /* 10 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
-            /* 11 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
-            /* 12 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
+            /* 10 */ jump(BPF_JEQ_K, AF_UNIX, to(DENY, 10), 0),
+            /* 11 */ jump(BPF_JEQ_K, AF_NETLINK, to(DENY, 11), 0),
+            /* 12 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
+            /* 13 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
+            /* 14 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
         ];
         Ok(Self { program })
     }
 
-    /// The filter refusing `socket(2)` of the IPv6 and packet families and every
-    /// IPv4 socket that is not a stream: what is left of the network is IPv4
-    /// TCP, which Landlock then holds to its allowed ports.
+    /// The filter refusing `socket(2)` of the IPv6, packet, Unix and netlink
+    /// families and every IPv4 socket that is not a stream: what is left of
+    /// the network is IPv4 TCP, which Landlock then holds to its allowed
+    /// ports (a granted port is no grant of the host's daemons).
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     pub fn deny_inet_sockets_but_tcp4() -> io::Result<Self> {
-        const ALLOW: u8 = 13;
-        const DENY: u8 = 14;
-        const KILL: u8 = 15;
+        const ALLOW: u8 = 15;
+        const DENY: u8 = 16;
+        const KILL: u8 = 17;
         const fn to(target: u8, at: u8) -> u8 {
             target - at - 1
         }
@@ -153,13 +165,15 @@ impl Filter {
             /* 6 */ stmt(BPF_LD_W_ABS, OFFSET_ARG0),
             /* 7 */ jump(BPF_JEQ_K, AF_INET6, to(DENY, 7), 0),
             /* 8 */ jump(BPF_JEQ_K, AF_PACKET, to(DENY, 8), 0),
-            /* 9 */ jump(BPF_JEQ_K, AF_INET, 0, to(ALLOW, 9)),
-            /* 10 */ stmt(BPF_LD_W_ABS, OFFSET_ARG1),
-            /* 11 */ stmt(BPF_ALU_AND_K, SOCK_TYPE_MASK),
-            /* 12 */ jump(BPF_JEQ_K, SOCK_STREAM, to(ALLOW, 12), to(DENY, 12)),
-            /* 13 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
-            /* 14 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
-            /* 15 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
+            /* 9 */ jump(BPF_JEQ_K, AF_UNIX, to(DENY, 9), 0),
+            /* 10 */ jump(BPF_JEQ_K, AF_NETLINK, to(DENY, 10), 0),
+            /* 11 */ jump(BPF_JEQ_K, AF_INET, 0, to(ALLOW, 11)),
+            /* 12 */ stmt(BPF_LD_W_ABS, OFFSET_ARG1),
+            /* 13 */ stmt(BPF_ALU_AND_K, SOCK_TYPE_MASK),
+            /* 14 */ jump(BPF_JEQ_K, SOCK_STREAM, to(ALLOW, 14), to(DENY, 14)),
+            /* 15 */ stmt(BPF_RET_K, SECCOMP_RET_ALLOW),
+            /* 16 */ stmt(BPF_RET_K, SECCOMP_RET_ERRNO | libc::EPERM as u32),
+            /* 17 */ stmt(BPF_RET_K, SECCOMP_RET_KILL_PROCESS),
         ];
         Ok(Self { program })
     }

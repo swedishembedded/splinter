@@ -642,3 +642,55 @@ fn the_private_view_still_reports_how_a_command_ended() {
     let own = rig.sh(&sandbox, "cat /proc/self/status | head -1; echo $$");
     assert_eq!(own.exit_code, Some(0), "{own:?}");
 }
+
+/// "No network" covers every way out of the command's tree a socket offers,
+/// not only IP: a Unix socket outside the tree (a daemon's control socket is
+/// a host's keys), an abstract Unix socket, the kernel's netlink and raw
+/// packet sockets. Each is refused, and the listeners hear nothing; a
+/// program's own socket pair still works.
+#[test]
+fn no_socket_reaches_outside_the_commands_tree() {
+    use std::os::unix::net::UnixListener;
+    let rig = Rig::new();
+    let sandbox = rig.sandbox();
+    let path = rig.state.join("daemon.sock");
+    let daemon = UnixListener::bind(&path).unwrap();
+    daemon.set_nonblocking(true).unwrap();
+    let abstract_name = format!("splinter-test-{}", std::process::id());
+    let abstract_daemon = {
+        use std::os::linux::net::SocketAddrExt;
+        let address =
+            std::os::unix::net::SocketAddr::from_abstract_name(abstract_name.as_bytes()).unwrap();
+        let listener = UnixListener::bind_addr(&address).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        listener
+    };
+    for script in [
+        format!(
+            "python3 -c 'import socket; s = socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect(\"{}\")'",
+            path.display()
+        ),
+        format!(
+            "python3 -c 'import socket; s = socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect(\"\\0{abstract_name}\")'"
+        ),
+        "python3 -c 'import socket; socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 0)'".to_string(),
+        "python3 -c 'import socket; socket.socket(socket.AF_PACKET, socket.SOCK_RAW, 0)'".to_string(),
+    ] {
+        let result = rig.sh(&sandbox, &script);
+        assert!(refused(&result), "{script}: {result:?}");
+    }
+    assert!(
+        daemon.accept().is_err(),
+        "nothing reached the daemon's socket"
+    );
+    assert!(
+        abstract_daemon.accept().is_err(),
+        "nothing reached the abstract socket"
+    );
+    // The pipes a program makes for itself (multiprocessing, asyncio) stay.
+    let paired = rig.sh(
+        &sandbox,
+        "python3 -c 'import socket; a, b = socket.socketpair(); a.sendall(b\"x\"); assert b.recv(1) == b\"x\"'",
+    );
+    assert_eq!(paired.exit_code, Some(0), "{paired:?}");
+}

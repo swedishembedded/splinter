@@ -87,9 +87,15 @@ digest-pinned `--workspace-image`), the commands an agent works with run on the 
 bounded but not isolated, and every environment record says `isolation: none`.
 
 On the host the kernel confines a command to read-only system access, its own tree and a private directory,
-with no network, a private user and pid namespace and no secret-named variables in its environment. A kernel
-that cannot do this makes the command refuse to run. That is confinement by the kernel, not a container's
-boundary: use a container for code you do not trust. The exposure audit is detection, not prevention. Details
+with no network and no secret-named variables in its environment; a kernel that cannot confine the filesystem
+and the network makes the command refuse to run. Where the host allows user namespaces the command also gets a
+private user and pid namespace with its own `/proc`; where it does not, the command sees the host's processes
+(their command lines, and the environments of processes of the same user), the run's record says so
+(`host_proc_visible`), and a run's leftover processes are found by a token in their environment instead of by
+the namespace. A workload that must not see them requires a private `/proc` and is refused on such a host. That is confinement by the kernel, not a container's
+boundary: use a container for code you do not trust. The exposure audit is detection, not prevention: it reads
+the text of an agent's tool calls, so a path a program builds at run time (concatenated, encoded) is beyond it
+and is the sandbox's to keep out of reach (the hidden tests are never mounted for the agent). Details
 are in [Learn a repository](../guides/repositories.md#confinement).
 
 ## Controlled demonstrations versus general capability

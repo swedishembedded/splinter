@@ -12,14 +12,16 @@
 //! [`Confinement::read_write`] names, and reach nothing else - and, unless
 //! [`Confinement::allow_network`] says otherwise, no network: TCP `bind` and
 //! `connect` are denied by Landlock (ABI 4) and the creation of every
-//! internet-family or packet socket is refused by a seccomp filter (which
-//! also closes UDP, that Landlock does not cover). Only local (unix-domain)
-//! sockets remain. A kernel that can do neither refuses the confinement
+//! internet-family, packet, Unix-domain or netlink socket is refused by a
+//! seccomp filter (which also closes UDP, that Landlock does not cover, and
+//! the host daemons' Unix sockets, whose `connect` no Landlock right
+//! governs). Only `socketpair(2)` pipes remain. A kernel that can do neither
+//! refuses the confinement
 //! instead of running the child with the network open.
 //! [`Confinement::tcp_connect_ports`] opens exactly one hole in that: TCP
 //! `connect` to those ports (Landlock ABI 4 port rules), on IPv4 stream sockets
-//! only (the seccomp filter then refuses IPv6, packet and every non-stream
-//! internet socket, so UDP stays closed); TCP `bind` stays denied.
+//! only (the seccomp filter then refuses IPv6, packet, Unix, netlink and every
+//! non-stream internet socket, so UDP stays closed); TCP `bind` stays denied.
 //!
 //! The ruleset is built in the parent ([`Confinement::prepare`]: it opens
 //! paths and allocates), and the child only enforces it ([`Prepared::enforce`]:
