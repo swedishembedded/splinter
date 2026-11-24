@@ -37,6 +37,8 @@ use splinter_data::{
     RecordBody, RolloutIdentity, Unchecked, View, ViewError,
 };
 
+mod external;
+
 const TOKENIZER: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const OTHER_TOKENIZER: &str =
     "sha256:2222222222222222222222222222222222222222222222222222222222222222";
@@ -59,10 +61,10 @@ fn bench_task() -> Task {
 /// graded and what it did.
 #[derive(Clone)]
 struct Attempt {
-    trial: &'static str,
+    trial: String,
     verdict: Outcome,
     strength: Strength,
-    model: &'static str,
+    model: String,
     /// The examiner's score status, when the trial was not counted.
     status: Option<&'static str>,
     /// The shell commands of its actions, in order, then its final word.
@@ -76,12 +78,12 @@ struct Attempt {
 }
 
 impl Attempt {
-    fn pass(trial: &'static str) -> Self {
+    fn pass(trial: &str) -> Self {
         Self {
-            trial,
+            trial: trial.into(),
             verdict: Outcome::Pass,
             strength: Strength::Executable,
-            model: "policy-a",
+            model: "policy-a".into(),
             status: None,
             commands: vec!["cat ledger.csv", "book accrual"],
             last: "Booked.",
@@ -91,7 +93,7 @@ impl Attempt {
         }
     }
 
-    fn fail(trial: &'static str) -> Self {
+    fn fail(trial: &str) -> Self {
         Self {
             verdict: Outcome::Fail,
             commands: vec!["ls", "book wrong"],
@@ -100,7 +102,7 @@ impl Attempt {
         }
     }
 
-    fn infrastructure(trial: &'static str) -> Self {
+    fn infrastructure(trial: &str) -> Self {
         Self {
             verdict: Outcome::Abstain,
             status: Some("model_error"),
@@ -123,8 +125,11 @@ impl Attempt {
         }
     }
 
-    fn model(self, model: &'static str) -> Self {
-        Self { model, ..self }
+    fn model(self, model: &str) -> Self {
+        Self {
+            model: model.into(),
+            ..self
+        }
     }
 
     fn tokenizer(self, tokenizer: Option<&'static str>) -> Self {

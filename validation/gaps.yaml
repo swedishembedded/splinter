@@ -552,10 +552,10 @@ gaps:
   confidence: medium
   status: confirmed
   resolution: golden products are blessed from the implementation output, so they guard regressions only; the independent
-    recomputation they lack now exists for the sft-step and sft-final views (data/sft-projection) and for policy-gradient
-    grouping and the records it writes (data/policy-gradient-groups, 400 cases, which kills the grouping mutants on its
-    own); the preference, feedback, distill and retrieval projections and the factory product statistics still have no second
-    implementation
+    recomputation they lack now exists for the sft-step and sft-final views (data/sft-projection), policy-gradient grouping
+    and its records (data/policy-gradient-groups) and the preference and feedback views attempt pairing and keeping (data/attempt-pairs),
+    each of which kills its views mutants on its own; the distill and retrieval projections, preference repairs and recorded
+    preferences, and the factory product statistics still have no second implementation
 - id: G-FS-18
   source_id: F-18
   where: crates/orchestrator/src/config.rs (629 lines, 2 unit tests)
