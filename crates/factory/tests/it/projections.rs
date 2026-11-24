@@ -200,6 +200,44 @@ fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
     .contains("gives preference options to another objective"));
 }
 
+/// A pair is trained as two rows, so `max_block` bounds the longer of its continuations under the prompt:
+/// a pair too long for the trainer's block is left out instead of sizing every row to it.
+#[test]
+fn a_preference_dataset_leaves_out_the_pairs_longer_than_the_block() {
+    let run = |max_block: u64| {
+        let repo = Repo::new();
+        // seed: a dataset states its seed; the fake backend's outcomes are scripted, so none draws.
+        let bounded = RECIPE.replace(
+            "objective: preference, target: student,",
+            &format!("objective: preference, target: student, max_block: {max_block},"),
+        );
+        let resolved = resolve(&repo.root, &bounded, connections()).unwrap();
+        let backend = FakeBackend {
+            vary_failures: true,
+            ..FakeBackend::with(Outcome::Fail)
+        };
+        for task in ["train/001-first", "train/002-second"] {
+            backend.script(task, &[Outcome::Pass, Outcome::Fail]);
+        }
+        let trainer = crate::fakes::FakeTrainer::default();
+        let services = Services {
+            backend: &backend,
+            trainer: Some(&trainer),
+            models: None,
+            variables: None,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let outcome = Factory::open(&resolved, dir.path(), services, "test")
+            .unwrap()
+            .run();
+        let pairs = dir.path().join("preferred/train.jsonl");
+        (outcome.map(|_| lines(&pairs).len()), dir)
+    };
+    assert_eq!(run(1_000_000).0.unwrap(), 2);
+    let (refused, _) = run(1);
+    assert!(refused.is_err(), "no pair fits one token");
+}
+
 // seed: a recipe states every seed; the fake backend's outcomes are scripted, so none draws.
 const LEARNABLE: &str = "  - id: rlvr
     uses: dataset.rlvr

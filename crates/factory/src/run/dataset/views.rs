@@ -129,6 +129,43 @@ fn without_reasoning(record: &mut Record) -> u64 {
     removed
 }
 
+/// The conversations a record of a pair or judged-completion objective is trained as: its prompt followed by
+/// each continuation, as chat records the trainer can count.
+fn rows_of(record: &Record) -> Vec<Record> {
+    let chat =
+        |messages: Vec<splinter_core::chat::WireMessage>, tools: &[serde_json::Value]| Record {
+            body: RecordBody::Chat {
+                messages,
+                tools: tools.to_vec(),
+                outcome: None,
+                teacher_context: Vec::new(),
+            },
+            metadata: record.metadata.clone(),
+        };
+    match &record.body {
+        RecordBody::Preference {
+            prompt,
+            chosen,
+            rejected,
+            tools,
+            ..
+        } => [chosen, rejected]
+            .into_iter()
+            .map(|c| chat(prompt.iter().chain(c).cloned().collect(), tools))
+            .collect(),
+        RecordBody::Feedback {
+            prompt,
+            completion,
+            tools,
+            ..
+        } => vec![chat(
+            prompt.iter().chain(completion).cloned().collect(),
+            tools,
+        )],
+        _ => vec![record.clone()],
+    }
+}
+
 /// The assistant turns of `record` it trains on.
 fn supervised(record: &Record) -> usize {
     match &record.body {
@@ -287,6 +324,45 @@ pub(super) fn produce(
         for record in &mut projection.records {
             reasoning_removed += without_reasoning(record);
         }
+    }
+    // A record is as long as its longest continuation under the shared prompt: that is the row the
+    // trainer must hold (a pair is trained as two rows, a judged completion as one).
+    if let (Some(limit), Some(trainer)) = (dataset.max_block, factory.services.trainer) {
+        let mut kept = Vec::with_capacity(projection.records.len());
+        for record in std::mem::take(&mut projection.records) {
+            let rows = rows_of(&record);
+            let lines: Vec<String> = rows
+                .iter()
+                .map(|row| splinter_data::dataset_line(Objective::Sft, row))
+                .collect::<Result<_, _>>()
+                .map_err(|e| fail(e.to_string()))?;
+            let tokens = trainer
+                .measure(&dataset.target, &lines)
+                .map_err(|e| fail(e.to_string()))?
+                .into_iter()
+                .max()
+                .unwrap_or(0);
+            if tokens <= limit {
+                kept.push(record);
+                continue;
+            }
+            let member = record
+                .metadata
+                .experiences
+                .iter()
+                .find_map(|id| members.get(id));
+            excluded.push(Excluded {
+                pass: member.map(|m| m.source.clone()).unwrap_or_default(),
+                slot: member.map(|m| m.name.clone()).unwrap_or_default(),
+                task: member.map(|m| m.task.clone()).unwrap_or_default(),
+                reason: "longer_than_max_block".into(),
+                detail: format!(
+                    "{tokens} tokens of {} where max_block is {limit}",
+                    dataset.target
+                ),
+            });
+        }
+        projection.records = kept;
     }
     if projection.records.is_empty() {
         return Err(fail(format!(

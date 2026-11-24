@@ -573,7 +573,9 @@ compiles its collection evaluates on the same compiled tasks:
   a verified pass over a verified fail of one task by one policy, from where
   their conversations part: the shared prompt is never trained on
   (`preference: { pairs_per_task: N }` bounds a task's pairs, drawn by the
-  seed). A feedback record (KTO) is one verified attempt's continuation,
+  seed;
+  `max_block` leaves out the pairs whose longer continuation exceeds it, as the trainer
+  sizes every row to the longest). A feedback record (KTO) is one verified attempt's continuation,
   desirable when it passed. `objective: retrieval` makes contrastive triples:
   a passed experience's question, the source passage its evidence names, and
   the passages other experiences rest on as negatives. These objectives also

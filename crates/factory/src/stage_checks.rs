@@ -139,10 +139,9 @@ pub(crate) fn projection_problems(
         .ok();
         if defaults
             .is_some_and(|d| d.projection != params.projection || d.admission != params.admission)
-            || params.max_block.is_some()
         {
             out.push(format!(
-                    "projection, admission and max_block are an SFT dataset's; a {} dataset is projected by its own view",
+                    "projection and admission are an SFT dataset's; a {} dataset is projected by its own view",
                     params.objective
                 ),
             );

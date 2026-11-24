@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (a preference dataset may be bounded by `max_block`)
+- `dataset.project` refused `max_block` for preference, feedback and policy-gradient objectives, so one 40 000-token pair sized every row of a preference job to 81 888 tokens (93 GiB) and brain refused it. The bound now applies to the longer continuation of a pair (or the completion of a judged record) under its prompt, and a record past it is excluded with the reason.
+
 ### Added (a candidate may continue a champion's adapter)
 - `model.train` takes `start: <champion role>`: the trained variant begins from that champion's adapter instead of a fresh one, so a preference or feedback objective refines what the champion already learned. The champion must be served from the same base; the champion's identity enters the variant's identity. Preference runs also take `loss`, `beta`, `nll_weight` and `gamma`.
 
