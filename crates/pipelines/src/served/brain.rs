@@ -10,7 +10,7 @@
 //! What a campaign over brain is made of, whichever way it reaches brain: the
 //! task family, the settings of the model sampled and of the trainer, and the
 //! files a training call writes and reads. The collector, validator and
-//! trainer that use them over brain's API are in [`super::served`].
+//! trainer that use them over brain's API are in [`crate::served`].
 //!
 //! A [`TaskFamily`] is what the path needs to know about the tasks: how a
 //! task is put to the policy and how a completion is graded. It is the

@@ -105,7 +105,7 @@ pub enum ExamSetCommand {
 /// `exam-set create`.
 #[derive(Debug, Args)]
 pub struct ExamSetArgs {
-    /// Files, directories, cmd:<command> (quoted as one argument), or stored
+    /// Files, directories, `cmd:<command>` (quoted as one argument), or stored
     /// source ids.
     #[arg(required = true, value_name = "SOURCE")]
     pub sources: Vec<String>,

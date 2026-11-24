@@ -20,7 +20,7 @@ use super::{load_candidate, plan_training_as, train_planned, Candidate, TrainReq
 /// the candidate prefix a candidate id adds.
 const MAX_IDENTITY: usize = 118;
 
-/// [`train`] as the run `identity` names (1 to 118 letters, digits, `.`,
+/// [`super::train`] as the run `identity` names (1 to 118 letters, digits, `.`,
 /// `_` and `-`, not starting with a dot): the candidate is
 /// `candidate-<identity>`, and brain keeps the run's record under the same
 /// identity as its `resume_key`. Asked again after a crash, the same request
@@ -29,7 +29,7 @@ const MAX_IDENTITY: usize = 118;
 /// with the result it recorded: the run is trained once.
 ///
 /// # Errors
-/// An identity brain would refuse, and [`train`]'s.
+/// An identity brain would refuse, and [`super::train`]'s.
 pub fn train_identified(
     ctx: &Context,
     request: &TrainRequest,

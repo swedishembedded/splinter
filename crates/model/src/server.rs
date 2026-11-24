@@ -345,7 +345,7 @@ pub(crate) fn wait_ready(
     Ok(startup_line)
 }
 
-/// Keeps `line` among the last [`KEPT_LINES`] of `kept`.
+/// Keeps `line` among the last `KEPT_LINES` of `kept`.
 pub fn remember(kept: &mut Vec<String>, line: String) {
     if kept.len() == KEPT_LINES {
         kept.remove(0);

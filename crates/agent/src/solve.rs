@@ -229,7 +229,7 @@ impl SolveOptions {
     /// `model`, asked again when a request fails transiently
     /// ([`crate::retry`]), and limited to this call's output budget a reply
     /// where a request names no limit of its own when there is a budget. See
-    /// [`crate::budget`]. With a [`Self::request_log`], every request is
+    /// `crate::budget`. With a [`Self::request_log`], every request is
     /// recorded as the model receives it, each retry its own request.
     #[must_use]
     pub fn provider(&self, model: Arc<dyn ModelProvider>) -> Arc<dyn ModelProvider> {

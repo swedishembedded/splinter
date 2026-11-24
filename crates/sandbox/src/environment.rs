@@ -10,7 +10,7 @@
 //! an experience keeps of them.
 //!
 //! [`ResolvedEnvironment::record`] is the store's
-//! [`Environment`](splinter_core::experience::Environment): its kind, a
+//! [`Environment`]: its kind, a
 //! spec holding everything that determines its behaviour, and the snapshot
 //! digest of the two. For a runtime environment the spec is the runtime
 //! (its registry entry, probed version and executable digest) and the

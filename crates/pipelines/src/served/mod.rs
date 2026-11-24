@@ -8,7 +8,7 @@
 // info@swedishembedded.com.
 
 //! Rollouts over a served policy: the seams (a collector, a trainer and a
-//! validator, [`types`]), what asks a model server for them
+//! validator, `types`), what asks a model server for them
 //! ([`PolicyModels`], [`ServedCollector`], [`ServedValidator`],
 //! [`ServedTrainer`]), the task family a verifier is plugged in through
 //! ([`brain`]), the episode executor seam ([`endpoint`]) and the environment

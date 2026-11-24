@@ -7,7 +7,7 @@
 // procure our services by sending an email to info@swedishembedded.com.
 
 //! Longitudinal datasets kept as episodes of the experience database: one
-//! immutable, content-addressed episode per participant ([`episode`] says how
+//! immutable, content-addressed episode per participant (`episode` says how
 //! it is laid out), imported from a `timeline-v1`-shaped JSON-lines file.
 //!
 //! An import reads the file twice, one line at a time, so memory does not

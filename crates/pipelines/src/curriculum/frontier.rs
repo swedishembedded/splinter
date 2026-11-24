@@ -8,7 +8,7 @@
 
 //! The parameters of a pass@k measurement ([`PassAtK`]: k attempts per
 //! task and how the policy samples them) and the tally of a set's graded
-//! attempts per task ([`tally`]), which the teach stage reads to find the
+//! attempts per task (`tally`), which the teach stage reads to find the
 //! tasks a student never solved ([`super::teacher`]).
 
 use std::collections::BTreeMap;

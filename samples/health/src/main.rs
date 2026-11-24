@@ -290,7 +290,7 @@ enum Command {
         /// The candidate, by label or id.
         #[arg(long)]
         candidate: String,
-        /// The champion: a candidate by label or id, or release:<alias or id>.
+        /// The champion: a candidate by label or id, or `release:<alias or id>`.
         #[arg(long)]
         champion: String,
         /// Horizons, in years, comma separated.

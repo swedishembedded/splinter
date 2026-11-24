@@ -282,7 +282,7 @@ impl Git {
         Ok(String::from_utf8_lossy(&self.diff_bytes(&args)?).into_owned())
     }
 
-    /// `git diff` with [`DIFF_OPTIONS`] and then `args`.
+    /// `git diff` with `DIFF_OPTIONS` and then `args`.
     pub fn diff_bytes(&self, args: &[&str]) -> Result<Vec<u8>> {
         let mut all = vec!["diff"];
         all.extend(DIFF_OPTIONS);

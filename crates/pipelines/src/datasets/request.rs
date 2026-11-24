@@ -26,7 +26,7 @@ pub struct BuildRequest {
     pub view: ViewName,
     /// What the student sees; `None` keeps the view's default.
     pub strip: Option<Strip>,
-    /// The weakest decision counted; `None` is [`DEFAULT_MIN_STRENGTH`].
+    /// The weakest decision counted; `None` is [`super::DEFAULT_MIN_STRENGTH`].
     pub min_strength: Option<Strength>,
     /// The system prompt every conversation opens with, in place of the
     /// default: a person's, for a policy to be trained as them. `None` keeps
@@ -35,42 +35,42 @@ pub struct BuildRequest {
     /// Write an objective brain cannot train in the export format.
     pub export_only: bool,
     /// The most records, kept evenly spread over the projection
-    /// ([`Projection::thinned_to`]); `None` keeps every one.
+    /// ([`splinter_data::Projection::thinned_to`]); `None` keeps every one.
     pub limit: Option<usize>,
     /// How the writer's own text is written, for the voice view.
     pub voice: VoiceBuild,
     /// The longest record, in tokens, the training that reads the dataset
-    /// fits ([`Projection::within_block`]): a longer one is left out and
-    /// counted as [`Exclusion::OverBlock`] instead of being refused in the
+    /// fits ([`splinter_data::Projection::within_block`]): a longer one is left out and
+    /// counted as [`splinter_data::Exclusion::OverBlock`] instead of being refused in the
     /// middle of a run. `None` keeps every record.
     pub max_block: Option<usize>,
     /// Split a chat record longer than `max_block` into consecutive windows
-    /// that each fit ([`Projection::split_over_block`]) instead of leaving it
+    /// that each fit ([`splinter_data::Projection::split_over_block`]) instead of leaving it
     /// out: every window repeats the instruction and keeps each supervised
     /// turn exactly once. Meaningless without `max_block`, which leaves the
     /// records unbounded.
     pub split_over_block: bool,
     /// For the sft-step view: one record per trajectory with every admitted
-    /// action supervised ([`SftStep::packed`]), not one record per action.
+    /// action supervised ([`splinter_data::SftStep::packed`]), not one record per action.
     pub pack: bool,
     /// For the sft-step view: a negative control to build instead of the
     /// verified dataset ([`Control`]).
     pub control: Control,
     /// For the sft-step view: read a trajectory exported as one agent step as
-    /// one tool call per turn ([`SftStep::serialise_calls`]).
+    /// one tool call per turn ([`splinter_data::SftStep::serialise_calls`]).
     pub serialise_calls: bool,
     /// For the sft-step view: keep only the actions whose tool calls are all
     /// named here, plus every action that calls no tool (the final answer);
     /// the rest become context and are counted as `ActionNotWanted`
-    /// ([`SftStep::only_actions`]).
+    /// ([`splinter_data::SftStep::only_actions`]).
     pub only_actions: Option<Vec<String>>,
     /// For the sft-step view: keep only the harness conversations answered by
     /// one of these model roles; every other experience is counted as
-    /// `RoleNotWanted` ([`SftStep::only_roles`]).
+    /// `RoleNotWanted` ([`splinter_data::SftStep::only_roles`]).
     pub roles: Option<Vec<String>>,
     /// For the sft-step view: the training base reads images, so a harness
     /// conversation whose model was shown some is built from the requests it
-    /// was sent, pictures in the turns that carried them ([`SftStep::images`]).
+    /// was sent, pictures in the turns that carried them ([`splinter_data::SftStep::images`]).
     /// Without it such a conversation is counted as `ShownImages`.
     pub images: bool,
     /// For the policy-gradient view: how an attempt's reward and its advantage
@@ -186,10 +186,10 @@ pub struct VoiceBuild {
     /// `system_prompt` or the default.
     pub writer: Option<String>,
     /// The most tokens of the writer's text, kept evenly spread over it
-    /// ([`Projection::thinned_to_tokens`]); `None` keeps all of it.
+    /// ([`splinter_data::Projection::thinned_to_tokens`]); `None` keeps all of it.
     pub token_budget: Option<usize>,
     /// The most of the tokens one family (the prints of one text, or one
-    /// work) may supply; `None` is [`DEFAULT_MAX_FAMILY_SHARE`].
+    /// work) may supply; `None` is [`super::DEFAULT_MAX_FAMILY_SHARE`].
     pub max_family_share: Option<f64>,
     /// Ask each passage by what a model says it is about
     /// ([`crate::describe`]) instead of by its heading and opening; a

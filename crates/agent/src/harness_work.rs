@@ -45,7 +45,7 @@ pub const TASK_INPUT: &str = "task";
 /// tree and `episode`'s scratch directory and nothing else of the disk; sven's
 /// file tools resolve inside the tree; tool calls need no approval. `episode`
 /// is a directory outside the tree that goes when the episode does (see
-/// [`SandboxShell::for_episode`]).
+/// `SandboxShell::for_episode`).
 ///
 /// # Errors
 ///

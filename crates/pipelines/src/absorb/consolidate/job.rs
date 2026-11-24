@@ -9,7 +9,7 @@
 
 //! One consolidation: the weights, the gate and the release.
 //!
-//! A [`Job`] says which claims are taken into which base, and which release
+//! A `Job` says which claims are taken into which base, and which release
 //! the checkpoint replaces. `full` trains every weight of the base on the
 //! records of the claims being taken in, beside a bounded sample of the
 //! records of the claims the base already holds and the base's own answers;

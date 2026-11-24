@@ -11,7 +11,7 @@
 //!
 //! A profile is a complete configuration; the file only changes what it
 //! names, and a name it does not know is refused rather than ignored. Every
-//! stage reads its own slice ([`Config::slice`]), and only that slice enters
+//! stage reads its own slice of it, and only that slice enters
 //! its ledger key, so changing the SFT step count recomputes SFT and what
 //! follows it, never the world or pretraining.
 

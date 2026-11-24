@@ -14,7 +14,7 @@
 //! stage checks that it was measured against the champion the alias really
 //! points at (a candidate that beat a weaker model is not thereby better than
 //! the release in place), hands the checkpoint, the numbers and the lineage
-//! to [`release_predictive`](crate::release::predictive::release_predictive)
+//! to [`release_predictive`]
 //! and reports its decision. A candidate that fails is recorded as rejected
 //! and the alias stays where it was.
 

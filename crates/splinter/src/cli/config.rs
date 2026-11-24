@@ -16,7 +16,7 @@ pub enum ConfigCommand {
     /// Print the file's path and its effective content; a missing file shows
     /// the empty default.
     Show,
-    /// Print one value. KEY is a dotted path, with [name] for a name that
+    /// Print one value. KEY is a dotted path, with `[name]` for a name that
     /// holds dots: `connections.hosted.url`, `operators[exam.sealed].network`.
     Get {
         /// The key to read.

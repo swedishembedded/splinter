@@ -73,7 +73,7 @@ impl Drop for Heartbeat {
 /// This controller's name on a lease: `host:pid@pidns:start`, the host the
 /// caller names, this process, the pid namespace it is numbered in and when
 /// it started (clock ticks since boot): what a later controller needs to
-/// prove the holder gone ([`holder_gone`]). Where `/proc` cannot say, the
+/// prove the holder gone (`holder_gone`). Where `/proc` cannot say, the
 /// namespace and start are `?` and no takeover is ever judged.
 #[must_use]
 pub fn controller_owner(host: &str) -> String {

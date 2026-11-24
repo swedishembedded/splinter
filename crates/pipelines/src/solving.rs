@@ -10,7 +10,7 @@
 //!
 //! Each task is solved in exactly the environment it records - closed-book,
 //! its runtime in the process sandbox, or a copy of its workspace's
-//! snapshot ([`crate::workspace_solve`]) - and refused (and reported) when
+//! snapshot (`crate::workspace_solve`) - and refused (and reported) when
 //! that environment is not what it was. Every solve is stored as an
 //! experience, answered or not: a run stopped by its deadline is evidence
 //! too. A task may be solved several times (a pass@k measurement): each

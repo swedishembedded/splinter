@@ -9,7 +9,7 @@
 
 //! Two timeline models scored on the same held-out subjects.
 //!
-//! Every number is brain's own arithmetic ([`survival`](super::survival)):
+//! Every number is brain's own arithmetic ([`survival`]):
 //! Uno's concordance, the time-dependent AUC, the IPCW Brier score and its
 //! integral over a grid, calibration at a horizon against the Aalen-Johansen
 //! observed risk, and the held-out event likelihood. Each outcome code is

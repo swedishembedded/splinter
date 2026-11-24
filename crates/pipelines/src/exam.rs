@@ -15,7 +15,7 @@
 //! words from one that does not. The exam puts the same held-out tasks to the
 //! base and to the candidate closed-book and asks a judge whether each answer
 //! gives what the task's reference says, and asks code whether it states a
-//! number or name the task's source does not hold ([`GroundingVerifier`]).
+//! number or name the task's source does not hold (`GroundingVerifier`).
 //! The judged results are compared with a paired sign test.
 //!
 //! The judge is trusted only as far as it can be measured. Before it grades an
@@ -121,9 +121,9 @@ pub struct Misjudged {
     pub label: String,
     /// What the judge gave it: `pass`, `fail` or `abstain`.
     pub judged: String,
-    /// The task's instruction, cut at [`SHOWN_CHARS`].
+    /// The task's instruction, cut at `SHOWN_CHARS`.
     pub instruction: String,
-    /// The answer it was judged on, cut at [`SHOWN_CHARS`].
+    /// The answer it was judged on, cut at `SHOWN_CHARS`.
     pub answer: String,
     /// The judge's reason, when it gave one.
     pub reason: String,

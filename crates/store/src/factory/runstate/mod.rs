@@ -10,8 +10,8 @@
 //!
 //! One SQLite database in WAL mode, `<run>/state/controller.db`, holds what a
 //! controller has decided: the lease that makes it the only controller
-//! ([`RunState::acquire`]), the [`stages`] of the run, and the logical
-//! [`rollouts`] slots with their physical attempts, and the [`groups`] of an
+//! ([`RunState::acquire`]), the `stages` of the run, and the logical
+//! `rollouts` slots with their physical attempts, and the `groups` of an
 //! online run. Every mutation is one
 //! `BEGIN IMMEDIATE` transaction that first checks the caller's [`Fence`], so
 //! a controller that lost its lease cannot change anything even if it still

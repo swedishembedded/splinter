@@ -14,7 +14,7 @@ use super::{resolve, Flag, Object, Pack, Resolution};
 /// say the same in other words (`attribute | entity`, both sides).
 ///
 /// Admission keeps a key in the words of its quote, so statements that
-/// paraphrase each other never meet in [`admit`]'s resolutions. A caller
+/// paraphrase each other never meet in `admit`'s resolutions. A caller
 /// that has decided which keys are one (an embedder proposes, code checks)
 /// passes the decision here; what is ruled is still decided by the documents'
 /// headers and by comparing the stated values, never by whoever aligned the

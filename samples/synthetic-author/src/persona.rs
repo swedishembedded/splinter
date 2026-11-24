@@ -94,7 +94,7 @@ impl Tenet {
     /// The fact of a situation this tenet turns on: the belief only gives a
     /// verdict where it holds (for [`Tenet::SelfReliance`], where an outsider
     /// offers help, which is the only situation that lists the option it
-    /// judges). [`Belief::verdict`] is the table that reads it.
+    /// judges). `Belief::verdict` is the table that reads it.
     #[must_use]
     pub fn fact(self) -> Fact {
         match self {
@@ -335,7 +335,7 @@ impl Belief {
         }
     }
 
-    /// Every verdict this belief gives, read off the table [`Self::verdict`]
+    /// Every verdict this belief gives, read off the table `Self::verdict`
     /// is: one rule for each option and verdict that occurs, naming the facts
     /// that are the same in every situation it applies to.
     #[must_use]

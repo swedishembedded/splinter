@@ -46,14 +46,12 @@
 //!   [`eval`] - one model graded on the gate's suites.
 //! * [`absorb`] - the sessions a person held with an agent, taught with the
 //!   stages above as one run.
-//! * [`runs`] - every command's run record, and cancelling one.
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`serving`] - the brain servers kept for other programs until interrupted;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`compare`] - two experience sets of the same tasks compared, a family
 //!   counted once; [`arm_compare`] - graded trials of several arms (Harbor
-//!   jobs or a trials file) each against a reference arm;
-//!   [`answers`] - every answer `ask` gave, and what gave it.
+//!   jobs or a trials file) each against a reference arm.
 //! * [`lineage`] - from any artifact, where it came from and what came
 //!   from it.
 //! * [`router`] - a sentence becomes a command: a classifier reads it, code decides.

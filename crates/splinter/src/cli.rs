@@ -340,7 +340,7 @@ pub enum JudgeCommand {
     /// Measure a judge on labelled experiences and keep the calibration
     /// `verify --judge` gates its verdicts by.
     Calibrate {
-        /// JSON Lines: {"experience": "<id>", "label": "pass"|"fail"}.
+        /// JSON Lines: `{"experience": "<id>", "label": "pass"|"fail"}`.
         #[arg(value_name = "LABELLED-FILE")]
         labelled: PathBuf,
         /// The judge.

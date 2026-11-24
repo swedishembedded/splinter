@@ -28,7 +28,7 @@
 //! cancellable from any process; [`pointers`] the few names that move, with
 //! their history; [`documents`] what is kept by its digest.
 //!
-//! [`source`] and [`sources`] are what Splinter learns from: every
+//! `source` and [`sources`] are what Splinter learns from: every
 //! document, repository and command run, its content stored once per
 //! digest, so a span resolves to the exact bytes it names. [`tasks`] holds
 //! the tasks generated from them and the named sets a stage hands the

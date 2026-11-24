@@ -30,10 +30,10 @@ pub enum Recipe {
     /// the policy the run starts from: the exact recorded behaviour
     /// log-probabilities, every token of a step weighed alike (token sum, as
     /// Dr. GRPO argues against a per-sequence mean), a learning rate of
-    /// [`ON_POLICY_RL_LEARNING_RATE`] and [`ON_POLICY_RL_PASSES`] passes over
+    /// `ON_POLICY_RL_LEARNING_RATE` and `ON_POLICY_RL_PASSES` passes over
     /// the batch. A run at a small learning rate over its rollouts once barely
     /// moved the policy and clipped almost none of its tokens; the targets
-    /// ([`ON_POLICY_RL_KL`], [`ON_POLICY_RL_CLIP`]) say what moving it looks
+    /// (`ON_POLICY_RL_KL`, `ON_POLICY_RL_CLIP`) say what moving it looks
     /// like.
     OnPolicyRl,
 }

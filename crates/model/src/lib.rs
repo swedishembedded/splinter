@@ -9,16 +9,10 @@
 //!   answer graded by code and recorded as one line.
 //! * [`report`] - two arms of an exam paired question by question, with the
 //!   paired sign test.
-//! * [`rl`] - brain's reinforcement-learning surface: an environment, a
-//!   verifier, and the chat tokenizer a prompt is read through.
 //! * [`local`] - brain's chat pipeline in-process behind sven's
 //!   `ModelProvider` seam: load, stream a generation, stop it cleanly.
 //! * [`manifest`] - the release manifest `brain serve --adapter-manifest`
 //!   follows, written with brain's own type.
-//! * [`residency`] - the one owner of resident bases: one loaded copy per
-//!   base checkpoint, shared by every model on it, each model's adapter
-//!   attached before its generation, and every base released when other
-//!   work needs the device.
 //! * [`scratch`] - a model trained from random weights through brain's API:
 //!   a tokenizer and random-init checkpoint of a named architecture,
 //!   pretraining, a full chat fine-tune, serving; missing capabilities named.

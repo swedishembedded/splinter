@@ -1285,7 +1285,7 @@ splinter judge calibrate [OPTIONS] --judge <REF> <LABELLED-FILE>
 
 Arguments:
 
-- `<LABELLED-FILE>` (required): JSON Lines: {"experience": "\<id\>", "label": "pass"|"fail"}.
+- `<LABELLED-FILE>` (required): JSON Lines: `{"experience": "<id>", "label": "pass"|"fail"}`.
 
 Options:
 
@@ -1834,7 +1834,7 @@ splinter exam-set create [OPTIONS] <SOURCE>...
 
 Arguments:
 
-- `<SOURCE>...` (required): Files, directories, cmd:\<command\> (quoted as one argument), or stored source ids.
+- `<SOURCE>...` (required): Files, directories, `cmd:<command>` (quoted as one argument), or stored source ids.
 
 Options:
 
@@ -2192,7 +2192,7 @@ splinter config show [OPTIONS]
 
 #### splinter config get
 
-Print one value. KEY is a dotted path, with [name] for a name that holds dots: `connections.hosted.url`, `operators[exam.sealed].network`
+Print one value. KEY is a dotted path, with `[name]` for a name that holds dots: `connections.hosted.url`, `operators[exam.sealed].network`
 
 ```text
 splinter config get [OPTIONS] <KEY>

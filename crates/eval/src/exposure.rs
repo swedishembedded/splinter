@@ -35,7 +35,7 @@
 //! (`outside_workspace_cd`) are recorded **probes**, not exposure: they are
 //! listed under `outside_probes` in the evidence (of an abstention as well as
 //! of a fail) so a caller can count and filter by it, and they do not fail
-//! the audit. [`crate::exposure_paths`] says how a call's paths and results
+//! the audit. `crate::exposure_paths` says how a call's paths and results
 //! are read.
 //!
 //! A clean trajectory is an **abstention**, not a pass: not having seen the

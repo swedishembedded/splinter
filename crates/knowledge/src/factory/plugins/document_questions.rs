@@ -27,7 +27,7 @@
 //!
 //! The check is deterministic: a number equal to the computed one (derived),
 //! or an answer that states the fact's value as a run of whole words
-//! ([`states`], recall; the answer may add at most four words). Documents are
+//! (`states`, recall; the answer may add at most four words). Documents are
 //! split between train and dev, by document: a dev instance asks about a
 //! document no train instance used.
 //!

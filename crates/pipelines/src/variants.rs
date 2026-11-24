@@ -23,7 +23,7 @@
 //!
 //! A variant is measured and never trained on: the set is not the one
 //! `solve` works on, `dataset build` refuses an experience of a variant
-//! ([`refuse_variants`]), and the gate leaves out any variant whose wording
+//! (`refuse_variants`), and the gate leaves out any variant whose wording
 //! the candidate trained on ([`crate::release::leakage`]).
 
 use std::sync::Arc;

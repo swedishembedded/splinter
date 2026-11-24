@@ -6,8 +6,12 @@
 // in evaluation-gated fine-tuning, you can procure our services by sending
 // an email to info@swedishembedded.com.
 
-//! The release gate's four checks, the numbers each records, and how each
-//! is decided. A candidate is released only when all four pass:
+//! The serve check, which the absorb and consolidation gates hold a candidate
+//! to ([`serve`]), and the report of the earlier graded-answer release gate,
+//! which releases made by it carry and which stays readable so they load.
+//! Nothing computes that gate's first three checks any more; what follows
+//! describes what its report records. It released a candidate only when all
+//! four passed:
 //!
 //! 1. **Improvement** on the new data's held-out tasks - the records
 //!    training held out, and the variants of the tasks it trained on (the
@@ -15,29 +19,22 @@
 //!    measured over both together, and reported for each alone: the held-out
 //!    records measure generalisation to text the candidate was not trained
 //!    on, the variants measure recall of trained facts under paraphrase, and
-//!    a report never lets one pass for the other. The gain is decided by the
-//!    one promotion rule ([`crate::promotion`]): the paired gain's two-sided
-//!    interval at the rule's level, resampling whole families, above zero over at least
-//!    [`crate::promotion::MIN_GAIN_FAMILIES`] families. The release applies
-//!    the rule over this check's outcomes (`splinter_pipelines::release`);
-//!    this module measures them. The one-sided paired sign test over
-//!    families ([`Significance`], at `alpha`, [`DEFAULT_ALPHA`]) is recorded
-//!    beside the rule and decides nothing. Ties and unpaired tasks carry no
-//!    evidence; they are excluded and counted. Beside the rule, every task
+//!    a report never lets one pass for the other. The one-sided paired sign test over
+//!    families ([`crate::significance::Significance`], at `alpha`,
+//!    [`DEFAULT_ALPHA`]) is recorded with the check. Ties and unpaired tasks carry no
+//!    evidence; they are excluded and counted. Beside that, every task
 //!    the suite assigned is counted for each arm ([`Verified`]): the
 //!    candidate must have solved at least as many as the champion, and a
 //!    task it was not graded on counts as unsolved, so an attempt set aside
 //!    as exposed or as an environment failure cannot remove a loss.
 //! 2. **Retention** on every earlier release's held-out tasks and the anchor
-//!    suite together, decided by the promotion rule's retention bound: the
-//!    one-sided lower bound of the paired change above
-//!    `-`[`crate::promotion::RETENTION_MARGIN`]. Each earlier suite's drop
+//!    suite together. Each earlier suite's drop
 //!    against `retention_bound` ([`DEFAULT_RETENTION_BOUND`]) is reported, and
-//!    names what a suite lost; it decides nothing.
+//!    names what a suite lost.
 //! 3. **Anchor**: on the frozen anchor suite of general tasks, a bound on
 //!    the drop in accuracy, `anchor_bound` ([`DEFAULT_ANCHOR_BOUND`]), or,
 //!    when `anchor_net_lost` is set, on the answers lost net of the answers
-//!    gained ([`AnchorBound`]).
+//!    gained.
 //! 4. **Serve**: plain `brain serve --adapter` loads the candidate, reports
 //!    its digest, and re-answers a sample of the held-out tasks with the
 //!    same answers as in-process (whitespace aside), graded the same. Both
@@ -98,12 +95,10 @@ pub struct SuiteSummary {
     pub excluded: BTreeMap<String, usize>,
 }
 
-/// The level of the sign test the improvement check reports beside the
-/// promotion rule, which decides at its own fixed level.
+/// The level of the sign test the improvement check reports.
 pub const DEFAULT_ALPHA: f64 = 0.05;
 /// The drop, as a fraction of the suite, in the candidate's accuracy on an
-/// earlier release's held-out tasks that the report marks; the promotion
-/// rule's retention bound decides.
+/// earlier release's held-out tasks that the report marks.
 pub const DEFAULT_RETENTION_BOUND: f64 = 0.05;
 /// How far, as a fraction of the suite, the candidate's accuracy on the
 /// anchor suite may fall below the champion's.

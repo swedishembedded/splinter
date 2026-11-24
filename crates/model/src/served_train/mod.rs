@@ -76,8 +76,8 @@ const ADAPTER_FILE: &str = "adapter.safetensors";
 const RECORD_FILE: &str = "training.json";
 
 /// Fine-tunes a LoRA on `request.train` as a job of the brain service, and
-/// scores base and tuned on the held-out records: [`crate::train::fine_tune`]
-/// with the work done by the service.
+/// scores base and tuned on the held-out records, the work
+/// done by the service.
 pub fn fine_tune_served(
     brain: &BrainEndpoints,
     request: &FineTune<'_>,
@@ -148,9 +148,8 @@ pub fn fine_tune_served(
 }
 
 /// Fine-tunes a LoRA on the rollout records of `request.train` by the clipped
-/// policy gradient as a job of the brain service:
-/// [`crate::policy_gradient::train_policy_gradient`] with the work done by the
-/// service.
+/// policy gradient, the work done by the brain
+/// service as a job.
 pub fn train_policy_gradient_served(
     brain: &BrainEndpoints,
     request: &PolicyGradientTune<'_>,

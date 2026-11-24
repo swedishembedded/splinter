@@ -8,7 +8,7 @@
 
 //! The dataset: splinter's own build over the run's experiences.
 //!
-//! No writer of this sample's own: [`datasets::build`] projects the run's
+//! No writer of this sample's own: [`build`] projects the run's
 //! experience sets through the `sft-step` view (one packed record per
 //! trajectory, every action supervised, strict call and result pairing,
 //! conservation of tool calls and results), puts the SERVING prompt in as the

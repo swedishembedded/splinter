@@ -110,7 +110,7 @@ fn line(id: &ExperienceId, experience: &Experience, notes: &[Annotation]) -> Exp
 pub struct Edge {
     /// The experience the relation is recorded on.
     pub from: ExperienceId,
-    /// The relation, read as "from <relation> to".
+    /// The relation, read as "from `<relation>` to".
     pub relation: RelationKind,
     /// The other experience.
     pub to: ExperienceId,

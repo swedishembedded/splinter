@@ -16,7 +16,7 @@ use crate::teaching::{parse_teaching, Teaching, CORRECTION_OPENERS};
 const REFUSALS: [&str; 3] = ["no", "wrong", "incorrect"];
 
 /// Whether `transcript` corrects what was said just before it: a correcting
-/// fact ([`parse_teaching`](crate::teaching::parse_teaching): `Actually, ...`, `That is wrong, ...`), or a
+/// fact ([`parse_teaching`]: `Actually, ...`, `That is wrong, ...`), or a
 /// reply that opens by refusing it (`No, ...`, `Wrong.`, `Incorrect:`). The
 /// refusal must be followed by punctuation, so `No problem` and `Not now`
 /// correct nothing; a correction opener alone needs none.

@@ -10,7 +10,7 @@
 //! `release_predictive`: a full-checkpoint candidate that is not a language
 //! model becomes the champion of an alias only through the predictive gate.
 //!
-//! The answer-grading gate ([`super::release`]) grades an adapter's answers
+//! The answer-grading gate ([`crate::release`]) grades an adapter's answers
 //! on tasks; a predictive model has none to grade. This stage is the other
 //! way to a release: the caller trains with brain, scores champion and
 //! candidate on the same held-out units, and hands over the checkpoint file,

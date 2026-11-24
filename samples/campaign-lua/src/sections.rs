@@ -180,7 +180,7 @@ fn weakness(accuracy: &Accuracy, family: &str) -> f64 {
 }
 
 /// The functions of `section` the policy answers worst on (below
-/// [`WEAK_BELOW`] with enough dev programs), worst first.
+/// `WEAK_BELOW` with enough dev programs), worst first.
 #[must_use]
 pub fn weak_functions(section: &ManualSection, accuracy: &Accuracy) -> Vec<String> {
     let mut weak: Vec<(f64, &String)> = section

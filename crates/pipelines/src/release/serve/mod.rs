@@ -23,8 +23,8 @@
 //! than two draws and, as in-process, without a reasoning block, and
 //! graded as in-process. A task is answered alike when the verdict is the
 //! same and the final answer is the same text up to the numerical noise of
-//! two processes decoding one model ([`alike`]) or, worded otherwise, says
-//! the same thing ([`meaning::says_the_same`]: nearer in meaning to its own
+//! two processes decoding one model (`alike`) or, worded otherwise, says
+//! the same thing ([`crate::release::meaning::says_the_same`]: nearer in meaning to its own
 //! in-process answer than to the answer to any other task, so the
 //! comparison cannot call everything alike). A served model may sample, and
 //! its kernels sum in another order, so the wording is not what must
@@ -35,14 +35,14 @@
 //!
 //! The server loads its own copy of the base, so every base this process
 //! keeps resident is released before it starts. The answers are decided
-//! only after the server has exited ([`ask_then_judge`]): the judge, a model
+//! only after the server has exited (`ask_then_judge`): the judge, a model
 //! of its own, would otherwise run out of memory on the device the server
 //! holds and every served verdict would be lost. A task the server gave no
 //! answer to is not a disagreement: the check is not measured
-//! ([`unanswered`]), and so is one whose server stopped answering, with what
+//! (`unanswered`), and so is one whose server stopped answering, with what
 //! the server last wrote. A judge may abstain on an answer; the verdict is
 //! then undecided and the answers are compared by their text and meaning
-//! ([`verdicts_compatible`]).
+//! (`verdicts_compatible`).
 //!
 //! A candidate that works in a workspace is served and asked the same way
 //! ([`workspace`]): the same worker, with the served endpoint as its model,
@@ -55,7 +55,7 @@
 //! measured - and the gate fails. When the gate runs on brain endpoints
 //! (`--brain-endpoint`) none is started: the candidate was served by the
 //! endpoint all along, and the check is that it lists the candidate under its
-//! digest ([`endpoint`]).
+//! digest (`endpoint`).
 
 mod compare;
 mod endpoint;
@@ -91,7 +91,7 @@ pub struct ServeCheck<'a> {
     /// The system prompt the candidate is asked under; `None` is the default.
     pub system: Option<&'a str>,
     /// The held-out tasks re-answered through the server. A suite of tasks
-    /// that work in a workspace is asked by [`workspace::check`]; this one
+    /// that work in a workspace is asked by `workspace::check`; this one
     /// holds closed-book tasks.
     pub sample: &'a Suite,
     /// The candidate's in-process answers to them, one per task.
@@ -105,7 +105,7 @@ pub struct ServeCheck<'a> {
 /// cancelled check; every other failure is the check's result.
 ///
 /// A sample of tasks that work in a workspace is asked through
-/// [`workspace::check`].
+/// `workspace::check`.
 pub fn check(
     ctx: &Context,
     request: &ServeCheck<'_>,

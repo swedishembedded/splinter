@@ -11,7 +11,7 @@
 //! A write that must survive a crash is a sequence of steps that each leave
 //! the disk in a state recovery must handle (a blob synced, a temporary file
 //! renamed into place, an intent recorded, a manifest committed). Each step's
-//! end calls [`boundary`]. In an ordinary build it does nothing and compiles
+//! end calls `boundary`. In an ordinary build it does nothing and compiles
 //! away. Built with the `fault-injection` feature (the store's own tests are),
 //! a test can record the boundaries an operation passes and then, in a child
 //! process, end that process at any one of them, as a crash would: no

@@ -24,7 +24,7 @@
 //!
 //! A benchmark trial's records are grouped by its task, and every record is
 //! drawn by the dataset's split seed in the stratum of its task's domain
-//! ([`assign_draws`]), so held-out and monitoring sets hold every domain at
+//! (`assign_draws`), so held-out and monitoring sets hold every domain at
 //! its share.
 
 use std::collections::{BTreeMap, BTreeSet};

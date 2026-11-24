@@ -100,7 +100,7 @@ impl ModelProvider for UnderSystemPrompt {
 /// `inner` with `addendum` appended to the system turn of every request, a
 /// blank line after what is there: the model asked under its system prompt
 /// and one more thing it is told, as when a model is prompted with a goal.
-/// Put inside a solve's own wrapping ([`UnderSystemPrompt`]), which sets the
+/// Put inside a solve's own wrapping (`UnderSystemPrompt`), which sets the
 /// system turn the addendum is appended to.
 pub fn with_system_addendum(
     inner: Arc<dyn ModelProvider>,

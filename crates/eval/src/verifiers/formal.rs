@@ -22,7 +22,7 @@ use super::{single_reference, Finding, Verifier, VerifyError};
 /// [`Reference`](splinter_core::experience::PrivilegedKind::Reference)
 /// once both are normalised, or when it states exactly one candidate of the
 /// reference's type and that is the reference (see
-/// [`short_answer`](super::short_answer)); fails a different answer or none. Abstains on
+/// `short_answer`); fails a different answer or none. Abstains on
 /// a task without exactly one reference, or of a kind it is not for.
 #[derive(Clone, Debug)]
 pub struct ExactMatchVerifier {
@@ -120,7 +120,7 @@ const STATED_SLACK: usize = 60;
 /// An answer that states the reference but runs past the length bound is
 /// still passed when its one candidate is the reference (the single phrase it
 /// emphasises, or for a numeric reference the single number it states; see
-/// [`short_answer`](super::short_answer)). Otherwise it is
+/// `short_answer`). Otherwise it is
 /// neither right nor wrong by code: the reference may be the point of a long
 /// explanation or one item of a list, which only a judge can tell apart, so
 /// the verifier abstains and leaves the answer to one. So it does when the

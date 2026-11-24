@@ -11,8 +11,8 @@
 //!
 //! * [`Family`] - a specification, its reference implementation and its mutations.
 //! * [`check_module`] - the refinement check, as a [`Verdict`].
-//! * [`audit`] - every family checks itself.
-//! * [`report`] - the mutation-detection table.
+//! * [`mod@audit`] - every family checks itself.
+//! * [`mod@report`] - the mutation-detection table.
 
 #![warn(missing_docs)]
 

@@ -10,8 +10,8 @@
 //! Bundles of experience, datasets, adapters and verdicts, distributed as
 //! immutable versions of a private Hugging Face dataset repository.
 //!
-//! [`publish`] writes what this state root holds as one tagged commit;
-//! [`ingest`] reads a bundle back at a pinned revision into this root through
+//! [`fn@publish`] writes what this state root holds as one tagged commit;
+//! [`fn@ingest`] reads a bundle back at a pinned revision into this root through
 //! the stores' own APIs. [`bundle`] is the manifest both read and write;
 //! [`withhold`] is the typed check of what is never published. The Hub is
 //! reached through [`splinter_hub::Hub`], at the endpoint the caller hands

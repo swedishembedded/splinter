@@ -19,7 +19,7 @@
 //! rate, which carries its 95% Wilson interval; an ungraded attempt is never a
 //! `0`. Every failed attempt's diagnosed class is counted, and so is how many
 //! of them were the model's own (a repairable failure: wrong content, no
-//! answer, a tool misused, ...). Each task's band ([`Band`]) comes from the
+//! answer, a tool misused, ...). Each task's band (`Band`) comes from the
 //! campaign's per-task pass rates.
 //!
 //! **Weight.** A capability's weight is how much practising it should teach:

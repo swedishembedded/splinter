@@ -11,7 +11,7 @@
 //! came from it.
 //!
 //! The graph is derived on every call from what the stores already record
-//! ([`load`]); nothing about lineage is stored twice. An edge runs from an
+//! (`load`); nothing about lineage is stored twice. An edge runs from an
 //! artifact to one it was made from - `from` is derived from `to` - and its
 //! [`Relation`] says how:
 //!

@@ -182,7 +182,7 @@ impl SkillGraph {
         Ok(ordered)
     }
 
-    /// The skills prerequisites first (see [`Self::order_of`]).
+    /// The skills prerequisites first (see `Self::order_of`).
     ///
     /// # Errors
     /// [`GraphError::Cycle`] when prerequisites form a cycle: never an empty

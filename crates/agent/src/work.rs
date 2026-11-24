@@ -501,7 +501,7 @@ pub struct WorkspaceSolution {
 /// directory that goes when the call returns, and a worker with sven's
 /// file, search and shell tools works there on `task`'s instruction. Where
 /// `env`'s sandbox is a container the shell runs in it (see
-/// [`SandboxShell`]); otherwise sven's own shell runs on the host, and the
+/// `SandboxShell`); otherwise sven's own shell runs on the host, and the
 /// environment's record says the sandbox does not isolate.
 ///
 /// After each reply that ends the worker's turn (a run that ends announcing a
@@ -785,8 +785,8 @@ fn follow_up(failures: &[Failure]) -> String {
     text
 }
 
-/// The end of `output`: its last [`FEEDBACK_LINES`] lines, and of those at
-/// most [`FEEDBACK_CHARS`] characters. What a follow-up shows of a failing
+/// The end of `output`: its last `FEEDBACK_LINES` lines, and of those at
+/// most `FEEDBACK_CHARS` characters. What a follow-up shows of a failing
 /// check, and what a supervisor puts in its own feedback.
 #[must_use]
 pub fn tail(output: &str) -> String {
