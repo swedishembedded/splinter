@@ -230,6 +230,14 @@ pub enum SandboxError {
          refusing to run it unconfined without --allow-unconfined-workspace"
     )]
     Unconfined,
+    /// A process budget was asked for where it cannot bind: the kernel exempts
+    /// root of the initial user namespace from the task limit, and no user
+    /// namespace can run the command as another user here.
+    #[error(
+        "this sandbox was asked to bound a command's processes, which cannot bind here: the command would run \
+         as root without a user namespace, and the kernel does not hold root to a task limit"
+    )]
+    UnboundedProcesses,
     /// The environment record cannot be serialized.
     #[error("cannot serialize the environment: {0}")]
     Serialize(#[from] serde_json::Error),

@@ -205,6 +205,19 @@ impl ProcessSandbox {
         self
     }
 
+    /// A process budget, when one is asked for, must bind: the kernel exempts
+    /// root of the initial user namespace from `RLIMIT_NPROC`, so a command
+    /// that would run as root without a user namespace is refused rather than
+    /// run with a budget its record would claim and nothing would hold.
+    fn process_budget_binds(&self) -> Result<(), SandboxError> {
+        // SAFETY: `geteuid` takes nothing and cannot fail.
+        let root = unsafe { libc::geteuid() } == 0;
+        if self.limits.max_processes.is_some() && root && !crate::namespace::available() {
+            return Err(SandboxError::UnboundedProcesses);
+        }
+        Ok(())
+    }
+
     /// Whether commands get a private user and pid namespace with their own
     /// `/proc`: unless the host's is allowed, where the host can make one,
     /// and always when it is required (a command is then refused without).
@@ -398,6 +411,7 @@ impl Sandbox for ProcessSandbox {
         if !self.allow_unconfined && !self.landlock {
             return Err(SandboxError::Unconfined);
         }
+        self.process_budget_binds()?;
         let dir = CallDir::create(&self.scratch_root)?;
         let result = self.run_in(&dir, runtime, call);
         let removed = dir.remove();
@@ -445,6 +459,7 @@ impl ProcessSandbox {
         if !self.allow_unconfined && !self.landlock {
             return Err(SandboxError::Unconfined);
         }
+        self.process_budget_binds()?;
         let Some(home_arg) = home.to_str() else {
             return Err(io(home)(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,

@@ -28,6 +28,7 @@ use splinter_sandbox::host::is_secret_name;
 use splinter_sandbox::landlock::abi_version;
 use splinter_sandbox::{
     CodeCall, CodeResult, CommandCall, Limits, ProcessSandbox, RuntimeRegistry, Sandbox,
+    SandboxError,
 };
 
 /// Two candidate trees, a state root holding withheld tests, and a stand-in
@@ -399,35 +400,55 @@ fn an_explicitly_allowed_network_is_open_and_recorded() {
     assert!(sandbox.spec().network_allowed, "the record says so");
 }
 
+/// The forks a budget allows and then refuses, as a program sees them.
+const FORK_BOMB: &str = "python3 - <<'PY'
+import os, time
+started = 0
+for _ in range(600):
+    try:
+        pid = os.fork()
+    except OSError:
+        print('refused after', started)
+        break
+    if pid == 0:
+        time.sleep(30)
+        os._exit(0)
+    started += 1
+else:
+    print('unbounded', started)
+PY";
+
+/// A budget bounds the processes a command starts, and is recorded; where it
+/// cannot bind (the command would run as root with no user namespace, and the
+/// kernel holds root to no task limit) the command is refused, never run under
+/// a budget its record would claim and nothing would hold.
 #[test]
 fn a_fork_bomb_is_stopped_at_the_process_budget_and_the_budget_is_recorded() {
     let rig = Rig::new();
     let sandbox = rig.sandbox().max_processes(Some(48));
     assert_eq!(sandbox.spec().limits.max_processes, Some(48));
-
-    let result = rig.sh(
-        &sandbox,
-        "python3 - <<'PY'\n\
-         import os, time\n\
-         started = 0\n\
-         for _ in range(600):\n\
-        \x20   try:\n\
-        \x20       pid = os.fork()\n\
-        \x20   except OSError:\n\
-        \x20       print('refused after', started)\n\
-        \x20       break\n\
-        \x20   if pid == 0:\n\
-        \x20       time.sleep(30)\n\
-        \x20       os._exit(0)\n\
-        \x20   started += 1\n\
-         else:\n\
-        \x20   print('unbounded', started)\n\
-         PY",
-    );
-    assert!(
-        result.stdout.contains("refused after"),
-        "the kernel stopped the forking: {result:?}"
-    );
+    let call = CommandCall {
+        argv: vec!["bash".into(), "-c".into(), FORK_BOMB.into()],
+        stdin: None,
+    };
+    match sandbox.run_command(&rig.tree_a, &call) {
+        Err(SandboxError::UnboundedProcesses) => {
+            // SAFETY: `geteuid` takes nothing and cannot fail.
+            assert_eq!(
+                unsafe { libc::geteuid() },
+                0,
+                "refused only where root is unbounded"
+            );
+            assert!(!splinter_sandbox::namespace::available());
+        }
+        ran => {
+            let result = ran.unwrap();
+            assert!(
+                result.stdout.contains("refused after"),
+                "the kernel stopped the forking: {result:?}"
+            );
+        }
+    }
 }
 
 #[test]
