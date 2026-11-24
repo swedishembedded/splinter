@@ -196,6 +196,16 @@ pub fn power(args: &PowerArgs) -> Result<PlannedExam, Error> {
             (read("discordance")?, read("icc")?)
         }
     };
+    // A lead is a share of the discordant tasks won over lost: it cannot
+    // exceed the discordance, and a plan that asks for one is no plan (its
+    // power would be the largest possible lead's, under another name).
+    if !(0.0..=1.0).contains(&discordance) || !(0.0..=discordance).contains(&args.effect) {
+        return Err(Error::Refused(format!(
+            "an effect of {} with a discordance of {discordance}: the effect is a lead in the share of \
+             tasks right, between 0 and the discordance (at most 1)",
+            args.effect
+        )));
+    }
     let plan = Plan {
         families: args.families,
         tasks_per_family: args.tasks_per_family,
@@ -343,6 +353,10 @@ mod tests {
     use crate::cli::{Cli, Command};
 
     fn planned(words: &[&str]) -> PlannedExam {
+        planning(words).unwrap()
+    }
+
+    fn planning(words: &[&str]) -> Result<PlannedExam, Error> {
         let argv = [
             "splinter",
             "exam-set",
@@ -355,7 +369,7 @@ mod tests {
         .into_iter()
         .chain(words.iter().copied());
         match Cli::try_parse_from(argv).unwrap().command {
-            Some(Command::ExamSet(ExamSetCommand::Power(args))) => power(&args).unwrap(),
+            Some(Command::ExamSet(ExamSetCommand::Power(args))) => power(&args),
             other => panic!("not an exam-set power: {other:?}"),
         }
     }
@@ -368,5 +382,17 @@ mod tests {
         assert_eq!(planned(&["--families", "120"]).pilot.len(), 1);
         let enough = planned(&["--families", "120", "--training-runs", "3"]);
         assert!(enough.pilot.is_empty(), "{:?}", enough.pilot);
+    }
+
+    /// A lead larger than the discordance cannot happen: such a plan is
+    /// refused, not given the power of a smaller lead.
+    #[test]
+    fn an_effect_beyond_the_discordance_is_refused() {
+        let refused = planning(&["--effect", "0.4", "--discordance", "0.3"])
+            .err()
+            .expect("refused")
+            .to_string();
+        assert!(refused.contains("discordance"), "{refused}");
+        assert!(planning(&["--effect", "0.3", "--discordance", "0.3"]).is_ok());
     }
 }
