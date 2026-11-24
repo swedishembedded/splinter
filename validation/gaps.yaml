@@ -344,9 +344,11 @@ gaps:
     OutcomeView and Retrieval datasets have no downstream consumer in brain; candidates for ablation or documentation.'
   severity: low
   confidence: medium
-  status: confirmed
-  resolution: 'the Reward and Contrastive objectives are written in a format no trainer reads: export-only, to be marked
-    so or removed (plan 6C: unsupported objective is an explicit error or export-only)'
+  status: fixed
+  resolution: 'export-only and explicitly refused: Objective::line_format writes Reward and Contrastive as splinter-export-v1,
+    the capability policy refuses them as ObjectiveNotTrainable (splinter-model/it/trainable_objectives), pipelines'' trainable
+    refuses an export-only dataset by name, and the factory''s trainer refuses an objective with no regime. Removing the
+    formats is a product decision, not a correctness gap'
 - id: G-FS-01
   source_id: F-01
   where: crates/factory/src/run/compute.rs:387,427,440
