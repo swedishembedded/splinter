@@ -26,26 +26,6 @@ use super::{fraction, model_ref, positive_count};
 /// `tasks ...`.
 #[derive(Debug, Subcommand)]
 pub enum TasksCommand {
-    /// Generate tasks from stored sources into a task set.
-    Generate {
-        /// The sources, by id or unique prefix.
-        #[arg(required = true, value_name = "SOURCE-ID")]
-        sources: Vec<String>,
-        /// Task kinds, comma-separated.
-        #[arg(long, required = true, value_delimiter = ',', value_name = "K,..")]
-        kinds: Vec<String>,
-        /// The model that writes the tasks.
-        #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-        generator: ModelRef,
-        /// Who wrote the sources, when they are one person's: the generator is
-        /// told, and a question may name the author as its subject.
-        #[arg(long, value_name = "NAME")]
-        author: Option<String>,
-        /// The seed the `denoise` tasks are built with (drawn and printed
-        /// when not given and the kinds include denoise).
-        #[arg(long, value_name = "N")]
-        denoise_seed: Option<Seed>,
-    },
     /// Read tasks from a repository's history: a commit that changes source
     /// and tests together is a task when its parent tree fails the commit's
     /// own tests and the commit's tree passes them. Formatting-only,

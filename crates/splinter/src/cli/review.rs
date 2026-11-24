@@ -12,18 +12,16 @@ use clap::Args;
 use splinter_sdk::critique::DEFAULT_RETRIES;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 
+use std::path::PathBuf;
+
 use super::model_ref;
 
 /// `verify`.
 #[derive(Debug, Args)]
 pub struct VerifyArgs {
-    /// A factory run directory, or an experience set by id or unique
-    /// prefix.
-    #[arg(value_name = "RUN|EXPERIENCE-SET")]
-    pub experience_set: String,
-    /// A calibrated judge for the kinds a judge grades.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
+    /// The factory run directory.
+    #[arg(value_name = "RUN")]
+    pub run: PathBuf,
 }
 
 /// `critique`.

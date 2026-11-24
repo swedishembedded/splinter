@@ -6,7 +6,7 @@
 
 use std::fmt::Write as _;
 
-use splinter_sdk::curriculum::frontier::{Frontier, Measured};
+use splinter_sdk::curriculum::frontier::Frontier;
 use splinter_sdk::curriculum::mastery::{MasteryReport, ReleaseMastery};
 use splinter_sdk::curriculum::teacher::Taught;
 
@@ -70,18 +70,6 @@ impl Report for Taught {
     }
 }
 
-impl Report for Measured {
-    fn human(&self) -> String {
-        format!(
-            "{}{}{}{}",
-            self.solve.human(),
-            self.verify.human(),
-            self.teach.human(),
-            self.frontier.human()
-        )
-    }
-}
-
 impl Report for MasteryReport {
     fn human(&self) -> String {
         let under = self
@@ -90,8 +78,8 @@ impl Report for MasteryReport {
             .as_ref()
             .map_or("the base".into(), |r| format!("release {r}"));
         let mut out = format!(
-            "concepts: {} measured under {under} of {} seen; {} queued for new tasks\n",
-            self.measured, self.concepts, self.queued
+            "concepts: {} measured under {under} of {} seen\n",
+            self.measured, self.concepts
         );
         for concept in &self.weakest {
             let current = concept.current.as_ref();

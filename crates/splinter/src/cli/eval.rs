@@ -6,52 +6,15 @@
 // evaluation and release gating, you can procure our services by sending an
 // email to info@swedishembedded.com.
 
-//! `release`, `eval`, `experiment` and `lineage`.
+//! `release list`, `eval`, `experiment` and `lineage`.
 
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use splinter_sdk::eval::SuiteChoice;
 use splinter_sdk::lineage::Direction;
-use splinter_sdk::seed::Seed;
 use splinter_sdk::vocabulary::model_ref::{ModelRef, POLICY_DEFAULT};
 
-use super::{model_ref, suite, GateArgs};
-
-/// `release`.
-#[derive(Debug, Args)]
-#[command(args_conflicts_with_subcommands = true)]
-pub struct ReleaseArgs {
-    /// The candidate, by id or unique prefix.
-    #[arg(value_name = "CANDIDATE-ID")]
-    pub candidate: Option<String>,
-    /// The alias it replaces the champion of.
-    #[arg(long, default_value = POLICY_DEFAULT, value_name = "NAME")]
-    pub alias: String,
-    /// The calibrated model that judges the tasks a judge decides.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-    /// Release for distribution and commercial use: refused unless the terms
-    /// of everything the candidate was made from allow both. Without it the
-    /// release is restricted: it records the terms and stays local.
-    #[arg(long)]
-    pub unrestricted: bool,
-    /// The seed the gate's bootstrap intervals are resampled with (drawn and
-    /// printed when not given; the same outcomes and seed give the same
-    /// intervals).
-    #[arg(long, value_name = "N")]
-    pub interval_seed: Option<Seed>,
-    /// A task set of canaries (`tasks canaries`) the candidate attempts beside
-    /// the exam: a pass on any one refuses it, whatever else it passed.
-    #[arg(long, value_name = "TASKSET-ID")]
-    pub canaries: Option<String>,
-    /// The gate's statistical settings.
-    #[command(flatten)]
-    pub gate: GateArgs,
-    /// `list`.
-    #[command(subcommand)]
-    pub command: Option<ReleaseCommand>,
-}
+use super::model_ref;
 
 /// `release ...`.
 #[derive(Debug, Subcommand)]
@@ -64,25 +27,26 @@ pub enum ReleaseCommand {
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
 pub struct EvalArgs {
-    /// A factory run directory (with `--plan` and `--out`), a candidate id
-    /// (or prefix) or a model reference; none shows the anchor suite.
-    #[arg(value_name = "REF")]
-    pub model: Option<String>,
-    /// held-out, retention, anchor, or an anchor-format file of tasks.
-    #[arg(long, default_value = "held-out", value_parser = suite, value_name = "SUITE")]
-    pub suite: SuiteChoice,
-    /// With --suite anchor: make these files' tasks (repeat the flag for
-    /// several) the anchor suite's next version first. JSON Lines:
-    /// {"instruction", "reference", "kind"?}.
-    #[arg(long, value_name = "FILE")]
+    /// A factory run directory, whose candidates `--plan` evaluates; none
+    /// shows the anchor suite, or grades a model with --suite.
+    #[arg(value_name = "RUN")]
+    pub run: Option<PathBuf>,
+    /// Make these files' tasks (repeat the flag for several) the anchor
+    /// suite's next version. JSON Lines: {"instruction", "reference",
+    /// "kind"?}.
+    #[arg(long, value_name = "FILE", conflicts_with = "run")]
     pub freeze: Vec<PathBuf>,
-    /// The calibrated model that judges the tasks a judge decides.
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub judge: Option<ModelRef>,
-    /// With a factory run directory as REF: the evaluation plan to evaluate
-    /// the run's candidates under, reusing them (a fork of the run into
-    /// --out with the recipe's plan replaced).
-    #[arg(long, value_name = "PLAN", requires = "out")]
+    /// Grade --policy closed-book on this file's tasks (the anchor format),
+    /// keeping every item with its verdict; decides nothing.
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["run", "freeze"])]
+    pub suite: Option<PathBuf>,
+    /// With --suite: the model graded.
+    #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(),
+        value_name = "REF", requires = "suite")]
+    pub policy: ModelRef,
+    /// The evaluation plan to evaluate the run's candidates under, reusing
+    /// them (a fork of the run into --out with the recipe's plan replaced).
+    #[arg(long, value_name = "PLAN", requires_all = ["out", "run"])]
     pub plan: Option<PathBuf>,
     /// With --plan: the new run directory.
     #[arg(long, value_name = "DIR")]

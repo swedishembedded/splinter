@@ -29,21 +29,14 @@ use std::collections::BTreeSet;
 use common::gate::put_base;
 use common::repo::{git, project, write, Agent};
 use common::{config, workspace_tasks, Scratch};
-use serde_json::json;
 use splinter_agent::solve::Model;
-use splinter_core::annotation::{Annotation, AnnotationBody, Outcome, Producer, Strength};
 use splinter_core::clock::FixedClock;
-use splinter_core::experience::{Experience, PrivilegedKind, Provenance};
-use splinter_core::family::touches;
 use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_knowledge::tasks::workspace::DrillOrigin;
 use splinter_orchestrator::Context;
-use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
-use splinter_pipelines::exam_seal;
 use splinter_pipelines::harbor::export_harbor;
 use splinter_pipelines::tasks::drills::{drills, DrillRequest, Drilled};
-use splinter_store::experiences::ExperienceSet;
 use splinter_store::tasks::TaskSetId;
 
 fn context(test: &str) -> (Scratch, Context) {
@@ -59,13 +52,13 @@ fn context(test: &str) -> (Scratch, Context) {
     (scratch, ctx)
 }
 
-/// A repository made into tasks: its admitted set and the files its exam holds.
-fn practised(test: &str) -> (Scratch, Context, TaskSetId, BTreeSet<String>) {
+/// A repository made into tasks: its admitted set.
+fn practised(test: &str) -> (Scratch, Context, TaskSetId) {
     let (scratch, ctx) = context(test);
     let repo = scratch.0.join("repo");
     project(&repo, &[]);
-    let (set, exam) = workspace_tasks::practised(&ctx, &repo, 2);
-    (scratch, ctx, set, exam)
+    let set = workspace_tasks::practised(&ctx, &repo);
+    (scratch, ctx, set)
 }
 
 fn request(scratch: &Scratch, seed: u64) -> DrillRequest {
@@ -91,154 +84,22 @@ fn members(ctx: &Context, set: &Option<TaskSetId>) -> Vec<splinter_core::experie
 }
 
 #[test]
-fn a_drill_of_an_exam_file_is_an_exam_drill_and_the_rest_may_be_trained_on() {
-    let (scratch, ctx, _, exam) = practised("task-drills-exam");
-    assert_eq!(exam.len(), 2);
+fn every_drill_is_named_by_the_file_it_exercises_and_the_same_seed_makes_the_same_set() {
+    let (scratch, ctx, _) = practised("task-drills");
 
     let made = drills(&ctx, &request(&scratch, 7)).unwrap();
     assert!(made.admitted > 0, "{made:#?}");
-    assert_eq!(made.exam_drills + made.training_drills, made.admitted);
-    assert!(
-        made.exam_drills > 0 && made.training_drills > 0,
-        "{made:#?}"
-    );
-
-    let in_exam = members(&ctx, &made.exam_task_set);
-    let in_training = members(&ctx, &made.training_task_set);
-    for task in &in_exam {
+    let all = members(&ctx, &made.task_set);
+    assert_eq!(all.len(), made.admitted);
+    for task in &all {
         let origin = DrillOrigin::of_task(task).unwrap();
-        assert!(
-            touches(&origin.file, &exam).is_some(),
-            "{} is not exam",
-            origin.file
-        );
         assert_eq!(task.concepts[0], origin.file);
     }
-    for task in &in_training {
-        let origin = DrillOrigin::of_task(task).unwrap();
-        assert_eq!(
-            touches(&origin.file, &exam),
-            None,
-            "{} was trained on",
-            origin.file
-        );
-    }
-    let all: BTreeSet<_> = members(&ctx, &made.task_set)
-        .into_iter()
-        .map(|t| t.task.id)
-        .collect();
-    let split: BTreeSet<_> = in_exam
-        .iter()
-        .chain(&in_training)
-        .map(|t| t.task.id.clone())
-        .collect();
-    assert_eq!(all, split);
-    assert_eq!(all.len(), in_exam.len() + in_training.len());
     assert_eq!(made.families.values().sum::<usize>(), made.admitted);
 
-    // Again with the same seed, the same sets.
+    // Again with the same seed, the same set.
     let again = drills(&ctx, &request(&scratch, 7)).unwrap();
     assert_eq!(made.task_set, again.task_set);
-    assert_eq!(made.exam_task_set, again.exam_task_set);
-    assert_eq!(made.training_task_set, again.training_task_set);
-}
-
-fn answered(ctx: &Context, task: &splinter_core::experience::Task) -> Experience {
-    let reference = task
-        .privileged
-        .iter()
-        .find(|p| p.kind == PrivilegedKind::Reference)
-        .unwrap()
-        .content
-        .clone();
-    let experience = Experience::answered_without_a_run(
-        task.clone(),
-        &format!("```\n{reference}\n```"),
-        Provenance::new(
-            "scripted/solver-1",
-            &FixedClock::new("2026-11-06T09:00:00.000Z"),
-        ),
-    )
-    .unwrap();
-    let id = ctx.experiences().put(&experience).unwrap();
-    ctx.experiences()
-        .annotate(&Annotation {
-            experience: id,
-            producer: Producer {
-                name: "grader".into(),
-                version: "1".into(),
-            },
-            body: AnnotationBody::Verdict {
-                outcome: Outcome::Pass,
-                strength: Strength::Formal,
-                evidence: json!({}),
-            },
-        })
-        .unwrap();
-    experience
-}
-
-fn sft_of(ctx: &Context, experience: &Experience) -> Result<(), String> {
-    let set = ctx
-        .experiences()
-        .put_set(&ExperienceSet {
-            name: "answers".into(),
-            members: vec![experience.id().unwrap()],
-        })
-        .unwrap();
-    build(
-        ctx,
-        &BuildRequest {
-            sets: vec![set],
-            view: ViewName::SftFinal,
-            strip: None,
-            min_strength: Some(Strength::Formal),
-            system_prompt: None,
-            export_only: false,
-            limit: None,
-            voice: VoiceBuild::default(),
-            max_block: None,
-            pack: false,
-            split_over_block: false,
-            control: Default::default(),
-            serialise_calls: false,
-            only_actions: None,
-            roles: None,
-            images: false,
-            rl: Default::default(),
-            transition: Default::default(),
-            practice: Vec::new(),
-            split_seed: None,
-            history: Default::default(),
-            pass_curation: Default::default(),
-            base: None,
-        },
-    )
-    .map(|_| ())
-    .map_err(|e| e.to_string())
-}
-
-#[test]
-fn an_answer_to_an_exam_drill_is_never_built_into_a_training_set_and_one_to_a_training_drill_is() {
-    let (scratch, ctx, _, exam) = practised("task-drills-seal");
-    let made = drills(&ctx, &request(&scratch, 7)).unwrap();
-
-    let before = exam_seal::trained(&ctx).unwrap();
-    let exam_task = members(&ctx, &made.exam_task_set).remove(0);
-    let refused = sft_of(&ctx, &answered(&ctx, &exam_task)).unwrap_err();
-    let file = &exam_task.concepts[0];
-    assert!(
-        refused.contains("leakage") && refused.contains(file.as_str()),
-        "{refused}"
-    );
-    assert_eq!(exam_seal::trained(&ctx).unwrap(), before);
-
-    let training_task = members(&ctx, &made.training_task_set).remove(0);
-    sft_of(&ctx, &answered(&ctx, &training_task)).unwrap();
-    let mut after = before;
-    after.insert(training_task.concepts[0].clone());
-    assert_eq!(exam_seal::trained(&ctx).unwrap(), after);
-    assert_eq!(touches(&training_task.concepts[0], &exam), None);
 }
 
 fn lines_of(drilled: &Drilled) -> BTreeSet<String> {
@@ -247,7 +108,7 @@ fn lines_of(drilled: &Drilled) -> BTreeSet<String> {
 
 #[test]
 fn drills_for_tasks_cover_exactly_the_functions_their_reference_changes_touch() {
-    let (scratch, ctx, tasks, _) = practised("task-drills-for-tasks");
+    let (scratch, ctx, tasks) = practised("task-drills-for-tasks");
     let mut asked = request(&scratch, 7);
     asked.for_tasks = Some(tasks.clone());
     let made = drills(&ctx, &asked).unwrap();
@@ -268,7 +129,7 @@ fn drills_for_tasks_cover_exactly_the_functions_their_reference_changes_touch() 
 
 #[test]
 fn a_reference_change_made_for_another_revision_is_refused_naming_the_revision() {
-    let (scratch, ctx, tasks, _) = practised("task-drills-other-revision");
+    let (scratch, ctx, tasks) = practised("task-drills-other-revision");
     let repo = scratch.0.join("repo");
     for n in 0..common::repo::MODULES {
         let path = repo.join(format!("shop/tier{n}.py"));
@@ -285,7 +146,7 @@ fn a_reference_change_made_for_another_revision_is_refused_naming_the_revision()
 
 #[test]
 fn drills_export_as_harbor_tasks_like_the_other_tasks_of_a_set() {
-    let (scratch, ctx, _, _) = practised("task-drills-harbor");
+    let (scratch, ctx, _) = practised("task-drills-harbor");
     let made = drills(&ctx, &request(&scratch, 7)).unwrap();
     let out = scratch.0.join("harbor");
     let exports = export_harbor(&ctx, &made.task_set.unwrap(), &out, "python:3.12-slim").unwrap();

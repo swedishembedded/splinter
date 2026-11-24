@@ -8,33 +8,23 @@
 
 //! A repository made into stored workspace tasks the way the repository
 //! practice recipe makes them - snapshot, qualified baseline, mutation-seeded
-//! faults - with the exam's families reserved and sealed, for the specs of
-//! the commands that read such a set (`tasks combine`, `tasks drills`,
+//! faults - for the specs of the commands that read such a set (`tasks combine`, `tasks drills`,
 //! `improve`).
 
 #![allow(clippy::unwrap_used)]
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
-use splinter_core::family::rank;
 use splinter_knowledge::capture::{capture_tree, DirtyPolicy, TreeRequest};
 use splinter_knowledge::tasks::workspace::{
     Held, RepositoryProfile, WorkspaceGenerator, WorkspacePlan, WORKSPACE_GENERATOR,
 };
 use splinter_orchestrator::Context;
-use splinter_pipelines::exam_seal::remember_reserved;
-use splinter_pipelines::family::family_of_task;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
 
 /// The tasks made from `repo` at `HEAD` (one fault per file, at most 32
-/// tasks) as one stored set, and the `exam_families` families reserved
-/// for the exam and sealed in the state root.
-pub fn practised(
-    ctx: &Context,
-    repo: &Path,
-    exam_families: usize,
-) -> (TaskSetId, BTreeSet<String>) {
+/// tasks) as one stored set.
+pub fn practised(ctx: &Context, repo: &Path) -> TaskSetId {
     let backend = ctx.environments().workspace().unwrap();
     let captured = capture_tree(
         &TreeRequest {
@@ -94,17 +84,5 @@ pub fn practised(
         })
         .unwrap();
 
-    let mut families: Vec<String> = generation
-        .admitted
-        .iter()
-        .filter_map(|made| family_of_task(&made.task).map(str::to_string))
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let seed = splinter_model::seed::draw();
-    families.sort_by_cached_key(|family| rank(family, seed));
-    families.truncate(exam_families);
-    let exam: BTreeSet<String> = families.into_iter().collect();
-    remember_reserved(ctx, &exam, seed).unwrap();
-    (set, exam)
+    set
 }

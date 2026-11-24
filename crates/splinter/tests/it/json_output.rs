@@ -120,7 +120,7 @@ fn status_and_source_list_print_their_documented_fields() {
     assert_eq!(status["roles"]["teacher"], "policy:default");
     assert_eq!(
         keys(&status["concepts"]),
-        ["concepts", "measured", "policy", "queued", "weakest"]
+        ["concepts", "measured", "policy", "weakest"]
     );
     assert_eq!(status["concepts"]["concepts"], 0, "nothing solved yet");
     assert_eq!(
@@ -191,34 +191,19 @@ fn releases_rollback_and_the_anchor_suite_speak_json() {
     assert_eq!(code, 2, "{refused}");
     assert!(refused["error"].as_str().unwrap().contains("no release"));
 
-    let (code, refused) = splinter(&state, &["release", "candidate-none"]);
-    assert_eq!(code, 2, "{refused}");
-
     let anchor = scratch.0.join("anchor.jsonl");
     std::fs::write(
         &anchor,
         "{\"instruction\": \"What is 2 + 2?\", \"reference\": \"4\"}\n",
     )
     .unwrap();
-    let (code, frozen) = splinter(
-        &state,
-        &[
-            "eval",
-            "--suite",
-            "anchor",
-            "--freeze",
-            anchor.to_str().unwrap(),
-        ],
-    );
+    let (code, frozen) = splinter(&state, &["eval", "--freeze", anchor.to_str().unwrap()]);
     assert_eq!(code, 0, "{frozen}");
-    assert_eq!(
-        keys(&frozen),
-        ["anchor", "model", "reference", "run", "scores"]
-    );
+    assert_eq!(keys(&frozen), ["anchor", "run"]);
     assert_eq!(keys(&frozen["anchor"]), ["digest", "tasks", "version"]);
     assert_eq!(frozen["anchor"]["version"], 1);
 
-    let (code, shown) = splinter(&state, &["eval", "--suite", "anchor"]);
+    let (code, shown) = splinter(&state, &["eval"]);
     assert_eq!(code, 0, "{shown}");
     assert_eq!(shown["anchor"]["digest"], frozen["anchor"]["digest"]);
 }
@@ -349,17 +334,4 @@ fn state_reports_the_database_and_maintenance_keeps_what_is_stored() {
         1,
         "one source, however often added"
     );
-}
-
-#[test]
-fn train_on_a_dataset_that_does_not_exist_fails_loudly_with_json_and_a_nonzero_exit() {
-    let scratch = Scratch::new("train-fails");
-    let state = scratch.0.join("state");
-    let (code, report) = splinter(&state, &["train", "no-such-dataset"]);
-    assert_ne!(code, 0, "{report}");
-    assert!(
-        report["error"].as_str().is_some_and(|e| !e.is_empty()),
-        "a failed train prints why: {report}"
-    );
-    assert!(report.get("refused").is_some(), "{report}");
 }

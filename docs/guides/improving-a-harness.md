@@ -5,10 +5,10 @@
 
 The agent loop is not the only way to solve a repository task: a sven harness
 is a programmable sequence of model turns, tool calls, verifications and
-retries, written as a YAML document. `solve TASKSET --harness FILE` runs such a
+retries, written as a YAML document. An `attempt.collect` stage with `harness: FILE` runs such a
 document on each workspace task in place of the agent loop - in the same fresh
 copy of the task's snapshot, with the same confinement - and stores the attempts
-as experiences, so `verify` grades them and `experiences compare` sets them
+as experiences, so their tasks' verifiers grade them and `experiences compare` sets them
 against another arm exactly as it does for the agent loop. The document may
 declare an input `task` (a string) to receive the task's instruction.
 

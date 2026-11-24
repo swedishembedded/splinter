@@ -45,15 +45,13 @@ use splinter_agent::CancelToken;
 use splinter_core::concurrency::fan_out_blocking;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Provenance, Task};
-use splinter_eval::gate::{AgenticConfig, AgenticProbe, Withheld};
-use splinter_eval::verifiers::hidden_strength::{summarise, HiddenStrength, StrengthSummary};
-use splinter_eval::verifiers::workspace::WorkspaceCheck;
+use splinter_eval::gate::{AgenticConfig, Withheld};
 use splinter_model::local::GREEDY_SAMPLING;
 use splinter_model::Sampling;
 use splinter_sandbox::ResolvedEnvironment;
 use splinter_store::decision::decide;
 
-use crate::release::probe::{Arm, Probe, Suite};
+use crate::release::probe::{Arm, Probe};
 use crate::verify::{exposure_failure, verifiers_for};
 use crate::workspace_solve::{attempt_seed, solve_attempt, WorkspaceInputs};
 use splinter_orchestrator::context::Context;
@@ -270,53 +268,6 @@ impl Arm<'_> {
             None => self.model.clone(),
         })
     }
-}
-
-/// What the probes of the workspace tasks of `suite` set aside, for each
-/// arm; `None` when it holds none.
-#[must_use]
-pub(crate) fn withheld(
-    suite: &Suite,
-    candidate: &[Probe],
-    champion: &[Probe],
-) -> Option<AgenticProbe> {
-    if suite.workspace_tasks() == 0 {
-        return None;
-    }
-    let sum = |probes: &[Probe]| {
-        suite
-            .tasks
-            .iter()
-            .zip(probes)
-            .filter(|(task, _)| is_workspace(task))
-            .fold(Withheld::default(), |sum, (_, probe)| {
-                sum.plus(probe.withheld)
-            })
-    };
-    Some(AgenticProbe {
-        attempts: suite.work.attempts.max(1),
-        candidate: sum(candidate),
-        champion: sum(champion),
-    })
-}
-
-/// What the hidden suites of the workspace tasks of `suite` are worth, from
-/// the kill rates recorded on their checks at admission; `None` when it holds
-/// none. A task whose check cannot be read counts as unmeasured.
-#[must_use]
-pub(crate) fn hidden_strength(suite: &Suite) -> Option<StrengthSummary> {
-    let strengths: Vec<Option<HiddenStrength>> = suite
-        .tasks
-        .iter()
-        .filter(|task| is_workspace(task))
-        .map(|task| {
-            WorkspaceCheck::of_task(task)
-                .ok()
-                .flatten()
-                .and_then(|(_, check)| check.hidden_strength)
-        })
-        .collect();
-    summarise(&strengths)
 }
 
 /// Whether `task` is a change to a repository.

@@ -8,16 +8,10 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use clap::{ArgGroup, Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use splinter_sdk::budget::parse_budget;
-use splinter_sdk::curriculum::frontier::{PassAtK, DEFAULT_K, DEFAULT_SAMPLING};
-use splinter_sdk::datasets::{
-    parse_advantage, parse_reward_metric, parse_strength, parse_strip, AdvantageKind, StripPolicy,
-    ViewName,
-};
-use splinter_sdk::eval::SuiteChoice;
+use splinter_sdk::datasets::{parse_advantage, AdvantageKind};
 use splinter_sdk::seed::Seed;
-use splinter_sdk::vocabulary::annotation::Strength;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
 use splinter_sdk::vocabulary::terms::UsagePolicy;
 
@@ -158,11 +152,7 @@ pub enum Command {
     /// Generate and inspect task sets.
     #[command(subcommand)]
     Tasks(TasksCommand),
-    /// Solve every task of a task set, each in the environment it records.
-    Solve(SolveArgs),
-    /// Check a factory run: every product against its blobs and its view;
-    /// or append verdicts to an experience set (re-grades without
-    /// re-running).
+    /// Check a factory run: every product against its blobs and its view.
     Verify(VerifyArgs),
     /// Critique the failed experiences of a set and retry them with it.
     Critique(CritiqueArgs),
@@ -178,16 +168,10 @@ pub enum Command {
     /// Goal-directed learning: what may enter a selection of material.
     #[command(subcommand)]
     Goal(GoalCommand),
-    /// Train a candidate adapter on datasets; it is not released.
-    Train(TrainArgs),
-    /// Build a rehearsal dataset: the base model's own answers to general
-    /// tasks - sums and format requests built by code, and requests the
-    /// base writes itself - never an anchor task or a near copy of one; for
-    /// `train --rehearsal`, so a fine-tune keeps what the base does.
-    Rehearse(RehearseArgs),
-    /// Run the release gate on a candidate and release it if every check
-    /// passes; or list the releases.
-    Release(ReleaseArgs),
+    /// The releases and the aliases pointing at them (a factory run's
+    /// `promotion` stage makes a release).
+    #[command(subcommand)]
+    Release(ReleaseCommand),
     /// Point an alias back at the release its current one was trained
     /// from.
     Rollback {
@@ -195,8 +179,8 @@ pub enum Command {
         alias: String,
     },
     /// Evaluate a factory run's candidates under another plan into a new run
-    /// (`RUN --plan PLAN --out DIR`); grade a candidate or a model
-    /// closed-book on a suite; or freeze and show the anchor suite.
+    /// (`RUN --plan PLAN --out DIR`); grade a model closed-book on a file of
+    /// tasks (`--suite FILE`); or show and freeze the anchor suite.
     Eval(EvalArgs),
     /// Put a candidate and the policy it continues to its held-out tasks and
     /// have a calibrated judge compare them; or, with --exam-set, to a frozen
@@ -253,14 +237,6 @@ fn budget(text: &str) -> Result<Duration, String> {
     parse_budget(text).map_err(|e| e.to_string())
 }
 
-fn view(text: &str) -> Result<ViewName, String> {
-    text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
-}
-
-fn strip(text: &str) -> Result<StripPolicy, String> {
-    parse_strip(text).map_err(|e| e.to_string())
-}
-
 fn share(text: &str) -> Result<f64, String> {
     let value: f64 = text
         .parse()
@@ -272,16 +248,8 @@ fn share(text: &str) -> Result<f64, String> {
     }
 }
 
-fn reward_metric(text: &str) -> Result<(String, f64), String> {
-    parse_reward_metric(text).map_err(|e| e.to_string())
-}
-
 fn advantage(text: &str) -> Result<AdvantageKind, String> {
     parse_advantage(text).map_err(|e| e.to_string())
-}
-
-fn strength(text: &str) -> Result<Strength, String> {
-    parse_strength(text).map_err(|e| e.to_string())
 }
 
 /// A fraction from 0 to 1, both included.
@@ -300,39 +268,6 @@ fn voice_share(text: &str) -> Result<f64, String> {
         Ok(share)
     } else {
         Err(format!("{text:?} is not a share in [0, 1)"))
-    }
-}
-
-fn suite(text: &str) -> Result<SuiteChoice, String> {
-    text.parse().map_err(|e: splinter_sdk::Error| e.to_string())
-}
-
-/// pass@k's parameters, for the commands that measure it.
-#[derive(Debug, Args)]
-pub struct PassAtKArgs {
-    /// Attempts per task when measuring pass@k.
-    #[arg(long = "k", default_value_t = DEFAULT_K, value_name = "N")]
-    pub k: usize,
-    /// The policy's sampling temperature for its pass@k attempts.
-    #[arg(long, value_name = "T", help = format!(
-        "The policy's sampling temperature for its pass@k attempts [default for a local \
-         model: {}; a remote model samples as its server does unless this is given]",
-        DEFAULT_SAMPLING.temperature
-    ))]
-    pub temperature: Option<f32>,
-    /// The policy's top-k cut for its pass@k attempts.
-    #[arg(long, value_name = "N", help = format!(
-        "The policy's top-k cut for its pass@k attempts [default for a local model: {}]",
-        DEFAULT_SAMPLING.top_k
-    ))]
-    pub top_k: Option<u32>,
-}
-
-impl PassAtKArgs {
-    /// The parameters.
-    #[must_use]
-    pub fn pass_at_k(&self) -> PassAtK {
-        PassAtK::new(self.k, self.temperature, self.top_k)
     }
 }
 
@@ -397,50 +332,6 @@ pub enum SourceCommand {
         /// The source's id, or a unique prefix of it.
         id: String,
     },
-}
-
-/// `solve`.
-#[derive(Debug, Args)]
-#[command(group = ArgGroup::new("pass_at_k_given")
-    .args(["k", "temperature", "top_k", "teacher"])
-    .multiple(true)
-    .requires("frontier"))]
-pub struct SolveArgs {
-    /// The task set, by id or unique prefix.
-    #[arg(value_name = "TASKSET-ID")]
-    pub task_set: String,
-    /// The model that solves.
-    #[arg(long, value_parser = model_ref, default_value_t = ModelRef::policy_default(), value_name = "REF")]
-    pub solver: ModelRef,
-    /// Solve each task k times, grade every attempt, have a teacher solve
-    /// open-book each task never solved, and keep the tasks worth training
-    /// on: failed at least sometimes, with a verified answer.
-    #[arg(long)]
-    pub frontier: bool,
-    /// With --frontier: the model that solves open-book the tasks the
-    /// solver never solves (default: the solver).
-    #[arg(long, value_parser = model_ref, value_name = "REF")]
-    pub teacher: Option<ModelRef>,
-    /// How the frontier is measured.
-    #[command(flatten)]
-    pub pass_at_k: PassAtKArgs,
-    /// Run this sven harness document on each workspace task in place of the
-    /// conversational agent loop; the attempts are verified and compared
-    /// like any other (`experiences compare`).
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["frontier", "teacher"])]
-    pub harness: Option<PathBuf>,
-    /// Resume an interrupted solve: the experience set its last progress
-    /// line named. A task that set already answers is not solved again, and
-    /// its experiences are members of the new set.
-    #[arg(long, value_name = "EXPERIENCE-SET", conflicts_with = "frontier")]
-    pub resume: Option<String>,
-    /// Record every episode whole: the solver keeps its conversation instead of
-    /// compacting it when it nears the context limit, so a failure can be
-    /// continued from its own transcript. A compacted transcript has no
-    /// faithful prefix and cannot be corrected, so this is the flag an arm
-    /// run for a correction corpus passes.
-    #[arg(long)]
-    pub no_compaction: bool,
 }
 
 /// `judge ...`.
@@ -578,8 +469,6 @@ pub enum ExperiencesCommand {
 /// `dataset ...`.
 #[derive(Debug, Subcommand)]
 pub enum DatasetCommand {
-    /// Project experience sets through a view into a stored dataset.
-    Build(Box<BuildArgs>),
     /// Build a policy-gradient dataset from graded conversations with a
     /// counterpart (a client, a student): each line of the input names the
     /// case, the model that played the learner, the reward the case's grade
@@ -628,7 +517,6 @@ mod baseline;
 mod bench;
 pub mod config;
 mod consolidate;
-mod control;
 mod corrections;
 mod dataset;
 mod env;
@@ -636,7 +524,6 @@ mod eval;
 mod exam;
 mod experiences;
 mod factory;
-mod gate;
 mod global;
 mod goal;
 mod harbor;
@@ -655,22 +542,16 @@ pub use baseline::BaselineArgs;
 pub use bench::BenchSplit;
 pub use config::ConfigCommand;
 pub use consolidate::ConsolidateArgs;
-pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
-pub use dataset::{
-    BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs, VerifySpeechArgs,
-};
+pub use dataset::{CheckArgs, ConversationsArgs, DecisionFixturesArgs, VerifySpeechArgs};
 pub use env::{EnvCommand, ObjectiveArgs};
-pub use eval::{
-    EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseArgs, ReleaseCommand,
-};
+pub use eval::{EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseCommand};
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
     ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
     RunDirArgs,
 };
-pub use gate::GateArgs;
 pub use global::Global;
 pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};
@@ -685,7 +566,7 @@ pub use tasks::TasksCommand;
 use train::positive_count;
 
 /// A sampling temperature a provider accepts: 0 to 2.
-pub use train::{OptimiserArgs, RehearseArgs, TrainArgs};
+pub use train::OptimiserArgs;
 
 #[cfg(test)]
 mod factory_tests;

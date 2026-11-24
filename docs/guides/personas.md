@@ -6,7 +6,8 @@
 Use this guide to train the policy on a body of one person's writing so that it answers
 as they would, on matters the writing never covered. Generate tasks from a directory of
 their writing with kinds that teach how they judge, build the dataset, train and release,
-one command per stage ([Learn from documents](documents.md) lists them). The `jefferson`,
+as the stages of a recipe of the [learning factory](learning-factory.md) ([Learn from
+documents](documents.md) lists them). The `jefferson`,
 `adams` and `synthetic-author` samples measure what this teaches
 ([examples](../examples/index.md)).
 
@@ -18,15 +19,22 @@ exam reports both. See [limitations](../concepts/limitations.md).
 
 ```bash
 splinter source add ./jefferson
-splinter tasks generate $SOURCE --kinds advise,converse,explain
+```
+
+The kinds are the `kinds` of a `task.generate` stage over the writing:
+
+```yaml
+  - id: generated
+    uses: task.generate
+    inputs: { documents: [$inputs.writing] }
+    with: { kinds: [advise, converse, explain], model: teacher }
 ```
 
 A task kind is chosen from a menu; facts alone are no way to think like someone, so
 a person whose sources hold advice or judgment is taught with the kinds that teach how
 they judge (`advise`, `converse`). The person becomes the policy's system prompt, in
-training and afterwards (`dataset build --system-prompt`, `--writer`), and the teacher's
-answers and the student's attempts are written under it too (`solve --frontier` takes the
-prompt from the policy's own), so what the records teach was said as the person they open
+training and afterwards, and the teacher's
+answers and the student's attempts are written under it too, so what the records teach was said as the person they open
 with.
 
 The `advise` kind is what teaches a person's own advice. Its task is a
@@ -91,16 +99,12 @@ the records open with the persona system prompt and half with the line that
 says only who the model is, so the voice is carried by the adapter and not
 only by the prompt. Two prints of one text are one family and only one is
 projected, and no family supplies more than a tenth of the tokens
-(`--max-family-share` on `dataset build`; `--writer NAME` names the writer and
-`--token-limit N` keeps at most N tokens, spread evenly over all the chunks).
-`--describe-voice` (`dataset build --describe-with REF`) asks each chunk by what the
+and the chunks are spread evenly over the sources. A chunk can be asked by what the
 generator says it is about instead of by its opening: 20 to 60 words in the model's own
 words, admitted only when no run of eight words, and no more than 35% of its words in runs of
 four, are the passage's own; a chunk with no admitted description keeps the opening request.
-Descriptions are kept per generator under the state's `work/describe`, so a second build
-reuses them.
 A record names the part it prints and no experience, so a dataset shows what is
-the writer's and what a model wrote. A dataset built with `--writer` projects the
+the writer's and what a model wrote. A dataset of the writer's voice projects the
 writer's text, chosen as an even spread over the whole of the sources in a stable order that
 does not follow their names, and the training is sized by all its examples. Such a record is
 held out with the family of the letter it prints: the families held out are
@@ -116,7 +120,7 @@ tokens are.
 
 ## Rehearsal
 
-Rehearse the base when you train on a persona (`rehearse`). A
+Rehearse the base when you train on a persona. A
 fine-tune on one person's answers erodes the base's general behaviour before
 it forgets a fact: under the plain assistant prompt it answers a sum at length
 and gets it wrong, or answers in a paragraph where a word was asked, which is
@@ -136,14 +140,13 @@ its words inside a longer prompt), is ever in the set: every anchor
 instruction is held against each task by the generator's own near-duplicate
 rule before it is stored, since a candidate rehearsed on an anchor task would
 pass the anchor check by having trained on it; the gate's leakage check reads
-the rehearsed records too. `train --rehearsal-share` is the share of the training
+the rehearsed records too. A `model.train` stage's `replay_share` is the share of the training
 draws the rehearsed records take, the set sized so that a rehearsed record is drawn about
 as often as a dialogue answer; a tenth of its records (the monitoring share)
 join the monitoring set instead, so the step the run carries is the one that
-keeps the base's answers as well as it fits the new ones. `rehearse --records
-N` builds such a set by hand and `train --rehearsal DATASET-ID
-[--rehearsal-share F]` mixes it, or any chat dataset of the base's own
-answers, into a training run.
+keeps the base's answers as well as it fits the new ones. A `model.train` stage mixes it, or any chat dataset of the base's own
+answers, into a training run through its `replay` input (see the [learning
+factory](learning-factory.md#what-each-stage-guarantees)).
 
 ## Bounded generation and held-out groups
 

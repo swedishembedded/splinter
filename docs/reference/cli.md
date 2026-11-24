@@ -130,7 +130,6 @@ Every command takes these.
   - [splinter claims show](#splinter-claims-show) - Show a claim set
   - [splinter claims ledger](#splinter-claims-ledger) - Show the ledger
 - [splinter tasks](#splinter-tasks) - Generate and inspect task sets
-  - [splinter tasks generate](#splinter-tasks-generate) - Generate tasks from stored sources into a task set
   - [splinter tasks history](#splinter-tasks-history) - Read tasks from a repository's history
   - [splinter tasks variants](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
   - [splinter tasks canaries](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
@@ -145,7 +144,6 @@ Every command takes these.
     - [splinter tasks harbor episodes](#splinter-tasks-harbor-episodes) - Run a directory of practice task folders (or one folder) as episodes
   - [splinter tasks list](#splinter-tasks-list) - List the stored task sets
   - [splinter tasks show](#splinter-tasks-show) - Show a task set's tasks, or one task
-- [splinter solve](#splinter-solve) - Solve every task of a task set, each in the environment it records
 - [splinter verify](#splinter-verify) - Check a factory run
 - [splinter critique](#splinter-critique) - Critique the failed experiences of a set and retry them with it
 - [splinter judge](#splinter-judge) - Measure a judge against labelled experiences
@@ -164,7 +162,6 @@ Every command takes these.
   - [splinter experiences compare](#splinter-experiences-compare) - Compare two experience sets of the same tasks
   - [splinter experiences compare-arms](#splinter-experiences-compare-arms) - Compare graded trials of several arms (Harbor jobs or trials files) with a reference arm
 - [splinter dataset](#splinter-dataset) - Build datasets from experience sets, and export them
-  - [splinter dataset build](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
   - [splinter dataset decision-fixtures](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
   - [splinter dataset check](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
@@ -172,9 +169,7 @@ Every command takes these.
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 - [splinter goal](#splinter-goal) - Goal-directed learning
   - [splinter goal admit](#splinter-goal-admit) - Admit documents into a selection of learning material
-- [splinter train](#splinter-train) - Train a candidate adapter on datasets
-- [splinter rehearse](#splinter-rehearse) - Build a rehearsal dataset
-- [splinter release](#splinter-release) - Run the release gate on a candidate and release it if every check passes
+- [splinter release](#splinter-release) - The releases and the aliases pointing at them (a factory run's `promotion` stage makes a release)
   - [splinter release list](#splinter-release-list) - List the releases and the aliases pointing at them
 - [splinter rollback](#splinter-rollback) - Point an alias back at the release its current one was trained from
 - [splinter eval](#splinter-eval) - Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`)
@@ -264,16 +259,13 @@ Subcommands:
 - [`session`](#splinter-session) - Take in recorded agent sessions, secrets removed
 - [`claims`](#splinter-claims) - What a person taught in sessions
 - [`tasks`](#splinter-tasks) - Generate and inspect task sets
-- [`solve`](#splinter-solve) - Solve every task of a task set, each in the environment it records
 - [`verify`](#splinter-verify) - Check a factory run
 - [`critique`](#splinter-critique) - Critique the failed experiences of a set and retry them with it
 - [`judge`](#splinter-judge) - Measure a judge against labelled experiences
 - [`experiences`](#splinter-experiences) - Inspect experience sets and experiences
 - [`dataset`](#splinter-dataset) - Build datasets from experience sets, and export them
 - [`goal`](#splinter-goal) - Goal-directed learning
-- [`train`](#splinter-train) - Train a candidate adapter on datasets
-- [`rehearse`](#splinter-rehearse) - Build a rehearsal dataset
-- [`release`](#splinter-release) - Run the release gate on a candidate and release it if every check passes
+- [`release`](#splinter-release) - The releases and the aliases pointing at them (a factory run's `promotion` stage makes a release)
 - [`rollback`](#splinter-rollback) - Point an alias back at the release its current one was trained from
 - [`eval`](#splinter-eval) - Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`)
 - [`exam`](#splinter-exam) - Put a candidate and the policy it continues to its held-out tasks and have a calibrated judge compare them
@@ -1023,7 +1015,6 @@ splinter tasks [OPTIONS] <COMMAND>
 
 Subcommands:
 
-- [`generate`](#splinter-tasks-generate) - Generate tasks from stored sources into a task set
 - [`history`](#splinter-tasks-history) - Read tasks from a repository's history
 - [`variants`](#splinter-tasks-variants) - Write differently worded questions about each task of a task set, into a task set of their own
 - [`canaries`](#splinter-tasks-canaries) - Make canaries of the workspace tasks of a task set
@@ -1034,25 +1025,6 @@ Subcommands:
 - [`harbor`](#splinter-tasks-harbor) - Harbor tasks
 - [`list`](#splinter-tasks-list) - List the stored task sets
 - [`show`](#splinter-tasks-show) - Show a task set's tasks, or one task
-
-#### splinter tasks generate
-
-Generate tasks from stored sources into a task set
-
-```text
-splinter tasks generate [OPTIONS] --kinds <K,..> <SOURCE-ID>...
-```
-
-Arguments:
-
-- `<SOURCE-ID>...` (required): The sources, by id or unique prefix.
-
-Options:
-
-- `--kinds <K,..>...` (required): Task kinds, comma-separated.
-- `--generator <REF>`: The model that writes the tasks. Default: `policy:default`.
-- `--author <NAME>`: Who wrote the sources, when they are one person's: the generator is told, and a question may name the author as its subject.
-- `--denoise-seed <N>`: The seed the `denoise` tasks are built with (drawn and printed when not given and the kinds include denoise)
 
 #### splinter tasks history
 
@@ -1279,45 +1251,17 @@ Arguments:
 
 - `<ID>` (required): A task set's or a task's id, or a unique prefix of it.
 
-### splinter solve
-
-Solve every task of a task set, each in the environment it records
-
-```text
-splinter solve [OPTIONS] <TASKSET-ID>
-```
-
-Arguments:
-
-- `<TASKSET-ID>` (required): The task set, by id or unique prefix.
-
-Options:
-
-- `--solver <REF>`: The model that solves. Default: `policy:default`.
-- `--frontier`: Solve each task k times, grade every attempt, have a teacher solve open-book each task never solved, and keep the tasks worth training on: failed at least sometimes, with a verified answer.
-- `--teacher <REF>`: With --frontier: the model that solves open-book the tasks the solver never solves (default: the solver)
-- `--k <N>`: Attempts per task when measuring pass@k. Default: `4`.
-- `--temperature <T>`: The policy's sampling temperature for its pass@k attempts [default for a local model: 0.8; a remote model samples as its server does unless this is given]
-- `--top-k <N>`: The policy's top-k cut for its pass@k attempts [default for a local model: 20]
-- `--harness <FILE>`: Run this sven harness document on each workspace task in place of the conversational agent loop; the attempts are verified and compared like any other (`experiences compare`)
-- `--resume <EXPERIENCE-SET>`: Resume an interrupted solve: the experience set its last progress line named. A task that set already answers is not solved again, and its experiences are members of the new set.
-- `--no-compaction`: Record every episode whole: the solver keeps its conversation instead of compacting it when it nears the context limit, so a failure can be continued from its own transcript. A compacted transcript has no faithful prefix and cannot be corrected, so this is the flag an arm run for a correction corpus passes.
-
 ### splinter verify
 
-Check a factory run: every product against its blobs and its view; or append verdicts to an experience set (re-grades without re-running)
+Check a factory run: every product against its blobs and its view
 
 ```text
-splinter verify [OPTIONS] <RUN|EXPERIENCE-SET>
+splinter verify [OPTIONS] <RUN>
 ```
 
 Arguments:
 
-- `<RUN|EXPERIENCE-SET>` (required): A factory run directory, or an experience set by id or unique prefix.
-
-Options:
-
-- `--judge <REF>`: A calibrated judge for the kinds a judge grades.
+- `<RUN>` (required): The factory run directory.
 
 ### splinter critique
 
@@ -1580,68 +1524,11 @@ splinter dataset [OPTIONS] <COMMAND>
 
 Subcommands:
 
-- [`build`](#splinter-dataset-build) - Project experience sets through a view into a stored dataset
 - [`conversations`](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
 - [`decision-fixtures`](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
 - [`check`](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
 - [`verify-speech`](#splinter-dataset-verify-speech) - Hear every recording of an audio dataset (a Hugging Face audio folder's metadata.jsonl) through a recogniser and check it says its transcript
 - [`export`](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
-
-#### splinter dataset build
-
-Project experience sets through a view into a stored dataset
-
-```text
-splinter dataset build [OPTIONS] --view <VIEW> <EXPERIENCE-SET>...
-```
-
-Arguments:
-
-- `<EXPERIENCE-SET>...` (required): The experience sets, by id or unique prefix.
-
-Options:
-
-- `--view <VIEW>` (required): sft-final, sft-step, critic, preference, feedback, verifier, decision, retrieval, outcome, denoise, cpt, voice, rehearsal, policy-gradient, self-distill or transition.
-- `--strip <all|keep:K,..|mix:F>`: What the student sees: all (only the instruction), keep:K,.. or mix:F.
-- `--mix-seed <N>`: The seed that picks which subjects keep their privileged context under `--strip mix:F` (drawn and printed when not given; a dataset built again with the same seed holds the same records)
-- `--min-strength <STRENGTH>`: The weakest decision counted: executable, formal, consistency (default) or judged.
-- `--system-prompt <TEXT>`: The system prompt every conversation opens with, in place of the one the runs were made under (the sft-step view opens a repository solve's records with the prompt its solve profile records) or the default assistant's; the dataset records it.
-- `--export-only`: Write an objective brain cannot train in the export format.
-- `--limit <N>`: Keep at most this many records, evenly spread over the projection (for voice, over the parts of the sources)
-- `--max-block <TOKENS>`: The longest record, in tokens, the training that reads the dataset fits: a longer record is left out and counted instead of stopping the training. Records are counted as the trainer counts them; the report says so, or that a floor stood in for it.
-- `--from <REF>`: The model the training that reads the dataset starts from, as `train --from` names it: its trainer reads every record (brain's own check), a record it refuses is left out (`trainer_refused`), and its tokenizer, chat template and vision configuration count the records of `--max-block`. The build needs a brain service then (`--brain-endpoint` or a brain binary) and is refused without one. Without it, the policy, checked only under `--max-block`; give it when training another base, or the records are checked for the wrong model.
-- `--split-over-block`: Split a record longer than `--max-block` into consecutive windows that each fit, keeping every supervised action, instead of leaving it out; every window repeats the task instruction. A window with no supervised turn is left out and counted as `NothingSupervised`.
-- `--reward <verdict|shaped-partial>`: For the policy-gradient view: the named reward. `verdict` (the default) gives a pass 1 and a failure what the `--reward-metric` terms earn (nothing without any). `shaped-partial` gives a failure partial credit for the share of its task's weighted checks it passed (`functional_correctness`, f) above the share a naive answer earns (f_naive, the examiner's `naive_floor` in the `--practice` material): `C * max(0, (f - f_naive) / (1 - f_naive))`, C the `--fail-ceiling`. A task without a floor is measured from 0, and the manifest records the floors, where they came from and how many groups had none. It changes what a failure teaches: a new arm, never the default. A pass is still only a pass.
-- `--practice <DIR>...`: For the policy-gradient view: an examiner practice directory (holding `practice.json`) the attempts' tasks were staged from; repeat it per directory. Its tasks' naive floors serve `--reward shaped-partial`, and their lineages are the families the learning-signal report counts. A trial is matched to its task by content digest.
-- `--reward-metric <NAME=WEIGHT>...`: For the policy-gradient view: a metric the verifier measured, in [0, 1], and its weight, that earns a failed attempt part of the reward (`--reward-metric iou=0.5 --reward-metric feature_match=0.5`); repeat it per metric, the weights summing to one. A pass always earns 1. Without any, a failed attempt earns nothing. A failed attempt that did not record a named metric is an error.
-- `--fail-ceiling <F>`: For the policy-gradient view: the most a failed attempt earns from the reward metrics or `--reward shaped-partial`, below a pass's 1 (default 0.5), so that any pass outranks any failure.
-- `--advantage <KIND>`: For the policy-gradient view: how brain is to read an attempt's advantage from the rewards of the attempts at its task (the records carry rewards; the dataset's manifest names this for the trainer): `standardised` (GRPO's: the reward less the group mean over its standard deviation, the default), `mean-centred` (the reward less the group mean), `leave-one-out` (the reward less the mean of the others) or `positive` (standardised against the whole group, then clamped at zero by brain's `advantage_floor: zero`: every attempt sets the baseline and nothing is pushed down)
-- `--cliff-distill`: For the policy-gradient view: distil the groups whose attempts all failed alike (the cliff, where GRPO's advantage is zero and teaches nothing) with a teacher context built from what the verifier knows, and keep the scalar advantage for every group with a spread of rewards. One build then holds both kinds of records, and the report counts the groups by kind. The `self-distill` view distils every attempt instead.
-- `--sampled-only`: For the policy-gradient view: train only the tokens the policy sampled. A record whose actions do not all carry their exact sampled ids and log-probabilities (no usable trace, a scrubbed conversation, a context rebuilt from the trajectory) is left out and counted as `proxy_tokens`; its trial still sets its group's baseline. Every trained token then has the behaviour policy's own log-probability, which `train --behaviour recorded` needs and which keeps the importance ratio bounded (a re-rendered proxy token weighed against the start of the run can reach a ratio of 1e6)
-- `--overlong-max-tokens <N>`: For the policy-gradient view: DAPO's soft over-length penalty, the completion tokens (as the attempt recorded them) at and past which an attempt loses a whole reward. From `N - buffer` tokens on the penalty grows linearly from 0 to -1 at N; it is added to the reward a pass or failure earns, and the manifest records both thresholds. An attempt that recorded no completion tokens is an error. Without it, no length is penalised.
-- `--overlong-buffer <N>`: The tokens before `--overlong-max-tokens` over which the penalty grows (default a quarter of it, DAPO's 4096 of 16384)
-- `--pairs-per-group <N>`: For the preference view: the most pairs made of one group of attempts (one task version attempted by one policy) or of one repaired task (default 4). The candidate pairs are ordered by a hash of `--pair-seed` and the first that make a record are kept; the rest are counted as `OverLimit`. The manifest records the bound and the seed.
-- `--pair-seed <N>`: For the preference view: the seed the pairs of a group are chosen by. Without it, the seed is derived from the experiences, so building again from them pairs the same.
-- `--loss-weight <W>`: For the transition view: the loss weight written on every supervised observation, against 1 for records without one (a dataset of model actions trained beside it). Finite and above zero; without it the trainer's default weight.
-- `--per-transition-cap <N>`: For the transition view: the most times one transition (a task, a tool call and what the environment answered) is supervised, in corpus order; the rest stay context, counted as `repeated_transition` (default 2)
-- `--pack`: For the sft-step and policy-gradient views: one record per trajectory with every admitted action supervised, not one record per action; a policy-gradient record keeps its trial's reward and group.
-- `--only-actions <TOOLS>...`: For the sft-step view: keep only the actions whose tool calls are all named here (comma separated), plus the final answer; the rest become context and are counted as `ActionNotWanted`. Names the decisive actions - the edits and the conclusion - instead of the exploration.
-- `--roles <ROLES>...`: For the sft-step, policy-gradient, preference and feedback views: keep only the conversations of a harness trial answered by these model roles (comma separated, as `ingest-bench` recorded them); every other experience, and a conversation whose role is unknown, is counted as `RoleNotWanted`.
-- `--images`: For the sft-step view: the training base reads images (a vision-language base such as Qwen3.8), so a harness conversation whose model was shown images is built from the requests it was sent, the pictures in the turns that carried them and only the answers supervised. Without it such a conversation is left out and counted as `ShownImages`, never trained on as text alone. A conversation ingested before requests were kept is counted as `RequestsNotRecorded` (ingest the trial again into a fresh store), and an action whose context holds more than 8 images as `TooManyImages`.
-- `--control <CONTROL>`: For the sft-step view: build another dataset than the default. `outcome-verified` admits only experiences an independent verdict passed (the default also admits an action labelled good from one that was not verified or failed; the manifest records `outcome-verified`). The negative controls: `unverified` keeps trajectories whatever their verdict (never an exposed one); `shuffled` gives each verified trajectory the instruction of another task. For the transition view, `shuffled` gives each supervised observation another's text: the same targets with the dynamics broken. Values: `outcome-verified`, `unverified`, `shuffled`.
-- `--control-seed <N>`: The seed of the `shuffled` pairing (drawn and printed when not given)
-- `--repository-history <keep|drop-step|truncate>`: For the sft-step view (and the preference and feedback views, where `drop-step` and `truncate` both leave out a pair or completion that holds such a read): what becomes of an action whose tool call reads the repository's history (`git log`, `git show`, `git reflog`, `git cat-file`, a commit before `HEAD`) or git's storage (`.git/refs`, `.git/objects`, `.git/HEAD`): `drop-step` (the default) does not supervise it and keeps it as context, counted as `repository_history`; `truncate` ends the demonstration before it (what follows is counted as `after_repository_history`); `keep` learns it. A student imitating such reads learns to dig through the history. The manifest names the policy.
-- `--final-answer-only`: For the sft-step view: leave out a pass whose last agent step calls a tool or says nothing, counted as `no_final_answer`: it teaches acting without concluding.
-- `--distinct-calls`: For the sft-step view: passes of one task whose tool calls are the same (name and arguments, whitespace normalised) are one demonstration; the one with the least reasoning is kept, the others counted as `duplicate_pass`. Applied after --final-answer-only.
-- `--ignore-call-argument <NAME>...`: For --distinct-calls: an argument name left out when two passes' tool calls are compared (repeatable), the free text a call carries beside what it does, such as a stated `intent`, which differs between two runs that made the same calls. The manifest records the names.
-- `--max-passes-per-task <N>`: For the sft-step view: keep at most N passes of each task, the least reasoning per action first; the rest are counted as `over_task_cap`. Applied after --distinct-calls. The manifest records the curation.
-- `--split-seed <N>`: The seed the dataset's held-out and monitoring sets are drawn by: within each stratum (the domain a record's task exercises) its groups are ordered by a hash of the seed, so every stratum is held out at its share. Every record carries it and the manifest records it. Without it, the seed is derived from the experiences the records come from, so building again from them splits the same; another seed draws another split.
-- `--drop-leaking`: Leave out, and list in the report, every experience that would carry an exam family's attempt or file into the dataset, instead of refusing the build. What remains is sealed as usual.
-- `--serialise-calls`: For the sft-step view: a trajectory exported as one agent step that holds a whole run's tool calls is read as one call per turn, each followed by its result, then the final reply.
-- `--writer <NAME>`: For the voice view: who the writer is. Requests are written as theirs and half the records open with their persona prompt, half with the line that says who the model is; refused with --system-prompt.
-- `--token-limit <N>`: For the voice view: keep at most this many tokens of the writer's text, evenly spread over all of it.
-- `--max-family-share <SHARE>`: For the voice view: the most of the tokens one family may supply.
-- `--describe-with <REF>`: For the voice view: the model that writes, for each passage, a description of what it is about, which its request carries in place of the passage's opening (a passage with no admitted description keeps the opening)
 
 #### splinter dataset conversations
 
@@ -1763,94 +1650,13 @@ Options:
 - `--scrub`: Scrub the live documents (secrets, addresses, accounts, contact data) first.
 - `--out <DIR>` (required): The directory the admitted documents are written to.
 
-### splinter train
-
-Train a candidate adapter on datasets; it is not released
-
-```text
-splinter train [OPTIONS] <DATASET-ID>...
-```
-
-Arguments:
-
-- `<DATASET-ID>...` (required): The datasets, by id or unique prefix, all chat, all preference pairs or all rollouts; a tenth of their records is held out for scoring, drawn by the seed and stratum each record carries (records built before they carried one: the newest; rollouts hold nothing out)
-
-Options:
-
-- `--from <REF>`: The base to train, and an adapter on it to continue; for a run on rollouts, the adapter whose policy generated them. Default: `policy:default`.
-- `--base-precision <TIER>`: How the frozen base is held while the adapter trains: fp32, bf16, int8, nf4 or fp8 [default: fp32]
-- `--replay-fraction <F>`: The fraction of each earlier release's training records replayed, when training from a policy alias. Default: `0.25`.
-- `--steps <N>`: The step budget: the most steps the training may take [default: 3 passes over the examples, within bounds]
-- `--rank <R>`: LoRA rank of a new adapter. Default: `8`.
-- `--beta <BETA>`: The temperature of the pair loss (preference datasets) or of KTO (feedback datasets) [default: 0.1]
-- `--loss <dpo|ipo|simpo|orpo>`: For a preference dataset: the pair loss, `dpo`, `ipo`, or the reference-free `simpo` and `orpo` [default: dpo]
-- `--gamma <GAMMA>`: For a preference dataset trained with --loss simpo: the target margin [default: brain's, stated in the training record]
-- `--nll-weight <W>`: For a preference dataset: the weight of the chosen continuation's own likelihood added to the pair loss, an anchor against likelihood displacement [default: 0]
-- `--desirable-weight <W>`: For a feedback dataset: the weight of a desirable (passed) example's term [default: the classes balanced, as the dataset's manifest records]
-- `--undesirable-weight <W>`: For a feedback dataset: the weight of an undesirable (failed) example's term [default: the classes balanced, as the dataset's manifest records]
-- `--max-block <TOKENS>`: The longest training record, in tokens, the card fits: a longer record is named and refused before any device is claimed (build the dataset with the same `--max-block` to leave such records out)
-- `--lr <LR>`: The peak learning rate [default: 0.0002]
-- `--alpha <A>`: The LoRA alpha, the update scaled by alpha / rank [default: 2 x the rank]
-- `--weight-decay <WD>`: The AdamW weight decay on the adapter's matrices [default: 0]
-- `--algorithm <grpo|dr-grpo|dapo|rloo>`: For a dataset of rollouts: a named policy-gradient algorithm brain expands into the run's defaults (grpo, dr-grpo, dapo or rloo); every setting named beside it overrides it, and the training record names it [default: none, brain's defaults setting by setting]
-- `--clip-eps <EPS>`: For a dataset of rollouts (the policy-gradient view): the half-width of the clip band of the importance ratio, in (0, 1) [default: brain's, stated in the training record]
-- `--kl-beta <BETA>`: For a dataset of rollouts: the coefficient of the KL penalty to the reference policy; 0 puts none in the loss [default: brain's, stated in the training record]
-- `--reference <base|start>`: For a dataset of rollouts: the policy the KL penalty keeps the adapter close to: the frozen base, or `start`, the adapter the run begins from (--from) [default: base]
-- `--behaviour <recorded|start>`: For a dataset of rollouts: where the behaviour log-probabilities of the importance ratio come from: `recorded`, the sampler's own, required on every trained token, or `start`, the adapter the run begins from (--from), exact only for rollouts sampled from it [default: recorded]
-- `--loss-agg <seq-mean|token-sum>`: For a dataset of rollouts: how the token terms of the loss are normalised, per sequence or over all tokens of a step [default: seq-mean]
-- `--teacher-policy <base|start>`: For records with a teacher context (the self-distill view, or policy-gradient --cliff-distill): the frozen policy that, shown the privileged context, scores the student's own tokens: the base, or `start`, the adapter the run begins from [default: base]
-- `--advantage-bound <C>`: For records with a teacher context: clip each token's advantage (log teacher - log student) to [-C, C] [default: none]
-- `--sequence-advantage-cap <SUM>`: For records with a teacher context: scale a sequence's token advantages down together when their magnitudes sum to more than SUM, so a few pivot tokens cannot dominate a step [default: none]
-- `--max-step-kl <KL>`: For a dataset of rollouts: skip, and record, every optimiser step whose mean KL to the reference is over KL, so one outlier batch cannot throw the policy off [default: no bound]
-- `--max-step-grad-norm <NORM>`: For a dataset of rollouts: skip, and record, every optimiser step whose global gradient norm is over NORM [default: no bound]
-- `--dual-clip <C>`: For a dataset of rollouts: dual-clip PPO's bound C (above 1) on a negative advantage's term, max(min(r*A, clip(r)*A), C*A): a token whose ratio ran past C gives no gradient, and each step reports the share it bounded [default: brain's, 3]
-- `--recipe <on-policy-rl>`: For a dataset of rollouts: a named recipe whose defaults fill every setting left unset; the candidate records it and where its run came out against the recipe's targets. `on-policy-rl`: recorded behaviour log-probabilities, token-sum loss, learning rate 1e-4 and 4 passes over the rollouts, aiming for a mean KL to the reference of 0.02-0.05 and a clip fraction of 0.10-0.20 [default: none]
-- `--temperature <T>`: For a dataset of rollouts: the temperature they were sampled at [default: brain's, stated in the training record]
-- `--records-per-step <N>`: Records averaged into one optimizer step (default: one when the steps are named, else from the size of the dataset)
-- `--seed <N>`: The seed of a fresh adapter's initialisation, the batch order and the draw of the records replayed (drawn, printed and recorded in the run and the candidate if not given)
-- `--rehearsal <DATASET-ID>`: A rehearsal dataset (`rehearse`, or any chat dataset of the base's own answers) mixed into training at --rehearsal-share of the draws, never held out, a share of it in the monitoring set.
-- `--rehearsal-share <F>`: The share of the training draws the rehearsal takes, in (0, 1) [default: 0.25]
-- `--eval-every <N>`: Steps between evaluations of the monitoring records; 0 monitors nothing and the candidate carries its last step [default: 16 evaluations over the step budget]
-- `--patience <N>`: Evaluations without improvement before the training stops; 0 runs the whole budget (the best evaluation is carried either way) [default: 4]
-- `--monitor-share <SHARE>`: The share of the training families set aside as the monitoring records, in (0, 0.5]: whole families, never the held-out ones the gate and the exam decide on [default: 0.1]
-- `--keep-evaluations`: Keep the adapter of every evaluation with the candidate, so a step can be chosen on the dev suite (`select`) instead of the monitoring loss.
-- `--memorisation-ratio <RATIO>`: The ratio of training loss to monitoring loss at the kept evaluation below which the run is reported as memorised [default: 0.5]
-
-### splinter rehearse
-
-Build a rehearsal dataset: the base model's own answers to general tasks - sums and format requests built by code, and requests the base writes itself - never an anchor task or a near copy of one; for `train --rehearsal`, so a fine-tune keeps what the base does
-
-```text
-splinter rehearse [OPTIONS] --records <N>
-```
-
-Options:
-
-- `--records <N>` (required): How many tasks the set holds: as many as make the rehearsal share of the examples it will be trained beside (`learn` sizes it so)
-- `--rehearsal-seed <N>`: The seed the form tasks are built with (drawn and printed when not given; the same seed and count build the same tasks)
-
 ### splinter release
 
-Run the release gate on a candidate and release it if every check passes; or list the releases
+The releases and the aliases pointing at them (a factory run's `promotion` stage makes a release)
 
 ```text
-splinter release [OPTIONS] [CANDIDATE-ID]
-       splinter release <COMMAND>
+splinter release [OPTIONS] <COMMAND>
 ```
-
-Arguments:
-
-- `<CANDIDATE-ID>`: The candidate, by id or unique prefix.
-
-Options:
-
-- `--alias <NAME>`: The alias it replaces the champion of. Default: `default`.
-- `--judge <REF>`: The calibrated model that judges the tasks a judge decides.
-- `--unrestricted`: Release for distribution and commercial use: refused unless the terms of everything the candidate was made from allow both. Without it the release is restricted: it records the terms and stays local.
-- `--interval-seed <N>`: The seed the gate's bootstrap intervals are resampled with (drawn and printed when not given; the same outcomes and seed give the same intervals)
-- `--canaries <TASKSET-ID>`: A task set of canaries (`tasks canaries`) the candidate attempts beside the exam: a pass on any one refuses it, whatever else it passed.
-- `--target-effect <SHARE>`: The lead, as a share of the exam's families won, the exam must be able to see: a gain not shown on an exam too small to see it is reported inconclusive, not as a failure (either way nothing is released)
-- `--anchor-max-net-lost <COUNT>`: Decide the anchor check on the answers the candidate loses net of the answers it gains, refusing above this count (6 for a 200-question suite), instead of on the drop in accuracy.
 
 Subcommands:
 
@@ -1878,23 +1684,23 @@ Arguments:
 
 ### splinter eval
 
-Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`); grade a candidate or a model closed-book on a suite; or freeze and show the anchor suite
+Evaluate a factory run's candidates under another plan into a new run (`RUN --plan PLAN --out DIR`); grade a model closed-book on a file of tasks (`--suite FILE`); or show and freeze the anchor suite
 
 ```text
-splinter eval [OPTIONS] [REF]
+splinter eval [OPTIONS] [RUN]
        splinter eval <COMMAND>
 ```
 
 Arguments:
 
-- `<REF>`: A factory run directory (with `--plan` and `--out`), a candidate id (or prefix) or a model reference; none shows the anchor suite.
+- `<RUN>`: A factory run directory, whose candidates `--plan` evaluates; none shows the anchor suite, or grades a model with --suite.
 
 Options:
 
-- `--suite <SUITE>`: held-out, retention, anchor, or an anchor-format file of tasks. Default: `held-out`.
-- `--freeze <FILE>...`: With --suite anchor: make these files' tasks (repeat the flag for several) the anchor suite's next version first. JSON Lines: {"instruction", "reference", "kind"?}.
-- `--judge <REF>`: The calibrated model that judges the tasks a judge decides.
-- `--plan <PLAN>`: With a factory run directory as REF: the evaluation plan to evaluate the run's candidates under, reusing them (a fork of the run into --out with the recipe's plan replaced)
+- `--freeze <FILE>...`: Make these files' tasks (repeat the flag for several) the anchor suite's next version. JSON Lines: {"instruction", "reference", "kind"?}.
+- `--suite <FILE>`: Grade --policy closed-book on this file's tasks (the anchor format), keeping every item with its verdict; decides nothing.
+- `--policy <REF>`: With --suite: the model graded. Default: `policy:default`.
+- `--plan <PLAN>`: The evaluation plan to evaluate the run's candidates under, reusing them (a fork of the run into --out with the recipe's plan replaced)
 - `--out <DIR>`: With --plan: the new run directory.
 
 Subcommands:

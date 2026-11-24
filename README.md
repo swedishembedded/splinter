@@ -69,7 +69,7 @@ installed.
 ```bash
 make build && export PATH="$PWD/target/release:$PATH"
 splinter doctor                                       # can a run start here?
-splinter eval --suite anchor --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
+splinter eval --freeze examples/first-run/anchor.jsonl   # once: the anchor suite
 splinter source add examples/first-run/manual.md --usage-policy research_only   # then the stages, one command each
 splinter status
 splinter ask "At what baud rate does the QX-7 console run?"

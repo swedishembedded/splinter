@@ -337,21 +337,9 @@ fn a_train_with_a_rehearsal_mixes_it_in_at_its_share_and_monitors_on_it() {
         rehearsal.trained,
         "the rehearsed records are kept"
     );
-    // The gate's leakage check reads them: an anchor task that were among
-    // them would be left out of the suite, which is what makes the
-    // admission's exclusion load-bearing.
-    let released = common::gate::decide(&ctx, &candidate);
-    let anchor_check = released.gate.anchor.measured.as_ref().unwrap();
-    assert_eq!(
-        anchor_check.suite.excluded.get("leaked"),
-        None,
-        "{anchor_check:#?}"
-    );
-    let manifest = ctx
-        .releases()
-        .get(released.release.as_ref().unwrap())
-        .unwrap()
-        .manifest;
+    // A release of the candidate records the rehearsal it was trained with.
+    let released = common::gate::releases::release_of(&ctx, &candidate);
+    let manifest = ctx.releases().get(&released).unwrap().manifest;
     assert_eq!(manifest.rehearsal.as_ref(), Some(sample));
 
     // Nothing rehearsed: no plan entry, no record.

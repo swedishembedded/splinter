@@ -21,6 +21,7 @@
 
 use crate::common;
 
+use crate::common::solve_set;
 use common::manual::{manual_policy, MANUAL};
 use common::{scratch_context, Scratch};
 use splinter_agent::CancelToken;
@@ -29,7 +30,7 @@ use splinter_core::rng::Seed;
 use splinter_data::Strip;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{build, parse_strip, BuildRequest, ViewName, VoiceBuild};
-use splinter_pipelines::solving::{harness_protocol, solve_set};
+use splinter_pipelines::solving::harness_protocol;
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation, TasksGenerated};
 use splinter_pipelines::verify::{verify_set, Grading};

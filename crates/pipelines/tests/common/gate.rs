@@ -32,7 +32,6 @@ use splinter_core::dataset::DatasetId;
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Environment, Privileged, PrivilegedKind, Task};
 use splinter_core::model_ref::ModelRef;
-use splinter_core::release::ReleaseId;
 use splinter_core::terms::Terms;
 use splinter_core::training::{HeldOutScore, Regime, TrainingCurve};
 use splinter_data::holdout::holdout_split_grouped;
@@ -45,7 +44,7 @@ use splinter_model::train::Trained;
 use splinter_model::train::TrainedPreference;
 use splinter_orchestrator::{Context, OrchestratorError};
 use splinter_pipelines::datasets::store_dataset;
-use splinter_pipelines::release::{arm, release, ReleaseRequest, Released};
+use splinter_pipelines::release::arm;
 use splinter_pipelines::train::{
     train, Candidate, TrainPlan, TrainRequest, Trainer, Tuning, DEFAULT_REPLAY_FRACTION,
 };
@@ -55,6 +54,7 @@ pub use super::fake_brain::Brain;
 use super::repo::Mender;
 use super::{config, Scratch, Scripted};
 
+pub mod releases;
 pub mod variants;
 
 /// The bytes of the base checkpoint every gate spec's policy sits on: a
@@ -483,50 +483,6 @@ const WORDINGS: [&str; 3] = [
     "Here is a question for you:",
     "Quick one before we go on:",
 ];
-
-/// Runs the gate on `candidate` under `default`; a release it writes is
-/// then served to the context as its adapter says.
-pub fn decide(ctx: &Context, candidate: &Candidate) -> Released {
-    let request = ReleaseRequest {
-        gate: fast_gate(),
-        ..ReleaseRequest::new(candidate.candidate.clone())
-    };
-    let decided = release(ctx, &request, &CancelToken::new()).unwrap();
-    if let Some(id) = &decided.release {
-        serve_release(ctx, id);
-    }
-    decided
-}
-
-/// Trains and releases a candidate knowing `knows` on `topic`; it must
-/// pass.
-pub fn released(ctx: &Context, topic: &str, knows: &[&str]) -> ReleaseId {
-    let (candidate, _) = candidate(ctx, topic, knows);
-    let decided = decide(ctx, &candidate);
-    assert!(decided.gate.passed, "{:#?}", decided.gate);
-    decided.release.unwrap()
-}
-
-/// Hands `ctx` the model the release `id` serves: its adapter file says
-/// what it knows, or whether it restores the module it is asked about. The gate grades a champion through its release's copy of
-/// the adapter.
-pub fn serve_release(ctx: &Context, id: &ReleaseId) {
-    let stored = ctx.releases().get(id).unwrap();
-    let adapter: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&stored.artifact).unwrap()).unwrap();
-    if let Some(agent) = adapter["agent"].as_str() {
-        let model = Model::new(Mender::new(agent == "mender"), "scripted/mender");
-        ctx.add_model(arm(ctx.config(), Some(&stored.artifact)), model);
-        return;
-    }
-    let knows: Vec<&str> = adapter["knows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|t| t.as_str().unwrap())
-        .collect();
-    ctx.add_model(arm(ctx.config(), Some(&stored.artifact)), knower(&knows));
-}
 
 /// A trainer double for both regimes: its adapter file is JSON naming the
 /// topics its candidate knows, and it hands the context a scripted model

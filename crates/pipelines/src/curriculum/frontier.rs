@@ -30,10 +30,8 @@
 //! release the policy was, k and the sampling.
 
 use std::collections::BTreeMap;
-use std::time::Instant;
 
 use serde::Serialize;
-use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
 use splinter_core::experience::ExperienceId;
 use splinter_eval::frontier::{Distribution, FrontierClass, PassCount};
@@ -43,11 +41,9 @@ use splinter_model::AGENT_SAMPLING;
 use splinter_store::experiences::{ExperienceSet, SetId};
 use splinter_store::tasks::{TaskSet, TaskSetId};
 
-use crate::curriculum::teacher::{teach, Taught, TeachRequest};
+use crate::curriculum::teacher::Taught;
 use crate::policy_used::PolicyUsed;
-use crate::solving::{solve_tasks, SamplingChoice, SolveRequest, Solved};
-use crate::verify::{verify_set, Grading, Verified};
-use splinter_core::model_ref::ModelRef;
+use crate::solving::{SamplingChoice, Solved};
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 
@@ -316,82 +312,4 @@ pub fn select_frontier(
 /// Records `measurement` once under its address.
 fn record(ctx: &Context, measurement: &Measurement) -> Result<Digest, OrchestratorError> {
     Ok(ctx.workspace().put_document(MEASUREMENT, measurement)?)
-}
-
-/// One pass@k measurement's inputs and bounds.
-pub struct MeasureRequest<'a> {
-    /// The tasks.
-    pub task_set: &'a TaskSetId,
-    /// The policy measured.
-    pub solver: &'a ModelRef,
-    /// The model that teaches what the policy never solves; `None`: the
-    /// policy itself.
-    pub teacher: Option<&'a ModelRef>,
-    /// k and the sampling.
-    pub pass_at_k: PassAtK,
-    /// No solve starts after this, and none runs past it.
-    pub deadline: Option<Instant>,
-    /// Stops the measurement.
-    pub cancel: CancelToken,
-}
-
-/// What `solve --frontier` reports: the solve, the grading, the teacher,
-/// the frontier.
-#[derive(Clone, Debug, Serialize)]
-pub struct Measured {
-    /// The k attempts per task.
-    pub solve: Solved,
-    /// Their verdicts.
-    pub verify: Verified,
-    /// The teacher's graded solves of the tasks never solved.
-    pub teach: Taught,
-    /// The tasks kept.
-    pub frontier: Frontier,
-}
-
-/// Solves each task of `request.task_set` k times, grades every attempt,
-/// has the teacher solve each task never solved, and keeps the tasks worth
-/// training on; see the module documentation.
-pub fn measure(ctx: &Context, request: &MeasureRequest<'_>) -> Result<Measured, OrchestratorError> {
-    request.pass_at_k.validate()?;
-    let solve = solve_tasks(
-        ctx,
-        &SolveRequest {
-            task_set: request.task_set,
-            solver: request.solver,
-            attempts: request.pass_at_k.k,
-            sampling: request.pass_at_k.sampling_choice(),
-            teacher: false,
-            system: None,
-            work: splinter_agent::work::WorkProtocol::default(),
-            deadline: request.deadline,
-            harness: None,
-            cancel: request.cancel.clone(),
-            resume: None,
-        },
-    )?;
-    let verify = verify_set(
-        ctx,
-        &solve.experience_set,
-        Grading::ActiveJudge,
-        &request.cancel,
-    )?;
-    let teach = teach(
-        ctx,
-        &TeachRequest {
-            task_set: request.task_set,
-            attempts: Some(&solve.experience_set),
-            teacher: request.teacher.unwrap_or(request.solver),
-            system: None,
-            deadline: request.deadline,
-            cancel: request.cancel.clone(),
-        },
-    )?;
-    let frontier = select_frontier(ctx, request.task_set, &solve, &teach)?;
-    Ok(Measured {
-        solve,
-        verify,
-        teach,
-        frontier,
-    })
 }

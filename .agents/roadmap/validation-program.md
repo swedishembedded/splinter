@@ -162,10 +162,14 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   judge is given, its attempts kept ungraded as if graded; a recall answer hedging among five candidates passed as
   stating the one fact.
 
+- legacy pipelines (16D, by ablation): the CLI verbs that duplicated factory stages are deleted with the pipelines
+  only they used (G-AS-11), the legacy exam seal whose reserved families nothing recorded (G-NEW-01) and the
+  release path of the third lineage notion (G-FS-09); the stage ledger moved to its one user (G-FS-08).
+
 ## Open
 
-- Confirmed and open (decisions or larger work, each in `validation/gaps.yaml` with its proposal): the learning-method smokes cannot run against the current brain (G-NEW-06: its toy checkpoint moved to the qwen3 sample, and its server no longer serves a local checkpoint by store name); the legacy
-  `dataset build` seal's reserved families are never recorded (G-NEW-01); the factory's examination check compares
+- Confirmed and open (decisions or larger work, each in `validation/gaps.yaml` with its proposal): the learning-method smokes cannot run against the current brain (G-NEW-06: its toy checkpoint moved to the qwen3 sample, and its server no longer serves a local checkpoint by store name); workspace episodes and Harbor ingestion still run through more than
+  one live path (G-NEW-14); the factory's examination check compares
   exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
   a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
   Harbor's ATIF validator (G-AS-13).

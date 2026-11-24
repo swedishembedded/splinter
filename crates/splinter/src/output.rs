@@ -356,7 +356,7 @@ impl Report for Critiqued {
     }
 }
 
-fn share(value: Option<f64>) -> String {
+pub(crate) fn share(value: Option<f64>) -> String {
     value.map_or("not measured".into(), |v| format!("{v:.3}"))
 }
 

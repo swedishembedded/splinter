@@ -30,9 +30,10 @@
 
 use crate::common;
 
+use common::gate::releases::{release_of, released};
 use common::gate::{
-    anchor_file, dataset, decide, gate_context, policy, preference_dataset, released,
-    rollout_dataset, Brain, FakeTrainer, ANCHOR, FACTS,
+    anchor_file, dataset, gate_context, policy, preference_dataset, rollout_dataset, Brain,
+    FakeTrainer, ANCHOR, FACTS,
 };
 use splinter_agent::CancelToken;
 use splinter_core::dataset::DatasetId;
@@ -69,7 +70,7 @@ fn refusal(ctx: &Context, request: &TrainRequest, trainer: &FakeTrainer) -> Stri
 }
 
 #[test]
-fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_gated_like_any_other() {
+fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_released_like_any_other() {
     let (scratch, ctx) = gate_context("train-dpo", Brain::Honest);
     anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
     let champion = released(&ctx, "alpha", &[ANCHOR, "alpha"]);
@@ -101,12 +102,7 @@ fn a_preference_dataset_trains_by_dpo_from_the_champion_and_is_gated_like_any_ot
         "the double measures nothing"
     );
 
-    let decided = decide(&ctx, &candidate);
-    assert!(decided.gate.passed, "{:#?}", decided.gate);
-    let release = ctx
-        .releases()
-        .get(decided.release.as_ref().unwrap())
-        .unwrap();
+    let release = ctx.releases().get(&release_of(&ctx, &candidate)).unwrap();
     assert_eq!(release.manifest.training.regime, Regime::Dpo);
     assert_eq!(release.manifest.parent, Some(champion.clone()));
 

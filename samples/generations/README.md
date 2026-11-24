@@ -46,7 +46,7 @@ whether general behaviour is intact.
 200 general questions with one short reference each (arithmetic and units
 computed in code, capitals, symbols, definitions and code facts from a
 reviewed list), none naming an entity the invented fact families could. Freeze
-it with `splinter eval --suite anchor --freeze target/samples/generations/anchor-200.jsonl`
+it with `splinter eval --freeze target/samples/generations/anchor-200.jsonl`
 and decide the anchor check on counts with `--anchor-max-net-lost 6` (3% of
 200); `scripts/anchor_power.py` computes the error rates of that bound. Recorded here, built file sha256: `2fb466ae50c5e3d7cc471ab60b74dba87f5873e0e95bb3b946fef89adb8cf22d`
 (`test_generations` holds the build to it). Frozen as version 1 its store digest is
@@ -55,7 +55,7 @@ undecided counts are in knowledge entry 068.
 
 `generations.py run --mode full|merge` drives the `splinter` binary on a state
 root of its own: `absorb --no-consolidate` for each update, then `consolidate
---mode MODE`, and `eval policy:default --suite FILE` after every step. The
+--mode MODE`, and `eval --suite FILE` (the default policy) after every step. The
 policy is Qwen3-0.6B; generator and teacher are Qwen3-8B. The measure
 after a step asks the facts taught so far and the anchor in one `eval`, so the
 model loads once. `memwatch.py` samples the card memory the driver reports

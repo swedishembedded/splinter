@@ -112,6 +112,63 @@ struct AnchorLine {
 const VERSION: &str = "anchor_version";
 const POINTER: &str = "anchor";
 
+/// The anchor suite in force, as it is shown.
+#[derive(Clone, Debug, Serialize)]
+pub struct AnchorShown {
+    /// Its version.
+    pub version: u32,
+    /// Its digest.
+    pub digest: Digest,
+    /// Tasks in it.
+    pub tasks: usize,
+}
+
+impl From<&FrozenAnchor> for AnchorShown {
+    fn from(frozen: &FrozenAnchor) -> Self {
+        Self {
+            version: frozen.suite.version,
+            digest: frozen.digest.clone(),
+            tasks: frozen.suite.tasks.len(),
+        }
+    }
+}
+
+/// What `eval` with no run says of the anchor suite: the version in force,
+/// and the run that froze it when this call froze one.
+#[derive(Clone, Debug, Serialize)]
+pub struct AnchorOutcome {
+    /// The version in force; `None` when none is frozen.
+    pub anchor: Option<AnchorShown>,
+    /// The recorded run that froze it, when this call did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run: Option<String>,
+}
+
+/// The anchor suite in force; with `files`, those files' tasks frozen as its
+/// next version first, recorded as an `anchor` run.
+///
+/// # Errors
+/// A file that is not anchor tasks, or the store refusing a write.
+pub fn show_or_freeze(
+    ctx: &Context,
+    files: &[PathBuf],
+) -> Result<AnchorOutcome, OrchestratorError> {
+    if files.is_empty() {
+        return Ok(AnchorOutcome {
+            anchor: current(ctx)?.as_ref().map(AnchorShown::from),
+            run: None,
+        });
+    }
+    let arguments = serde_json::json!({ "freeze": files });
+    let recorded = splinter_orchestrator::runs::record(ctx, "anchor", &arguments, |_| {
+        freeze(ctx, files).map(|f| AnchorShown::from(&f))
+    })?;
+    Ok(AnchorOutcome {
+        anchor: Some(recorded.report),
+        run: Some(recorded.run),
+    })
+}
+
 /// The anchor suite version in force, verified; `None` before one is
 /// frozen.
 pub fn current(ctx: &Context) -> Result<Option<FrozenAnchor>, OrchestratorError> {

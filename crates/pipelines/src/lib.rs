@@ -28,8 +28,7 @@
 //! * [`verify`] - verdicts appended, by each task kind's verifiers;
 //!   [`judge`] - a judge's calibration.
 //! * [`curriculum`] - budget spent where learning happens: pass@k frontier
-//!   selection, concept mastery across releases, concepts the gate saw
-//!   forgotten queued for new tasks.
+//!   selection and concept mastery across releases.
 //! * [`goal`] - goal-directed learning: probe the participant, find its
 //!   gaps, choose the raw material expected to close them under a budget
 //!   with a reason for every section, learn it, probe again; and the
@@ -110,7 +109,6 @@ pub mod objects;
 pub mod policy_used;
 pub mod powered;
 pub mod preflight;
-mod promotion;
 pub mod raft;
 pub mod rehearsal;
 pub mod release;

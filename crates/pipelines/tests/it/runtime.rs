@@ -19,7 +19,8 @@
 
 use crate::common;
 
-use common::gate::{anchor_file, gate_context, released, Brain, ANCHOR};
+use common::gate::releases::released;
+use common::gate::{anchor_file, gate_context, Brain, ANCHOR};
 use splinter_pipelines::release::{anchor, arm};
 
 #[test]

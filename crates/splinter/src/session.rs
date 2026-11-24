@@ -11,18 +11,14 @@ use std::sync::Arc;
 
 use clap::Parser;
 use serde_json::json;
-use splinter_sdk::canaries;
 use splinter_sdk::critique::{critique_set, CritiqueRequest};
 use splinter_sdk::doctor::doctor;
-use splinter_sdk::eval::{evaluate, EvalRequest};
 use splinter_sdk::exam::{examine, ExamineRequest};
 use splinter_sdk::experiences::{self, resolve_set};
 use splinter_sdk::experiment;
 use splinter_sdk::judge::{calibrate_judge, measure_judge};
 use splinter_sdk::lineage::{lineage, LineageRequest};
-use splinter_sdk::measure::gate::GateConfig;
-use splinter_sdk::rehearsal::{rehearse, RehearseRequest, DEFAULT_REHEARSAL_SHARE};
-use splinter_sdk::release::{self, ReleaseRequest};
+use splinter_sdk::release;
 use splinter_sdk::retrieval::{candidates_for, library_of, Rerank, Retrieval};
 use splinter_sdk::router::{interpret, Routed};
 use splinter_sdk::runs::{self, record};
@@ -30,26 +26,22 @@ use splinter_sdk::sources::{self, SourceTarget};
 use splinter_sdk::state;
 use splinter_sdk::status::status;
 use splinter_sdk::tasks::resolve_set as resolve_task_set;
-use splinter_sdk::train::{train_recorded, Rehearse, TrainRequest, Tuning};
-use splinter_sdk::verify::{verify_set, Grading, Judge, Judging};
+use splinter_sdk::verify::Judging;
 use splinter_sdk::vocabulary::build::BuildInfo;
 use splinter_sdk::vocabulary::model_ref::ModelRef;
-use splinter_sdk::vocabulary::terms::Distribution;
 use splinter_sdk::{Config, Context, Error, Splinter};
 
 use crate::absorb_session;
 use crate::baseline_report;
 use crate::cli::{
-    Cli, Command, DatasetCommand, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand,
-    Global, JudgeCommand, ReleaseCommand, RunsCommand, SourceCommand, StateCommand,
+    Cli, Command, EvalArgs, EvalCommand, ExperiencesCommand, ExperimentCommand, Global,
+    JudgeCommand, ReleaseCommand, RunsCommand, SourceCommand, StateCommand,
 };
 use crate::compare_session;
 use crate::conversation_dataset;
 use crate::exam_session;
 use crate::output::{self, emit, shell_words};
-use crate::solve_session;
 use crate::tasks_session;
-use crate::train_output::Trained;
 
 /// How an invocation ended; see the crate documentation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -269,6 +261,7 @@ impl Session {
             | Command::Fork(_)
             | Command::Report(_)
             | Command::Export(_)
+            | Command::Verify(_)
             | Command::Play(_) => {
                 unreachable!("the factory's commands are routed before this match")
             }
@@ -317,25 +310,6 @@ impl Session {
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
             Command::Tasks(command) => return tasks_session::tasks(ctx, json, command),
-            Command::Solve(args) => return solve_session::solve(ctx, json, &args),
-            Command::Verify(args) => {
-                let set = resolve_set(ctx, &args.experience_set)?;
-                let judge = args
-                    .judge
-                    .as_ref()
-                    .map(|j| Judge::load(ctx, j))
-                    .transpose()?;
-                let arguments = json!({ "experience_set": set, "judge": args.judge });
-                let verified = record(ctx, "verify", &arguments, |run| {
-                    verify_set(
-                        ctx,
-                        &set,
-                        judge.as_ref().map_or(Grading::ActiveJudge, Grading::Judge),
-                        &run.cancel_token(),
-                    )
-                })?;
-                emit(json, &verified);
-            }
             Command::Critique(args) => {
                 let set = resolve_set(ctx, &args.experience_set)?;
                 let solver = ModelRef::policy_default();
@@ -457,9 +431,6 @@ impl Session {
                 interval_seed,
                 strata.cutoffs(),
             )?,
-            Command::Dataset(DatasetCommand::Build(args)) => {
-                crate::dataset_build::run(ctx, json, *args)?;
-            }
             Command::Dataset(command) => {
                 if !conversation_dataset::dispatch(ctx, json, command)? {
                     return Ok(Exit::Failed);
@@ -470,99 +441,7 @@ impl Session {
                     return Ok(Exit::Refused);
                 }
             }
-            Command::Train(args) => {
-                let request = TrainRequest {
-                    datasets: args.datasets,
-                    rehearsal: args.rehearsal.map(|dataset| Rehearse {
-                        dataset,
-                        share: args.rehearsal_share.unwrap_or(DEFAULT_REHEARSAL_SHARE),
-                    }),
-                    from: args.from,
-                    replay_fraction: args.replay_fraction,
-                    replay_policy: Default::default(),
-                    steps: args.steps,
-                    rank: args.rank,
-                    beta: args.beta,
-                    tuning: {
-                        let tuning = args.optimiser.applied_to(Tuning {
-                            records_per_step: args.records_per_step,
-                            eval_every: args.monitoring.eval_every,
-                            patience: args.monitoring.patience,
-                            monitor_share: args.monitoring.monitor_share,
-                            keep_evaluations: args.monitoring.keep_evaluations,
-                            max_block: args.max_block,
-                            seed: args.seed,
-                            base_precision: args.base_precision,
-                            policy_gradient: args.policy_gradient.options(args.temperature),
-                            pairs: args.pairs.settings(),
-                            ..Tuning::default()
-                        });
-                        match args.recipe {
-                            Some(recipe) => recipe.apply(tuning),
-                            None => tuning,
-                        }
-                    },
-                };
-                let candidate = record(ctx, "train", &request, |run| {
-                    train_recorded(ctx, run, &request, self.splinter.trainer())
-                })?;
-                emit(json, &Trained::new(candidate, args.memorisation_ratio));
-            }
-            Command::Rehearse(args) => {
-                let arguments =
-                    json!({ "records": args.records, "rehearsal_seed": args.rehearsal_seed });
-                let rehearsed = record(ctx, "rehearse", &arguments, |run| {
-                    rehearse(
-                        ctx,
-                        &RehearseRequest {
-                            records: args.records,
-                            seed: run.seed("rehearsal-seed", args.rehearsal_seed)?,
-                            deadline: None,
-                            cancel: run.cancel_token(),
-                        },
-                    )
-                })?;
-                emit(json, &rehearsed);
-            }
-            Command::Release(args) => {
-                if matches!(args.command, Some(ReleaseCommand::List)) {
-                    emit(json, &release::list(ctx)?);
-                    return Ok(Exit::Ok);
-                }
-                let Some(candidate) = args.candidate else {
-                    return Err(Error::Refused(
-                        "name a candidate to release, or `release list`".into(),
-                    ));
-                };
-                if let Some(judge) = args.judge {
-                    ctx.set_judge(judge);
-                }
-                let canaries = args
-                    .canaries
-                    .map(|id| canaries::load(ctx, &resolve_task_set(ctx, &id)?))
-                    .transpose()?
-                    .unwrap_or_default();
-                let request = ReleaseRequest {
-                    alias: args.alias,
-                    canaries,
-                    distribution: if args.unrestricted {
-                        Distribution::Unrestricted
-                    } else {
-                        Distribution::Restricted
-                    },
-                    interval_seed: args.interval_seed,
-                    gate: args.gate.plan().applied_to(GateConfig::default()),
-                    ..ReleaseRequest::new(candidate)
-                };
-                let released = record(ctx, "release", &request, |run| {
-                    release::release_recorded(ctx, run, &request)
-                })?;
-                emit(json, &released);
-                // A blocked release did not do what was asked.
-                if released.report.release.is_none() {
-                    return Ok(Exit::Failed);
-                }
-            }
+            Command::Release(ReleaseCommand::List) => emit(json, &release::list(ctx)?),
             Command::Rollback { alias } => {
                 let arguments = json!({ "alias": alias });
                 emit(
@@ -576,17 +455,7 @@ impl Session {
                 command: Some(EvalCommand::Matrix { alias }),
                 ..
             }) => emit(json, &release::continual::matrix(ctx, &alias)?),
-            Command::Eval(args) => {
-                if let Some(judge) = args.judge {
-                    ctx.set_judge(judge);
-                }
-                let request = EvalRequest {
-                    model: args.model,
-                    suite: args.suite,
-                    freeze: args.freeze,
-                };
-                emit(json, &evaluate(ctx, &request)?);
-            }
+            Command::Eval(args) => crate::eval_session::eval(ctx, json, &args)?,
             Command::ExamReport(command) => exam_session::report(ctx, json, command)?,
             Command::ExamSet(command) => exam_session::set(ctx, json, command)?,
             Command::Select(args) => emit(json, &exam_session::select(ctx, &args)?),

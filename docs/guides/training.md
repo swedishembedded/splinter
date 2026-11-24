@@ -3,17 +3,16 @@
 
 # Build datasets and train a candidate
 
-Each command here is one stage of a learning run (the [learning factory](learning-factory.md) composes them as a recipe). Use them to build a dataset
-with a different view, to retrain on the same data with other settings, or to see what a
-stage produced. Datasets and their views are described in the [datasets
-reference](../reference/datasets.md); the [release gate](../concepts/release-policy.md)
-decides whether a candidate is ever used.
+Datasets and training are stages of a recipe of the [learning factory](learning-factory.md): a
+`dataset.project` stage projects attempts to a dataset, and a `model.train` stage trains a candidate on it. This page
+describes how that training behaves: the parameters, the regimes, the evaluation and the replay. Datasets
+are described in the [datasets reference](../reference/datasets.md); the [release
+gate](../concepts/release-policy.md) decides whether a candidate is ever used.
 
 ```bash
-splinter dataset build 5c0f2a91 --view sft-final
-splinter train 9d41e7b3 --steps 200
-splinter train 9d41e7b3 --rehearsal 2b6c88f0 --rehearsal-share 0.25
-splinter select 4a77d1c5 --exam-set 8e10b2f6
+splinter plan recipes/agent-sft.yaml
+splinter run recipes/agent-sft.yaml --out runs/agent-sft
+splinter inspect runs/agent-sft --stage lora
 ```
 
 Training runs in the process unless the run has brain endpoints (`--brain-endpoint`): then a supervised
@@ -21,105 +20,74 @@ or policy-gradient run is a job of the brain service, which schedules it on the 
 the datasets and the adapter move through the artifact store `--brain-artifact-store` names. See
 [Training on a brain endpoint](../getting-started/configuration.md#training-on-a-brain-endpoint).
 
-## Defaults
+## Parameters
 
-Unless `--steps` is given a run's step budget
-is three passes over what it learned, within bounds, at one learning rate
-suited to a short LoRA run (`--lr`, 2e-4),
-a LoRA alpha of twice the rank (`--alpha`, so the update's scale does not
-change with the rank) and no weight decay (`--weight-decay`), all recorded
-in the candidate. Each pass takes every record once in a fresh order, a step
-is a mean over its supervised tokens, the rate warms up over a twentieth of
-the steps and decays over all of them, and a run that stops on its plateau
-first cools the rate down to the floor. A step averages several records - one per
-sixteen the data holds, up to eight, or `--records-per-step N` - because an
-update on a single long, individual answer is noise the next record undoes.
-The budget is a ceiling: the run is watched as it trains and
-carries the step with the best monitoring loss, stopping early once that
-loss stops improving.
+A `model.train` stage names its `base` role, its `method` (`lora`), its `seed` and the trainer's own
+`params`. For `lora` the `params` are checked before the run:
 
-## Regimes, held-out records and what a candidate continues
+- `steps` and `rank` are required; there is no default step budget.
+- `alpha` defaults to twice the rank, so the update's scale does not change with the rank.
+- `grad_accum` is the records per optimiser step and defaults to 1.
+- `learning_rate` is brain's default when absent; `weight_decay` defaults to 0.
+- `max_block` bounds the longest training row in tokens.
+- `base_precision` is how the frozen base is held: `fp32` (brain's default), `bf16`, `int8`, `nf4` or `fp8`;
+  a CPU backend trains `fp32` only.
+- `eval_every` is the steps between evaluations of the validation records. Its default 0 evaluates nothing
+  and exports the last step. With a value above 0 and validation records, the run evaluates every
+  `eval_every` steps and exports the step with the best validation loss.
+- `patience` is the evaluations without improvement before the run stops. Its default 0 runs the whole
+  budget; the best evaluation is exported either way.
+- For preference datasets: `loss` (`dpo`, `ipo`, `simpo` or `orpo`; `dpo` when absent), `beta`,
+  `nll_weight` (the weight of the chosen answer's likelihood beside the pair loss, 0 when absent) and
+  `gamma` (SimPO's target margin).
+- For rollout datasets: `behaviour`, where the importance ratio's behaviour log-probabilities come from
+  (`recorded`, the default, or `start`: the policy the run starts from, exact only when the rollouts were
+  sampled from it).
 
-`train` trains the regime its datasets' objective names - chat datasets
-by supervised fine-tuning, preference datasets by a pair loss against the model
-the run starts from (`--loss dpo|ipo|simpo|orpo`, default `dpo`; `--beta`, the loss's
-temperature, defaults to brain's; `--gamma`, SimPO's target margin; `--nll-weight`, an anchor
-on the chosen continuation's own likelihood), feedback datasets by KTO on every judged
-completion, nothing held out (`--desirable-weight` and `--undesirable-weight` default to the
-balanced weights the dataset's manifest records; a setting of the other objective is refused);
-a dataset of rollouts (the `policy-gradient` view, whose records carry a
-`reward` and a `group`) by brain's clipped policy gradient, below; one run's datasets are all of one
-regime. It concatenates them in
-order and holds a tenth of the records out for scoring, drawn by the seed and
-stratum each record of a built dataset carries so that every domain is held out
-at its share ([the held-out split](../reference/datasets.md#held-out-and-monitoring-split);
-a record of the writer's own text, which has no question to examine, is held
-out with its family and scored by nobody): a supervised candidate
-reports the held-out loss of base and candidate, a preference candidate
-brain's preference score on the held-out pairs (how often, and by how
-many nats, it prefers the chosen answer more than its reference does).
+The stage records every parameter as the trainer resolved it, defaults written in, so a change of a default
+is a change of the stage's identity. Brain's own settings that the stage does not name are left at brain's
+defaults.
+
+## Regimes and what a candidate continues
+
+`model.train` trains the regime the dataset's objective names, and one stage's datasets are all of one
+regime:
+
+- `sft` and `cpt` datasets by supervised fine-tuning.
+- `preference` datasets by a pair loss against the model the run starts from (DPO by default).
+- `feedback` datasets by KTO on every judged completion, with class weights from the balance of desirable and
+  undesirable records.
+- `policy-gradient` and `distill` datasets by brain's clipped policy gradient, below.
+
+A stage trains a fresh adapter on the base unless it names `start:`, a champion role (see
+[the learning factory](learning-factory.md)) served from the same base, whose adapter a preference, feedback or
+policy-gradient run continues: a preference run polishes the policy that made its pairs. A stage with no
+`start:` does not continue any earlier release. The validation records are what the held-out scores and the
+step choice are read over; a dataset with none is scored on its training records, which the candidate's
+report records as `held_out`.
 
 ## Training on rollouts
 
 A `policy-gradient` dataset trains with a clipped policy gradient, the way GRPO and PPO do:
 brain turns each group's rewards into advantages by the normalisation the dataset was built
-for (its `--advantage`, which its manifest records; datasets built for two are refused
-together), a record with a negative advantage lowers the probability of its action, one with a
+for (which its manifest records), a record with a negative advantage lowers the probability of its action, one with a
 positive advantage raises it, and a KL penalty keeps the adapter near a reference policy.
 Nothing is imitated. Brain trains it on `qwen35` bases only and refuses any other, and refuses
 a dataset with rewards under supervised training, so neither can silently drop them. The
-run holds nothing out and monitors nothing - the exam is its judge - and replays and
-rehearses nothing; `--eval-every`, `--patience`, `--monitor-share`, `--keep-evaluations`,
-`--rehearsal` and `--beta` are refused with it. `--from local:<checkpoint>+<adapter>` (or a
-`policy:` alias) continues the adapter whose policy generated the rollouts. The settings are
-brain's own, left at brain's defaults unless named:
+run replays and rehearses nothing: a `replay` input is refused with it. Of brain's policy-gradient settings
+the stage names only `behaviour`; the rest are brain's defaults.
 
-| Flag | Meaning |
-|---|---|
-| `--clip-eps` | half-width of the clip band of the importance ratio, in (0, 1) (0.2) |
-| `--kl-beta` | coefficient of the KL penalty to the reference; 0 puts none in the loss (0.02) |
-| `--reference base\|start` | the policy the penalty is taken against: the frozen base, or the adapter the run begins from (`base`) |
-| `--loss-agg seq-mean\|token-sum` | how token terms are normalised (`seq-mean`) |
-| `--temperature` | the temperature the rollouts were sampled at (1.0) |
-| `--teacher-policy base\|start` | self-distillation: the frozen policy that scores the student's tokens in the privileged context (`base`) |
-| `--advantage-bound` | self-distillation: clip each token's advantage to `[-C, C]` (none) |
-| `--sequence-advantage-cap` | self-distillation: scale a sequence's token advantages down together when their magnitudes sum past this (none) |
-
-`--recipe on-policy-rl` fills what is left unset with the defaults an on-policy round of
-reinforcement learning on one batch of rollouts needs: `--behaviour recorded` (the sampler's
-own log-probabilities, exact on brain's served rollouts), `--loss-agg token-sum` (every token
-of a step weighed alike, as Dr. GRPO argues), `--lr 1e-4` and four passes over the rollouts
-(the step budget, when `--steps` is not named, is sized to them; brain draws every record once
-per pass, reshuffled). A run that took 67 steps at `2e-5` over its rollouts once moved the
-policy by a KL of 0.002 and clipped about 1% of its tokens, which teaches nothing; the recipe
-aims for a mean KL to the reference of 0.02-0.05 and a clip fraction of 0.10-0.20, and the
-candidate records where its run came out against both (`recipe`, printed as one line:
-`below`, `within` or `above`). Every flag named beside it wins. It is refused for any other
-regime.
-
-The plan records every setting, brain's training record keeps the loss, clip fraction, KL and
-importance ratio of each step, and the candidate is released through the same gate as any
-other. The candidate's report carries the same series under `policy_gradient`, with the first,
-last and mean KL to the reference, the mean clip fraction and the mean ratio, and `train` prints
-them as one line. brain also prints the step's KL, clip fraction and ratio on its step log line.
-The KL costs one forward pass over the dataset before the first step, none per step.
+The candidate's report carries brain's per-step statistics under `statistics`: the loss, clip fraction, KL and
+importance ratio of each step. The KL costs one forward pass over the dataset before the first step, none per step.
 
 ### Self-distillation on the cliff
 
 GRPO's advantage is zero where every attempt at a task failed, so the hardest tasks teach it
 nothing. Self-distillation gives those attempts dense credit instead, on the student's own
-distribution. Build the dataset with `--cliff-distill` (the `policy-gradient` view keeps the
-scalar advantage of every group with a spread of rewards and distils each group whose
-attempts all failed alike), or with `--view self-distill` (every attempt of every group,
-passed or failed, distilled):
-
-```sh
-splinter dataset build --view policy-gradient --cliff-distill --roles designer \
-    --max-block 8192 --from local:/models/qwen3.8-27b+round-3.safetensors --drop-leaking TRAIN-SET-ID
-splinter train DATASET-ID --from local:/models/qwen3.8-27b+round-3.safetensors \
-    --teacher-policy base --advantage-bound 5 --sequence-advantage-cap 40 \
-    --kl-beta 0.02 --reference start --base-precision bf16
-```
+distribution. A dataset projected with `objective: distill` makes every attempt of every group,
+passed or failed, a distilled record (see the [learning
+factory](learning-factory.md#what-each-stage-guarantees)); a `model.train` stage trains it with the
+policy-gradient job.
 
 A distilled record is the attempt's own conversation, exactly as the student saw it, plus a
 `teacher_context`: a turn right after the instruction that only the teacher sees, built from what
@@ -128,115 +96,48 @@ statement of why, the task's reference change when the task carries one). It nev
 student's messages. An attempt with nothing of that to show is left out and counted as
 `no_privileged_context`. Brain scores the student's own sampled tokens with the frozen model shown
 that context and trains each token with `A_t = log q_teacher(y_t | privileged context, y_<t) - log p_student(y_t)`
-through the same clipped step as any advantage (reverse KL, the dense signal). The guards are named:
-`--advantage-bound` clips each `A_t`, `--sequence-advantage-cap` scales a sequence's advantages
-down so that a few pivot tokens cannot dominate a step, and the KL penalty stays. The step log
-line adds the mean, largest magnitude and clipped share of the token advantages. The teacher's
-rendering is longer than the student's, so `--max-block` counts the longer of the two. The build
-report counts groups by kind (graded, all-fail, all-pass) and says which were distilled.
+through the same clipped step as any advantage (reverse KL, the dense signal). The teacher's
+rendering is longer than the student's, so the block size counts the longer of the two.
 
-## Watching the training and choosing the step
+## Evaluation and the step carried
 
-A supervised run is watched as it trains. A share of the training families
-(`--monitor-share`, default 0.1, whole families) is set aside as the
-monitoring records - carved from the training half, never from the held-out
-half the gate and the exam decide on, so no step is chosen on the evidence
-it is then judged by - and scored every `--eval-every` steps (default:
-sixteen evaluations over the step budget, and at the last step). The
-candidate carries the adapter of the evaluation with the lowest monitoring
-loss, not the last step's, and the run stops once that loss has gone
-`--patience` evaluations (default 4) without improving; `--patience 0` runs
-the whole budget and still carries the best, `--eval-every 0` monitors
-nothing and carries the last step. `--steps` is the budget, the most steps
-the run may take: by default three passes over the examples. The candidate's
-report shows the steps trained of the budget, the step carried and why, the
-training and monitoring loss at it and the gap between them, the whole curve
-(step, mean training loss since the previous evaluation, monitoring loss),
-and warns when the gap at the carried step is more than a quarter of the
-monitoring loss, when the monitoring loss rose after the step carried, or
-when it was still falling at the end of the budget; the release gate and the
-exam repeat those warnings beside their verdicts.
-`train` also judges the run for memorisation and records the verdict in the
-candidate's JSON as `memorisation` (the verdict `memorised`, `not_memorised`
-or `not_judged`, the reason, and the numbers it used), printing one line:
-`memorisation: memorised|not memorised|not judged (<reason>): kept step S,
-monitor M vs base B, train T`. It is judged on the kept evaluation (the
-lowest monitoring loss, not the last step) and is memorised when that
-monitoring loss is not below the base model's loss on the same records, or
-when the training loss there is below `--memorisation-ratio` (default 0.5)
-times the monitoring loss. A run with no monitoring evaluations or no base
-score is not judged. The verdict is reported only: it never stops or alters
-the run.
-`--keep-evaluations` also keeps the adapter of every evaluation with the
-candidate, and `splinter select CANDIDATE --exam-set DEV-SUITE` puts each of
-them to the dev suite (the families `exam-set create --dev-families` reserves apart from
-the final test and from all training) and chooses one by a rule fixed in
-advance: an evaluation whose answers state what the source does not hold in
-more than 8% of the answers checked is out; of those left, the best share of
-answers the judge calls right and every one within a standard error of it are
-in the running; of those, the writer's own text of the dev families gets the
-lowest loss. Correctness decides, voice breaks the tie it cannot, and an
-evaluation that invents is never chosen for its voice. `--adopt` makes the
-chosen evaluation a candidate of its own (its held-out score is not carried
-over: it was measured of another adapter) to release.
+A supervised run evaluates the validation records only when `eval_every` is above 0. The candidate then
+carries the adapter of the evaluation with the lowest validation loss, not the last step's, and the run stops
+once that loss has gone `patience` evaluations without improving (`patience: 0` runs the whole budget and
+still carries the best). With `eval_every: 0` nothing is evaluated and the last step is carried. The
+candidate's report holds the base and tuned scores and the training curve (`curve`). The validation records
+come from the dataset's own `validation` split, so no step is chosen on training records.
 
 ## Interrupting a run
 
 A brain training job keeps running when the client that submitted it exits, and keeps its card.
-So Ctrl-C (or SIGTERM) on `splinter train`, or on any command whose run submits a training job,
+So Ctrl-C (or SIGTERM) on `splinter run`, or on any command whose run submits a training job,
 cancels the job through brain's API (`DELETE /v1/jobs/{id}`, which stops it at its next optimiser
 step) before the command exits, and the error it ends with says which job was cancelled and
 whether brain confirmed it; one brain did not confirm is named with how to find it
 (`GET /v1/jobs`) and stop it. The run is recorded as cancelled. A second Ctrl-C exits at once.
-With `--detach-on-interrupt` the command exits on the first Ctrl-C and leaves its jobs running:
-running the same command again continues each from its last saved state (its resume key).
+A killed run continues where it stopped (`splinter resume`), and a training job continues from its last saved state
+(its resume key).
 
 ## Replay and rehearsal
 
-From `policy:<alias>` (the default) it continues the adapter of the
-release the alias points at - never the base weights once a release
-exists - and a supervised run replays `--replay-fraction` (default 0.25)
-of every earlier release's trained-on chat records, a sample drawn with the
-run's seed (so the same seed replays the same records) that never includes
-what that release held out;
-replayed records are never held out, and take a quarter of the training
-draws however many there are, so a large replay cannot starve the new
-records. `--rehearsal DATASET-ID` mixes a rehearsal dataset (`rehearse`) in the same way at `--rehearsal-share` of the draws (default 0.25;
-the replay's quarter and this share must leave the new records some draws),
-never held out, and puts `--monitor-share` of its records into the
-monitoring set beside the training families' records, so the step carried is
-chosen on the mixture the run trains. The candidate records what it
-rehearsed (dataset, share, records trained on and monitored), and the records
-mixed in are kept as an artifact the gate's leakage check reads. `--seed N`
-seeds the adapter's initialisation, the batch order and the replay draw;
-without it a seed is drawn, printed (`no --seed given, using seed N`), written
-to the run record and to the candidate (`seed`), and passing it again writes
-the same adapter on the same data. Two runs that differ only in the seed show
-how much of a measured difference is the draw. A preference run replays and rehearses nothing:
-brain's preference trainer trains on its pairs alone. `--from
-local:<checkpoint>+<adapter>` continues that adapter instead, with no
-replay, and such a candidate cannot replace a champion. The candidate
-records its regime; the release gate grades either the same way.
+A `model.train` stage may name a `replay` input: datasets of earlier chat records mixed into the
+training draws. With `replay_share` (between 0 and 1) that share of the draws comes from the replay records;
+without it the replay and the new records are one plain union. Replay is for `sft` and `cpt` datasets only: a
+preference, feedback or rollout dataset is refused with a `replay` input, and so is a `replay_share` with
+nothing replayed. The stage's `seed` seeds the adapter's initialisation, the batch order and the replay draw;
+the same seed writes the same adapter on the same data, and two runs that differ only in the seed show how
+much of a measured difference is the draw.
 
 ## Seeds
 
-Every random choice a pipeline makes takes a seed the run states. The exam's
-families (`exam-set create --seed` and,
-kept with the families so every later run reads it back and naming another is
-refused), the rehearsal's form tasks (`--rehearsal-seed`), the denoise tasks
-(`--denoise-seed`), the subjects of `--strip mix:F` (`--mix-seed`) and the
-exam's bootstrap intervals (`--interval-seed`) are drawn when no seed is given,
-printed (`no --exam-seed given, using seed N (pass --exam-seed N to
-reproduce)`), written to the run record (`seeds`) and kept in the artifact they
-decide: the reservation, the frozen exam, the rehearsal and task reports, the
-dataset manifest and the exam report. The release gate's bootstrap intervals
-(the tasks' own evidence, the anchor's drop) are resampled from a seed of their
-own, recorded as `gate-interval` and kept in the gate report and so in the
-release manifest; `release --interval-seed N` passes it again. A local model
-that samples draws a seed for each request that names none; the run that made
-the requests records them in order (`runs show` lists the count, the first
-sixteen and a digest of all of them, and the whole list is kept in the run's
-events), and a seed passed back as the request's replays its decoding. Greedy
-decoding draws nothing. Passing the seed again reproduces the choice. Two runs
-reserve different families unless they share a seed, so
+Every random choice a pipeline makes takes a seed the run states. A recipe writes down the seed of every stage. The
+exam's families (`exam-set create --seed`) are kept with the families, so every later run reads the seed back and
+naming another is refused; the exam's bootstrap intervals draw a seed when none is given, write it to the run record (`seeds`) and keep
+it in the artifact it decides. The release gate's bootstrap intervals (the tasks' own evidence, the anchor's drop) are
+resampled from a seed of their own, recorded as `gate-interval` and kept in the gate report and so in the release
+manifest. A local model that samples draws a seed for each request that names none; the run that made the requests
+records them in order (`runs show` lists the count, the first sixteen and a digest of all of them, and the whole list
+is kept in the run's events), and a seed passed back as the request's replays its decoding. Greedy decoding draws
+nothing. Passing the seed again reproduces the choice. Two runs reserve different families unless they share a seed, so
 results are comparable across runs only when each names a recorded one.

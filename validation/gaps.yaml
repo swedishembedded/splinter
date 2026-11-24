@@ -454,9 +454,12 @@ gaps:
     not appear to write the store/orchestrator release store.'
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: 'three lineage notions (release.json lineage, store lineage, orchestrator generations): the factory''s is
-    the live one; the others go with the legacy pipelines'
+  status: fixed
+  resolution: 'the orchestrator-side legacy release path (release over a candidate, its decision and generation marks) is
+    deleted with G-AS-11. Two notions remain, each with one owner and documented in docs/guides/releases.md: a factory run
+    decides in its own release product (release.json, champion:RUN), and knowledge absorption (absorb, consolidate) releases
+    through the state root release store that release list, rollback and serving read; the factory does not write that store,
+    and the guide no longer says it does'
 - id: G-FS-10
   source_id: F-10
   where: crates/factory/tests/it/templates.rs:20; crates/factory/src/templates.rs:121-207
@@ -968,10 +971,13 @@ gaps:
     stay by decision'' (git log 9549e5e8); candidates for ablation or an explicit deprecation list.'
   severity: medium
   confidence: high (reference counts by grep)
-  status: confirmed
-  resolution: 'duplicate pipelines: the legacy CLI verbs (tasks generate, solve, verify, dataset build, train, release,
-    eval) beside the factory''s operations; the runner module is deleted, the verbs remain (kept by the user''s decision
-    for U9; Phase 16 to revisit)'
+  status: fixed
+  resolution: the legacy CLI verbs are deleted (solve, train, rehearse, dataset build, tasks generate, release over a candidate,
+    eval over a model or suite, verify over a set) with the pipelines only they used (crates/pipelines/src/eval.rs, solving::solve_set,
+    frontier::measure, curriculum queue, release decision/canary/exams/statistics, the legacy exam seal); eval keeps showing
+    and freezing the anchor suite and re-evaluating a factory run, verify checks a factory run, release lists the store;
+    the runner module went earlier. The duplicate workspace-episode and Harbor-ingestion paths that still have production
+    callers are G-NEW-14
 - id: G-AS-12
   source_id: F12
   where: workers/harbor/splinter_harbor_worker/audit.py (84 lines); workers/harbor/tests/test_run.py:60 asserts leaks ==
@@ -1082,9 +1088,10 @@ gaps:
     module. The live mechanism is the factory's examination_material (split eval, same content).
   severity: high
   confidence: 'high (read: every caller listed)'
-  status: confirmed
-  resolution: doc link fixed; the reserved/trained store records and the legacy seal are to be deleted with the legacy dataset
-    build path (G-AS-11), the factory's check being the one seal
+  status: fixed
+  resolution: the legacy dataset-build seal and its reserved/trained store records are deleted with the legacy dataset build
+    (G-AS-11); exam_seal::seal keeps only the benchmark split check (an eval-side trial is never training data), mutant
+    seal-ignores-exam-split, and the factory examination_material is the one seal over reserved tasks
 - id: G-NEW-02
   source_id: null
   where: crates/factory/src/stage_checks.rs:316 examined_tasks
@@ -1249,3 +1256,16 @@ gaps:
     another number) is left to a judge, as an over-long one is; the verifier''s version is 2. splinter-knowledge/it/task_kinds
     holds every plain kind to a correct, wrong, incomplete, empty, adversarial and ungradeable answer, and checks the catalogue
     has no plain kind without a case'
+- id: G-NEW-14
+  source_id: null
+  where: crates/agent/src/{work.rs:solve_in_workspace, harness_work.rs, workspace_episode.rs}; crates/pipelines/src/harbor.rs:ingest_harbor_trials
+    beside the factory recipe imports
+  what: After the legacy verbs went (G-AS-11), workspace episodes still run through three paths (solve_in_workspace for
+    workspace_solve and demonstrations, harness_work for the factory attempt harness and repo-replay, workspace_episode
+    for the minimind sample) and Harbor trials are still ingested both by experiences ingest-harbor and by the factory imports.
+    Each has a production caller, so a fix to episode or ingestion semantics has to be made more than once.
+  severity: medium
+  confidence: high (callers listed by grep)
+  status: confirmed
+  resolution: 'open: consolidate onto the factory attempt harness and its imports, porting each caller; a refactor of live
+    paths, not a removal'

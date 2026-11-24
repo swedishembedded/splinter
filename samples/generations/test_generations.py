@@ -162,9 +162,10 @@ if verb == "eval":
         suite = args[args.index("--suite") + 1]
         tasks = [json.loads(l) for l in open(suite)]
         taught = set(open(state + "/taught").read().split()) if __import__("os").path.exists(state + "/taught") else set()
-        missed = [{"instruction": t["instruction"]} for t in tasks
-                  if t["reference"].isdigit() and t["reference"] not in taught]
-        print(json.dumps({"scores": [{"missed": missed}]}))
+        failed = lambda t: t["reference"].isdigit() and t["reference"] not in taught
+        items = [{"instruction": t["instruction"], "verdict": "failed" if failed(t) else "passed"}
+                 for t in tasks]
+        print(json.dumps({"run": "run-0", "items": items}))
 elif verb == "absorb":
     import os, glob
     os.makedirs(state, exist_ok=True)

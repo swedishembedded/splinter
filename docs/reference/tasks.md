@@ -4,7 +4,7 @@
 # Tasks reference
 
 A task is a request with a reference and the verifiers that grade an answer to it, written
-from sources and addressed by content. Tasks are grouped in task sets; `tasks generate`
+from sources and addressed by content. Tasks are grouped in task sets; a `task.generate` stage
 makes them, `tasks list` and `tasks show` read them. This page lists the kinds and what
 each is graded by; the checks themselves are described in
 [verification](../concepts/verification.md).
@@ -36,15 +36,12 @@ its `batches`. Only `predict` kinds are relabelled; the record never reaches the
 
 A task's concepts: those it declares; otherwise the (source, section)
 pairs its evidence falls in (the section of the source part containing
-each span's first byte); otherwise its task kind. Every solve through
-`policy:<alias>` records the release the alias was (or `base`), and
-`status` ranks concepts by their rolling pass rate (the newest 32 graded
-solves) under the current release, weakest first, with their rates under
-earlier releases; a teacher's open-book solve and a retry helped by a
-critique are not counted. When the release gate's retention check fails
-on an earlier release's suite, the concepts of the tasks the candidate
-forgot are queued under `<state>/curriculum/queue/` (the `release` report lists
-them).
+each span's first byte); otherwise its task kind. `status` ranks concepts by
+the rolling pass rate of the policy alias's closed-book attempts (the newest 32
+decided ones), weakest first, with their rates under earlier releases. Each
+experience recorded for `policy:<alias>` names the release the alias was (or
+`base`); a teacher's open-book attempt and a retry helped by a critique are not
+counted.
 
 ## Variants
 
@@ -57,7 +54,7 @@ gate and never trained on.
 
 `tasks canaries TASKSET-ID` makes canaries of the workspace tasks of a set: each task with
 its hidden assertions also required to fail, so that no honest change passes it. A candidate
-that passes one is refused when the set is given to `release --canaries`.
+that passes one has not been graded honestly.
 
 ## Picking and dividing sets
 

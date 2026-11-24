@@ -1,301 +1,105 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 //
-// Swedish Embedded AB implements closed-book evaluation suites graded by
-// verifiers the model under test cannot reach, for its clients. If your
-// team needs expertise in model evaluation, you can procure our services
-// by sending an email to info@swedishembedded.com.
+// Swedish Embedded AB implements closed-book measurement of what a model
+// answers, for its clients. If your team needs expertise in measuring what a
+// model has learned and kept, you can procure our services by sending an
+// email to info@swedishembedded.com.
 
-//! `eval`: one model graded closed-book on the gate's suites, and the
-//! anchor suite frozen or shown.
+//! `eval --suite FILE`: one model graded closed-book on the tasks of a file.
 //!
-//! The model is a candidate (by id or prefix: its base with its adapter)
-//! or a model reference, decoding greedily as the gate's arms do. Which tasks a suite holds depends on it:
+//! The file is in the anchor suite's format ([`anchor::read_tasks`]): every
+//! task is closed-book and graded against its reference by code, so no judge
+//! is needed. The model decodes greedily, as a release gate's arms do, and
+//! is any model reference (`policy:<alias>` for what an alias serves). Every
+//! item is kept with its answer and verdict, so the run can be regraded
+//! without asking the model again; the evaluation is a recorded run.
 //!
-//! | Suite | A candidate | `policy:<alias>` |
-//! |---|---|---|
-//! | `held-out` | its new datasets' held-out tasks | the alias's release's |
-//! | `retention` | every release in its champion's lineage, per release | every release before the alias's |
-//! | `anchor` | the anchor suite in force | the same |
-//! | a file | the anchor-format tasks in it | the same |
-//!
-//! A `local:` or `remote:` model has no release, so only `anchor` and a
-//! file apply to it. `--freeze FILE` (with `--suite anchor`, repeatable)
-//! makes the tasks in the files, in order, the anchor suite's next version
-//! first; with no model, the anchor suite in force is shown.
+//! A factory run's candidates are evaluated by its `evaluation` stages, and
+//! a release is decided by its gate; this measures one model on tasks the
+//! caller chose, and decides nothing.
 
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use serde::Serialize;
 use splinter_agent::CancelToken;
-use splinter_core::dataset::DatasetId;
-use splinter_core::digest::Digest;
-use splinter_eval::paired::accuracy;
-
-use crate::graded::GradedItem;
-use crate::release::probe::{self, Suite};
-use crate::release::{anchor, arm_on};
-use crate::train::load_candidate;
 use splinter_core::model_ref::ModelRef;
-use splinter_core::release::ReleaseId;
 use splinter_eval::gate::SuiteSummary;
+use splinter_eval::paired::accuracy;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
-use splinter_orchestrator::releases::StoredRelease;
 use splinter_orchestrator::runs::{record, Recorded};
 
-/// Which suite `eval` grades on.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SuiteChoice {
-    /// The new data's held-out tasks.
-    HeldOut,
-    /// Every earlier release's held-out tasks, per release.
-    Retention,
-    /// The anchor suite in force.
-    Anchor,
-    /// Anchor-format tasks in a file.
-    File(PathBuf),
-}
+use crate::graded::GradedItem;
+use crate::release::anchor;
+use crate::release::probe::{self, Suite};
 
-impl FromStr for SuiteChoice {
-    type Err = OrchestratorError;
-
-    fn from_str(text: &str) -> Result<Self, OrchestratorError> {
-        Ok(match text {
-            "held-out" => Self::HeldOut,
-            "retention" => Self::Retention,
-            "anchor" => Self::Anchor,
-            "" => {
-                return Err(OrchestratorError::Refused(
-                    "a suite is held-out, retention, anchor or a file".into(),
-                ))
-            }
-            file => Self::File(PathBuf::from(file)),
-        })
-    }
-}
-
-/// One `eval`.
+/// One `eval --suite`.
 #[derive(Clone, Debug, Serialize)]
-pub struct EvalRequest {
-    /// A candidate id (or prefix) or a model reference; `None` only to
-    /// show or freeze the anchor suite.
-    pub model: Option<String>,
-    /// The suite.
-    pub suite: SuiteChoice,
-    /// Freeze these files' tasks, in order, as the anchor suite's next
-    /// version first; none freezes nothing.
-    pub freeze: Vec<PathBuf>,
+pub struct SuiteEval {
+    /// The model graded.
+    pub model: ModelRef,
+    /// The file of anchor-format tasks.
+    pub suite: PathBuf,
 }
 
-/// The anchor suite in force, as `eval` shows it.
+/// What `eval --suite` reports.
 #[derive(Clone, Debug, Serialize)]
-pub struct AnchorShown {
-    /// Its version.
-    pub version: u32,
-    /// Its digest.
-    pub digest: Digest,
-    /// Tasks in it.
-    pub tasks: usize,
-}
-
-/// One suite's score.
-#[derive(Clone, Debug, Serialize)]
-pub struct SuiteScore {
+pub struct SuiteGraded {
+    /// The model graded, as it was named.
+    pub model: String,
     /// The suite.
     pub suite: SuiteSummary,
-    /// The release whose held-out tasks it is, for held-out and retention.
-    pub release: Option<ReleaseId>,
     /// Tasks a verifier decided.
     pub graded: usize,
     /// Of those, the fraction right; `None` when none was decided.
     pub accuracy: Option<f64>,
-    /// Every task of the suite, in suite order, whatever its verdict: the
-    /// answer given, how it was decided and why, so that the run can be
-    /// regraded without asking the model again.
+    /// Every task of the suite, in file order, with the answer given and how
+    /// it was decided.
     pub items: Vec<GradedItem>,
 }
 
-/// What `eval` reports.
-#[derive(Clone, Debug, Serialize)]
-pub struct Evaluated {
-    /// The model graded, as it was named; `None` when none was.
-    pub model: Option<String>,
-    /// The reference it was graded through.
-    pub reference: Option<String>,
-    /// The anchor suite in force, when the anchor suite was asked for.
-    pub anchor: Option<AnchorShown>,
-    /// Each suite's score.
-    pub scores: Vec<SuiteScore>,
-}
-
-/// What the model under evaluation is, with the releases its suites come
-/// from.
-struct Subject {
-    reference: ModelRef,
-    held_out: Option<(Option<ReleaseId>, Vec<DatasetId>)>,
-    earlier: Vec<StoredRelease>,
-}
-
-fn subject(ctx: &Context, named: &str) -> Result<Subject, OrchestratorError> {
-    let store = ctx.releases();
-    let lineage = |parent: Option<&ReleaseId>| match parent {
-        Some(id) => store.lineage(id),
-        None => Ok(Vec::new()),
-    };
-    if let Ok(reference) = named.parse::<ModelRef>() {
-        let ModelRef::Policy(alias) = &reference else {
-            return Ok(Subject {
-                reference,
-                held_out: None,
-                earlier: Vec::new(),
-            });
-        };
-        let pin = ctx.policy_pin(alias)?;
-        let release = pin.map(|p| store.get(&p.release)).transpose()?;
-        let earlier = lineage(release.as_ref().and_then(|r| r.manifest.parent.as_ref()))?;
-        return Ok(Subject {
-            held_out: release.map(|r| (Some(r.id), r.manifest.datasets)),
-            reference,
-            earlier,
-        });
-    }
-    let candidate = load_candidate(ctx, named)?;
-    Ok(Subject {
-        reference: arm_on(ctx.config(), &candidate.base, Some(&candidate.adapter)),
-        held_out: Some((None, candidate.datasets)),
-        earlier: lineage(candidate.parent.as_ref())?,
-    })
-}
-
-/// Runs `request`; see the module documentation.
-pub fn eval(
+/// Grades `request.model` on `request.suite`; see the module documentation.
+///
+/// # Errors
+/// [`OrchestratorError::Refused`] for a file that is missing, holds a bad
+/// line or holds no task, before the model is asked; the model's and the
+/// store's own errors.
+pub fn grade(
     ctx: &Context,
-    request: &EvalRequest,
+    request: &SuiteEval,
     cancel: &CancelToken,
-) -> Result<Evaluated, OrchestratorError> {
-    if !request.freeze.is_empty() && request.suite != SuiteChoice::Anchor {
-        return Err(OrchestratorError::Refused(
-            "--freeze makes an anchor suite; give it with --suite anchor".into(),
-        ));
-    }
-    let frozen = match &request.freeze[..] {
-        [] if request.suite == SuiteChoice::Anchor => anchor::current(ctx)?,
-        [] => None,
-        files => Some(anchor::freeze(ctx, files)?),
-    };
-    let anchor_shown = frozen.as_ref().map(|f| AnchorShown {
-        version: f.suite.version,
-        digest: f.digest.clone(),
-        tasks: f.suite.tasks.len(),
-    });
-    let Some(named) = &request.model else {
-        if request.suite == SuiteChoice::Anchor {
-            return Ok(Evaluated {
-                model: None,
-                reference: None,
-                anchor: anchor_shown,
-                scores: Vec::new(),
-            });
-        }
-        return Err(OrchestratorError::Refused(
-            "name a candidate or a model reference to evaluate".into(),
-        ));
-    };
-    let subject = subject(ctx, named)?;
-    let suites: Vec<(Option<ReleaseId>, Suite)> = match &request.suite {
-        SuiteChoice::HeldOut => {
-            let Some((release, datasets)) = &subject.held_out else {
-                return Err(no_release(named, "held-out"));
-            };
-            vec![(release.clone(), probe::held_out(ctx, "held-out", datasets)?)]
-        }
-        SuiteChoice::Retention => {
-            if subject.held_out.is_none() {
-                return Err(no_release(named, "retention"));
-            }
-            subject
-                .earlier
-                .iter()
-                .map(|release| {
-                    let name = format!("retention {}", release.id);
-                    probe::held_out(ctx, name, &release.manifest.datasets)
-                        .map(|suite| (Some(release.id.clone()), suite))
-                })
-                .collect::<Result<_, _>>()?
-        }
-        SuiteChoice::Anchor => {
-            let Some(frozen) = &frozen else {
-                return Err(OrchestratorError::Refused(
-                    "no anchor suite is frozen: `splinter eval --suite anchor --freeze FILE`"
-                        .into(),
-                ));
-            };
-            vec![(None, frozen.probe_suite())]
-        }
-        SuiteChoice::File(file) => {
-            vec![(
-                None,
-                Suite::of_tasks(file.display().to_string(), anchor::read_tasks(file)?),
-            )]
-        }
-    };
-    let model = probe::greedy(ctx, &subject.reference)?;
-    let mut scores = Vec::with_capacity(suites.len());
-    for (release, suite) in &suites {
-        let probes = probe::grade(ctx, &model, suite, cancel)?;
-        let outcomes: Vec<Option<bool>> = probes.iter().map(|probe| probe.verdict).collect();
-        let (accuracy, graded) = accuracy(&outcomes);
-        let items = suite
-            .tasks
-            .iter()
-            .zip(&probes)
-            .map(|(task, probe)| GradedItem::keep(ctx, task, probe))
-            .collect::<Result<Vec<_>, _>>()?;
-        scores.push(SuiteScore {
-            suite: suite.summary(),
-            release: release.clone(),
-            graded,
-            accuracy,
-            items,
-        });
-    }
-    Ok(Evaluated {
-        model: Some(named.clone()),
-        reference: Some(subject.reference.to_string()),
-        anchor: anchor_shown,
-        scores,
+) -> Result<SuiteGraded, OrchestratorError> {
+    let tasks = anchor::read_tasks(&request.suite)?;
+    let suite = Suite::of_tasks(request.suite.display().to_string(), tasks);
+    let model = probe::greedy(ctx, &request.model)?;
+    let probes = probe::grade(ctx, &model, &suite, cancel)?;
+    let outcomes: Vec<Option<bool>> = probes.iter().map(|p| p.verdict).collect();
+    let (accuracy, graded) = accuracy(&outcomes);
+    let items = suite
+        .tasks
+        .iter()
+        .zip(&probes)
+        .map(|(task, probe)| GradedItem::keep(ctx, task, probe))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(SuiteGraded {
+        model: request.model.to_string(),
+        suite: suite.summary(),
+        graded,
+        accuracy,
+        items,
     })
 }
 
-/// What the `eval` command reports: the anchor suite shown, or a recorded
-/// run that froze a suite or graded a model.
-#[derive(Clone, Debug, Serialize)]
-#[serde(untagged)]
-pub enum EvalReport {
-    /// Only shown: nothing was written or run.
-    Shown(Evaluated),
-    /// A recorded run and its report.
-    Ran(Box<Recorded<Evaluated>>),
-}
-
-/// The `eval` command: showing the anchor suite is a read; freezing one
-/// or grading a model is a recorded run.
-pub fn evaluate(ctx: &Context, request: &EvalRequest) -> Result<EvalReport, OrchestratorError> {
-    if request.model.is_none() && request.freeze.is_empty() {
-        return Ok(EvalReport::Shown(eval(ctx, request, &CancelToken::new())?));
-    }
-    let recorded = record(ctx, "eval", request, |run| {
-        eval(ctx, request, &run.cancel_token())
-    })?;
-    Ok(EvalReport::Ran(Box::new(recorded)))
-}
-
-fn no_release(named: &str, suite: &str) -> OrchestratorError {
-    OrchestratorError::Refused(format!(
-        "{named} has no release or candidate data, so there is no {suite} suite for it; \
-         name a candidate or a policy alias that points at a release"
-    ))
+/// [`grade`] as a recorded `eval` run.
+///
+/// # Errors
+/// As [`grade`]; the run store's own errors.
+pub fn evaluate(
+    ctx: &Context,
+    request: &SuiteEval,
+) -> Result<Recorded<SuiteGraded>, OrchestratorError> {
+    record(ctx, "eval", request, |run| {
+        grade(ctx, request, &run.cancel_token())
+    })
 }

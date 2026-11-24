@@ -61,7 +61,7 @@ not imported back.
 *Trials* are read from `result.json` (or `results.json`) and `agent/trajectory.json`
 (ATIF; a trial without one is refused, never reconstructed). The experience's verdict
 is Harbor's: pass at reward 1, fail at any other reward, none for a trial with an
-exception or no reward. `verify` leaves such experiences alone: they carry no patch.
+exception or no reward. Grading leaves such experiences alone: they carry no patch.
 
 *Episodes* run a directory of practice task folders (or one folder) through sven's agent,
 for experience to learn from:
@@ -75,7 +75,7 @@ The seed every attempt's draws derive from is drawn and printed unless `--seed` 
 the run records it. Every folder is read, checked for exam material and imported before any attempt starts;
 a sealed or malformed folder refuses the whole collection by name, and a folder imported
 before is found again by the digest of its files. Each attempt is a workspace episode as
-`solve` runs one: a fresh copy of the starting files, the agent's shell confined to it,
+an attempt stage runs one: a fresh copy of the starting files, the agent's shell confined to it,
 the policy asked, with every request, to sample at temperature 1 with nothing cut away
 and a seed of the attempt's own, whatever serves it (the record's `seeded`), and asked for
 its policy trace, which sven keeps in the trajectory's step metrics:
@@ -117,7 +117,7 @@ splinter experiences ingest-harbor TASKSET-ID ~/runs/vim-play/*/   # or, for tas
 
 * **Ingestion keeps the provenance.** The trajectory's `human` turns are kept as recorded, and `ingest-harbor`'s
   verdict evidence says `human_guided: true`.
-* **No dataset trains on them.** `dataset build` withholds every experience whose trajectory holds a `human` turn,
+* **No dataset trains on them.** A dataset projection withholds every experience whose trajectory holds a `human` turn,
   under every view, and counts it as `human_context` in the build's exclusions, so a set that mixes guided and
   automatic experiences trains on the automatic ones only.
 * **No arm counts them.** `experiences compare-arms --arm NAME=JOB` refuses a job holding a guided trial: its pass is

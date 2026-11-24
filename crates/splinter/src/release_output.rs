@@ -6,14 +6,11 @@
 
 use std::fmt::Write as _;
 
-use splinter_sdk::eval::{EvalReport, Evaluated};
-use splinter_sdk::graded::Verdict;
 use splinter_sdk::measure::gate::{AgenticProbe, Agreement, Check, GateReport};
 use splinter_sdk::measure::power::PowerAssessment;
-use splinter_sdk::measure::promotion::{Promotion, Rule};
-use splinter_sdk::release::{ReleaseList, Released, RolledBack};
+use splinter_sdk::release::{ReleaseList, RolledBack};
 
-use crate::output::{tally, Report};
+use crate::output::{share, tally, Report};
 
 /// A verdict as a word; no verdict is not a fail.
 fn grade(verdict: Option<bool>) -> &'static str {
@@ -22,10 +19,6 @@ fn grade(verdict: Option<bool>) -> &'static str {
         Some(false) => "wrong",
         None => "not graded",
     }
-}
-
-fn share(value: Option<f64>) -> String {
-    value.map_or("not measured".into(), |v| format!("{v:.3}"))
 }
 
 /// `passed`, `FAILED: <reason>`, as one check's verdict.
@@ -307,53 +300,6 @@ impl Report for GateReport {
     }
 }
 
-impl Report for Released {
-    fn human(&self) -> String {
-        let champion = self
-            .champion
-            .as_ref()
-            .map_or("the base".to_string(), ToString::to_string);
-        let mut out = format!(
-            "candidate {} against {} ({}):\n{}",
-            self.candidate,
-            champion,
-            self.alias,
-            self.gate.human()
-        );
-        if let Some(promotion) = &self.promotion {
-            let _ = writeln!(out, "  promotion    {}", promotion_line(promotion));
-        }
-        for concept in &self.requeued {
-            let _ = writeln!(out, "forgotten, queued for new tasks: {concept}");
-        }
-        for warning in &self.warnings {
-            let _ = writeln!(out, "warning: {warning}");
-        }
-        match &self.release {
-            Some(id) => {
-                let _ = writeln!(out, "released {id}; {} points at it", self.alias);
-            }
-            None => {
-                let _ = writeln!(out, "not released: the gate blocked it");
-            }
-        }
-        out
-    }
-}
-
-/// Which rule decided the promotion, and whether it is exam-verified.
-fn promotion_line(promotion: &Promotion) -> String {
-    let decided = if promotion.promoted {
-        "promoted"
-    } else {
-        "not promoted"
-    };
-    match &promotion.rule {
-        Rule::Examined => format!("{decided}, exam-verified on the examiner's signed verdicts"),
-        Rule::NotExamVerified { why } => format!("{decided}, NOT exam-verified: {why}"),
-    }
-}
-
 impl Report for ReleaseList {
     fn human(&self) -> String {
         if self.releases.is_empty() {
@@ -391,74 +337,6 @@ impl Report for RolledBack {
     }
 }
 
-impl Report for Evaluated {
-    fn human(&self) -> String {
-        let mut out = String::new();
-        match &self.anchor {
-            Some(a) => {
-                let _ = writeln!(
-                    out,
-                    "anchor suite version {} ({}), {} task(s)",
-                    a.version, a.digest, a.tasks
-                );
-            }
-            None if self.model.is_none() => {
-                let _ = writeln!(out, "no anchor suite is frozen");
-            }
-            None => {}
-        }
-        if let (Some(model), Some(reference)) = (&self.model, &self.reference) {
-            let _ = writeln!(out, "{model} ({reference}):");
-        }
-        for score in &self.scores {
-            let excluded: usize = score.suite.excluded.values().sum();
-            let _ = writeln!(
-                out,
-                "  {}: {} of {} task(s) graded, accuracy {}{}",
-                score.suite.name,
-                score.graded,
-                score.suite.tasks,
-                share(score.accuracy),
-                if excluded > 0 {
-                    format!(", {excluded} excluded")
-                } else {
-                    String::new()
-                }
-            );
-            let undecided = score
-                .items
-                .iter()
-                .filter(|item| item.verdict == Verdict::Undecided)
-                .count();
-            if undecided > 0 {
-                let _ = writeln!(out, "    {undecided} undecided (kept in the report)");
-            }
-            for missed in score.items.iter().filter(|i| i.verdict == Verdict::Failed) {
-                let _ = writeln!(
-                    out,
-                    "    missed ({}): {} -> {}",
-                    missed.kind,
-                    missed.instruction.replace('\n', " "),
-                    missed
-                        .answer
-                        .as_ref()
-                        .map_or_else(|| "(no answer)".to_string(), |a| a.text.replace('\n', " "))
-                );
-            }
-        }
-        out
-    }
-}
-
-impl Report for EvalReport {
-    fn human(&self) -> String {
-        match self {
-            Self::Shown(shown) => shown.human(),
-            Self::Ran(run) => run.human(),
-        }
-    }
-}
-
 /// What the improvement check says of how little it rests on: the candidate's
 /// share of the discordant families with its Wilson interval, and the PILOT
 /// label with its reasons.
@@ -483,36 +361,6 @@ mod tests {
     use splinter_sdk::measure::power::{PowerAssessment, Verdict};
 
     use super::*;
-
-    /// A decision with no sealed slice says so in the release output.
-    #[test]
-    fn a_promotion_not_exam_verified_says_so_and_why() {
-        use splinter_sdk::measure::promotion::{decide_unexamined, Measured, Measurement, Pair};
-        let measurement = |low: f64| Measurement {
-            items: 8,
-            families: 8,
-            gain: Some(low + 0.1),
-            interval: Some((low, low + 0.2)),
-            one_sided_lower: Some(low),
-        };
-        let pair = Pair {
-            candidate: Some("cand".into()),
-            predecessor: None,
-        };
-        let measured = Measured {
-            dev: measurement(0.1),
-            retention: measurement(0.0),
-        };
-        let line = promotion_line(&decide_unexamined(
-            &pair,
-            &measured,
-            "the learner made its exam",
-        ));
-        assert_eq!(
-            line,
-            "promoted, NOT exam-verified: the learner made its exam"
-        );
-    }
 
     fn assessment(units: usize, share: Option<Share>) -> PowerAssessment {
         PowerAssessment {

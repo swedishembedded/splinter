@@ -3,25 +3,30 @@
 
 # Release, serve and roll back
 
-A candidate becomes the policy only through the release gate. This guide covers the commands
-around it; the checks themselves are in the [evaluation reference](../reference/evaluation.md#the-release-gate)
-and the reasoning in [release policy](../concepts/release-policy.md).
+A candidate becomes the policy only through a release decision, and there are two places a
+decision lives.
+
+A recipe of the [learning factory](learning-factory.md) decides inside its run: its `evaluation`
+stages measure each candidate, and its `promotion` stage records every decision and the gates each
+candidate met and, with `promote: true`, promotes the best candidate that meets them all. The
+decision is the run's release product (`release.json`, with the champion's adapter copied beside
+it); a later recipe trains from it by naming `champion:RUN`
+([learning factory](learning-factory.md)). It is not written to the release store below.
+
+[Knowledge absorption](../reference/cli.md#splinter-absorb) (`absorb`, `consolidate`) releases through the release
+store of the state root: its gate writes a release manifest and moves an alias, and `release list`
+and `rollback` work on that store. The checks themselves are in the
+[evaluation reference](../reference/evaluation.md#the-release-gate) and the reasoning in
+[release policy](../concepts/release-policy.md).
 
 ```bash
-splinter release 9d41e7b3
-splinter release list
-splinter release 9d41e7b3 --alias staging --unrestricted
-splinter rollback default
+splinter report runs/knowledge   # a factory run's evaluations and its release decision
+splinter release list            # the release store: every release with its parent and aliases
+splinter rollback default        # move an alias back (below)
 ```
 
-`release CANDIDATE` runs the gate against the release the alias points at (`--alias`, default
-`default`): the champion, or the base before any release. A candidate that passes is
-released and the alias moves to it; one that fails, or that cannot be measured, is not
-released and the command exits 1 with the reason of each failed check. `--unrestricted`
-asks for a release that may be distributed and used commercially; it is refused unless the
-terms of everything the candidate was made from allow both, and without it a release records
-the terms and stays local. `--canaries TASKSET` hands the gate canary tasks (see
-[tasks](../reference/tasks.md#canaries)) that the candidate must fail.
+A factory candidate that does not meet its gates is not promoted, and `report` names each gate it
+failed. An absorption that does not pass its gate makes no release, and the alias stays.
 
 ## What a release is
 

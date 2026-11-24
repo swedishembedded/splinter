@@ -5,29 +5,29 @@
 
 A learning run is judged by measurements the policy under training cannot influence. This
 page explains what counts as evidence that an answer is right, how strong that evidence is,
-and where verification runs. The commands are `splinter verify`, `splinter judge` and
-`splinter experiences replay`; the strength labels are what `dataset build --min-strength`
+and where verification runs. The commands are `splinter verify RUN`, `splinter judge` and
+`splinter experiences replay`; the strength labels are what a dataset projection
 filters on.
 
 ## Verifiers
 
 
-`verify` appends verdicts from each task kind's own verifiers: formal
+Verification appends verdicts from each task kind's own verifiers: formal
 (exact match, lenient), executable checks, mutation-validated tests,
-agreement among answers, and - with `--judge REF` - a judge gated by
+agreement among answers, and a judge gated by
 the calibration `judge calibrate` stored for it. A verifier either
 establishes that an answer is right or only refutes it: grounding (every
 number, name and quotation is in the source) is a constraint, whose fail
 refutes whatever else says and whose pass decides nothing, so an answer that
 invents nothing but says nothing right passes no check. A kind no other
-verifier can pass - a conversation - is decided by a judge, which `verify --judge` names (else `--judge-model`, else the assistant). The
+verifier can pass - a conversation - is decided by a judge (the one named by `--judge-model`, else the assistant). The
 judge is another model than the teacher, the generator and the policy; it is
 measured before any verdict counts, on controls made from the tasks' own
 references (each task's reference is the right answer to it, and a task of
 another family of sources lends the wrong one) unless a stored calibration
 rests on at least `--min-calibration-controls` of them (16). A judge is
 trusted for what its verdicts do. Where they admit answers to a training set
-(`verify`, the `teach`, `critique` and `author` stages) its passes must be
+(verification, the `teach`, `critique` and `author` stages) its passes must be
 precise (0.9): a fail only withholds an answer, so a strict judge whose fails
 were measured less precise has them abstain and admits nothing wrong. Where two
 models are compared on its verdicts (the release gate, the exam) its passes and
@@ -51,7 +51,7 @@ Lines, `{"experience": "<id>", "label": "pass" | "fail"}`.
   found by kind. Where no container is configured the audit is detection, not prevention; see
   [limitations](limitations.md#security-of-agent-generated-code).
 - A judge is another model, measured before its verdicts count, on controls made from the tasks'
-  own references. Its calibration is stored and `verify --judge` gates its verdicts by it.
+  own references. Its calibration is stored and gates its verdicts.
 
 Because a verifier either establishes that an answer is right or only refutes it, a pass from
 a refuting check is never taken as proof. Training admits answers by the strength of the verdicts

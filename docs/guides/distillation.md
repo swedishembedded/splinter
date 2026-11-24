@@ -51,34 +51,17 @@ experiences: 550 new, 0 held; datasets: 1 new, 0 held; candidates: 1; artifacts:
 
 Ingesting it again stores nothing new.
 
-### 2. Build the dataset
+### 2. Take the dataset
 
-```bash
-splinter --brain-bin "$BRAIN" --device cpu --backend cpu dataset build --view sft-step --pack \
-    --max-block 16384 --from local:Qwen/Qwen3-4B blake3:c2ff3061
-```
+The bundle holds the dataset the reference run trained on, and `ingest-hf` printed its id above. It is one record per
+passing trajectory: every assistant turn (its reasoning, its tool calls and its answer) is supervised, and the system
+prompt, the instruction and the tool results are context. Failed trials, repeated actions and records longer than the
+block size are left out and counted. To make a dataset of your own from trials, a `dataset.project` stage of a recipe
+projects the verified attempts (the [learning factory](learning-factory.md#what-each-stage-guarantees) says what a
+projection keeps and what it lists in `excluded.jsonl`), with trials of a Harbor job joining through `attempt.import`.
 
-`sft-step --pack` makes one record per passing trajectory. Every assistant turn (its reasoning, its tool calls and
-its answer) is supervised, and the system prompt, the instruction and the tool results are context. Failed trials,
-repeated actions and records longer than `--max-block` are left out and counted. `--from` names the base the
-records are for: that base's trainer reads every record (brain's own check, through `--brain-bin` or
-`--brain-endpoint`), counts its tokens the way training will, and a record it refuses (its chat template or its
-record contract) is left out and counted as `trainer_refused`, so training never meets it. With `--from` and no brain
-to ask, the build is refused. Without `--from`, a build with no brain counts by a floor, says so, and can keep a
-record that the trainer later refuses. Checking needs no card.
-
-`--repository-history` sets what happens to the teacher's reads of git history (see the pitfalls below). The
-default, `drop-step`, keeps such a read as context and does not supervise it. `truncate` ends the demonstration
-before the read. `keep` supervises it, as the reference dataset did. On this set, `drop-step` leaves 14 actions
-unsupervised and keeps 420 records (`blake3:2d505ae1...`). To rebuild the reference dataset itself, pass
-`--repository-history keep`. The result (`blake3:0efa3688...`, the same id in any state root) then holds the same
-420 records with the same exclusions (105 failed, 7 repeated actions, 25 over the block) and, as brain's trainer
-reads it, the same 2,894,518 tokens with 1,544,541 supervised. Its id is not the
-bundle's, for two reasons
-([knowledge 193](../../.agents/knowledge/193-a-rebuilt-distillation-dataset-has-the-same-records-but-not-the-same-id.md)).
-The records now carry the seeded, stratified held-out split
-([the held-out split](../reference/datasets.md#held-out-and-monitoring-split)). Also, a long listing's `agent` owner
-is kept rather than renamed `user`, because `agent` is the account the student meets again in the examiner's sandbox.
+The teacher's reads of git history are the one choice to make deliberately (see the pitfalls below): a record that
+supervises such a read teaches the student to make it.
 
 ### 3. Check it with the trainer
 
@@ -93,24 +76,16 @@ longest records. The command exits 1 if the trainer refuses any record. Fix the 
 
 ### 4. Train
 
-```bash
-splinter --brain-endpoint http://127.0.0.1:8811/v1 --brain-key-file brain.key \
-    --brain-artifact-store /srv/brain-artifacts \
-    train "$DATASET" --from local:Qwen/Qwen3-4B --base-precision bf16 --max-block 16384 \
-    --rank 16 --alpha 32 --lr 2e-4 --weight-decay 0 --steps 210 --records-per-step 4 \
-    --eval-every 14 --patience 4 --seed 1
-```
-
-These are the reference run's settings, read from its candidate record:
+Training is a `model.train` stage of a recipe, run with `splinter run`; `splinter report` and `splinter inspect RUN
+--stage STAGE` show what it produced. These are the reference run's settings, read from its candidate record:
 
 - LoRA rank 16 and alpha 32 on every adapter site of the model (all seven Qwen3 projections, brain's default);
 - a peak learning rate of 2e-4 and no weight decay;
 - 210 steps of 4 records each, with the base held in bf16;
 - the monitoring set evaluated every 14 steps, and the best evaluation kept;
-- seeds 1, 2 and 3, one run each (the examined candidate is seed 1). Without `--seed`, a seed is drawn and printed.
+- seeds 1, 2 and 3, one run each (the examined candidate is seed 1).
 
-Name `--records-per-step`, because a run that names `--steps` otherwise takes one record per step. The job runs on the
-brain service, which you start with `--training --artifact-store` set to the directory you pass as
+The job runs on the brain service, which you start with `--training --artifact-store` set to the directory you pass as
 `--brain-artifact-store` ([training on a brain endpoint](../getting-started/configuration.md#training-on-a-brain-endpoint)):
 
 ```text
@@ -126,7 +101,7 @@ The candidate records:
 - the splinter binary that trained it, with its digest;
 - brain's training record.
 
-The split now draws held-out and monitoring records per domain rather than from the tail of the file, so a retrain
+The split draws held-out and monitoring records per domain rather than from the tail of the file, so a retrain
 lands within the seed band, not on the reference adapter bit for bit. The reference run's three seeds came out within
 0.002 of each other in held-out loss (1.528 for the base, about 0.567 for each adapter). How training is scheduled,
 interrupted and resumed is in [Build datasets and train a candidate](training.md).
@@ -136,8 +111,8 @@ interrupted and resumed is in [Build datasets and train a candidate](training.md
 A brain started with `--serve-adapters DIR` serves every adapter file in `DIR` as a model of its own and lists it in
 `GET /v1/models`. To measure the candidate and the base on the same tasks and attempts, run a recipe of the learning
 factory (`docs/guides/learning-factory.md`) that rolls out both models over the same collection, for example a forked
-run whose `champion:` is the base and whose model is the candidate (`$ADAPTER` is the file `train` or `ingest-hf`
-printed; `--brain-adapter-dir` writes it into the directory the server follows). Each run admits its graded trials as an
+run whose `champion:` is the base and whose model is the candidate (`$ADAPTER` is the adapter file `ingest-hf` or the run's candidate
+records; `--brain-adapter-dir` writes it into the directory the server follows). Each run admits its graded trials as an
 experience set, and `experiences compare` pairs two sets task by task and counts each family once:
 
 ```bash
@@ -184,12 +159,11 @@ data](bench-trials.md).
   record.
 - A trial the examiner's leak audit flagged (a security violation, such as reading history beyond `HEAD`) is never
   exported, so it never becomes an experience. The run's report counts such a trial as `exposed`.
-- An experience of an eval-side or sealed task is refused by every dataset build.
-- Reads of history that the audit allows can still teach probing, so choose `--repository-history` deliberately (see
+- An experience of an eval-side or sealed task never reaches a dataset.
+- Reads of history that the audit allows can still teach probing, so decide deliberately what the dataset supervises of them (see
   below).
 
-Then continue at step 2 of the first section, naming every run's experience set in one
-`dataset build`. To share the result, `splinter publish` writes the sets, the dataset, the candidate and its verdicts as
+Then continue at step 2 of the first section. To share the result, `splinter publish` writes the sets, the dataset, the candidate and its verdicts as
 one tagged revision of a private repository.
 
 ## Pitfalls
@@ -199,9 +173,9 @@ one tagged revision of a private repository.
   ([knowledge 170](../../.agents/knowledge/170-a-student-learned-to-dig-through-git-history-from-seven-teacher-log-reads.md)).
   Dropping the supervision of those reads did not lower the probing
   ([knowledge 179](../../.agents/knowledge/179-dropping-supervised-history-reads-did-not-stop-a-student-probing-git-history.md)).
-  Measure the examiner's security-violation rate on the trained arm, and use `truncate` when it has to fall.
+  Measure the examiner's security-violation rate on the trained arm, and end the demonstration before such a read when it has to fall.
 - **Serve/train parity.** A record must render, token for token, the way the served model is prompted: the same chat
-  template, the same system prompt and tools, the same JSON spelling of arguments. The `sft-step` view takes the system
+  template, the same system prompt and tools, the same JSON spelling of arguments. A projection takes the system
   prompt and tool schemas from the trial's first recorded model request for this reason
   ([knowledge 003](../../.agents/knowledge/003-training-and-evaluation-must-render-the-same-prompt.md),
   [knowledge 085](../../.agents/knowledge/085-a-dataset-from-the-27b-teacher-taught-the-host-login-the-scratch-path-and-the-loop-tail-under-a-prompt-it-was-not-served-with.md),

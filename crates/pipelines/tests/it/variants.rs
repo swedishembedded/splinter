@@ -25,6 +25,7 @@ use crate::common;
 
 use std::sync::Arc;
 
+use crate::common::solve_set;
 use common::manual::{manual_policy, BAUD_QUESTION, BAUD_VARIANTS, IDLE_VARIANTS, MANUAL};
 use common::{scratch_context, Scratch, Scripted};
 use splinter_agent::solve::Model;
@@ -33,7 +34,7 @@ use splinter_core::model_ref::ModelRef;
 use splinter_core::rng::Seed;
 use splinter_orchestrator::Context;
 use splinter_pipelines::datasets::{build, BuildRequest, ViewName, VoiceBuild};
-use splinter_pipelines::solving::{harness_protocol, solve_set};
+use splinter_pipelines::solving::harness_protocol;
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation};
 use splinter_pipelines::variants::{generate_variants, VariantsRequest};

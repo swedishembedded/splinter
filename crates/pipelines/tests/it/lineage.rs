@@ -35,6 +35,7 @@ use crate::common;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+use crate::common::solve_set;
 use common::gate::{gate_context, Brain, FakeTrainer, BASE_BYTES, NOW};
 use common::manual::{manual_policy, BAUD_QUESTION, BAUD_QUOTE, MANUAL};
 use common::Scratch;
@@ -62,7 +63,7 @@ use splinter_pipelines::datasets::{build, ViewName, DEFAULT_MIN_STRENGTH};
 use splinter_pipelines::lineage::{
     lineage, Direction, Lineage, LineageRequest, NodeKind, Relation,
 };
-use splinter_pipelines::solving::{harness_protocol, solve_set};
+use splinter_pipelines::solving::harness_protocol;
 use splinter_pipelines::sources::{self, SourceTarget};
 use splinter_pipelines::tasks::{generate, Generation};
 use splinter_pipelines::train::{

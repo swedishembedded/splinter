@@ -5,8 +5,8 @@
 
 Use this guide to teach the policy what a document, a directory of text or a
 command-line tool says, then check that it learned it. The run is a recipe of
-the [learning factory](learning-factory.md); the stages it is made of are
-also commands of their own, which is how you debug or rerun a part of it.
+the [learning factory](learning-factory.md); `splinter inspect RUN --stage STAGE` shows
+what one of its stages made, and `splinter resume` runs a stopped run again without repeating a finished stage.
 
 The worked example is [your first learning
 run](../getting-started/first-learning-run.md). Every option is in the [command
@@ -54,40 +54,28 @@ splinter source add "cmd:brain --help"
 splinter source list
 ```
 
-## The stages, one command each
+## The stages of the recipe
 
-| Stage | Command | Reads | Writes |
+| Stage | Command or operation | Reads | Writes |
 |---|---|---|---|
 | sources | `source add` | a file, a directory, a command's run | a source |
 | sessions | `session add` | ATIF files of a person's sessions with an agent | session sources, secrets removed |
 | claims | `claims extract` | session sources | a claim set: what a model proposes the person taught, with their exact words |
 | gates | `claims gate` | a claim set | the ledger: every proposal admitted, refused (with the reason), or superseding earlier claims |
 | absorb | `absorb` | a person's sessions with an agent | the above for sessions, then kits of records per claim, a candidate trained again from the base and a release the declared count gate opens |
-| tasks | `tasks generate` | sources | a task set |
-| solve | `solve` | a task set | an experience set |
-| verify | `verify` | an experience set | verdicts on its experiences |
-| frontier | `solve --frontier` | a task set | k graded attempts per task, a teacher's graded open-book solve of each task never solved, a pass@k measurement, the kept tasks' task and experience sets |
-| variants | `tasks variants` | a task set | a task set of the same facts asked in other words, each recording the task it varies; measured by the gate, never trained on |
-| critique | `critique` | an experience set | an experience set of critiques and revisions |
-| dataset | `dataset build` | experience sets | a dataset and its manifest |
-| train | `train` | datasets | a candidate adapter (not released) |
-| release | `release` | a candidate | the gate's numbers; a release and the alias moved, if it passed |
+| tasks | `task.generate` | documents | tasks that quote their evidence, and `rejected.jsonl` with the reason for each refusal |
+| answers | `answer.collect` | a task | k graded answers per task, each graded by its task kind's verifiers |
+| dataset | `dataset.project` | answers | a dataset and its manifest |
+| candidate | `model.train` | a dataset | a candidate adapter (not released) |
+| evaluation | `evaluation` | a candidate | the paired comparison with its baseline |
+| release | `promotion` | evaluations | every decision and the gates met; the best candidate promoted when `promote: true` |
 
-Each stage reads what the one before it stored under the state root and
-writes its own result, so any of them can be rerun or inspected alone. A task
-set is made from the text parts of the sources, and every question answered
-from a source must name its subject, which the source's identity or a cited
-section must name; two tasks of a set that ask one question of one subject
-with different answers are both left out. `solve --frontier` solves each task
-k times (`--k`), grades every attempt by its task kind's verifiers (the judged
-kind by the judge `verify --judge` names), has a teacher solve open-book each
-task no attempt solved, and keeps the tasks worth training on: those the
-policy fails at least sometimes and has a verified answer to. `tasks variants`
-asks the same facts in other words, which the release gate measures and
-nothing trains on. `dataset build` caps near duplicates and gives a dataset
-whose records are the passing attempts, the verified teacher answers and the
-revisions `critique` made; `train` trains a candidate on it from the champion
-and `release` lets the gate decide.
+Other commands act on what the stages store under the state root: `tasks variants` makes a task set of the same
+facts asked in other words, each recording the task it varies, which the release gate measures and nothing trains on;
+`critique` makes an experience set of critiques and revisions. A task set is made from the text parts of the sources,
+and every question answered from a source must name its subject, which the source's identity or a cited section must
+name; two tasks of a set that ask one question of one subject with different answers are both left out. How a stage
+selects, projects and trains is in the [learning factory](learning-factory.md#what-each-stage-guarantees).
 
 ## Ask the learned model
 

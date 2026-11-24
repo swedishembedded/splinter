@@ -24,7 +24,7 @@ use splinter_data::Exclusion;
 use splinter_orchestrator::Context;
 use splinter_pipelines::bench::ingest_bench_trials;
 use splinter_pipelines::datasets::{
-    build, build_dropping_leaks, AdvantageKind, BuildRequest, RewardPreset, RlBuild, ViewName,
+    build, AdvantageKind, BuildRequest, RewardPreset, RlBuild, ViewName,
 };
 use splinter_store::experiences::{ExperienceSet, SetId};
 
@@ -148,15 +148,11 @@ fn building_again_gives_the_same_dataset() {
 }
 
 #[test]
-fn a_held_out_trial_is_refused_or_dropped_never_trained_on() {
+fn a_held_out_trial_is_refused_never_trained_on() {
     let (scratch, ctx) = context("pg-leak");
     let (_, mixed) = ingest_attempts(&ctx, &scratch.0.join("export"));
-    let refused = build(&ctx, &request(mixed.clone(), shaped())).unwrap_err();
+    let refused = build(&ctx, &request(mixed, shaped())).unwrap_err();
     assert!(refused.to_string().contains("leakage"), "{refused}");
-    let built = build_dropping_leaks(&ctx, &request(mixed, shaped())).unwrap();
-    assert_eq!(built.excluded.get(&Exclusion::ExamLeak), Some(&1));
-    assert_eq!(built.records, 6);
-    assert_eq!(built.groups.len(), 1);
 }
 
 #[test]
@@ -313,11 +309,8 @@ fn the_self_distill_view_takes_every_attempt_and_keeps_the_exam_sealed() {
         .iter()
         .all(|l| l.get("teacher_context").is_some() && l.get("reward").is_none()));
 
-    let refused = build(&ctx, &request(mixed.clone())).unwrap_err();
+    let refused = build(&ctx, &request(mixed)).unwrap_err();
     assert!(refused.to_string().contains("leakage"), "{refused}");
-    let dropped = build_dropping_leaks(&ctx, &request(mixed)).unwrap();
-    assert_eq!(dropped.excluded.get(&Exclusion::ExamLeak), Some(&1));
-    assert_eq!(dropped.records, 6);
 }
 
 #[test]

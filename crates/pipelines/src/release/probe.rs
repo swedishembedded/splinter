@@ -142,18 +142,6 @@ impl Suite {
         self
     }
 
-    /// This suite and `other`'s tasks, and what each left out. A task of
-    /// `other` is one it admitted: it is not asked again of this suite's
-    /// rule.
-    pub(crate) fn absorb(&mut self, other: Suite) {
-        for task in other.tasks {
-            self.push_unique(task);
-        }
-        for (reason, count) in other.excluded {
-            *self.excluded.entry(reason).or_default() += count;
-        }
-    }
-
     /// How many of its tasks work in a workspace.
     #[must_use]
     pub fn workspace_tasks(&self) -> usize {

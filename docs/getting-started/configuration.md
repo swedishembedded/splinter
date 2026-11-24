@@ -203,10 +203,10 @@ splinter jobs reconcile
 | `--workspace-scratch DIR` | Where trees are laid out for repository tasks. |
 | `--cargo-home DIR` | A cargo home the commands of a Cargo project build offline from. |
 
-`--bf16-base` (on every command that trains) and `train --base-precision` hold a large policy's
-base at bf16 so it trains on one card. `train --base-precision` also takes `int8`, `nf4` and `fp8`
-(block-scaled E4M3, half of bf16: an fp8 checkpoint's own format, so nothing is requantised); brain refuses a
-tier the base cannot hold, naming the formats it can.
+A `model.train` stage holds a large policy's base at a lower precision so it trains on one card with
+`base_precision` in its `params`: `fp32` (brain's default), `bf16`, `int8`, `nf4` or `fp8` (block-scaled
+E4M3, half of bf16: an fp8 checkpoint's own format, so nothing is requantised). A CPU backend trains `fp32`
+only; brain refuses a tier the base cannot hold, naming the formats it can.
 
 ## Model references
 
@@ -237,7 +237,7 @@ provider: store it once with `sven auth set openrouter` (or the provider's id).
 
 Splinter reaches brain only through its API. A local model (`local:...`, `policy:...`) is never loaded in
 the process: it is requested from a `brain serve --openai` by the id that server serves it under, and the
-attempts of `solve`, the repository-practice recipe and the release gate run against it at once,
+attempts of an `attempt.collect` stage and of the evaluation stages run against it at once,
 which brain's continuous batching decodes together.
 
 Without flags, Splinter starts such a server for the length of the command: the `brain` on `PATH` (or
@@ -253,7 +253,7 @@ Given a running server, Splinter starts nothing:
 brain --device gpu3 --backend cuda serve --openai 127.0.0.1:8805 --api-key-file KEY \
       --checkpoint ~/models/Qwen/Qwen3.8-27B-FP8 --max-batch 48
 splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY \
-         --attempt-concurrency 48 --policy-base Qwen/Qwen3.8-27B-FP8 solve ...
+         --attempt-concurrency 48 --policy-base Qwen/Qwen3.8-27B-FP8 run RECIPE --out DIR
 ```
 
 `--brain-endpoint URL` repeats for more endpoints; an attempt is pinned to one by a stable hash of its
@@ -276,7 +276,7 @@ against its champion needs.
 
 ### Training on a brain endpoint
 
-With endpoints, `train` and the training stages of `absorb` do not load the
+With endpoints, `model.train` stages and the training stages of `absorb` do not load the
 base in the process either: a supervised fine-tune and a policy-gradient run (self-distillation with
 teacher contexts included) are jobs of the brain service, which schedules them on the cards it serves
 from, taking them from idle serving replicas and giving them back.
@@ -285,7 +285,7 @@ from, taking them from idle serving replicas and giving them back.
 brain serve --openai 0.0.0.0:8805 --api-key-file KEY --models-dir ~/models \
       --training --artifact-store /shared/artifacts
 splinter --brain-endpoint http://gpu-node:8805/v1 --brain-key-file KEY \
-         --brain-artifact-store /shared/artifacts --policy-base Qwen/Qwen3.8-27B-FP8 train ...
+         --brain-artifact-store /shared/artifacts --policy-base Qwen/Qwen3.8-27B-FP8 run RECIPE --out DIR
 ```
 
 `--brain-artifact-store DIR` is the directory the service was started with as `--artifact-store`: the
@@ -328,7 +328,7 @@ card and says so):
 splinter --brain-endpoint http://n442:8805/v1 --brain-endpoint http://n442:8806/v1 \
          --brain-key-file KEY --brain-artifact-store /shared/artifacts \
          --brain-train-cards 2,1 --brain-train-job-secret SECRET \
-         --brain-train-coordinator 10.150.4.178:29500 train ...
+         --brain-train-coordinator 10.150.4.178:29500 run RECIPE --out DIR
 ```
 
 `splinter doctor` says which mode a training run in the allocation will use.
@@ -355,5 +355,5 @@ can start, but rarely trains anything.
 `--remote-concurrency` is how many requests to a model reached over an API may be in flight at once (4 by
 default); a model on the local device is asked one at a time. `--temperature` is the sampling temperature (0 to
 2) asked of a model reached through sven's providers, the provider's own default when not given.
-`--solve-deadline` is how many seconds one task's solve may take on the wall clock (300 by default); raise it
+`--solve-deadline` is how many seconds one attempt at a task may take on the wall clock (300 by default); raise it
 when many tasks share one served model, so a task is not failed for waiting in the queue.

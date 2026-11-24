@@ -8,7 +8,7 @@
 //! datasets and runs (the pairing bound and seed, the pair loss and its
 //! margin, KTO's class weights), and the curation of passes per task.
 
-use super::{command, parse, Command, DatasetCommand};
+use super::{command, parse, Command};
 
 #[test]
 fn the_remote_knobs_are_global_flags_and_bounded() {
@@ -106,39 +106,6 @@ fn the_cluster_is_used_automatically_and_its_flags_are_global() {
 }
 
 #[test]
-fn train_takes_a_positive_max_block() {
-    match command(&["train", "ds1", "--max-block", "8192"]) {
-        Command::Train(args) => assert_eq!(args.max_block, Some(8192)),
-        other => panic!("{other:?}"),
-    }
-    assert!(parse(&["train", "ds1", "--max-block", "0"]).is_err());
-}
-
-#[test]
-fn one_temperature_flag_serves_the_model_and_the_pass_at_k_sampling_the_one_after_the_verb_wins() {
-    // clap folds the global flag and the verb's own into one value: the
-    // last given wins, and it is both the served model's temperature and
-    // the verb's pass@k sampling.
-    let both = |args: &[&str]| {
-        let cli = parse(args).unwrap();
-        let Some(Command::Solve(solve)) = cli.command else {
-            panic!("solve --frontier");
-        };
-        let sampled = solve.pass_at_k.pass_at_k().sampling.map(|s| s.temperature);
-        (cli.global.temperature, sampled)
-    };
-    let verb = ["solve", "ab12", "--frontier", "--k", "8"];
-    let after: Vec<&str> = ["--temperature", "0.2"]
-        .into_iter()
-        .chain(verb)
-        .chain(["--temperature", "1.0"])
-        .collect();
-    assert_eq!(both(&after), (Some(1.0), Some(1.0)));
-    let before: Vec<&str> = verb.into_iter().chain(["--temperature", "1.0"]).collect();
-    assert_eq!(both(&before), (Some(1.0), Some(1.0)));
-}
-
-#[test]
 fn the_solve_deadline_is_a_global_flag_of_whole_seconds() {
     for args in [
         &["--solve-deadline", "1800", "status"][..],
@@ -175,24 +142,6 @@ fn baseline_takes_the_binary_models_and_seeds_as_given_and_no_default_seed() {
     );
     assert!(args.require_clean);
 }
-#[test]
-fn train_names_the_tier_the_frozen_base_is_held_at() {
-    use splinter_sdk::model::train::BasePrecision;
-    let Command::Train(plain) = command(&["train", "ds-1"]) else {
-        panic!("train");
-    };
-    assert_eq!(plain.base_precision, None);
-    let Command::Train(nf4) = command(&["train", "ds-1", "--base-precision", "nf4"]) else {
-        panic!("train --base-precision");
-    };
-    assert_eq!(nf4.base_precision, Some(BasePrecision::Nf4));
-    let Command::Train(fp8) = command(&["train", "ds-1", "--base-precision", "fp8"]) else {
-        panic!("train --base-precision fp8");
-    };
-    assert_eq!(fp8.base_precision, Some(BasePrecision::Fp8));
-    assert!(parse(&["train", "ds-1", "--base-precision", "fp4"]).is_err());
-}
-
 #[test]
 fn the_sampling_of_a_served_model_is_global_flags_and_bounded() {
     let cli = parse(&[
@@ -302,118 +251,4 @@ fn brain_endpoints_are_global_flags_and_repeat() {
         none.global.device.brain_endpoint.is_empty() && none.global.attempt_concurrency.is_none()
     );
     assert!(parse(&["--attempt-concurrency", "0", "status"]).is_err());
-}
-
-#[test]
-fn a_dataset_build_takes_the_seed_its_split_is_drawn_by() {
-    let seed_of = |extra: &[&str]| {
-        let mut args = vec!["dataset", "build", "ab12", "--view", "sft-step"];
-        args.extend_from_slice(extra);
-        let Command::Dataset(DatasetCommand::Build(build)) = command(&args) else {
-            panic!("dataset build");
-        };
-        build.split_seed.map(splinter_sdk::seed::Seed::value)
-    };
-    assert_eq!(seed_of(&["--split-seed", "9"]), Some(9));
-    assert_eq!(
-        seed_of(&[]),
-        None,
-        "derived from the experiences when not given"
-    );
-}
-
-#[test]
-fn the_pair_loss_its_settings_and_the_pairing_bound_parse() {
-    // The pair loss and KTO's class weights; a loss brain does not name is
-    // refused at the command line.
-    let Command::Train(pairs) = command(&[
-        "train",
-        "ab12",
-        "--loss",
-        "simpo",
-        "--gamma",
-        "0.5",
-        "--nll-weight",
-        "1",
-        "--desirable-weight",
-        "1.33",
-    ]) else {
-        panic!("train");
-    };
-    let settings = pairs.pairs.settings();
-    assert_eq!(
-        (
-            settings.loss.map(|l| l.name()),
-            settings.gamma,
-            settings.nll_weight
-        ),
-        (Some("simpo"), Some(0.5), Some(1.0))
-    );
-    assert_eq!(settings.desirable_weight, Some(1.33));
-    assert!(parse(&["train", "ab12", "--loss", "kto"]).is_err());
-    let Command::Dataset(DatasetCommand::Build(build)) = command(&[
-        "dataset",
-        "build",
-        "ab12",
-        "--view",
-        "preference",
-        "--pairs-per-group",
-        "2",
-        "--pair-seed",
-        "7",
-    ]) else {
-        panic!("dataset build");
-    };
-    assert_eq!(
-        (
-            build.pairs_per_group,
-            build.pair_seed.map(splinter_sdk::seed::Seed::value)
-        ),
-        (Some(2), Some(7))
-    );
-    assert!(parse(&["dataset", "build", "ab12", "--view", "feedback"]).is_ok());
-}
-
-#[test]
-fn a_build_curates_passes_by_final_answer_distinct_calls_and_a_cap_per_task() {
-    let Command::Dataset(DatasetCommand::Build(build)) = command(&[
-        "dataset",
-        "build",
-        "ab12",
-        "--view",
-        "sft-step",
-        "--final-answer-only",
-        "--distinct-calls",
-        "--ignore-call-argument",
-        "intent",
-        "--max-passes-per-task",
-        "3",
-    ]) else {
-        panic!("dataset build");
-    };
-    assert!(build.final_answer_only && build.distinct_calls);
-    assert_eq!(build.ignore_call_argument, ["intent"]);
-    assert_eq!(build.max_passes_per_task, Some(3));
-    let Command::Dataset(DatasetCommand::Build(plain)) =
-        command(&["dataset", "build", "ab12", "--view", "sft-step"])
-    else {
-        panic!("dataset build");
-    };
-    assert!(!plain.final_answer_only && !plain.distinct_calls);
-    assert_eq!(plain.max_passes_per_task, None, "no cap unless asked");
-    assert!(
-        parse(&[
-            "dataset",
-            "build",
-            "ab12",
-            "--ignore-call-argument",
-            "intent"
-        ])
-        .is_err(),
-        "ignoring an argument only means something when calls are compared"
-    );
-    assert!(
-        parse(&["dataset", "build", "ab12", "--max-passes-per-task", "0"]).is_err(),
-        "a cap of zero would keep nothing"
-    );
 }

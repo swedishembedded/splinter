@@ -42,8 +42,8 @@ already ran: `splinter corrections --attempts <EXPERIENCE-SET> --tasks
 <TASK-SET> --teacher <REF> [--max N]` continues the failed or stuck attempts
 of that set from the state the student actually reached, verifies every
 continuation with the task's own hidden checks and prints the id of the
-experience set holding the verified ones, which `splinter dataset build --view
-sft-step` and `splinter train` then take as any other set.
+experience set holding the verified ones, which a `dataset.project` stage
+and a `model.train` stage then take as any other attempts.
 
 Where no container is configured, the commands the agent works with run on
 the host, bounded but not isolated, and every environment record says
@@ -100,7 +100,7 @@ path in what a tool returned, hidden content and the state root still fail it.
 
 ## Running a repository's attempts on a brain endpoint
 
-`solve` and the release gate attempt tasks as agents, each
+An `attempt.collect` stage and the release gate attempt tasks as agents, each
 attempt a conversation of many requests. With `--brain-endpoint` the policy is served by brain and up
 to `--attempt-concurrency` attempts run at once against it, each with the seed it has when run one
 after another, so the experiences recorded are the same ones, in the order of the tasks and attempts
@@ -108,7 +108,7 @@ after another, so the experiences recorded are the same ones, in the order of th
 
 ```text
 splinter --brain-endpoint http://127.0.0.1:8805/v1 --brain-key-file KEY --attempt-concurrency 48 \
-         --policy-base Qwen/Qwen3.8-27B-FP8 solve TASKSET
+         --policy-base Qwen/Qwen3.8-27B-FP8 run recipes/practice.yaml --out runs/practice
 ```
 
 The gate's candidate must be served too: start the endpoint with `--adapter-manifest FILE` and give

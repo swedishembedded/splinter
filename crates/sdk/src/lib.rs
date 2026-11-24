@@ -39,7 +39,7 @@
 //! * The commands, one module each - [`ask`],
 //!   [`sources`], [`sessions`], [`claims`], [`absorb`], [`tasks`], [`timeline`],
 //!   [`solving`], [`verify`], [`critique`], [`datasets`],
-//!   [`train`], [`release`], [`eval`], [`lineage`], [`status`], [`doctor`], [`state`],
+//!   [`train`], [`release`], [`lineage`], [`status`], [`doctor`], [`state`],
 //!   [`router`], [`goal`] and the rest - with their requests and reports.
 //! * `absorb::consolidate` takes a generation of a policy's claims into the
 //!   weights, and [`generation`] is what a release records of the generation

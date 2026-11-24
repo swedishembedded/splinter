@@ -59,23 +59,15 @@ pub fn route(
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),
         Command::Play(args) => play(config, json, &args),
-        // A run directory, or something that names a path: never an
-        // experience set's id.
-        Command::Verify(VerifyArgs { experience_set, .. })
-            if is_run(Path::new(&experience_set))
-                || experience_set.contains('/')
-                || Path::new(&experience_set).exists() =>
-        {
-            verify(json, Path::new(&experience_set))
-        }
+        Command::Verify(VerifyArgs { run }) => verify(json, &run),
         Command::Eval(EvalArgs {
-            model: Some(run),
+            run: Some(run),
             plan: Some(plan),
             out: Some(out),
             ..
-        }) if is_run(Path::new(&run)) => eval(config, json, Path::new(&run), &plan, &out),
-        Command::Eval(EvalArgs { plan: Some(_), .. }) => Err(refused(
-            "--plan evaluates a factory run's candidates: give the run directory as REF",
+        }) => eval(config, json, &run, &plan, &out),
+        Command::Eval(EvalArgs { run: Some(_), .. }) => Err(refused(
+            "a factory run is evaluated under another plan: give --plan PLAN --out DIR",
         )),
         other => return Err(Box::new(other)),
     })
@@ -144,12 +136,6 @@ fn init(json: bool, args: &InitArgs) -> Result<Exit, Error> {
         },
     );
     Ok(Exit::Ok)
-}
-
-/// Whether `path` is a factory run directory.
-#[must_use]
-pub fn is_run(path: &Path) -> bool {
-    run::is_run(path)
 }
 
 /// The controller's name on its lease: this host and process

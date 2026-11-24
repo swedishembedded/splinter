@@ -11,13 +11,11 @@
 //!
 //! The tasks are made by [`splinter_knowledge::tasks::workspace`] (see
 //! `WorkspaceGenerator::combine` for what a combined task is and what it is
-//! admitted on). This stage stores them and divides them by the exam the
-//! store keeps: a combined task is an exam task when **any** file it holds a
-//! fault of is an exam family ([`splinter_core::family::touches`]), so a task
-//! made of one exam file and two training files is never trained on.
+//! admitted on). This stage stores them: a combined task's family joins the
+//! families of the files it holds a fault of ([`splinter_core::family`]), and
+//! a task of a family an experiment plan seals is refused ([`crate::sealed`]).
 //!
-//! Three sets are written: every combined task, those of the exam, and the
-//! rest. The members of each combined task are kept as a document
+//! One set is written, of every combined task. The members of each combined task are kept as a document
 //! (`combined_task`), outside the task, so its address is that of any
 //! workspace task with the same content.
 
@@ -25,7 +23,6 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
-use splinter_core::family::touches;
 use splinter_core::rng::Seed;
 use splinter_knowledge::tasks::workspace::{
     CombinePlan, CombineReason, WorkspaceGenerator, COMBINED_GENERATOR,
@@ -33,8 +30,6 @@ use splinter_knowledge::tasks::workspace::{
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-
-use crate::exam_seal;
 
 /// The class the record of a combined task is kept under.
 const COMBINED_TASK: &str = "combined_task";
@@ -58,9 +53,6 @@ pub struct CombinedRecord {
     pub family: String,
     /// The single tasks it is made of, in family order.
     pub members: Vec<Digest>,
-    /// Whether it is an exam task: some file it holds a fault of is an exam
-    /// family.
-    pub exam: bool,
 }
 
 /// What `tasks combine` did.
@@ -74,16 +66,8 @@ pub struct Combined {
     pub per_family: usize,
     /// Every combined task admitted; `None` when none was.
     pub task_set: Option<TaskSetId>,
-    /// Those of the exam; `None` when there are none.
-    pub exam_task_set: Option<TaskSetId>,
-    /// The rest, which may be trained on; `None` when there are none.
-    pub training_task_set: Option<TaskSetId>,
     /// Combined tasks admitted.
     pub admitted: usize,
-    /// Of those, the exam's.
-    pub exam_tasks: usize,
-    /// The rest.
-    pub training_tasks: usize,
     /// Combinations tried.
     pub attempted: usize,
     /// Combinations not admitted, by reason.
@@ -124,16 +108,13 @@ pub fn combine(ctx: &Context, request: &CombineRequest) -> Result<Combined, Orch
         .map_err(|e| OrchestratorError::Refused(e.to_string()))?;
 
     let sealed = crate::sealed::families(ctx)?;
-    let exam_families = exam_seal::reserved(ctx)?;
     let mut all = Vec::new();
-    let (mut exam, mut training) = (Vec::new(), Vec::new());
     let mut records = Vec::new();
     let mut families: BTreeMap<String, usize> = BTreeMap::new();
     for combined in made.admitted {
         if let Some(why) = crate::sealed::refuses_task(&sealed, &combined.task.task) {
             return Err(OrchestratorError::Refused(why));
         }
-        let is_exam = touches(&combined.task.family, &exam_families).is_some();
         let entry = TaskEntry {
             task: store.put(&combined.task.task)?,
             generator: Some(COMBINED_GENERATOR.to_string()),
@@ -145,11 +126,9 @@ pub fn combine(ctx: &Context, request: &CombineRequest) -> Result<Combined, Orch
             task: entry.task.clone(),
             family: combined.task.family.clone(),
             members: combined.members,
-            exam: is_exam,
         };
         ctx.workspace().put_document(COMBINED_TASK, &record)?;
         *families.entry(record.family.clone()).or_default() += 1;
-        if is_exam { &mut exam } else { &mut training }.push(entry.clone());
         all.push(entry);
         records.push(record);
     }
@@ -169,11 +148,7 @@ pub fn combine(ctx: &Context, request: &CombineRequest) -> Result<Combined, Orch
         faults: request.plan.faults,
         per_family: request.plan.per_family,
         task_set: put("combined workspace tasks", &all)?,
-        exam_task_set: put("combined workspace tasks of the exam files", &exam)?,
-        training_task_set: put("combined workspace tasks of training files", &training)?,
         admitted: records.len(),
-        exam_tasks: exam.len(),
-        training_tasks: training.len(),
         attempted: made.attempted,
         refused: made.refused,
         unusable: made.unusable,

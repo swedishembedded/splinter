@@ -5,7 +5,7 @@
 
 use super::*;
 use clap::CommandFactory;
-use splinter_sdk::{lineage::Direction, vocabulary::model_ref::POLICY_DEFAULT};
+use splinter_sdk::lineage::Direction;
 
 fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("splinter").chain(args.iter().copied()))
@@ -94,34 +94,6 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         Command::Source(SourceCommand::Show { .. })
     ));
 
-    let Command::Tasks(TasksCommand::Generate {
-        sources,
-        kinds,
-        generator,
-        author,
-        denoise_seed,
-    }) = command(&[
-        "tasks",
-        "generate",
-        "ab12",
-        "cd34",
-        "--kinds",
-        "recall,construct",
-        "--author",
-        "Thomas Jefferson",
-    ])
-    else {
-        panic!("tasks generate");
-    };
-    assert_eq!((sources.len(), kinds.len()), (2, 2));
-    assert_eq!(generator, ModelRef::policy_default());
-    assert_eq!(author.as_deref(), Some("Thomas Jefferson"));
-    assert_eq!(denoise_seed, None);
-    assert!(
-        parse(&["tasks", "generate", "ab12"]).is_err(),
-        "--kinds is required"
-    );
-
     let Command::Tasks(TasksCommand::Variants {
         task_set,
         generator,
@@ -138,12 +110,10 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
         Command::Tasks(TasksCommand::Variants { per_task: 5, .. })
     ));
 
-    let Command::Solve(solve) = command(&["solve", "ab12", "--solver", "local:Qwen/Qwen3-1.7B"])
-    else {
-        panic!("solve");
-    };
-    assert_eq!(solve.solver.to_string(), "local:Qwen/Qwen3-1.7B");
-    assert!(matches!(command(&["verify", "ab12"]), Command::Verify(v) if v.judge.is_none()));
+    assert!(matches!(
+        command(&["verify", "runs/r1"]),
+        Command::Verify(v) if v.run == std::path::Path::new("runs/r1")
+    ));
     let Command::Critique(critique) = command(&["critique", "ab12", "--retry", "3"]) else {
         panic!("critique");
     };
@@ -168,199 +138,54 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
     ));
     assert!(parse(&["experiences", "compare", "ab12"]).is_err());
 
-    let Command::Dataset(DatasetCommand::Build(args)) = command(&[
-        "dataset",
-        "build",
-        "ab12",
-        "cd34",
-        "--view",
-        "preference",
-        "--strip",
-        "mix:0.5",
-        "--min-strength",
-        "formal",
-        "--system-prompt",
-        "You are a clerk.",
-        "--export-only",
-        "--limit",
-        "5",
-        "--max-block",
-        "4096",
-        "--split-over-block",
-        "--only-actions",
-        "edit,write_file",
-        "--roles",
-        "specifier,designer",
-        "--images",
-        "--pack",
-        "--control",
-        "shuffled",
-        "--control-seed",
-        "5",
-        "--drop-leaking",
-        "--serialise-calls",
-        "--writer",
-        "The Writer",
-        "--token-limit",
-        "9000",
-        "--max-family-share",
-        "0.2",
-        "--describe-with",
-        "local:Qwen/Qwen3-8B",
-    ]) else {
-        panic!("dataset build");
-    };
-    let super::BuildArgs {
-        sets,
-        view,
-        strip,
-        mix_seed,
-        min_strength,
-        system_prompt,
-        export_only,
-        limit,
-        max_block,
-        split_over_block,
-        only_actions,
-        roles,
-        images,
-        pack,
-        control,
-        control_seed,
-        drop_leaking,
-        serialise_calls,
-        writer,
-        token_limit,
-        max_family_share,
-        describe_with,
-        ..
-    } = *args;
-    assert_eq!(control, Some(super::ControlKind::Shuffled));
-    assert_eq!(control_seed.map(splinter_sdk::seed::Seed::value), Some(5));
-    assert_eq!(
-        (writer.as_deref(), token_limit, max_family_share),
-        (Some("The Writer"), Some(9000), Some(0.2))
-    );
-    assert!(describe_with.is_some());
-    assert!(pack && drop_leaking && serialise_calls && split_over_block && images);
-    assert_eq!(only_actions, Some(vec!["edit".into(), "write_file".into()]));
-    assert_eq!(roles, Some(vec!["specifier".into(), "designer".into()]));
-    assert_eq!(sets.len(), 2);
-    assert_eq!(view, ViewName::Preference);
-    assert!(matches!(strip, Some(StripPolicy::Mix { .. })));
-    assert_eq!(mix_seed, None);
-    assert_eq!(min_strength, Some(Strength::Formal));
-    assert_eq!(system_prompt.as_deref(), Some("You are a clerk."));
-    assert!(export_only);
-    assert_eq!(limit, Some(5));
-    assert_eq!(max_block, Some(4096));
-    assert!(parse(&["dataset", "build", "ab12", "--view", "sft"]).is_err());
-    assert!(
-        parse(&[
-            "dataset",
-            "build",
-            "ab12",
-            "--view",
-            "sft-step",
-            "--control-seed",
-            "1"
-        ])
-        .is_err(),
-        "a control seed needs a control"
-    );
     assert!(
         parse(&["dataset", "export", "ab12"]).is_err(),
         "--out is required"
     );
 
-    let Command::Train(train) = command(&[
-        "train",
-        "ab12",
-        "cd34",
-        "--from",
-        "local:./ckpt+a.safetensors",
-        "--replay-fraction",
-        "0.5",
-        "--steps",
-        "10",
-        "--rank",
-        "4",
-        "--beta",
-        "0.2",
-    ]) else {
-        panic!("train");
-    };
-    assert_eq!(train.datasets.len(), 2);
-    assert_eq!(
-        (train.steps, train.rank, train.beta),
-        (Some(10), 4, Some(0.2))
-    );
-    assert_eq!(train.replay_fraction, 0.5);
-
-    let Command::Release(release) = command(&["release", "candidate-1", "--alias", "staging"])
-    else {
-        panic!("release");
-    };
-    assert_eq!(release.candidate.as_deref(), Some("candidate-1"));
-    assert_eq!(release.alias, "staging");
-    assert!(release.command.is_none());
-    let Command::Release(listing) = command(&["release", "list"]) else {
-        panic!("release list");
-    };
-    assert!(matches!(listing.command, Some(ReleaseCommand::List)));
-    assert_eq!(listing.alias, POLICY_DEFAULT);
+    assert!(matches!(
+        command(&["release", "list"]),
+        Command::Release(ReleaseCommand::List)
+    ));
     assert!(matches!(
         command(&["rollback", "default"]),
         Command::Rollback { alias } if alias == "default"
     ));
     assert!(parse(&["rollback"]).is_err(), "rollback needs an alias");
-    let Command::Eval(eval) = command(&["eval", "policy:default"]) else {
-        panic!("eval");
+    let Command::Eval(eval) = command(&["eval", "--freeze", "a.jsonl"]) else {
+        panic!("eval --freeze");
     };
-    assert_eq!(eval.suite, SuiteChoice::HeldOut);
-    let Command::Eval(eval) = command(&["eval", "--suite", "anchor", "--freeze", "a.jsonl"]) else {
-        panic!("eval anchor");
+    assert_eq!((eval.run, eval.freeze.len()), (None, 1));
+    let Command::Eval(eval) = command(&["eval", "runs/r1", "--plan", "p.yaml", "--out", "o"])
+    else {
+        panic!("eval of a run");
     };
-    assert_eq!((eval.model, eval.suite), (None, SuiteChoice::Anchor));
-    let Command::Eval(eval) = command(&["eval", "c1", "--suite", "tasks.jsonl"]) else {
-        panic!("eval file");
-    };
-    assert_eq!(eval.suite, SuiteChoice::File("tasks.jsonl".into()));
-    let Command::Train(train) = command(&["train", "d1", "--lr", "0.0002"]) else {
-        panic!("train");
-    };
-    assert_eq!(train.optimiser.lr, Some(0.0002));
+    assert!(eval.run.is_some() && eval.plan.is_some());
     assert!(
-        train.steps.is_none()
-            && train.monitoring.eval_every.is_none()
-            && train.monitoring.patience.is_none(),
-        "the budget, the cadence and the patience follow the data unless named"
+        parse(&["eval", "--plan", "p.yaml", "--out", "o"]).is_err(),
+        "a plan evaluates a run"
     );
-    let Command::Train(train) = command(&[
-        "train",
-        "d1",
-        "--eval-every",
-        "0",
-        "--patience",
-        "2",
-        "--monitor-share",
-        "0.2",
-    ]) else {
-        panic!("train");
+    let Command::Eval(eval) = command(&["eval", "--suite", "probes.jsonl"]) else {
+        panic!("eval --suite");
     };
+    assert_eq!(eval.suite, Some("probes.jsonl".into()));
     assert_eq!(
-        (
-            train.monitoring.eval_every,
-            train.monitoring.patience,
-            train.monitoring.monitor_share
-        ),
-        (Some(0), Some(2), Some(0.2))
+        eval.policy.to_string(),
+        "policy:default",
+        "the default policy is graded"
     );
-    assert!(
-        parse(&["train", "d1", "--monitor-share", "0.6"]).is_err(),
-        "more than half monitored is refused"
-    );
-    assert!(parse(&["train", "d1", "--monitor-share", "0"]).is_err());
+    let Command::Eval(eval) = command(&["eval", "--suite", "p.jsonl", "--policy", "local:m"])
+    else {
+        panic!("eval --suite --policy");
+    };
+    assert_eq!(eval.policy.to_string(), "local:m");
+    for mixed in [
+        &["eval", "runs/r1", "--suite", "p.jsonl"][..],
+        &["eval", "--suite", "p.jsonl", "--freeze", "a.jsonl"],
+        &["eval", "--policy", "local:m"],
+    ] {
+        assert!(parse(mixed).is_err(), "{mixed:?} parses");
+    }
     let Command::Exam(exam) = command(&["exam", "c1", "--judge", "local:Qwen/Qwen3-8B"]) else {
         panic!("exam");
     };
@@ -487,61 +312,22 @@ fn each_verb_takes_what_it_acts_on_as_positionals() {
 }
 
 #[test]
-fn pass_at_k_is_asked_for_where_it_is_measured() {
-    let Command::Solve(solve) = command(&[
-        "solve",
-        "ab12",
-        "--frontier",
-        "--k",
-        "8",
-        "--temperature",
-        "1.0",
-    ]) else {
-        panic!("solve --frontier");
-    };
-    assert!(solve.frontier);
-    let pass_at_k = solve.pass_at_k.pass_at_k();
-    assert_eq!(pass_at_k.k, 8);
-    assert_eq!(pass_at_k.sampling.map(|s| s.temperature), Some(1.0));
-    let Command::Solve(plain) = command(&["solve", "ab12", "--frontier"]) else {
-        panic!("solve --frontier");
-    };
-    assert_eq!(plain.pass_at_k.pass_at_k(), PassAtK::default());
-    assert!(
-        parse(&["solve", "ab12", "--k", "8"]).is_err(),
-        "pass@k parameters need --frontier"
-    );
-    let Command::Solve(taught) =
-        command(&["solve", "ab12", "--frontier", "--teacher", "local:./big"])
-    else {
-        panic!("solve --frontier --teacher");
-    };
-    assert_eq!(taught.teacher, Some("local:./big".parse().unwrap()));
-    assert_eq!(plain.teacher, None, "the solver teaches by default");
-    assert!(
-        parse(&["solve", "ab12", "--teacher", "local:./big"]).is_err(),
-        "a teacher needs --frontier"
-    );
-}
-
-#[test]
 fn every_command_takes_the_global_flags() {
     for args in [
         &["status"][..],
         &["ask", "q"],
         &["source", "list"],
         &["tasks", "list"],
-        &["solve", "ab12"],
-        &["verify", "ab12"],
+        &["verify", "runs/r1"],
         &["critique", "ab12"],
         &["judge", "calibrate", "f", "--judge", "policy:default"],
         &["experiences", "list"],
         &["dataset", "export", "ab12", "--out", "d"],
-        &["train", "ab12"],
         &["release", "list"],
-        &["release", "c1"],
         &["rollback", "default"],
-        &["eval", "c1", "--suite", "anchor"],
+        &["eval"],
+        &["eval", "--freeze", "a.jsonl"],
+        &["eval", "--suite", "p.jsonl"],
         &["state", "status"],
         &["state", "maintain"],
         &["state", "maintain", "--collect"],
@@ -567,7 +353,7 @@ fn every_command_takes_the_global_flags() {
 
 #[test]
 fn model_references_are_parsed_by_the_one_parser() {
-    let refused = parse(&["solve", "ab12", "--solver", "Qwen3"]).unwrap_err();
+    let refused = parse(&["ask", "q", "--policy", "Qwen3"]).unwrap_err();
     assert!(
         refused.to_string().contains("remote:<provider>/<name>"),
         "{refused}"
@@ -595,61 +381,16 @@ fn the_old_commands_are_gone() {
         &["ask", "--question", "q"],
         &["eval-facts", "--dataset", "d", "--out", "o"],
         &["facts", "--file", "f.md"],
+        // The legacy pipeline verbs: the factory's operations do each.
+        &["solve", "ab12"],
+        &["rehearse", "--records", "120"],
+        &["dataset", "build", "ab12"],
+        &["tasks", "generate", "ab12", "--kinds", "recall"],
+        &["release", "candidate-1"],
+        &["eval", "policy:default", "--suite", "held-out"],
+        &["verify", "ab12", "--judge", "local:/j"],
     ] {
         assert!(parse(removed).is_err(), "{removed:?} still parses");
-    }
-}
-
-#[test]
-fn a_rehearsal_is_built_by_its_own_verb_and_mixed_in_by_train() {
-    let Command::Rehearse(args) = command(&["rehearse", "--records", "120"]) else {
-        panic!("rehearse");
-    };
-    assert_eq!(args.records, 120);
-    assert!(
-        parse(&["rehearse"]).is_err(),
-        "the size is the caller's to say"
-    );
-    assert!(parse(&["rehearse", "--records", "0"]).is_err());
-
-    let Command::Train(plain) = command(&["train", "ds-1"]) else {
-        panic!("train");
-    };
-    assert_eq!(
-        (plain.rehearsal, plain.rehearsal_share, plain.seed),
-        (None, None, None)
-    );
-    let Command::Train(mixed) = command(&[
-        "train",
-        "ds-1",
-        "--rehearsal",
-        "ds-2",
-        "--rehearsal-share",
-        "0.3",
-        "--seed",
-        "1338",
-    ]) else {
-        panic!("train --rehearsal");
-    };
-    assert_eq!(mixed.rehearsal.as_deref(), Some("ds-2"));
-    assert_eq!((mixed.rehearsal_share, mixed.seed), (Some(0.3), Some(1338)));
-    assert!(
-        parse(&["train", "ds-1", "--rehearsal-share", "0.3"]).is_err(),
-        "a share of nothing"
-    );
-    for bad in ["0", "1", "1.5"] {
-        assert!(
-            parse(&[
-                "train",
-                "ds-1",
-                "--rehearsal",
-                "ds-2",
-                "--rehearsal-share",
-                bad
-            ])
-            .is_err(),
-            "{bad}"
-        );
     }
 }
 
@@ -658,5 +399,3 @@ mod env;
 mod flags;
 mod jobs;
 mod measure;
-mod rollouts;
-mod solve;

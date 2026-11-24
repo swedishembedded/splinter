@@ -7,16 +7,14 @@
 // can procure our services by sending an email to info@swedishembedded.com.
 
 //! `tasks drills`: comprehension drills made by code from a repository's
-//! snapshot, stored as task sets and divided by the exam the store keeps.
+//! snapshot, stored as a task set.
 //!
 //! The drills are made by [`splinter_knowledge::tasks::workspace`] (see
 //! `WorkspaceGenerator::drills` for what a drill is and what it is admitted
 //! on). This stage captures the revision, optionally narrows the functions to
-//! those a set of repair tasks touches, stores the drills and divides them:
-//! a drill's family is the file it exercises, so a drill of a file the
-//! practice exam reserved is an **exam drill** ([`splinter_core::family`])
-//! and never trained on. Three sets are written: every drill, those of the
-//! exam, and the rest.
+//! those a set of repair tasks touches, and stores the drills: a drill's
+//! family is the file it exercises ([`splinter_core::family`]). A drill of a
+//! family an experiment plan seals is refused ([`crate::sealed`]).
 //!
 //! The strategy hook for the automatic loop is [`DrillRequest::for_tasks`]:
 //! given a set of workspace tasks (the ones a policy fails or solves only
@@ -29,7 +27,6 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use splinter_core::experience::PrivilegedKind;
-use splinter_core::family::touches;
 use splinter_core::rng::Seed;
 use splinter_knowledge::capture::{capture_tree, DirtyPolicy, TreeRequest};
 use splinter_knowledge::tasks::workspace::{
@@ -38,8 +35,6 @@ use splinter_knowledge::tasks::workspace::{
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_store::tasks::{TaskEntry, TaskSet, TaskSetId};
-
-use crate::exam_seal;
 
 /// What `tasks drills` is asked.
 #[derive(Clone, Debug)]
@@ -75,16 +70,8 @@ pub struct Drilled {
     pub per_function: usize,
     /// Every drill admitted; `None` when none was.
     pub task_set: Option<TaskSetId>,
-    /// Those of the exam; `None` when there are none.
-    pub exam_task_set: Option<TaskSetId>,
-    /// The rest, which may be trained on; `None` when there are none.
-    pub training_task_set: Option<TaskSetId>,
     /// Drills admitted.
     pub admitted: usize,
-    /// Of those, the exam's.
-    pub exam_drills: usize,
-    /// The rest.
-    pub training_drills: usize,
     /// Functions considered.
     pub functions: usize,
     /// Candidates, and functions with no input, not admitted, by reason.
@@ -163,9 +150,8 @@ pub fn drills(ctx: &Context, request: &DrillRequest) -> Result<Drilled, Orchestr
         .map_err(|e| refuse("making drills", &e))?;
 
     let sealed = crate::sealed::families(ctx)?;
-    let exam_families = exam_seal::reserved(ctx)?;
     let store = ctx.tasks();
-    let (mut all, mut exam, mut training) = (Vec::new(), Vec::new(), Vec::new());
+    let mut all = Vec::new();
     let mut families: BTreeMap<String, usize> = BTreeMap::new();
     let mut drilled: BTreeMap<String, usize> = BTreeMap::new();
     for drill in &generation.admitted {
@@ -183,8 +169,6 @@ pub fn drills(ctx: &Context, request: &DrillRequest) -> Result<Drilled, Orchestr
         *drilled
             .entry(format!("{}::{}", drill.family, drill.function))
             .or_default() += 1;
-        let is_exam = touches(&drill.family, &exam_families).is_some();
-        if is_exam { &mut exam } else { &mut training }.push(entry.clone());
         all.push(entry);
     }
     let name = |what: &str| format!("{what} (of {})", captured.commit);
@@ -204,11 +188,7 @@ pub fn drills(ctx: &Context, request: &DrillRequest) -> Result<Drilled, Orchestr
         seed: request.seed,
         per_function: request.per_function,
         task_set: put("comprehension drills", &all)?,
-        exam_task_set: put("comprehension drills of the exam files", &exam)?,
-        training_task_set: put("comprehension drills of training files", &training)?,
         admitted: all.len(),
-        exam_drills: exam.len(),
-        training_drills: training.len(),
         functions: generation.functions,
         refused: generation.refused,
         families,

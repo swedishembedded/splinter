@@ -83,10 +83,6 @@ pub struct Built {
     pub path: PathBuf,
     /// How the passages of a described voice dataset were described.
     pub described: Option<Described>,
-    /// The experiences left out because they would have crossed the exam
-    /// seal, and why ([`build_dropping_leaks`]); empty otherwise.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub dropped: Vec<exam_seal::Leak>,
     /// The groups of attempts a policy-gradient dataset compared: each
     /// attempt's reward and advantage.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -127,7 +123,6 @@ impl From<StoredDataset> for Built {
             excluded: stored.manifest.counts.excluded,
             path: stored.path,
             described: None,
-            dropped: Vec::new(),
             signal: None,
             groups: stored.manifest.groups,
             block_measure: None,
@@ -169,38 +164,8 @@ fn project_sealed(
 ) -> Result<(Projection, Option<Described>), OrchestratorError> {
     let (projection, described, corpus) = project_without(ctx, request, &BTreeSet::new(), facts)?;
     crate::sealed::admit_corpus(ctx, &corpus)?;
-    exam_seal::seal(ctx, &corpus, &projection)?;
+    exam_seal::seal(ctx, &corpus)?;
     Ok((projection, described))
-}
-
-/// [`build`], leaving out every experience that would cross the exam seal
-/// ([`exam_seal::leaks`]) instead of refusing the build. The dataset is
-/// projected again without them and sealed as usual, so it is refused if
-/// anything still leaks. They are counted under [`Exclusion::ExamLeak`] and
-/// listed, with why, in the result.
-pub fn build_dropping_leaks(
-    ctx: &Context,
-    request: &BuildRequest,
-) -> Result<Built, OrchestratorError> {
-    let facts = practice_facts(request)?;
-    let (first, _, corpus) = project_without(ctx, request, &BTreeSet::new(), &facts)?;
-    let dropped = exam_seal::leaks(ctx, &corpus, &first)?;
-    let leaving: BTreeSet<ExperienceId> = dropped.iter().map(|l| l.experience.clone()).collect();
-    let (mut projection, described, corpus) = project_without(ctx, request, &leaving, &facts)?;
-    if !leaving.is_empty() {
-        projection
-            .excluded
-            .insert(Exclusion::ExamLeak, leaving.len());
-    }
-    exam_seal::seal(ctx, &corpus, &projection)?;
-    let stored = store_dataset(ctx, &projection, request.export_only)?;
-    Ok(Built {
-        described,
-        dropped,
-        block_measure: projection.block_measure.clone(),
-        signal: group_signal(&projection.groups, &facts),
-        ..Built::from(stored)
-    })
 }
 
 /// [`project_with`] without the experiences in `left_out` and without the

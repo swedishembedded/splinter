@@ -36,7 +36,7 @@ use splinter_orchestrator::Context;
 use splinter_pipelines::bench::artifact::sha256_hex;
 use splinter_pipelines::bench::split::Split;
 use splinter_pipelines::bench::{ingest_bench_trials, IngestOptions};
-use splinter_pipelines::datasets::{build, build_dropping_leaks};
+use splinter_pipelines::datasets::build;
 use splinter_store::experiences::{ExperienceSet, SetId};
 
 fn mixed(ctx: &Context, a: &SetId, b: &SetId) -> SetId {
@@ -280,13 +280,7 @@ fn only_passing_train_trials_become_tool_use_records_and_eval_never_enters_a_dat
         "{refused}"
     );
     let both = mixed(&ctx, &train, &eval);
-    assert!(build(&ctx, &sft_request(both.clone())).is_err());
-
-    // Dropping leaks leaves the eval trial out, lists it, and builds the rest.
-    let dropped = build_dropping_leaks(&ctx, &sft_request(both)).unwrap();
-    assert_eq!(dropped.dropped.len(), 1);
-    assert_eq!(dropped.records, built.records);
-    assert!(!fs::read_to_string(&dropped.path).unwrap().contains("org/b"));
+    assert!(build(&ctx, &sft_request(both)).is_err());
 }
 
 #[test]

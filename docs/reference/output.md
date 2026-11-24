@@ -68,7 +68,7 @@ base itself; `generation` is 0 on the configured base); `recent_runs` lists up t
 "status", "started_at", "updated_at"}`; `counts` is `{"sources",
 "task_sets", "tasks", "experiences", "experience_sets", "datasets",
 "candidates"}`; `concepts` is `{"policy", "concepts", "measured",
-"weakest", "queued"}`, each of `weakest` `{"concept", "current",
+"weakest"}`, each of `weakest` `{"concept", "current",
 "releases"}` with `{"release", "graded", "passes", "rate", "since"}` per
 release.
 

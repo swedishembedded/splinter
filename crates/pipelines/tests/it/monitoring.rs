@@ -22,13 +22,10 @@
 
 use crate::common;
 
-use common::gate::{
-    anchor_file, dataset, decide, gate_context, policy, Brain, FakeTrainer, ANCHOR,
-};
+use common::gate::{dataset, gate_context, policy, Brain, FakeTrainer};
 use splinter_agent::CancelToken;
-use splinter_core::training::{CurvePoint, Selection, TrainingCurve};
+use splinter_core::training::Selection;
 use splinter_pipelines::datasets::examples_in;
-use splinter_pipelines::release::anchor;
 use splinter_pipelines::train::{
     auto_records_per_step, eval_every_for, steps_for, train, TrainRequest, Tuning,
     DEFAULT_MONITOR_SHARE, DEFAULT_PATIENCE, DEFAULT_REPLAY_FRACTION,
@@ -121,72 +118,6 @@ fn a_run_without_named_steps_gets_a_budget_a_cadence_and_a_monitor_and_keeps_wha
             plan.tuning.records_per_step
         ),
         (7, 0, 0, 0.3, Some(2))
-    );
-}
-
-#[test]
-fn the_gate_repeats_what_the_curve_warns_of() {
-    let (scratch, ctx) = gate_context("monitoring-warnings", Brain::Honest);
-    anchor::freeze(&ctx, &[anchor_file(&scratch.0, 4)]).unwrap();
-    let data = dataset(&ctx, "alpha", 40);
-    let trainer = FakeTrainer::knowing(&[ANCHOR, "alpha"]);
-    // A run that carried its last step although the monitoring loss had
-    // turned at step 20, with a gap of more than a quarter at the end.
-    let point = |step, train_loss, monitor_loss| CurvePoint {
-        step,
-        train_loss,
-        monitor_loss,
-    };
-    *trainer.curve.lock().unwrap() = Some(TrainingCurve {
-        steps: 40,
-        steps_completed: 40,
-        eval_every: 10,
-        patience: 0,
-        monitor_records: 4,
-        points: vec![
-            point(10, 2.0, 1.8),
-            point(20, 1.4, 1.3),
-            point(30, 1.0, 1.35),
-            point(40, 0.7, 1.4),
-        ],
-        selected_step: 40,
-        selection: Selection::LastStep,
-        stopped_early: false,
-        monitoring_skipped: None,
-        speed: None,
-        parallel: None,
-    });
-    let candidate = train(
-        &ctx,
-        &request(&data.to_string(), Some(40), Tuning::default()),
-        &trainer,
-        &CancelToken::new(),
-    )
-    .unwrap();
-    let warnings = candidate.warnings();
-    assert_eq!(warnings.len(), 2, "{warnings:?}");
-    assert!(
-        warnings[0].contains("generalisation gap"),
-        "{}",
-        warnings[0]
-    );
-    assert!(
-        warnings[1].contains("rose before the end"),
-        "{}",
-        warnings[1]
-    );
-
-    let released = decide(&ctx, &candidate);
-    assert!(released.gate.passed, "{:?}", released.gate);
-    assert_eq!(released.warnings, warnings, "a pass repeats the warnings");
-    let manifest = ctx
-        .releases()
-        .get(released.release.as_ref().unwrap())
-        .unwrap()
-        .manifest;
-    assert_eq!(
-        manifest.training.curve.as_ref().map(|c| c.selected_step),
-        Some(40)
     );
 }
 

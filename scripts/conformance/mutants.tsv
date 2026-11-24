@@ -8,15 +8,15 @@ pass-earns-zero	rewards	crates/data/src/views/rewards.rs	return Ok(1.0);	return 
 shaped-reward-sign-reversed	rewards	crates/data/src/views/rewards.rs	Ok(self.fail_ceiling * shaped)	Ok(-self.fail_ceiling * shaped)	splinter-data	all
 naive-floor-ignored	rewards	crates/data/src/views/rewards.rs	self.credit * ((f - floor) / (1.0 - floor)).max(0.0)	self.credit * f	splinter-data	all
 partial-credit-unclamped	rewards	crates/data/src/views/rewards.rs	self.credit * ((f - floor) / (1.0 - floor)).max(0.0)	self.credit * ((f - floor) / (1.0 - floor))	splinter-data	all
-zero-variance-group-kept	rewards	crates/data/src/views/rewards.rs	rewards.len() >= 2 && max - min >= MIN_SPREAD	rewards.len() >= 2	splinter-data	all
-groups-merged-across-policies	rewards	crates/data/src/views/policy_gradient.rs	                policy,\n            },\n            trial,	                policy: String::new(),\n            },\n            trial,	splinter-data	all
+zero-variance-group-kept	rewards	crates/data/src/views/rewards.rs	    splinter_core::rewards::differ(rewards.iter().copied())\n}	    rewards.len() >= 2\n}	splinter-data	all
+groups-merged-across-policies	rewards	crates/data/src/views/policy_gradient.rs	                policy: identity.policy,\n            },\n            trial,	                policy: String::new(),\n            },\n            trial,	splinter-data	all
 sampled-only-ignored	dataset	crates/data/src/views/policy_gradient.rs	if self.sampled_only && !exact {	if false && self.sampled_only && !exact {	splinter-data	all
 context-message-supervised	dataset	crates/data/src/trajectory.rs	            messages[action.index].train = true;	            messages[action.index.saturating_sub(1)].train = true;	splinter-data	all
 user-turn-supervised	dataset	crates/data/src/trajectory.rs	            last.train = true;\n        }	            last.train = true;\n        }\n        if let Some(first) = messages.first_mut() {\n            first.train = true;\n        }	splinter-data	all
 history-read-supervised	dataset	crates/data/src/views/rendering.rs	            self.history != HistoryCuration::Keep\n                &&	            false\n                &&	splinter-data	all
 sample-variance	learning-signal	crates/eval/src/campaign/learning_signal.rs	(r - m).powi(2)).sum::<f64>() / n as f64);	(r - m).powi(2)).sum::<f64>() / (n as f64 - 1.0).max(1.0));	splinter-eval	all
 no-shrinkage	learning-signal	crates/eval/src/campaign/learning_signal.rs	pub const PRIOR_ATTEMPTS: f64 = 2.0;	pub const PRIOR_ATTEMPTS: f64 = 0.0;	splinter-eval	all
-flat-group-informative	learning-signal	crates/eval/src/campaign/learning_signal.rs	let informative = n >= 2 && hi - lo >= MIN_SPREAD;	let informative = n >= 2;	splinter-eval	all
+flat-group-informative	learning-signal	crates/eval/src/campaign/learning_signal.rs	let informative = splinter_core::rewards::differ(rewards.iter().copied());	let informative = rewards.len() >= 2;	splinter-eval	all
 flat-group-drawn	learning-signal	crates/eval/src/campaign/learning_signal.rs	if task.measured() && !task.informative {	if false && task.measured() && !task.informative {	splinter-eval	all
 competence-item-level-resample	statistics	crates/eval/src/competence.rs	.flat_map(|_| groups[rng.below(groups.len())].iter().copied())	.map(|_| pool[rng.below(pool.len())])	splinter-eval	all
 sign-test-two-sided	statistics	crates/model/src/stats.rs	p_value: one_sided_p(candidate_wins, discordant - candidate_wins),	p_value: (2.0 * one_sided_p(candidate_wins, discordant - candidate_wins)).min(1.0),	splinter-model	all	stat
@@ -44,7 +44,7 @@ student-t-tail-halved	statistics	crates/eval/src/student.rs	    let tail = 0.5 *
 wilson-wrong-quantile	statistics	crates/eval/src/pilot.rs	const Z_95: f64 = 1.959_963_984_540_054;	const Z_95: f64 = 1.96;	splinter-eval	it	external_wilson
 skill-order-cycle-empty	knowledge	crates/knowledge/src/skills.rs	        self.order_of().map_err(GraphError::Cycle)	        Ok(self.order_of().unwrap_or_default())	splinter-knowledge	it	external_skill_order
 signature-unchecked	release	crates/eval/src/promotion/verdict.rs	    if key.verifies(&bytes, value) {	    if true {	splinter-eval	it	promotion_gate
-seal-ignores-reserved	seal	crates/pipelines/src/exam_seal.rs	    if exam.is_empty() {\n        return Ok(found);	    if true {\n        return Ok(found);	splinter-pipelines	it	dataset_seal
+seal-ignores-exam-split	seal	crates/pipelines/src/exam_seal.rs	        if let Some(reason) = crate::bench::split::exam_only(&register, &entry.experience) {	        if let Some(reason) = crate::bench::split::exam_only(&register[..0], &entry.experience) {	splinter-pipelines	it	bench_ingest::an_experience_of_a_task_registered_as_eval_is_refused_even_if_it_claims_train
 power-level-doubled	statistics	crates/eval/src/power.rs	        test.sign_test(&pairs).p_value <= alpha\n	        test.sign_test(&pairs).p_value <= alpha * 2.0\n	splinter-eval	lib	power::
 socket-filter-lets-unix-through	sandbox	crates/sandbox/src/seccomp.rs	            /* 10 */ jump(BPF_JEQ_K, AF_UNIX, to(DENY, 10), 0),	            /* 10 */ jump(BPF_JEQ_K, u32::MAX, to(DENY, 10), 0),	splinter-sandbox	it	containment::no_socket
 repository-credential-bound	security	crates/factory/src/connections.rs	        if let Some(machine) = self.unvouched.get(&model.connection) {	        if let Some(machine) = None::<&String> {	splinter-factory	it	resolve::

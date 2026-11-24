@@ -19,10 +19,10 @@ so any stage can be rerun or inspected alone.
    See [Verification](verification.md).
 4. **Datasets** are projected from the experiences worth training on, for one objective. See the
    [datasets reference](../reference/datasets.md).
-5. **Training** continues the current release with a LoRA adapter, replaying earlier material.
+5. **Training** fits a LoRA adapter on a dataset, optionally continuing a champion and replaying earlier material.
    See [Build datasets and train](../guides/training.md).
-6. **Evaluation and release** decide whether the candidate becomes the policy. See [Release
-   policy](release-policy.md).
+6. **Evaluation and release** decide whether the candidate becomes the policy, in a recipe that has
+   evaluation and promotion stages. See [Release policy](release-policy.md).
 
 ## Why questions name their subject
 
@@ -35,58 +35,25 @@ answers.
 
 ## Where the training budget goes
 
-Budget goes where learning happens: before a task's attempts become
-training data, `solve --frontier` measures the policy's pass@k on it closed-book.
-A task it never solves is solved once more by a teacher - the same
-policy unless `--teacher` names another model - shown the source
-sections the task is grounded in; the teacher's answer, once the task's
-verifiers pass it, is what the policy learns a new fact from. `solve --frontier`
-keeps the tasks the policy fails at least sometimes and has a verified
-answer to - its own or the teacher's - and drops those it always solves
-(nothing to learn) and those nobody answered verifiably (nothing to learn
-from). The training records are the student's: the instruction alone and
-the verified answer, never the passage the teacher saw. The training set
-is capped per concept, task kind and verification strength; `splinter
-status` lists the concepts the policy has mastered least, from its
-closed-book solves alone; and concepts the release gate sees forgotten are
-queued for new tasks.
+Budget goes where learning happens, and the recipe says where. An `attempt.collect` or `answer.collect`
+stage runs the policy at each task (`attempts: k` makes k graded attempts, each an experience numbered by its
+attempt) and grades every attempt by the task's own verifiers. A `dataset.project` stage then projects
+attempts to a dataset: an `sft` dataset admits an attempt only when it was counted and passed at full credit
+with no veto, and writes the student's record, the instruction alone and the verified answer. A task whose
+attempts all failed contributes nothing to an `sft` dataset, and an attempt stage can be pointed at the tasks
+an earlier one left unsolved (`unsolved_by`) to try them again.
+
+For reinforcement learning, a `dataset.rlvr` stage selects the tasks worth rolling out again: those whose
+measured pass rate lies strictly between 0 and 1, or inside the `min_pass_rate` and `max_pass_rate` the stage
+names, since a task the policy always or never solves gives its groups the same reward and no gradient.
+`splinter status` lists the concepts the policy has mastered least, from its closed-book attempts alone.
 
 ## One prompt for asking and training
 
 What the policy is trained on is what it sees when it answers: every
-solve, `ask`, judge, critique and gate probe runs under one short system
+attempt, `ask`, judge and critique runs under one short system
 prompt of Splinter's own, and every training record starts with that same
 system turn.
-
-## The curriculum
-
-`solve --frontier` measures the solver's pass@k on every task: k solves
-(default 4), each an experience numbered by its attempt, graded by the
-task's own verifiers. Each task no graded attempt solved is then solved
-once by a teacher - the solver, or the model `--teacher` names -
-open-book: its prompt shows, before the instruction, the task's
-grounding material (the source section each evidence span falls in, its
-passages and hints; never its reference). The teacher's solve is an
-experience of the task like any other, graded by the same verifiers, its
-provenance marked `teacher`; a task grounded in nothing a teacher could
-be shown is skipped. A task is worth training on when the solver fails it
-at least sometimes and a verified answer exists: on the frontier (some
-attempts passed) or taught (none passed, the teacher's did). A task
-every graded attempt solved carries no signal, and one with no verified
-answer nothing to learn from: both are dropped, as is one with no graded
-attempt (it has no rate; unmeasured is never 0). The tasks kept are
-written as a task set and an experience set of their attempts and
-verified teacher answers. The measurement is recorded under
-`<state>/curriculum/measurements/`, per task: its kind, concepts,
-attempts, graded attempts, passes, rate, the teacher's attempts, graded
-attempts and passes, and class (`always`, `frontier`, `taught`, `never`,
-`unmeasured`), with the solver, the teacher, the release `policy:<alias>`
-was, k and the sampling. The teacher's solves are training data, never a
-measurement of the policy: they count toward neither a task's rate nor
-concept mastery. A local model samples
-its attempts at temperature 0.8 unless `--temperature`/`--top-k` say
-otherwise; a model whose sampling cannot be set (a remote one) samples as
-its server does, and naming a sampling for it is refused.
 
 ## Learning a person's way of thinking
 

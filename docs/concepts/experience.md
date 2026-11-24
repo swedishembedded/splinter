@@ -41,7 +41,7 @@ Splinter, not the agent runtime, decides what an experience is worth:
 - A teacher's open-book solve is training data and never a measurement of the policy: it counts
   toward neither a task's pass rate nor concept mastery.
 - The student sees only the instruction: the material a teacher was shown is not in the training
-  record (`dataset build --strip`).
+  record.
 - Experiences whose trajectory shows the hidden tests, and attempts the harness could not carry
   out, are set aside and counted, and are in no denominator.
 

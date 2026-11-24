@@ -91,9 +91,6 @@ pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<bo
             return Ok(checked.passes());
         }
         DatasetCommand::Export { id, out } => emit(json, &export(ctx, &id, &out)?),
-        DatasetCommand::Build(_) => {
-            return Err(Error::Refused("dataset build is not served here".into()))
-        }
     }
     Ok(true)
 }

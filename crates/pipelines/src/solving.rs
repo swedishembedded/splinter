@@ -173,37 +173,6 @@ pub fn harness_protocol() -> WorkProtocol {
     }
 }
 
-/// Solves every task of `task_set` once with `solver`, as its provider
-/// samples; no solve starts after `deadline` or runs past it. Workspace
-/// tasks run under [`harness_protocol`]. With `resume`, the tasks that
-/// earlier, unfinished set already answers are not solved again.
-pub fn solve_set(
-    ctx: &Context,
-    task_set: &TaskSetId,
-    solver: &ModelRef,
-    deadline: Option<Instant>,
-    cancel: &CancelToken,
-    resume: Option<&SetId>,
-    work: WorkProtocol,
-) -> Result<Solved, OrchestratorError> {
-    solve_tasks(
-        ctx,
-        &SolveRequest {
-            task_set,
-            solver,
-            attempts: 1,
-            sampling: SamplingChoice::Own,
-            teacher: false,
-            system: None,
-            work,
-            deadline,
-            harness: None,
-            cancel: cancel.clone(),
-            resume,
-        },
-    )
-}
-
 /// The solver `request` names, sampling as it asks, and the sampling
 /// applied (`None`: the provider's own).
 fn sampled_solver(

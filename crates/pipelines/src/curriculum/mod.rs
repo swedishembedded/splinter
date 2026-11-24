@@ -31,9 +31,6 @@
 //!   transfer exercises are requested for.
 //! * [`mastery`] - each concept's rolling pass rate per release, from the
 //!   student's closed-book solves; `status` shows the weakest.
-//! * [`queue`] - concepts the release gate saw forgotten (a retention suite
-//!   that dropped), queued for new tasks, which `status` and the release
-//!   report list.
 //!
 //! What a task exercises is [`splinter_knowledge::concepts`]' rule: the
 //! concepts it declares, else the (source, section) pairs its evidence
@@ -43,14 +40,12 @@
 //!
 //! ```text
 //! measurements/<hex>.json   one pass@k measurement, content-addressed, written once
-//! queue/<hex>.json          one concept queued for generation, named by the concept's digest
 //! ```
 
 pub mod capability;
 pub mod corrections;
 pub mod frontier;
 pub mod mastery;
-pub mod queue;
 pub mod teacher;
 
 use splinter_core::digest::Digest;

@@ -30,7 +30,7 @@ splinter-jefferson materials --resources RESOURCES --out ./materials
 # 2. Freeze the suite the release gate holds the adapter to, so that learning
 #    Jefferson is checked against forgetting everything else: general knowledge,
 #    and the arithmetic and format-following a persona fine-tune erodes first.
-splinter eval --suite anchor --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
+splinter eval --freeze samples/jefferson/anchor.jsonl --freeze samples/adams/anchor-skills.jsonl
 
 # 3. Splinter's stages do the rest, one command each, under the roles the
 #    configuration names: the policy to train and the assistant that writes,

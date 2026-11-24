@@ -376,10 +376,8 @@ def measure(splinter, work, facts_taught, earlier, all_facts, anchor):
              for p in probes(f)] + anchor
     path = work / "suite.jsonl"
     path.write_text("".join(json.dumps(s) + "\n" for s in suite))
-    report = splinter.run("eval", "policy:default", "--suite", path)
-    missed = []
-    for score in report.get("scores", []):
-        missed += [m["instruction"] for m in score.get("missed", [])]
+    report = splinter.run("eval", "--suite", path)
+    missed = [i["instruction"] for i in report["items"] if i["verdict"] == "failed"]
     anchor_missed = {a["instruction"] for a in anchor} & set(missed)
     now = answered_facts(facts_taught, missed)
     before = answered_facts(earlier, missed)
@@ -438,7 +436,7 @@ class Cycle:
         # also part of every release gate, where it may lose no item: a rule that
         # a model this small meets only by learning almost nothing.
         if not self.args.no_anchor_gate:
-            self.splinter.run("eval", "--suite", "anchor", "--freeze", self.out / "anchor.jsonl")
+            self.splinter.run("eval", "--freeze", self.out / "anchor.jsonl")
         base = self.measure([], [])
         self.record("base", -1, "base", time.time(), time.time(), base)
 

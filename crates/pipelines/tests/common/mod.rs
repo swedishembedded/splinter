@@ -209,3 +209,32 @@ impl ModelProvider for Counted {
         self.inner.complete(req).await
     }
 }
+
+/// Every task of `task_set` solved once by `solver`, as the specs set up the
+/// experiences they read.
+pub fn solve_set(
+    ctx: &Context,
+    task_set: &splinter_store::tasks::TaskSetId,
+    solver: &ModelRef,
+    deadline: Option<std::time::Instant>,
+    cancel: &splinter_agent::CancelToken,
+    resume: Option<&splinter_store::experiences::SetId>,
+    work: splinter_agent::work::WorkProtocol,
+) -> Result<splinter_pipelines::solving::Solved, splinter_orchestrator::error::OrchestratorError> {
+    splinter_pipelines::solving::solve_tasks(
+        ctx,
+        &splinter_pipelines::solving::SolveRequest {
+            task_set,
+            solver,
+            attempts: 1,
+            sampling: splinter_pipelines::solving::SamplingChoice::Own,
+            teacher: false,
+            system: None,
+            work,
+            deadline,
+            harness: None,
+            cancel: cancel.clone(),
+            resume,
+        },
+    )
+}

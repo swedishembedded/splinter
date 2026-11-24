@@ -73,15 +73,15 @@ baseline with no uncommitted change to a tracked file.
 
 The loop supervises one task; it does not train. Training from agent work is
 the `repository-practice` recipe of the learning factory (`splinter init --template
-repository-practice`) and the verbs it is made of, which solve tasks through
-the same worker, grade them with hidden material, write the `sft-step`
-view of what the checks confirmed, train and release through the gate:
+repository-practice`), whose stages solve tasks through the same worker, grade them
+with hidden material, project what the checks confirmed into training records,
+train, and compare the candidate with the base on held-out tasks:
 
 | The loop used to | Now |
 |---|---|
-| `dataset`: records from accepted runs | `splinter dataset build` with the `sft-step` view, from the experiences `solve` verified |
-| `train`: an adapter on those records | `splinter train` (and the training stage of the recipe) |
-| `models list`, `judge`, `current`, `rollback` | the release store: `splinter release` runs the gate over the exam that was reserved and moves the alias; `splinter rollback` moves it back |
+| `dataset`: records from accepted runs | the `dataset.project` stage, over the attempts `attempt.collect` verified |
+| `train`: an adapter on those records | the `model.train` stage |
+| `models list`, `judge`, `current`, `rollback` | the `evaluation` and `promotion` stages decide on the held-out tasks; `splinter report RUN` shows the decision, `splinter release list` the release store, and `splinter rollback` moves an alias back |
 
 `fixtures/families.py` renders the twelve seeded-bug families (`--seed N`, or one is
 drawn and printed; `fixture.json` in the output records it); they are

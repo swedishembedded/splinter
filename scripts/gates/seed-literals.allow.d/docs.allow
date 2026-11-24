@@ -1,2 +1,1 @@
 # path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
-docs/guides/distillation.md	doc:--seed 1	world: the reference candidate was trained with seed 1, and the list after the block says so; another seed is another run of the same recipe

@@ -3,13 +3,13 @@
 
 # Evaluation reference
 
-What the release gate checks, the suites that `eval` grades, and the file format of the
+What the release gate checks, the anchor suite that `eval` freezes and shows, and the file format of the
 anchor suite. How to run an evaluation is in the [evaluation guide](../guides/evaluation.md).
 
 ## The release gate
 
 
-`release <CANDIDATE-ID>` decides a candidate against the release its alias
+The gate decides a candidate against the release its alias
 (`--alias`, default `default`) points at - the champion, or the base before
 any release - and refuses a candidate that was not trained from it. Both
 are graded closed-book by each task's own verifiers (the judged kinds by
@@ -18,15 +18,15 @@ is printed with its numbers, and a check that could not be measured fails.
 Improvement and retention carry the one promotion decision
 (`splinter_eval::promotion`): on the examiner's signed verdicts when the
 caller holds them (exam-verified), else on the gate's own suites, where no
-sealed slice applies (a release from `release`, whose exam the learner made
+sealed slice applies (a release whose exam the learner made
 itself). That decision is recorded as `promotion` in the report and in the
 release manifest's gate (`rule`: `examined`, or `not_exam_verified` with
-`why`; `exam_verified`; typed `reasons`), and `release` prints it:
+`why`; `exam_verified`; typed `reasons`), and the gate prints it:
 
 | Check | Passes when |
 |---|---|
 | improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - the promotion rule's dev gain: the paired change in the share of tasks right, over the tasks both models were graded on, has its two-sided 95% interval above 0, the interval resampling whole families of source text, over at least six families (`too_few_families` below: unanimous families resample to an interval of no width); and the candidate solved at least as many of the assigned tasks as the champion (a task it was not graded on counts as unsolved). The sign test that counts a family once is reported beside it and decides nothing |
-| retention | the promotion rule's retention: over every earlier release's held-out tasks and the anchor suite together, the lower bound of the one-sided 95% interval of the paired change, resampling families, is above -0.05. Each earlier release's drop is reported, and a suite that dropped more than 0.05 names the concepts queued for new tasks |
+| retention | the promotion rule's retention: over every earlier release's held-out tasks and the anchor suite together, the lower bound of the one-sided 95% interval of the paired change, resampling families, is above -0.05. Each earlier release's drop is reported with the tasks the champion answered and the candidate lost (`lost`) |
 | anchor | beside the promotion rule, a tighter floor on the anchor suite in force: the candidate's accuracy is at most 0.02 below the champion's; both arms are asked it under the default prompt, so it measures what the weights kept and not the persona prompt; the report gives the drop's bootstrap interval over the paired items beside it |
 | serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `--brain-bin`), with the base checkpoint the candidate was trained on as its `--checkpoint`, in a runtime directory of its own, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
 
@@ -58,11 +58,9 @@ report states the system prompt each arm was asked each suite under
 
 ### Training warnings
 
-A gate that passes is not silent about the candidate's training curve: the
-warnings `train` reported (a large generalisation gap at the step carried, a
-monitoring loss that rose after it or was still falling at the end of the
-budget) are printed again with the verdict and carried in the JSON report
-(`warnings`), as the exam carries them (`training_warnings`).
+The warnings a training run reports about its curve (a large generalisation gap at the step
+carried, a monitoring loss that rose after it or was still falling at the end of the budget) are
+carried by the exam of that candidate (`training_warnings`) and printed with its verdict.
 
 ### Repository candidates
 
@@ -81,18 +79,14 @@ report says how many it holds rather than scoring an absence.
 
 ## Suites
 
-`eval <REF>` grades one model - a candidate id, or a model reference -
-closed-book on `--suite held-out` (the default: a candidate's new data, or
-the release a policy alias points at), `retention` (every earlier release,
-each reported), `anchor`, or a FILE of tasks, and names every task it got
-wrong with the answer it gave, so two evaluations show what a candidate
-lost against the base. The anchor suite is frozen
-from one or more files with `eval --suite anchor --freeze FILE...` (the
+`splinter eval` with nothing after it shows the anchor suite in force. The anchor suite is frozen
+from one or more files with `eval --freeze FILE...` (the
 files' tasks in order are one version; different tasks are the next version;
-the same tasks are the same version) and shown with `eval --suite anchor`. An
+the same tasks are the same version). An
 anchor file is JSON Lines, `{"instruction", "reference", "kind"?}`, `kind`
 (default `recall`) a closed-book kind graded against its reference by code:
 `recall` (the answer states the reference), `arithmetic` (the last number the
 answer states is the reference) or `format` (the answer has exactly the
 non-empty lines the reference counts). The last two are what a persona
-fine-tune of a reasoning model erodes and trivia cannot show.
+fine-tune of a reasoning model erodes and trivia cannot show. A file in this format is also
+what `eval --suite FILE` grades a model on ([evaluation guide](../guides/evaluation.md#grade-a-model-on-a-file-of-tasks)).

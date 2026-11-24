@@ -29,7 +29,7 @@ use serde::Serialize;
 use splinter_core::experience::PrivilegedKind;
 use splinter_knowledge::concepts::{Concept, ConceptResolver};
 
-use crate::curriculum::{queue, release_of_label};
+use crate::curriculum::release_of_label;
 use crate::policy_used::PolicyUsed;
 use splinter_core::model_ref::POLICY_DEFAULT;
 use splinter_core::release::ReleaseId;
@@ -80,8 +80,6 @@ pub struct MasteryReport {
     pub measured: usize,
     /// The weakest under the current release, weakest first.
     pub weakest: Vec<ConceptMastery>,
-    /// Concepts queued for new tasks.
-    pub queued: usize,
 }
 
 /// One decided attempt: when it was recorded and whether it passed.
@@ -201,6 +199,5 @@ pub fn weakest(ctx: &Context, n: usize) -> Result<MasteryReport, OrchestratorErr
         concepts,
         measured,
         weakest: ranked,
-        queued: queue::pending(ctx)?.len(),
     })
 }

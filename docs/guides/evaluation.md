@@ -3,37 +3,55 @@
 
 # Measure what a candidate learned
 
-Use this guide to grade a model or a candidate yourself, outside the release gate, and to
+Use this guide to measure a candidate yourself, outside the release gate, and to
 build an exam whose result you can trust. The gate's own checks, thresholds and report
 fields are in the [evaluation reference](../reference/evaluation.md); the reasoning behind
 them is in [release policy](../concepts/release-policy.md).
 
 Three tools, in order of strength:
 
-- `splinter eval` grades one model closed-book on a suite and names every task it got
-  wrong, so two evaluations show what a candidate lost against the base.
+- An `evaluation` stage of a [learning factory](learning-factory.md) recipe runs a baseline
+  and a candidate on the same tasks under a plan and decides by a paired sign test.
+  `splinter eval RUN --plan PLAN --out DIR` evaluates a finished run's candidates under
+  another plan.
 - `splinter exam` puts a candidate and the model it continues to held-out tasks and has a
   calibrated judge compare their answers.
 - `splinter exam-set create` freezes an exam before any training, from sources reserved
   apart from everything a candidate saw.
 
 ```bash
-splinter eval policy:default --suite anchor
-splinter eval 3f9a1c20 --suite retention
+splinter eval runs/knowledge --plan eval/dev.yaml --out runs/knowledge-dev
 splinter exam 3f9a1c20 --prompt "the QX-7 console, boot, power and watchdog"
 splinter exam-set create ./letters --families 50
 splinter exam-set power --families 50 --tasks-per-family 8 --effect 0.1
 ```
 
-## Grade a model on a suite
+## Evaluate a run's candidates under another plan
 
+`splinter eval RUN --plan PLAN --out DIR` runs every candidate of the run RUN under the
+evaluation plan PLAN, a file of the task repository, and writes the result to DIR; the
+plan's tasks, attempts, seed and significance level are the ones the plan states. Use it to
+measure a candidate on tasks the run's own plan did not hold, such as a sealed plan. The
+plan format and how the decision is made are in the [learning
+factory](learning-factory.md#what-each-stage-guarantees).
 
-`splinter eval REF --suite SUITE` grades the model REF (a candidate id or a model reference)
-closed-book on `held-out` (the default), `retention`, `anchor` or a file of tasks, and
-prints each task it got wrong with the answer it gave. Run it on the base and on a candidate
-and compare the two lists. With no `REF` it shows the anchor suite in force, and
-`--freeze FILE` makes a file the next version of the suite. The suites and the file format are
-in the [evaluation reference](../reference/evaluation.md#suites).
+`splinter eval` with nothing after it shows the anchor suite in force, and `--freeze FILE`
+makes a file the next version of the suite. The suite and the file format are in the
+[evaluation reference](../reference/evaluation.md#suites).
+
+## Grade a model on a file of tasks
+
+```bash
+splinter eval --suite probes.jsonl
+splinter eval --suite probes.jsonl --policy local:Qwen/Qwen3-0.6B
+```
+
+`eval --suite FILE` asks a model each task of a file in the anchor format, closed-book and
+greedily, and grades the answer against the task's reference by code, so no judge is needed.
+`--policy` names the model (default `policy:default`, what the default alias serves). The
+report gives the accuracy over the tasks decided and every item with its answer and verdict,
+and the evaluation is a recorded run. It measures and decides nothing: a candidate is released
+by a run's gates, not by this.
 
 ## The exam
 
@@ -131,7 +149,7 @@ memory; nearest-passage similarity and an authorship embedding are not measured.
 ## Choose how to improve
 
 `splinter improve EXPERIMENT.toml...` measures each intervention an experiment names (more
-samples, another episode protocol, a candidate that `train` kept, no change)
+samples, another episode protocol, a candidate that a `model.train` stage kept, no change)
 against the incumbent on the same target tasks and chooses the one with the greatest net value:
 the one-sided lower confidence bound of the paired gain per family (Student's t over the families, at the
 pricing's `confidence`, 0.95 unless named), times what a success is worth and how often it is used, less its one-time and per-use cost, or no change when none pays. Nothing is

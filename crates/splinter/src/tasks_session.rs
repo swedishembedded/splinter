@@ -12,12 +12,11 @@ use splinter_sdk::knowledge::tasks::workspace::{
     CombinePlan, HistoryRecord, HistoryReport, HistoryRequest, DEFAULT_MAX_COMMITS,
 };
 use splinter_sdk::runs::record;
-use splinter_sdk::sources;
 use splinter_sdk::tasks::check_requests::check_requests;
 use splinter_sdk::tasks::combine::{combine, CombineRequest};
 use splinter_sdk::tasks::drills::{drills, DrillRequest};
 use splinter_sdk::tasks::pick::{pick, Quota};
-use splinter_sdk::tasks::{self, check_kinds, resolve_set as resolve_task_set};
+use splinter_sdk::tasks::{self, resolve_set as resolve_task_set};
 use splinter_sdk::variants;
 use splinter_sdk::{Context, Error};
 
@@ -40,47 +39,6 @@ pub(crate) struct HistoryRan {
 /// Runs a `tasks` command.
 pub fn tasks(ctx: &Context, json: bool, command: TasksCommand) -> Result<Exit, Error> {
     match command {
-        TasksCommand::Generate {
-            sources: ids,
-            kinds,
-            generator,
-            author,
-            denoise_seed,
-        } => {
-            let kinds = check_kinds(&kinds)?;
-            let ids = ids
-                .iter()
-                .map(|id| sources::resolve(ctx, id))
-                .collect::<Result<Vec<_>, _>>()?;
-            let arguments = json!({
-                "sources": ids,
-                "kinds": kinds,
-                "generator": generator,
-                "author": author,
-                "denoise_seed": denoise_seed,
-            });
-            let generated = record(ctx, "tasks generate", &arguments, |run| {
-                let denoise_seed = tasks::asks_for_denoise(&kinds)
-                    .then(|| run.seed("denoise-seed", denoise_seed))
-                    .transpose()?;
-                tasks::generate(
-                    ctx,
-                    &tasks::Generation {
-                        sources: &ids,
-                        sections: &[],
-                        kinds: &kinds,
-                        generator: &generator,
-                        goal: None,
-                        author: author.as_deref(),
-                        written: &[],
-                        denoise_seed,
-                        deadline: None,
-                        cancel: run.cancel_token(),
-                    },
-                )
-            })?;
-            emit(json, &generated);
-        }
         TasksCommand::Harbor(HarborCommand::Discover { root }) => {
             emit(json, &harbor::discover_harbor(&root)?);
         }

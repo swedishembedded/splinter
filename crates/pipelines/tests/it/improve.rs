@@ -239,7 +239,7 @@ fn context(test: &str) -> (Scratch, Context) {
 fn some_tasks(ctx: &Context, scratch: &Scratch) -> TaskSetId {
     let repo = scratch.0.join("repo");
     project(&repo, &[]);
-    workspace_tasks::practised(ctx, &repo, 0).0
+    workspace_tasks::practised(ctx, &repo)
 }
 
 /// What an arm is worth in the world, as it is and not as measured: the gain
