@@ -20,6 +20,8 @@ mod claim_gates;
 mod claim_supersession;
 mod claim_task;
 mod denoise_task;
+mod external_bm25;
+mod external_skill_order;
 mod factory_admission;
 mod factory_documents;
 mod factory_firmware;

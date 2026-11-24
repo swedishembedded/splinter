@@ -1,0 +1,6552 @@
+{
+ "cases": [
+  {
+   "acyclic": true,
+   "order": [
+    "a",
+    "b",
+    "c"
+   ],
+   "skills": [
+    {
+     "id": "c",
+     "prerequisites": [
+      "b"
+     ]
+    },
+    {
+     "id": "b",
+     "prerequisites": [
+      "a"
+     ]
+    },
+    {
+     "id": "a",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ],
+   "skills": [
+    {
+     "id": "d",
+     "prerequisites": [
+      "b",
+      "c"
+     ]
+    },
+    {
+     "id": "b",
+     "prerequisites": [
+      "a"
+     ]
+    },
+    {
+     "id": "c",
+     "prerequisites": [
+      "a"
+     ]
+    },
+    {
+     "id": "a",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "a",
+     "prerequisites": [
+      "b"
+     ]
+    },
+    {
+     "id": "b",
+     "prerequisites": [
+      "a"
+     ]
+    }
+   ],
+   "stuck": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "a",
+     "prerequisites": [
+      "a"
+     ]
+    },
+    {
+     "id": "b",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "a"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "x",
+     "prerequisites": []
+    },
+    {
+     "id": "a",
+     "prerequisites": [
+      "b",
+      "x"
+     ]
+    },
+    {
+     "id": "b",
+     "prerequisites": [
+      "a"
+     ]
+    },
+    {
+     "id": "y",
+     "prerequisites": [
+      "a"
+     ]
+    }
+   ],
+   "stuck": [
+    "a",
+    "b",
+    "y"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7",
+      "s2"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s12",
+      "s5",
+      "s10",
+      "s13",
+      "s4"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s12"
+     ]
+    },
+    {
+     "id": "s13",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3",
+      "s2"
+     ]
+    }
+   ],
+   "stuck": [
+    "s4",
+    "s12",
+    "s6",
+    "s3",
+    "s2",
+    "s10",
+    "s0"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s10",
+    "s0",
+    "s4",
+    "s9",
+    "s7",
+    "s8",
+    "s6",
+    "s3",
+    "s5",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s10"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s4",
+    "s0",
+    "s3",
+    "s2",
+    "s7",
+    "s1",
+    "s5",
+    "s6",
+    "s8"
+   ],
+   "skills": [
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1",
+      "s4",
+      "s3"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s6"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s8",
+    "s4",
+    "s6",
+    "s5",
+    "s9",
+    "s3",
+    "s0",
+    "s2",
+    "s7",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s8",
+      "s4",
+      "s5",
+      "s2"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s8",
+      "s5"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s5",
+      "s3"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s5",
+    "s3",
+    "s0",
+    "s1",
+    "s2",
+    "s4",
+    "s6",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2",
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s2",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s5",
+      "s2"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5",
+      "s2"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s0",
+      "s6"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s3",
+      "s2",
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s3",
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s3",
+    "s5",
+    "s4",
+    "s2",
+    "s6"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s5",
+    "s7",
+    "s0",
+    "s1",
+    "s8",
+    "s9",
+    "s2",
+    "s3",
+    "s6",
+    "s4"
+   ],
+   "skills": [
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s9",
+      "s5",
+      "s0",
+      "s8"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0",
+      "s6",
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s8",
+    "s7",
+    "s5",
+    "s0",
+    "s9",
+    "s6",
+    "s1",
+    "s2",
+    "s3",
+    "s4"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s8",
+      "s6"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s8",
+    "s3",
+    "s11",
+    "s1",
+    "s6",
+    "s0",
+    "s7",
+    "s9",
+    "s4",
+    "s12",
+    "s5",
+    "s10"
+   ],
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s11",
+      "s5"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2",
+      "s7"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s9"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s11",
+    "s0",
+    "s9",
+    "s7",
+    "s4",
+    "s10",
+    "s6",
+    "s8",
+    "s3",
+    "s5",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s9",
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0",
+      "s3"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s11",
+      "s7"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s9",
+      "s7"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s1",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s10",
+    "s9",
+    "s3",
+    "s2",
+    "s6",
+    "s8",
+    "s4",
+    "s5",
+    "s0",
+    "s7",
+    "s11",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s9",
+      "s6"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s10",
+      "s5"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3",
+      "s7",
+      "s5"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s3",
+    "s7",
+    "s5",
+    "s2",
+    "s6"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s6",
+    "s1",
+    "s4",
+    "s5",
+    "s0",
+    "s3",
+    "s9",
+    "s8",
+    "s7",
+    "s10",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s4",
+      "s0"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s6",
+      "s1",
+      "s5"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s8",
+    "s5",
+    "s3",
+    "s6",
+    "s9",
+    "s4",
+    "s7",
+    "s1",
+    "s0",
+    "s10"
+   ],
+   "skills": [
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s2"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5",
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s4",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s1",
+    "s5",
+    "s6",
+    "s4",
+    "s7",
+    "s2",
+    "s0",
+    "s8"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3",
+      "s1",
+      "s4",
+      "s2"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s5",
+      "s4",
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s6",
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8",
+      "s2"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s9",
+      "s4",
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s6",
+    "s2",
+    "s3"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s8",
+    "s4",
+    "s7",
+    "s6",
+    "s3",
+    "s0",
+    "s5",
+    "s2",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8",
+      "s5"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6",
+      "s8",
+      "s2"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2",
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s3"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s4",
+      "s2"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s1",
+    "s2",
+    "s5"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s6",
+    "s5",
+    "s1",
+    "s0",
+    "s2",
+    "s4",
+    "s3"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s6",
+      "s2"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0",
+      "s4",
+      "s2",
+      "s5"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1",
+      "s2"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s5",
+      "s2"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s1",
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s3",
+    "s5",
+    "s0",
+    "s8"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s0",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s4",
+    "s8",
+    "s6",
+    "s7",
+    "s10",
+    "s5",
+    "s9",
+    "s2",
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s10",
+      "s2",
+      "s0"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s3",
+      "s8",
+      "s10",
+      "s5"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s8"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6",
+      "s9",
+      "s8"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s9",
+      "s4",
+      "s0"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s9",
+      "s4",
+      "s10",
+      "s0"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s10"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s8"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5",
+      "s3",
+      "s6"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1",
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s4",
+    "s6"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s3",
+    "s1",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s4",
+    "s1",
+    "s2",
+    "s3"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2",
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s9",
+    "s0",
+    "s1",
+    "s8",
+    "s10",
+    "s6",
+    "s2",
+    "s3",
+    "s5",
+    "s4",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0",
+      "s8",
+      "s2"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s10"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s9"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s0",
+    "s5",
+    "s6",
+    "s2",
+    "s8",
+    "s4",
+    "s3",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s1",
+    "s9",
+    "s2",
+    "s6",
+    "s10",
+    "s5",
+    "s12",
+    "s8",
+    "s11",
+    "s4",
+    "s7",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6",
+      "s8"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s9",
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s0",
+    "s10",
+    "s4",
+    "s8",
+    "s7",
+    "s11",
+    "s5",
+    "s9",
+    "s3",
+    "s12",
+    "s2",
+    "s13",
+    "s6"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s13",
+     "prerequisites": [
+      "s3",
+      "s0"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s1",
+      "s12"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8",
+      "s4"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s12",
+    "s8",
+    "s4",
+    "s5",
+    "s0",
+    "s9",
+    "s11",
+    "s1",
+    "s10",
+    "s6",
+    "s2",
+    "s3",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s12",
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s4",
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s6",
+    "s5",
+    "s7",
+    "s1",
+    "s3",
+    "s9",
+    "s2",
+    "s11",
+    "s4",
+    "s10",
+    "s8"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s11",
+      "s3",
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s6",
+      "s7",
+      "s3"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s6",
+      "s11",
+      "s3"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s3",
+    "s4",
+    "s2",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s3"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s10",
+    "s8",
+    "s1",
+    "s11",
+    "s12",
+    "s9",
+    "s3",
+    "s5",
+    "s6",
+    "s0",
+    "s2",
+    "s4",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5",
+      "s6"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s3",
+      "s0"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s6",
+    "s2",
+    "s10",
+    "s8",
+    "s7",
+    "s0",
+    "s5",
+    "s9",
+    "s3",
+    "s4",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s10",
+      "s5",
+      "s3",
+      "s9"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2",
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s9"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s11",
+    "s6",
+    "s5",
+    "s7",
+    "s1",
+    "s9",
+    "s4",
+    "s8",
+    "s3",
+    "s0",
+    "s12",
+    "s2",
+    "s10"
+   ],
+   "skills": [
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s1",
+      "s9"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s11",
+      "s4"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s11",
+      "s9"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s6",
+      "s1",
+      "s5"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s3",
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s9"
+     ]
+    }
+   ],
+   "stuck": [
+    "s2"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s1",
+    "s4",
+    "s5",
+    "s3",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2",
+      "s3",
+      "s4"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s2",
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s4",
+      "s7",
+      "s8"
+     ]
+    }
+   ],
+   "stuck": [
+    "s8",
+    "s3"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s7",
+    "s5",
+    "s3",
+    "s0",
+    "s9",
+    "s6",
+    "s2",
+    "s10",
+    "s8",
+    "s1",
+    "s4"
+   ],
+   "skills": [
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s0",
+      "s2"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s7",
+      "s9"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s5",
+      "s10"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s3"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1",
+      "s4",
+      "s2",
+      "s1"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s1",
+      "s3"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s7",
+      "s3"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s9",
+    "s3",
+    "s8",
+    "s6",
+    "s0"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s5",
+    "s0",
+    "s3",
+    "s4",
+    "s6",
+    "s2",
+    "s7"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s5",
+      "s3"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s4"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s1",
+      "s3",
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s1",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3",
+      "s4",
+      "s4"
+     ]
+    }
+   ],
+   "stuck": [
+    "s4",
+    "s0"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s0",
+      "s6"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8",
+      "s0",
+      "s3"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s0",
+      "s10"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s10",
+    "s6"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s3",
+      "s4"
+     ]
+    }
+   ],
+   "stuck": [
+    "s4",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s7",
+      "s0",
+      "s5",
+      "s5"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s7",
+      "s6"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s7"
+     ]
+    }
+   ],
+   "stuck": [
+    "s3",
+    "s6",
+    "s5"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s2",
+      "s11"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s8",
+      "s5"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s11"
+     ]
+    }
+   ],
+   "stuck": [
+    "s3",
+    "s6",
+    "s4",
+    "s10",
+    "s1",
+    "s11",
+    "s5"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2",
+      "s0",
+      "s4"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s2",
+    "s3",
+    "s0",
+    "s1",
+    "s4"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s3",
+    "s4",
+    "s8",
+    "s7",
+    "s0",
+    "s2",
+    "s6",
+    "s5"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s2",
+      "s4"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4",
+      "s8"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s2",
+      "s8"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s8",
+    "s12",
+    "s2",
+    "s7",
+    "s5",
+    "s4",
+    "s9",
+    "s11",
+    "s1",
+    "s10",
+    "s0",
+    "s6"
+   ],
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7",
+      "s5"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s12",
+      "s2",
+      "s10",
+      "s5"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s3",
+      "s9",
+      "s10",
+      "s1"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s0",
+    "s4",
+    "s5",
+    "s3",
+    "s1",
+    "s6"
+   ],
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2",
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s7",
+    "s3",
+    "s4",
+    "s1",
+    "s0",
+    "s6",
+    "s5",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s7",
+      "s3"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s7",
+      "s5",
+      "s3",
+      "s4"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s0",
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s2",
+      "s9"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s10",
+      "s10"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s7",
+      "s9",
+      "s8"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s4",
+      "s11"
+     ]
+    }
+   ],
+   "stuck": [
+    "s8",
+    "s10"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s6",
+    "s0",
+    "s9",
+    "s5",
+    "s7",
+    "s4",
+    "s8",
+    "s3",
+    "s2",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s5",
+      "s4"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8",
+      "s0"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0",
+      "s2"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s13",
+    "s9",
+    "s12",
+    "s2",
+    "s1",
+    "s3",
+    "s11",
+    "s8",
+    "s6",
+    "s7",
+    "s0",
+    "s10",
+    "s5",
+    "s4"
+   ],
+   "skills": [
+    {
+     "id": "s13",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s12",
+      "s2",
+      "s11"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s12",
+      "s2"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s12",
+      "s11"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s13",
+      "s9",
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s13"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s11",
+    "s7",
+    "s2",
+    "s8",
+    "s10",
+    "s5",
+    "s4",
+    "s1",
+    "s6",
+    "s9",
+    "s3"
+   ],
+   "skills": [
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s7",
+      "s8"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s7",
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s9",
+      "s11",
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s10",
+      "s8"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s4",
+      "s6"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4",
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2",
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s4",
+    "s2",
+    "s3",
+    "s5"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s5",
+      "s11",
+      "s0",
+      "s3",
+      "s3"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s9"
+     ]
+    }
+   ],
+   "stuck": [
+    "s10",
+    "s9",
+    "s3"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0",
+      "s3",
+      "s2",
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s4"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s10",
+    "s8",
+    "s3",
+    "s4",
+    "s11",
+    "s0",
+    "s2",
+    "s9",
+    "s6",
+    "s7",
+    "s1",
+    "s5"
+   ],
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s3",
+      "s9"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s9",
+      "s4",
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s9",
+      "s4",
+      "s11"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s4",
+    "s1",
+    "s5",
+    "s6",
+    "s13",
+    "s7",
+    "s8",
+    "s12",
+    "s10",
+    "s11",
+    "s0",
+    "s2",
+    "s9"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s3",
+      "s12"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s0",
+      "s2"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s13",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s8",
+      "s10"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s6"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s4",
+    "s5",
+    "s0",
+    "s3",
+    "s6",
+    "s2",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4",
+      "s0"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s6",
+      "s3"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s3",
+    "s6",
+    "s4",
+    "s0",
+    "s1",
+    "s5",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s6",
+      "s4",
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5",
+      "s3",
+      "s6",
+      "s4"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s3"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s9",
+      "s12",
+      "s4"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s9",
+      "s10"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s2",
+      "s7",
+      "s3"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s13",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s11"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s7",
+      "s10"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s9"
+     ]
+    }
+   ],
+   "stuck": [
+    "s10",
+    "s8",
+    "s3"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s9",
+    "s6",
+    "s7",
+    "s8",
+    "s5",
+    "s2",
+    "s0",
+    "s3",
+    "s4",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s9",
+      "s6"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s6",
+      "s5"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s4",
+    "s3",
+    "s0",
+    "s2",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4",
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4",
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s9",
+    "s5",
+    "s8",
+    "s1",
+    "s3",
+    "s0",
+    "s7",
+    "s4",
+    "s6"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s4",
+      "s5"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0",
+      "s2"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s3",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s8",
+      "s0",
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s8",
+      "s4"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s8",
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s6",
+    "s8",
+    "s7",
+    "s2",
+    "s4"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s6",
+      "s0",
+      "s8",
+      "s3",
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s10",
+      "s10"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s6",
+      "s9",
+      "s10"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s0",
+      "s8"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s0",
+      "s10"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s0",
+      "s8"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s4",
+    "s8",
+    "s3",
+    "s9",
+    "s5",
+    "s10"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s0",
+      "s5",
+      "s4"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1",
+      "s6"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s0",
+      "s3"
+     ]
+    }
+   ],
+   "stuck": [
+    "s8",
+    "s5",
+    "s4"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s5",
+    "s10",
+    "s7",
+    "s1",
+    "s6",
+    "s12",
+    "s2",
+    "s13",
+    "s3",
+    "s8",
+    "s4",
+    "s9",
+    "s0",
+    "s11"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s13",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s10",
+      "s12"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": [
+      "s13",
+      "s9"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s6"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s8",
+    "s6",
+    "s7",
+    "s0",
+    "s4",
+    "s2",
+    "s3",
+    "s1",
+    "s5"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s8",
+      "s7",
+      "s0"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s4"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s1",
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s10",
+     "prerequisites": [
+      "s12"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s10",
+      "s8",
+      "s9",
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s11",
+      "s9"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s10",
+      "s8"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s10",
+      "s11",
+      "s12"
+     ]
+    }
+   ],
+   "stuck": [
+    "s6",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s3",
+    "s2",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s5",
+    "s0",
+    "s2",
+    "s4",
+    "s3"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0",
+      "s2",
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s5"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s2",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s2",
+    "s0"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s1",
+    "s3",
+    "s4",
+    "s0"
+   ],
+   "skills": [
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2",
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2",
+      "s4"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": [
+      "s7",
+      "s10",
+      "s2",
+      "s13"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s9"
+     ]
+    },
+    {
+     "id": "s13",
+     "prerequisites": [
+      "s9",
+      "s12"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s3",
+      "s0"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s12",
+    "s13"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s0",
+    "s3",
+    "s7",
+    "s6",
+    "s2",
+    "s4",
+    "s5",
+    "s1"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s2",
+      "s3",
+      "s4"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s2",
+      "s4"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s6",
+    "s2",
+    "s11",
+    "s12",
+    "s10",
+    "s7",
+    "s8",
+    "s5",
+    "s9",
+    "s3",
+    "s0",
+    "s4"
+   ],
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s10"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2",
+      "s9"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s11",
+     "prerequisites": []
+    },
+    {
+     "id": "s12",
+     "prerequisites": []
+    },
+    {
+     "id": "s10",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s7",
+      "s6",
+      "s9"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7",
+      "s10"
+     ]
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s12"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1",
+      "s1"
+     ]
+    }
+   ],
+   "stuck": [
+    "s1",
+    "s0"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0",
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s4",
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s3",
+      "s1"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s4",
+      "s1"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3"
+     ]
+    }
+   ],
+   "stuck": [
+    "s4",
+    "s2",
+    "s5",
+    "s3",
+    "s0",
+    "s1"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s0"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": []
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s6"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s5",
+    "s6",
+    "s7"
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": [
+      "s7",
+      "s0"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s3",
+      "s0"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7",
+      "s6",
+      "s2",
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3",
+      "s3"
+     ]
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    }
+   ],
+   "stuck": [
+    "s3",
+    "s1",
+    "s4",
+    "s2"
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s5",
+    "s4",
+    "s0",
+    "s1",
+    "s3",
+    "s2"
+   ],
+   "skills": [
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s4",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s4"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": []
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s3"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s1",
+    "s8",
+    "s7",
+    "s3",
+    "s4",
+    "s5",
+    "s6",
+    "s0",
+    "s2",
+    "s9"
+   ],
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s7"
+     ]
+    },
+    {
+     "id": "s7",
+     "prerequisites": [
+      "s8"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": [
+      "s7",
+      "s3"
+     ]
+    },
+    {
+     "id": "s8",
+     "prerequisites": []
+    },
+    {
+     "id": "s9",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s1",
+      "s8"
+     ]
+    },
+    {
+     "id": "s6",
+     "prerequisites": [
+      "s7"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": true,
+   "order": [
+    "s2",
+    "s5",
+    "s1",
+    "s4",
+    "s0",
+    "s3"
+   ],
+   "skills": [
+    {
+     "id": "s3",
+     "prerequisites": [
+      "s0",
+      "s2",
+      "s5"
+     ]
+    },
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s5",
+      "s1"
+     ]
+    },
+    {
+     "id": "s2",
+     "prerequisites": []
+    },
+    {
+     "id": "s5",
+     "prerequisites": []
+    },
+    {
+     "id": "s1",
+     "prerequisites": [
+      "s5"
+     ]
+    },
+    {
+     "id": "s4",
+     "prerequisites": [
+      "s5"
+     ]
+    }
+   ]
+  },
+  {
+   "acyclic": false,
+   "skills": [
+    {
+     "id": "s0",
+     "prerequisites": [
+      "s2"
+     ]
+    },
+    {
+     "id": "s1",
+     "prerequisites": []
+    },
+    {
+     "id": "s2",
+     "prerequisites": [
+      "s0",
+      "s1",
+      "s0"
+     ]
+    }
+   ],
+   "stuck": [
+    "s0",
+    "s2"
+   ]
+  }
+ ],
+ "fixture": "graphs/skill-order",
+ "references": [
+  "networkx"
+ ]
+}

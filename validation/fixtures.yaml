@@ -5,6 +5,20 @@
 # `check` and, digest by digest, by every test that reads one (crates/conformance).
 schema: splinter.validation-fixtures/v1
 fixtures:
+  graphs/skill-order:
+    path: "validation/fixtures/graphs/skill-order.json"
+    sha256: "1dee3d27a1284399d4a3ce9018d318caa45ce134b5cb62a7c6dfc6c6d8b4e3f2"
+    oracle: "validation/oracles/graphs/skill_order.py"
+    oracle_sha256: "dc79ee1ee82de9ba025ea6a92350522a3b55412834f19180b71318d1d756e9f8"
+    references: ["networkx"]
+    test: "splinter-knowledge/it/external_skill_order"
+  retrieval/bm25:
+    path: "validation/fixtures/retrieval/bm25.json"
+    sha256: "bc78a51b6cdab5e2d89bb88894da2292f49b8e63759fe103282fe1969ba5e0d0"
+    oracle: "validation/oracles/retrieval/bm25.py"
+    oracle_sha256: "53c324dc7cba6f54e687989779dd9f5b0b58c51be0fc6124b7561d974fd972e0"
+    references: ["rank-bm25"]
+    test: "splinter-knowledge/it/external_bm25"
   statistics/paired-tests:
     path: "validation/fixtures/statistics/paired-tests.json"
     sha256: "4ca2a9db93bb2ee2fb3b865c2d4b90f092ccfe7b6329e15b900fbe2a06fb316e"

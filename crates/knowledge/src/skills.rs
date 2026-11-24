@@ -114,9 +114,10 @@ pub enum GraphError {
         /// The missing prerequisite.
         missing: String,
     },
-    /// Skills that need one another.
-    #[error("skills that need one another: {0}")]
-    Cycle(String),
+    /// Skills no order can place: those on a cycle of prerequisites and
+    /// those that need one of them, in the graph's order.
+    #[error("skills on or behind a cycle of prerequisites: {}", .0.join(", "))]
+    Cycle(Vec<String>),
 }
 
 impl SkillGraph {
@@ -147,12 +148,14 @@ impl SkillGraph {
         }
         match self.order_of() {
             Ok(_) => Ok(()),
-            Err(stuck) => Err(GraphError::Cycle(stuck.join(", "))),
+            Err(stuck) => Err(GraphError::Cycle(stuck)),
         }
     }
 
-    /// The skills prerequisites first, ties in the graph's order; the ids of
-    /// the skills that need one another when there is no such order.
+    /// The skills prerequisites first, in rounds (every skill whose
+    /// prerequisites are placed, in the graph's order); when no order exists,
+    /// the ids of the skills no round can place: those on a cycle and those
+    /// that need one of them.
     fn order_of(&self) -> Result<Vec<&Skill>, Vec<String>> {
         let mut done: BTreeSet<&str> = BTreeSet::new();
         let mut ordered: Vec<&Skill> = Vec::new();
@@ -179,11 +182,13 @@ impl SkillGraph {
         Ok(ordered)
     }
 
-    /// The skills prerequisites first. A graph that [`Self::validate`]d has
-    /// such an order.
-    #[must_use]
-    pub fn order(&self) -> Vec<&Skill> {
-        self.order_of().unwrap_or_default()
+    /// The skills prerequisites first (see [`Self::order_of`]).
+    ///
+    /// # Errors
+    /// [`GraphError::Cycle`] when prerequisites form a cycle: never an empty
+    /// curriculum in place of the error.
+    pub fn order(&self) -> Result<Vec<&Skill>, GraphError> {
+        self.order_of().map_err(GraphError::Cycle)
     }
 
     /// The skill named `id`.
@@ -730,10 +735,14 @@ mod tests {
             skill("a", &[]),
         ]);
         g.validate().unwrap();
-        let order: Vec<&str> = g.order().iter().map(|s| s.id.as_str()).collect();
+        let order: Vec<&str> = g.order().unwrap().iter().map(|s| s.id.as_str()).collect();
         assert_eq!(order, ["a", "b", "c"]);
         let cyclic = graph(vec![skill("a", &["b"]), skill("b", &["a"])]);
         assert!(matches!(cyclic.validate(), Err(GraphError::Cycle(_))));
+        assert!(
+            matches!(cyclic.order(), Err(GraphError::Cycle(_))),
+            "never an empty order"
+        );
         let missing = graph(vec![skill("a", &["z"])]);
         assert!(matches!(
             missing.validate(),

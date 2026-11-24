@@ -1,0 +1,4443 @@
+{
+ "cases": [
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.7385771316718702
+    },
+    {
+     "passage": 0,
+     "score": 0.47000362924573563
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "Yank the line.",
+    "yank YANK yank",
+    "a split window"
+   ],
+   "query": "yank yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.47000362924573563
+    },
+    {
+     "passage": 1,
+     "score": 0.47000362924573563
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "macro",
+    "macro",
+    "register"
+   ],
+   "query": "macro"
+  },
+  {
+   "hits": [],
+   "k": 2,
+   "passages": [
+    "fold",
+    "mark"
+   ],
+   "query": "absent words"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 1.3537182534173344
+    },
+    {
+     "passage": 2,
+     "score": 1.167788202547721
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "vim!",
+    "fold split split macro split.",
+    "register buffer jump vim fold window vim macro mark split yank vim jump window motion fold yank buffer buffer!",
+    "mark macro split window jump motion register yank fold!"
+   ],
+   "query": "yank motion absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 1.9738285037945558
+    },
+    {
+     "passage": 0,
+     "score": 1.6752780056569954
+    },
+    {
+     "passage": 6,
+     "score": 1.6501041089449444
+    },
+    {
+     "passage": 9,
+     "score": 1.629418908832986
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "vim yank vim macro vim yank window split regex split regex!",
+    "window mark regex register motion register macro buffer register split mark regex register jump buffer regex macro fold regex regex.",
+    "split vim split regex!",
+    "vim split register window.",
+    "macro mark macro jump split mark motion vim yank regex regex motion window mark motion fold",
+    "buffer",
+    "yank register mark regex window window buffer register vim split vim vim motion split yank mark split regex",
+    "register jump register split yank register motion motion yank vim motion vim mark.",
+    "fold regex mark mark vim jump macro mark register jump register",
+    "regex macro vim mark fold register jump vim mark motion vim mark regex split motion fold yank register"
+   ],
+   "query": "window fold yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.7392680044878528
+    },
+    {
+     "passage": 0,
+     "score": 1.7124403076889196
+    },
+    {
+     "passage": 1,
+     "score": 0.19410408279854363
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "macro motion jump macro vim regex jump register regex vim split vim mark yank window macro window fold yank.",
+    "window register macro window vim macro macro split jump macro jump motion motion motion!",
+    "mark register yank register window fold vim split jump split motion motion split jump jump macro motion split mark"
+   ],
+   "query": "fold yank mark jump jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.665188603305166
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "register jump mark motion fold vim split split motion yank.",
+    "window register yank split motion jump mark vim regex fold macro regex",
+    "motion yank yank regex mark yank vim yank macro window jump."
+   ],
+   "query": "mark fold fold macro regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 1.5976953861793002
+    },
+    {
+     "passage": 1,
+     "score": 1.4450888250743854
+    },
+    {
+     "passage": 0,
+     "score": 1.304666307035955
+    },
+    {
+     "passage": 8,
+     "score": 1.2461593066899253
+    },
+    {
+     "passage": 2,
+     "score": 1.0151367314437316
+    },
+    {
+     "passage": 3,
+     "score": 1.0002228715302584
+    },
+    {
+     "passage": 10,
+     "score": 0.8050670491386628
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "vim jump fold split fold split yank jump jump buffer mark register split macro jump window!",
+    "fold regex fold yank regex jump register register register motion motion macro regex buffer fold regex macro vim fold window",
+    "motion jump vim split yank fold yank macro macro motion register yank motion!",
+    "regex fold buffer yank yank.",
+    "motion yank yank motion register jump vim jump split mark fold register fold jump split split!",
+    "yank jump yank fold mark motion regex.",
+    "motion yank jump!",
+    "regex register motion register jump fold motion yank macro jump motion macro register fold regex buffer",
+    "macro vim macro mark window motion macro regex jump register.",
+    "motion mark split.",
+    "vim jump motion register buffer yank register window window split!"
+   ],
+   "query": "macro absent macro buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 3.1265154188375437
+    },
+    {
+     "passage": 3,
+     "score": 1.7584978852231423
+    },
+    {
+     "passage": 4,
+     "score": 1.4263239351562127
+    },
+    {
+     "passage": 6,
+     "score": 1.3078024551680447
+    },
+    {
+     "passage": 2,
+     "score": 1.2194924057137215
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "mark.",
+    "fold yank vim mark window motion regex yank window split buffer vim mark vim register jump vim.",
+    "buffer split mark buffer register macro fold motion register vim vim vim split split!",
+    "macro motion vim register fold mark yank split window mark.",
+    "window buffer fold jump window buffer split jump macro.",
+    "motion jump split mark vim mark",
+    "window buffer motion mark vim mark macro buffer fold motion mark fold motion buffer motion."
+   ],
+   "query": "regex yank macro buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 3.0754424868071375
+    },
+    {
+     "passage": 0,
+     "score": 2.3641350097278533
+    },
+    {
+     "passage": 1,
+     "score": 1.9542358077565578
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "regex split fold vim motion buffer buffer yank fold fold macro yank fold split window split macro register!",
+    "motion window macro.",
+    "vim buffer regex macro register vim buffer yank yank macro buffer yank window register regex fold mark macro window jump!",
+    "macro register buffer split motion register split.",
+    "vim vim!",
+    "yank split buffer regex motion macro mark",
+    "jump regex",
+    "register vim yank jump split mark mark mark yank!"
+   ],
+   "query": "macro yank window window register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 2.3881770518121543
+    },
+    {
+     "passage": 1,
+     "score": 1.1744004644446604
+    },
+    {
+     "passage": 0,
+     "score": 0.5317699164177465
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "split regex!",
+    "macro register regex split window vim vim motion window motion vim split vim yank",
+    "buffer split macro register register yank macro window mark regex register register window window regex window fold regex buffer.",
+    "split split buffer yank motion buffer!"
+   ],
+   "query": "window fold regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.9340174758071313
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "motion buffer buffer window motion buffer yank yank fold regex jump macro mark.",
+    "motion window macro split vim mark buffer motion jump fold mark.",
+    "vim fold regex regex fold buffer jump mark vim jump buffer fold fold fold!"
+   ],
+   "query": "buffer vim mark"
+  },
+  {
+   "hits": [],
+   "k": 8,
+   "passages": [
+    "buffer fold regex register window vim macro buffer motion fold!",
+    "mark regex motion jump regex yank regex macro mark split split vim yank yank yank register fold!",
+    "window vim register window buffer motion split split mark yank buffer window window",
+    "fold yank jump buffer macro mark jump yank mark mark regex mark yank motion split fold yank buffer jump",
+    "mark",
+    "split motion jump mark buffer yank fold mark fold vim buffer regex!",
+    "jump split yank split split regex jump motion mark!",
+    "regex macro fold split macro split window fold jump jump vim split macro jump."
+   ],
+   "query": "absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.1152444667737242
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "buffer fold regex window window mark split split",
+    "register vim mark macro regex split window",
+    "mark",
+    "mark yank split buffer regex macro fold",
+    "jump mark.",
+    "motion split jump register split macro motion split fold vim register buffer fold yank yank jump window buffer buffer mark!",
+    "macro jump vim motion.",
+    "split yank window macro fold mark jump regex motion regex."
+   ],
+   "query": "mark buffer yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.9529823657022451
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "mark jump fold macro split.",
+    "macro vim regex fold.",
+    "yank register split split vim!"
+   ],
+   "query": "register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.1526583112455207
+    },
+    {
+     "passage": 4,
+     "score": 1.6524187487605342
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "window window fold mark.",
+    "register window vim split!",
+    "buffer motion buffer regex motion jump mark regex register jump mark yank yank fold vim buffer",
+    "fold yank buffer register macro motion window mark regex window split vim split jump fold window split",
+    "motion mark macro vim mark register fold",
+    "jump buffer motion yank mark register jump.",
+    "buffer regex vim regex"
+   ],
+   "query": "window register macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 2.8264852649508674
+    },
+    {
+     "passage": 8,
+     "score": 2.1560543234779574
+    },
+    {
+     "passage": 3,
+     "score": 2.0000586976353576
+    },
+    {
+     "passage": 2,
+     "score": 1.8423886421558588
+    },
+    {
+     "passage": 9,
+     "score": 1.713956078592191
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "vim jump motion buffer.",
+    "regex regex mark jump mark split",
+    "macro vim jump fold fold jump buffer split jump vim regex buffer yank yank!",
+    "window buffer regex vim window fold!",
+    "window mark window window register yank regex macro macro motion jump yank buffer split vim!",
+    "macro motion split macro fold yank macro regex vim register buffer.",
+    "split buffer window motion fold jump jump.",
+    "fold macro motion!",
+    "jump fold yank register regex fold mark jump mark yank yank regex macro!",
+    "yank motion register macro yank vim split motion fold macro buffer jump buffer register buffer buffer register window!"
+   ],
+   "query": "yank jump yank regex window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 1.4458485432756691
+    },
+    {
+     "passage": 1,
+     "score": 0.8825309290124215
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "yank window jump yank register macro buffer register macro split register window regex mark motion yank buffer mark motion!",
+    "window jump jump fold fold window fold motion split regex buffer yank register motion split fold yank mark vim",
+    "motion buffer mark motion buffer fold!",
+    "register macro yank motion mark yank mark motion window yank yank window split motion regex",
+    "mark split yank motion regex macro window yank jump fold mark split mark register mark split register window.",
+    "vim regex window yank"
+   ],
+   "query": "vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.2506921405916876
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "register window yank yank regex buffer motion vim vim jump register.",
+    "regex window jump fold fold yank split split vim mark split."
+   ],
+   "query": "vim absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 0.9490561768246485
+    },
+    {
+     "passage": 0,
+     "score": 0.8856719437423637
+    },
+    {
+     "passage": 8,
+     "score": 0.7902454120831243
+    },
+    {
+     "passage": 6,
+     "score": 0.7378387287040636
+    },
+    {
+     "passage": 5,
+     "score": 0.6592874345199684
+    },
+    {
+     "passage": 7,
+     "score": 0.6183019048386642
+    }
+   ],
+   "k": 11,
+   "passages": [
+    "regex jump fold register fold fold regex register register buffer split",
+    "split window split motion vim window split mark yank jump buffer motion motion fold yank motion vim fold yank motion!",
+    "window jump yank fold register motion split buffer split buffer",
+    "window split window jump fold mark register fold motion motion window vim register mark yank.",
+    "mark vim buffer buffer window motion window mark buffer register window vim register register fold yank split!",
+    "window split window vim motion window window regex vim fold window!",
+    "mark split fold regex vim register jump buffer mark regex motion fold register jump buffer motion window motion window motion!",
+    "split fold register window yank jump jump register window macro motion buffer regex.",
+    "yank motion mark regex buffer macro!",
+    "register register fold window regex regex split macro.",
+    "yank yank yank split register split motion register vim window window vim jump vim yank"
+   ],
+   "query": "regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 3.4875108417676715
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "jump fold regex fold split window!",
+    "jump mark split mark fold mark split split window fold window mark buffer!",
+    "motion mark buffer.",
+    "buffer macro split buffer motion motion window motion jump vim buffer split macro",
+    "mark",
+    "motion",
+    "window register regex fold regex buffer mark motion buffer yank jump register split fold mark jump regex regex jump regex.",
+    "register window regex macro fold jump macro fold macro yank vim window regex"
+   ],
+   "query": "macro window yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.9355572798610694
+    },
+    {
+     "passage": 1,
+     "score": 1.805860415503034
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "split jump jump jump fold yank split register jump mark motion yank mark macro macro jump macro macro",
+    "motion mark macro window buffer motion jump yank buffer regex regex motion macro jump",
+    "vim split split split fold fold fold buffer split window yank vim buffer.",
+    "yank fold",
+    "macro mark fold vim.",
+    "jump register vim"
+   ],
+   "query": "yank register yank motion register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 2.143286721212431
+    },
+    {
+     "passage": 2,
+     "score": 1.9467135970159497
+    },
+    {
+     "passage": 8,
+     "score": 1.8406153595215504
+    },
+    {
+     "passage": 7,
+     "score": 1.2108492776652768
+    },
+    {
+     "passage": 1,
+     "score": 1.0502041117656418
+    },
+    {
+     "passage": 0,
+     "score": 0.6980391728183677
+    },
+    {
+     "passage": 4,
+     "score": 0.6750899397394078
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "fold fold motion macro!",
+    "fold jump split mark jump vim mark macro",
+    "fold mark mark mark window fold regex yank buffer mark regex yank register macro yank!",
+    "buffer regex macro yank window buffer jump!",
+    "mark!",
+    "regex motion split motion buffer split macro split mark fold register vim mark register split register window.",
+    "macro jump vim buffer jump!",
+    "mark macro split fold split fold motion mark",
+    "register window buffer fold window mark split buffer fold split yank buffer fold"
+   ],
+   "query": "mark fold register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.1398417625373352
+    },
+    {
+     "passage": 3,
+     "score": 1.0554766048570792
+    },
+    {
+     "passage": 5,
+     "score": 0.9003456372250439
+    },
+    {
+     "passage": 0,
+     "score": 0.8880273403314558
+    },
+    {
+     "passage": 4,
+     "score": 0.5094248245183052
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "split window yank yank buffer buffer vim window register window regex",
+    "fold motion yank window vim buffer mark window buffer mark.",
+    "buffer split register motion register mark buffer window yank macro register mark macro macro buffer.",
+    "jump yank macro motion macro yank fold fold mark vim buffer fold jump motion buffer.",
+    "macro regex buffer mark fold motion register macro regex regex motion regex motion mark.",
+    "window split register yank regex yank split macro motion motion yank buffer mark window register regex vim regex",
+    "motion"
+   ],
+   "query": "motion buffer motion vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 1.2347427208934425
+    },
+    {
+     "passage": 9,
+     "score": 1.188994998788252
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "fold mark.",
+    "motion regex jump yank regex fold motion split register buffer buffer fold motion",
+    "window split register vim jump.",
+    "vim vim register yank macro vim register vim fold fold buffer yank yank vim regex register mark.",
+    "yank jump",
+    "window register yank macro macro vim window yank fold fold motion register jump fold motion fold window fold",
+    "window vim register split regex!",
+    "yank motion split window motion macro motion mark regex register split regex vim motion yank",
+    "motion motion vim vim mark register vim window motion window jump fold.",
+    "jump vim vim mark macro jump yank vim vim window window macro yank window register"
+   ],
+   "query": "vim mark"
+  },
+  {
+   "hits": [],
+   "k": 2,
+   "passages": [
+    "buffer jump buffer yank window regex regex fold buffer register fold buffer register regex mark fold vim.",
+    "mark vim vim buffer mark",
+    "mark mark macro jump vim!"
+   ],
+   "query": "split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.6043167809081638
+    },
+    {
+     "passage": 1,
+     "score": 1.408021332464582
+    },
+    {
+     "passage": 2,
+     "score": 1.3921540719227579
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "fold motion buffer macro macro.",
+    "motion mark yank motion mark regex jump!",
+    "register macro window vim motion buffer window regex",
+    "register window yank vim split.",
+    "window fold vim register regex vim macro motion vim motion mark fold fold register mark window yank split window yank",
+    "regex register fold yank yank register mark register macro split jump vim motion yank window regex!"
+   ],
+   "query": "buffer absent mark motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.18926862230809646
+    },
+    {
+     "passage": 1,
+     "score": 0.17931358438150177
+    },
+    {
+     "passage": 2,
+     "score": 0.13237915625479993
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "yank fold vim yank jump fold jump yank register vim window jump window yank",
+    "split motion buffer split register mark regex register mark vim macro split register vim jump regex jump",
+    "mark register regex regex regex motion window window fold vim motion buffer window split macro register."
+   ],
+   "query": "absent vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 2.5700409254113006
+    },
+    {
+     "passage": 5,
+     "score": 1.9531945613986743
+    },
+    {
+     "passage": 0,
+     "score": 1.450239511331462
+    },
+    {
+     "passage": 1,
+     "score": 1.1295731831347258
+    },
+    {
+     "passage": 6,
+     "score": 1.1099455593391605
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "fold buffer vim buffer window jump yank yank buffer split register window split yank register split!",
+    "motion register split motion jump regex motion fold register fold!",
+    "regex macro macro fold",
+    "buffer split buffer",
+    "buffer register mark fold regex register regex regex window fold window window jump macro jump",
+    "fold split split jump window regex jump register yank motion window mark jump mark vim buffer jump macro!",
+    "motion window register mark mark jump fold yank fold register mark mark jump split.",
+    "jump vim macro regex buffer motion window window buffer window motion mark buffer jump regex motion."
+   ],
+   "query": "absent motion vim absent window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 3.2077373711001034
+    },
+    {
+     "passage": 4,
+     "score": 2.4595719182706337
+    },
+    {
+     "passage": 0,
+     "score": 2.1758632062998373
+    },
+    {
+     "passage": 2,
+     "score": 2.0044626320370718
+    },
+    {
+     "passage": 1,
+     "score": 0.8759484995580054
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "macro register regex split window buffer regex buffer register motion jump vim motion split vim register window macro.",
+    "regex motion register split macro motion.",
+    "buffer yank fold regex buffer motion fold buffer yank vim fold buffer mark mark",
+    "mark regex mark split vim jump window fold macro motion split mark register vim fold vim motion split regex vim!",
+    "fold register mark split register jump macro split macro buffer yank register macro.",
+    "motion regex vim register split regex split!"
+   ],
+   "query": "register window mark macro fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.2922295506897297
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "mark fold",
+    "split mark fold fold yank yank",
+    "motion vim motion fold motion vim buffer buffer mark buffer yank fold window.",
+    "jump vim yank vim register mark split regex motion regex jump split yank window!",
+    "regex yank jump mark macro macro jump yank buffer motion macro macro motion",
+    "window yank split jump buffer mark jump yank window yank motion fold macro fold split"
+   ],
+   "query": "window absent motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 2.7612396667104724
+    },
+    {
+     "passage": 9,
+     "score": 2.5315604809040555
+    },
+    {
+     "passage": 7,
+     "score": 2.1665859873175783
+    },
+    {
+     "passage": 5,
+     "score": 2.1088148466091137
+    },
+    {
+     "passage": 2,
+     "score": 1.9397503082212995
+    },
+    {
+     "passage": 10,
+     "score": 1.741987383072293
+    },
+    {
+     "passage": 3,
+     "score": 1.3207065262291156
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "macro motion buffer motion split regex register macro",
+    "yank window register macro register window regex yank fold split split motion motion yank vim register mark yank mark buffer",
+    "motion window yank buffer mark split vim vim fold regex motion window regex macro regex window motion window buffer.",
+    "mark motion jump motion register buffer mark jump jump motion register buffer yank jump yank mark window!",
+    "motion macro vim motion regex motion regex regex fold.",
+    "regex vim regex split fold!",
+    "register fold motion motion yank!",
+    "motion vim vim buffer vim fold motion register motion macro mark fold.",
+    "register regex jump macro window window jump buffer buffer yank vim macro window window yank.",
+    "buffer jump register motion register vim jump vim vim motion regex fold vim macro motion mark split regex.",
+    "motion mark motion vim macro mark register window!"
+   ],
+   "query": "vim register mark split fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.8105861521179587
+    },
+    {
+     "passage": 5,
+     "score": 0.7216368752483774
+    },
+    {
+     "passage": 4,
+     "score": 0.7121831170573506
+    },
+    {
+     "passage": 8,
+     "score": 0.6058318492055471
+    },
+    {
+     "passage": 2,
+     "score": 0.5608319594433745
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "yank split split split fold yank fold regex motion yank regex yank vim vim yank macro window register",
+    "window macro vim buffer window motion fold window buffer motion fold.",
+    "buffer mark jump regex regex jump vim jump jump fold regex split.",
+    "macro",
+    "split jump yank fold split regex yank mark yank motion regex window buffer window macro jump",
+    "yank split yank motion yank vim.",
+    "buffer macro fold vim window yank jump register motion fold yank jump register mark window vim buffer!",
+    "vim motion",
+    "buffer yank motion jump motion window yank mark split yank"
+   ],
+   "query": "split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 1.311190063768302
+    },
+    {
+     "passage": 5,
+     "score": 1.2187562994817638
+    },
+    {
+     "passage": 2,
+     "score": 1.1384967382963795
+    },
+    {
+     "passage": 6,
+     "score": 0.9806379468519235
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "split motion regex",
+    "split jump vim jump fold fold macro mark split mark split fold",
+    "register regex window vim jump yank mark macro yank vim buffer jump yank split window yank regex vim vim buffer.",
+    "regex buffer buffer split yank motion fold motion buffer yank macro macro macro mark regex!",
+    "split split buffer fold yank register yank motion buffer.",
+    "split jump window jump vim regex vim split macro register window mark regex macro buffer regex buffer.",
+    "mark yank buffer buffer split window macro register vim split macro vim!",
+    "buffer register buffer mark jump register!",
+    "split!",
+    "jump window vim vim split jump yank regex window mark buffer split register macro.",
+    "regex buffer mark split vim",
+    "vim macro motion split regex fold!"
+   ],
+   "query": "window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.8760490398899619
+    },
+    {
+     "passage": 1,
+     "score": 1.6257040440035757
+    },
+    {
+     "passage": 4,
+     "score": 1.4351157078678298
+    },
+    {
+     "passage": 2,
+     "score": 0.9427237728696736
+    },
+    {
+     "passage": 3,
+     "score": 0.44894330337630856
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "split macro motion yank window motion macro jump register window regex jump macro jump",
+    "macro split window vim regex jump buffer jump vim yank.",
+    "buffer register fold window buffer window split regex.",
+    "jump!",
+    "window macro mark jump jump yank mark macro!"
+   ],
+   "query": "window regex absent macro jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 3.3599873747109297
+    },
+    {
+     "passage": 3,
+     "score": 1.1907667985228447
+    },
+    {
+     "passage": 1,
+     "score": 1.1328175501152074
+    },
+    {
+     "passage": 0,
+     "score": 1.0845972472476302
+    },
+    {
+     "passage": 4,
+     "score": 0.2634845149558367
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "fold fold window vim motion window",
+    "fold register buffer fold jump",
+    "yank mark fold motion split mark yank mark jump jump split split vim buffer!",
+    "motion motion buffer motion motion jump jump window yank buffer window vim!",
+    "split register register regex regex fold macro yank yank regex split split."
+   ],
+   "query": "fold mark vim jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.2382137202776295
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "jump register buffer split register register split window yank motion vim register yank split vim mark mark fold!",
+    "window register buffer jump mark motion yank register buffer split regex jump mark buffer window yank",
+    "buffer regex!",
+    "buffer buffer jump window.",
+    "window motion.",
+    "jump motion."
+   ],
+   "query": "yank split macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.642472119837193
+    },
+    {
+     "passage": 3,
+     "score": 1.615359231452411
+    },
+    {
+     "passage": 0,
+     "score": 1.446874427634437
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "window register mark fold register regex fold buffer window yank mark macro macro fold motion register macro regex!",
+    "split register register buffer fold regex register macro split window vim vim window jump macro split fold!",
+    "jump register macro macro jump mark motion motion register register register fold split buffer",
+    "yank regex vim buffer macro window mark vim motion mark split buffer vim motion split jump fold.",
+    "fold motion jump motion macro",
+    "macro window fold vim fold regex mark vim window split register buffer vim mark buffer register buffer motion!",
+    "regex window yank jump yank split mark macro mark vim!",
+    "fold split",
+    "jump fold window register mark macro jump jump split fold regex split yank!",
+    "regex split register yank macro register yank macro jump vim register vim jump regex fold mark fold buffer mark.",
+    "buffer regex mark regex fold fold vim window regex jump yank fold yank buffer fold",
+    "window macro buffer fold yank window motion yank split vim fold!"
+   ],
+   "query": "mark motion macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 0.5786029407680676
+    },
+    {
+     "passage": 9,
+     "score": 0.5294442924801557
+    },
+    {
+     "passage": 5,
+     "score": 0.41897291769681555
+    },
+    {
+     "passage": 6,
+     "score": 0.41897291769681555
+    },
+    {
+     "passage": 7,
+     "score": 0.38669825641917216
+    },
+    {
+     "passage": 8,
+     "score": 0.37235642548054904
+    },
+    {
+     "passage": 1,
+     "score": 0.34664383343969263
+    },
+    {
+     "passage": 10,
+     "score": 0.3242529638155977
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "motion jump register!",
+    "regex register motion motion fold window jump yank vim mark jump jump regex register motion",
+    "window split jump buffer motion motion jump mark fold mark jump!",
+    "mark regex motion vim motion.",
+    "mark macro yank register vim regex mark jump yank mark",
+    "jump yank mark window macro window fold motion vim window",
+    "regex motion window yank mark fold register buffer fold register!",
+    "vim jump fold split motion yank macro motion mark mark split register",
+    "split window vim fold macro vim split fold yank motion motion mark fold!",
+    "mark yank fold buffer mark.",
+    "yank buffer register register macro window window fold motion fold vim split fold jump motion macro buffer",
+    "regex motion motion motion regex."
+   ],
+   "query": "yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.7220901491008456
+    },
+    {
+     "passage": 0,
+     "score": 0.5380778692125467
+    },
+    {
+     "passage": 2,
+     "score": 0.42129834673084865
+    },
+    {
+     "passage": 3,
+     "score": 0.1227008892646486
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "register buffer window vim mark mark buffer mark motion.",
+    "fold vim vim jump fold macro fold yank split yank split window window yank yank window mark mark window window",
+    "macro buffer buffer macro fold vim fold buffer buffer fold register motion split macro jump window fold.",
+    "vim fold jump register macro mark split fold register!"
+   ],
+   "query": "vim vim window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 2.2590646834610912
+    },
+    {
+     "passage": 2,
+     "score": 1.7572474527311204
+    },
+    {
+     "passage": 6,
+     "score": 1.1951537494325388
+    },
+    {
+     "passage": 7,
+     "score": 0.8372765292019095
+    },
+    {
+     "passage": 3,
+     "score": 0.7241556541797898
+    },
+    {
+     "passage": 0,
+     "score": 0.6165886261375083
+    },
+    {
+     "passage": 1,
+     "score": 0.25623570144015245
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "yank fold motion macro register fold fold split register register vim split fold split regex yank.",
+    "fold mark split window fold yank regex regex yank register macro split",
+    "register regex vim window motion jump window motion mark yank motion register yank regex window vim macro mark.",
+    "fold register motion macro motion vim split fold window vim",
+    "register motion jump regex",
+    "regex fold fold fold vim buffer register regex mark vim mark split window.",
+    "fold regex mark vim vim mark jump yank regex buffer split macro vim!",
+    "motion fold yank regex regex mark buffer fold register register register fold mark macro mark motion yank yank"
+   ],
+   "query": "jump regex motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.585331742140648
+    },
+    {
+     "passage": 7,
+     "score": 2.5778150100372303
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "macro motion vim motion regex window vim mark jump buffer jump fold macro vim!",
+    "window split yank vim split fold window window fold motion vim vim!",
+    "window register window mark mark buffer vim register jump fold split motion.",
+    "vim.",
+    "split jump yank fold!",
+    "fold mark register mark jump!",
+    "macro register fold vim.",
+    "fold buffer mark mark yank register window regex fold regex split window vim jump motion window split macro macro fold.",
+    "jump window window split fold buffer jump.",
+    "vim macro buffer jump jump mark register vim register regex vim macro buffer window window jump window window macro split!",
+    "register vim macro buffer split regex window vim register yank motion window fold!",
+    "macro buffer split fold register fold regex register jump yank macro window vim fold buffer macro mark"
+   ],
+   "query": "macro register mark macro motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.2235295934411656
+    },
+    {
+     "passage": 0,
+     "score": 1.7036752252568932
+    },
+    {
+     "passage": 5,
+     "score": 1.5412525389166567
+    },
+    {
+     "passage": 2,
+     "score": 1.3592477472635274
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "window jump vim motion macro mark fold macro register register jump buffer register buffer!",
+    "register macro window vim buffer macro regex regex mark yank jump vim split register window",
+    "macro register register register motion",
+    "motion motion buffer regex motion split jump motion vim window motion motion vim motion window window jump regex yank macro!",
+    "regex register vim fold window motion vim split buffer fold vim window mark split mark split split yank yank!",
+    "jump register split buffer mark jump buffer regex motion window macro jump jump vim",
+    "register yank yank split buffer mark macro fold fold fold jump macro yank vim macro split!",
+    "vim fold split mark register.",
+    "split mark regex."
+   ],
+   "query": "motion macro window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 1.778953854864909
+    },
+    {
+     "passage": 8,
+     "score": 1.1439086996980172
+    },
+    {
+     "passage": 0,
+     "score": 1.0079523378486628
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "register motion vim jump split macro regex macro motion register register jump macro vim buffer vim split motion split regex.",
+    "buffer fold regex split.",
+    "register mark jump mark yank yank mark motion macro macro fold yank jump buffer vim jump",
+    "motion register split vim jump register register fold fold buffer buffer register window register buffer motion window!",
+    "fold!",
+    "vim fold register register window macro fold",
+    "jump yank vim mark window split!",
+    "window vim fold vim regex!",
+    "register buffer macro vim macro yank motion buffer."
+   ],
+   "query": "absent macro window window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 1.555995243452149
+    },
+    {
+     "passage": 0,
+     "score": 1.3476028218129934
+    },
+    {
+     "passage": 3,
+     "score": 1.2077914711742352
+    },
+    {
+     "passage": 2,
+     "score": 1.072270713781293
+    },
+    {
+     "passage": 6,
+     "score": 0.6405660956416208
+    },
+    {
+     "passage": 1,
+     "score": 0.5888916554381438
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "fold jump fold yank macro mark regex vim fold buffer buffer vim jump buffer regex mark buffer regex jump regex!",
+    "macro fold vim jump window jump motion jump fold register jump macro register window window regex motion jump motion.",
+    "mark register macro buffer register regex fold mark split fold buffer.",
+    "buffer vim register window window split mark yank fold split buffer motion macro macro yank!",
+    "split jump buffer.",
+    "vim regex register yank fold buffer jump macro yank motion jump motion mark register mark vim vim macro fold vim",
+    "split fold register window yank register buffer vim regex macro register!"
+   ],
+   "query": "mark macro vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.5724618424444885
+    },
+    {
+     "passage": 3,
+     "score": 1.4267162699330767
+    },
+    {
+     "passage": 1,
+     "score": 0.14308218175754198
+    },
+    {
+     "passage": 0,
+     "score": 0.1363489026160106
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "motion yank fold yank window.",
+    "motion regex window vim!",
+    "motion register yank buffer macro jump vim vim mark vim vim jump register yank motion vim",
+    "yank fold jump regex buffer regex split mark motion yank macro split register yank split fold fold regex motion macro!"
+   ],
+   "query": "motion register macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 2.563046634581188
+    },
+    {
+     "passage": 6,
+     "score": 1.7970045493649591
+    },
+    {
+     "passage": 7,
+     "score": 1.7906755877020646
+    },
+    {
+     "passage": 3,
+     "score": 1.3353396248206666
+    },
+    {
+     "passage": 2,
+     "score": 1.0840586927468316
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "yank window fold vim register jump regex yank motion vim jump mark",
+    "window mark regex jump mark mark motion yank jump vim regex",
+    "jump macro regex yank buffer buffer motion register mark vim fold.",
+    "jump buffer yank register register split register jump vim window",
+    "vim mark register register register fold register buffer fold yank vim window register vim.",
+    "macro vim mark jump regex vim register fold jump motion jump buffer fold",
+    "jump fold register vim regex mark macro split.",
+    "fold vim fold mark fold fold mark motion motion macro split yank register mark jump motion window jump macro!",
+    "window vim vim buffer.",
+    "buffer split macro split motion yank jump split motion jump."
+   ],
+   "query": "absent yank split macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 2.0449268842190134
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "split macro.",
+    "macro motion motion yank vim fold regex split buffer.",
+    "motion jump mark window.",
+    "split regex macro jump yank.",
+    "motion mark macro mark vim split split vim motion mark regex motion yank mark window!",
+    "split motion buffer register macro vim macro register split jump motion regex jump split motion jump motion yank jump.",
+    "vim",
+    "yank vim mark split fold fold macro regex register jump window mark jump buffer.",
+    "split motion fold fold buffer buffer register mark yank motion yank!",
+    "fold mark fold split yank window mark motion vim split jump window buffer.",
+    "regex vim fold yank split yank window split register window"
+   ],
+   "query": "buffer fold absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.472589141623279
+    },
+    {
+     "passage": 4,
+     "score": 0.45289151468579286
+    },
+    {
+     "passage": 5,
+     "score": 0.4218467238971272
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "macro yank register register buffer macro motion motion window yank!",
+    "register fold regex regex regex fold regex buffer motion vim fold",
+    "vim macro motion register regex motion vim macro buffer motion fold buffer mark vim buffer window mark jump regex",
+    "fold regex mark register macro mark window jump regex yank yank vim jump fold yank motion macro fold buffer.",
+    "regex motion jump motion macro buffer yank regex buffer register jump vim macro fold fold yank macro yank!",
+    "buffer motion window motion vim macro fold motion."
+   ],
+   "query": "motion macro macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.8564075930098065
+    },
+    {
+     "passage": 0,
+     "score": 0.2052177522983117
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "yank yank motion split!",
+    "regex split regex regex split macro buffer."
+   ],
+   "query": "mark window buffer split fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.7761236366460565
+    },
+    {
+     "passage": 0,
+     "score": 0.6208762360189451
+    },
+    {
+     "passage": 3,
+     "score": 0.6048891013725164
+    },
+    {
+     "passage": 1,
+     "score": 0.21886047029351055
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "window window split mark fold mark motion jump window motion yank buffer register motion regex vim fold!",
+    "yank regex fold motion macro fold window window split yank mark mark register macro register",
+    "register buffer buffer yank vim buffer window motion macro buffer mark macro jump split vim vim register register regex register",
+    "jump yank register split window jump buffer window yank window motion yank jump regex"
+   ],
+   "query": "motion motion buffer split buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.1608024647285917
+    },
+    {
+     "passage": 0,
+     "score": 0.9780852343761327
+    },
+    {
+     "passage": 3,
+     "score": 0.6682932975916603
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "vim fold fold vim mark",
+    "fold mark regex yank fold.",
+    "fold macro register buffer macro split.",
+    "window window jump vim macro motion!"
+   ],
+   "query": "buffer vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 1.8653099785331406
+    },
+    {
+     "passage": 0,
+     "score": 1.7577675445635947
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "motion mark regex buffer window vim window buffer fold mark regex fold motion fold macro vim motion register yank.",
+    "macro vim macro window vim register fold!",
+    "regex motion regex.",
+    "jump."
+   ],
+   "query": "regex register jump window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.3282715909436256
+    },
+    {
+     "passage": 7,
+     "score": 1.2082935045764993
+    },
+    {
+     "passage": 10,
+     "score": 1.1397358140988894
+    },
+    {
+     "passage": 0,
+     "score": 1.0321227469504781
+    },
+    {
+     "passage": 5,
+     "score": 0.9594969590106912
+    },
+    {
+     "passage": 11,
+     "score": 0.31590790324938445
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "split motion window window split macro window yank window buffer macro fold fold buffer yank motion macro split window fold",
+    "buffer jump yank regex jump buffer mark.",
+    "fold split macro mark motion",
+    "vim.",
+    "motion regex jump split macro register window mark mark split buffer",
+    "motion mark register buffer yank vim motion macro vim split window window fold buffer register motion jump",
+    "motion macro jump regex buffer window motion buffer window mark split macro motion vim buffer.",
+    "split split window yank split jump yank jump vim buffer jump mark register split macro macro split vim motion buffer",
+    "buffer mark motion register register vim vim regex motion register macro motion!",
+    "mark macro vim jump vim mark mark motion split fold vim split vim buffer regex macro jump macro!",
+    "mark fold macro split macro mark jump window window yank fold macro motion mark vim.",
+    "jump register jump jump buffer mark buffer regex window vim regex split vim macro mark register mark"
+   ],
+   "query": "yank mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 3.398924709733556
+    },
+    {
+     "passage": 0,
+     "score": 1.5462015716214388
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "motion buffer fold register mark macro vim jump buffer buffer buffer fold jump jump yank window buffer motion buffer!",
+    "yank window macro regex jump split regex regex register split regex macro mark motion window window jump regex split.",
+    "yank fold buffer motion split motion buffer!"
+   ],
+   "query": "mark window absent jump regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.9042729230514261
+    },
+    {
+     "passage": 1,
+     "score": 0.6627757700382496
+    },
+    {
+     "passage": 2,
+     "score": 0.5438329598618937
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "fold window motion jump macro buffer mark fold buffer macro jump buffer regex jump",
+    "jump window fold buffer register",
+    "yank vim window jump macro buffer fold buffer motion",
+    "motion macro buffer buffer split register!",
+    "split macro yank split window fold vim yank vim yank window yank"
+   ],
+   "query": "jump jump regex jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 0.9810927524466964
+    },
+    {
+     "passage": 7,
+     "score": 0.9729810195065366
+    },
+    {
+     "passage": 6,
+     "score": 0.8823640026937731
+    },
+    {
+     "passage": 8,
+     "score": 0.637738272340565
+    },
+    {
+     "passage": 5,
+     "score": 0.6095720781968432
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "window buffer macro window jump fold yank window mark register buffer regex vim macro split register vim buffer window jump.",
+    "window yank fold mark macro yank buffer!",
+    "vim.",
+    "regex motion motion buffer.",
+    "register buffer vim vim fold split mark buffer register macro buffer mark register split macro.",
+    "vim yank regex motion jump regex vim regex register!",
+    "motion macro.",
+    "buffer fold motion jump fold split motion motion vim motion buffer motion motion window macro fold vim fold vim",
+    "yank motion jump register register buffer vim vim."
+   ],
+   "query": "motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 1.1942662749293962
+    },
+    {
+     "passage": 11,
+     "score": 1.1942662749293962
+    },
+    {
+     "passage": 0,
+     "score": 1.0039232602717736
+    },
+    {
+     "passage": 4,
+     "score": 1.0039232602717736
+    },
+    {
+     "passage": 10,
+     "score": 0.877376126166542
+    },
+    {
+     "passage": 3,
+     "score": 0.826956259371393
+    },
+    {
+     "passage": 2,
+     "score": 0.7382539093199639
+    },
+    {
+     "passage": 9,
+     "score": 0.6283174429889662
+    },
+    {
+     "passage": 6,
+     "score": 0.5449174595249598
+    },
+    {
+     "passage": 5,
+     "score": 0.3927491708922627
+    }
+   ],
+   "k": 10,
+   "passages": [
+    "mark macro register register mark split motion buffer yank window yank!",
+    "fold vim window vim",
+    "yank jump macro macro macro regex!",
+    "regex regex buffer yank mark yank yank macro vim motion regex macro regex vim register motion yank window",
+    "motion vim yank vim macro yank macro jump window jump mark!",
+    "window split window vim register vim yank split yank jump mark vim window",
+    "fold vim macro split window!",
+    "macro vim buffer macro mark mark register jump register split",
+    "regex split buffer motion window fold yank split fold register regex buffer window jump split jump fold register",
+    "vim fold mark yank mark mark yank vim window register regex motion motion window.",
+    "macro regex window mark motion fold jump regex yank fold!",
+    "split mark macro macro buffer motion register mark register buffer"
+   ],
+   "query": "macro mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 0.6151668634687875
+    },
+    {
+     "passage": 8,
+     "score": 0.5993736002238154
+    },
+    {
+     "passage": 1,
+     "score": 0.4957015222979976
+    },
+    {
+     "passage": 4,
+     "score": 0.34543473098427757
+    },
+    {
+     "passage": 7,
+     "score": 0.34543473098427757
+    },
+    {
+     "passage": 0,
+     "score": 0.3263551447519377
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "jump regex register macro window jump mark mark window macro split window vim vim buffer regex regex macro jump regex!",
+    "mark fold mark mark macro mark macro split buffer buffer mark yank mark split register jump fold jump mark.",
+    "macro macro!",
+    "buffer window regex!",
+    "regex vim window vim regex mark fold yank fold macro vim jump motion buffer fold register motion yank",
+    "regex yank.",
+    "register!",
+    "mark vim jump buffer jump mark fold yank split vim jump macro macro vim motion motion fold vim!",
+    "jump window motion buffer regex regex yank regex buffer register macro buffer motion vim window split window mark"
+   ],
+   "query": "buffer absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.5611443869630871
+    },
+    {
+     "passage": 4,
+     "score": 0.5560118822176922
+    },
+    {
+     "passage": 1,
+     "score": 0.4994618598726991
+    },
+    {
+     "passage": 6,
+     "score": 0.446541680191308
+    },
+    {
+     "passage": 5,
+     "score": 0.4369422252401176
+    },
+    {
+     "passage": 3,
+     "score": 0.3782098649518349
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "fold regex window yank split.",
+    "vim yank split fold mark jump macro split window regex vim motion regex regex buffer window vim",
+    "fold mark window fold window fold.",
+    "jump mark yank register vim jump vim motion motion macro motion fold regex mark macro vim fold",
+    "register motion fold buffer regex jump fold register regex motion regex regex motion yank",
+    "macro motion register buffer macro macro regex vim mark jump regex register window buffer mark vim register macro yank!",
+    "fold buffer fold buffer macro vim jump jump jump jump macro mark yank macro regex register window yank."
+   ],
+   "query": "regex yank"
+  },
+  {
+   "hits": [],
+   "k": 2,
+   "passages": [
+    "yank yank yank fold regex yank yank",
+    "motion window vim regex fold!",
+    "window macro fold register register!",
+    "motion jump mark window yank regex mark mark macro yank buffer register",
+    "register mark buffer motion buffer macro macro yank buffer buffer vim buffer motion jump jump!"
+   ],
+   "query": "absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.644083194934349
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "split fold register vim yank register motion vim register!",
+    "macro mark split register",
+    "fold fold regex vim yank",
+    "motion macro jump regex.",
+    "fold regex regex jump motion yank motion yank regex",
+    "split window yank mark.",
+    "split yank motion vim motion buffer macro split fold register window mark regex regex register!",
+    "vim fold register vim vim yank!",
+    "register jump yank window macro window fold."
+   ],
+   "query": "fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.145152375323358
+    },
+    {
+     "passage": 2,
+     "score": 1.557803612277075
+    },
+    {
+     "passage": 1,
+     "score": 1.23859140240538
+    },
+    {
+     "passage": 5,
+     "score": 0.8719470901764865
+    },
+    {
+     "passage": 8,
+     "score": 0.510062986140814
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "jump mark buffer regex vim buffer buffer!",
+    "vim regex yank jump split vim buffer split mark vim yank jump!",
+    "regex macro split window macro buffer register window yank motion fold!",
+    "regex register split motion vim.",
+    "jump regex macro motion",
+    "register motion window jump jump macro.",
+    "motion yank",
+    "mark window macro",
+    "regex regex jump regex vim vim yank buffer mark register fold fold mark vim macro mark buffer yank"
+   ],
+   "query": "split register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 2.39436460671463
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "register window window jump register motion split vim regex regex yank buffer yank",
+    "split motion.",
+    "fold window macro yank mark buffer split window fold!",
+    "fold register regex window jump mark"
+   ],
+   "query": "absent yank vim macro mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 2.768234782345348
+    },
+    {
+     "passage": 4,
+     "score": 2.5346097587899363
+    },
+    {
+     "passage": 5,
+     "score": 2.3706069486408805
+    },
+    {
+     "passage": 7,
+     "score": 1.1741186675594928
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "jump mark vim jump macro window",
+    "jump vim mark!",
+    "motion yank",
+    "vim register mark window split register mark jump vim!",
+    "fold buffer jump mark window window regex split regex!",
+    "regex register macro regex fold register jump fold mark jump macro fold.",
+    "regex window regex window register fold macro",
+    "mark window jump window split vim vim yank regex macro motion",
+    "yank motion jump window yank split"
+   ],
+   "query": "fold regex window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 1.2684338660367271
+    },
+    {
+     "passage": 9,
+     "score": 1.019178302841737
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "window motion fold vim jump macro yank mark macro mark window yank regex motion regex split macro macro.",
+    "window regex mark mark register vim buffer motion jump buffer yank register macro.",
+    "macro register motion jump motion fold buffer regex.",
+    "yank window register vim vim vim window mark mark mark.",
+    "regex jump jump vim motion yank regex window regex.",
+    "vim macro window window split vim!",
+    "yank motion yank jump split fold motion vim register macro macro motion vim jump vim.",
+    "yank mark buffer jump vim regex motion regex",
+    "vim motion yank mark fold.",
+    "regex split fold vim fold jump buffer motion motion fold yank",
+    "window register fold mark fold vim vim fold!",
+    "jump mark motion buffer register fold buffer vim yank"
+   ],
+   "query": "split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.7734101639441753
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "window yank macro register!",
+    "vim mark jump mark yank mark vim motion vim split jump register motion regex regex jump register."
+   ],
+   "query": "regex jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 1.3227038866364234
+    },
+    {
+     "passage": 7,
+     "score": 1.154146931171251
+    },
+    {
+     "passage": 4,
+     "score": 1.1359256319515043
+    },
+    {
+     "passage": 5,
+     "score": 0.9651416438176452
+    },
+    {
+     "passage": 2,
+     "score": 0.5775310592831274
+    },
+    {
+     "passage": 0,
+     "score": 0.5648843937513801
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "vim buffer motion register vim regex register vim window buffer window window jump regex macro register!",
+    "register mark macro window",
+    "regex vim macro mark macro mark.",
+    "split mark motion register fold vim regex!",
+    "split macro motion buffer jump fold window yank register regex buffer regex window fold vim.",
+    "window register motion split split register yank buffer buffer fold macro split vim buffer register",
+    "motion fold!",
+    "regex motion jump jump vim jump motion split motion jump"
+   ],
+   "query": "split regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.448920172131245
+    },
+    {
+     "passage": 6,
+     "score": 1.263250482913983
+    },
+    {
+     "passage": 3,
+     "score": 1.0755130056043485
+    },
+    {
+     "passage": 1,
+     "score": 0.7679472360160545
+    },
+    {
+     "passage": 7,
+     "score": 0.7679472360160545
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "mark fold macro window regex window register regex vim register jump register yank yank macro fold regex yank macro",
+    "regex split register split motion split mark vim",
+    "split",
+    "split fold buffer yank register register vim window buffer mark yank vim mark register register motion.",
+    "motion jump fold vim window fold yank motion regex window yank vim",
+    "split macro buffer fold split macro motion.",
+    "vim buffer macro vim regex yank fold mark jump buffer yank register window.",
+    "motion jump buffer motion fold yank window regex"
+   ],
+   "query": "jump register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 1.358764933896159
+    },
+    {
+     "passage": 2,
+     "score": 1.1781232464670854
+    },
+    {
+     "passage": 3,
+     "score": 1.1496565526615272
+    },
+    {
+     "passage": 7,
+     "score": 0.8748127421131384
+    },
+    {
+     "passage": 0,
+     "score": 0.8027876078293833
+    },
+    {
+     "passage": 4,
+     "score": 0.7693818947582312
+    },
+    {
+     "passage": 1,
+     "score": 0.6227087947195936
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "macro jump",
+    "vim vim register window jump window register window motion buffer macro fold buffer buffer fold register motion window jump mark",
+    "vim fold fold jump regex register buffer mark regex motion window jump buffer fold split.",
+    "motion window mark vim mark yank fold register buffer register jump jump split fold mark vim.",
+    "yank split split vim fold yank fold yank register fold",
+    "register motion yank fold regex macro register buffer buffer mark mark regex window split fold.",
+    "vim regex register yank vim window split window regex window macro buffer macro!",
+    "mark buffer motion jump regex macro yank jump jump window jump window vim vim!",
+    "motion regex vim split register mark jump fold regex jump fold vim motion jump yank vim register motion split buffer!",
+    "mark register"
+   ],
+   "query": "split absent absent jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.552233566095577
+    },
+    {
+     "passage": 7,
+     "score": 1.4912677099775302
+    },
+    {
+     "passage": 0,
+     "score": 1.3498660804143574
+    },
+    {
+     "passage": 1,
+     "score": 1.3450755007263115
+    },
+    {
+     "passage": 6,
+     "score": 1.3391343941359746
+    },
+    {
+     "passage": 8,
+     "score": 0.8895985035333197
+    },
+    {
+     "passage": 9,
+     "score": 0.8403859860312537
+    },
+    {
+     "passage": 5,
+     "score": 0.26567229321616664
+    }
+   ],
+   "k": 10,
+   "passages": [
+    "window split mark vim motion motion yank jump register.",
+    "fold split motion macro register yank vim mark jump jump jump fold yank macro macro motion",
+    "jump motion vim macro split fold.",
+    "window fold buffer register window register!",
+    "buffer register",
+    "split register yank motion register yank fold buffer regex",
+    "fold motion yank split jump buffer window split motion vim register",
+    "yank yank buffer window vim vim window jump split yank.",
+    "regex fold window motion split yank vim motion fold split yank window vim motion window register yank",
+    "regex split macro split register window fold buffer mark window jump!"
+   ],
+   "query": "vim vim split jump absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.4302781499607735
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "register buffer window buffer window regex mark buffer window jump fold motion register jump fold yank motion regex",
+    "macro yank window mark vim mark mark motion motion register mark split jump vim motion register",
+    "yank register window motion macro mark jump vim vim vim split"
+   ],
+   "query": "mark motion absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.2050953351759457
+    },
+    {
+     "passage": 2,
+     "score": 1.777429950655265
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "register buffer yank mark fold fold!",
+    "split!",
+    "buffer yank motion buffer buffer buffer jump buffer buffer mark jump split",
+    "vim fold fold mark!",
+    "regex fold yank",
+    "split vim motion mark mark mark mark regex buffer buffer regex vim window fold!",
+    "macro"
+   ],
+   "query": "vim fold jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.0910186668741377
+    },
+    {
+     "passage": 5,
+     "score": 1.0364252152659386
+    },
+    {
+     "passage": 1,
+     "score": 1.0178609546740653
+    },
+    {
+     "passage": 10,
+     "score": 0.7649180575162213
+    },
+    {
+     "passage": 4,
+     "score": 0.69575845080902
+    },
+    {
+     "passage": 7,
+     "score": 0.5892119599371672
+    }
+   ],
+   "k": 12,
+   "passages": [
+    "fold regex regex motion vim split fold.",
+    "register mark.",
+    "yank mark mark regex fold",
+    "regex macro fold yank jump jump split vim",
+    "split yank mark motion register register split register vim!",
+    "yank window window macro fold fold mark mark fold vim yank mark yank window motion mark",
+    "regex motion fold.",
+    "window regex register fold regex register motion yank regex mark yank register fold",
+    "window register yank window motion yank jump macro vim regex yank regex buffer!",
+    "buffer window motion motion window regex fold buffer window regex.",
+    "fold vim motion register mark window register!",
+    "vim macro buffer regex window yank window vim register motion regex regex fold yank jump yank."
+   ],
+   "query": "mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.1856249145993676
+    },
+    {
+     "passage": 4,
+     "score": 1.9540887775992468
+    },
+    {
+     "passage": 6,
+     "score": 1.6928616018237572
+    },
+    {
+     "passage": 7,
+     "score": 1.503567212348153
+    },
+    {
+     "passage": 0,
+     "score": 1.264087006703099
+    },
+    {
+     "passage": 2,
+     "score": 0.9172547098654906
+    },
+    {
+     "passage": 8,
+     "score": 0.6296894097297606
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "macro split macro motion split regex fold macro split split register window buffer fold fold buffer register fold regex window!",
+    "split split!",
+    "jump jump jump yank vim register.",
+    "buffer motion regex fold split macro motion register fold fold regex vim jump jump mark regex mark vim regex!",
+    "mark jump jump window regex vim fold macro mark fold!",
+    "jump motion split register",
+    "mark buffer yank split window buffer vim fold fold macro buffer regex window yank",
+    "fold regex!",
+    "regex register."
+   ],
+   "query": "fold regex vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.5715064553938927
+    },
+    {
+     "passage": 1,
+     "score": 0.4880993198566322
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "mark jump window register buffer mark vim mark window register window regex jump window.",
+    "window motion buffer regex fold register fold jump motion window split jump macro mark macro register buffer."
+   ],
+   "query": "register window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.7281746368595905
+    },
+    {
+     "passage": 0,
+     "score": 0.4872799172198956
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "register vim split jump mark vim buffer motion split yank window window mark yank vim jump buffer macro.",
+    "regex split",
+    "yank yank split fold register!"
+   ],
+   "query": "yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 2.4380336074896873
+    },
+    {
+     "passage": 0,
+     "score": 0.7069183165975601
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "motion fold split mark fold window fold window mark regex",
+    "split buffer buffer jump macro window window yank mark jump buffer!"
+   ],
+   "query": "macro buffer yank regex absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 10,
+     "score": 2.3991801065454057
+    },
+    {
+     "passage": 5,
+     "score": 1.692627173228172
+    },
+    {
+     "passage": 0,
+     "score": 1.4533633058718227
+    },
+    {
+     "passage": 7,
+     "score": 1.2463948872436106
+    },
+    {
+     "passage": 1,
+     "score": 1.1796614365921863
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "yank motion buffer motion",
+    "regex motion vim yank.",
+    "yank buffer mark fold register regex vim fold jump vim window mark split",
+    "macro window fold regex regex jump window regex buffer motion mark motion window vim!",
+    "buffer jump regex macro fold split buffer split!",
+    "register macro fold mark buffer window fold register vim register jump!",
+    "regex mark",
+    "mark fold register jump split jump register mark vim macro split macro fold vim regex buffer regex macro buffer!",
+    "macro macro fold window split split yank split fold fold regex macro buffer jump yank jump jump fold!",
+    "jump jump mark yank yank motion yank mark macro buffer yank vim fold fold!",
+    "buffer buffer motion jump motion register regex regex fold register regex buffer window vim vim jump macro motion regex macro",
+    "regex fold yank window regex buffer jump macro buffer split buffer fold fold mark macro."
+   ],
+   "query": "register motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.8388079937128665
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "window jump window window buffer window window!",
+    "register vim yank window jump mark fold motion vim jump mark motion regex macro buffer mark jump jump buffer!",
+    "fold register fold macro mark window buffer macro yank macro fold vim motion motion fold split!",
+    "register window macro window fold yank mark!",
+    "split register register register jump motion motion regex register buffer mark jump window.",
+    "fold buffer yank vim jump jump motion regex register buffer!"
+   ],
+   "query": "macro register register vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.4959076179375178
+    },
+    {
+     "passage": 6,
+     "score": 0.45885814918427087
+    },
+    {
+     "passage": 7,
+     "score": 0.3590461046487195
+    },
+    {
+     "passage": 0,
+     "score": 0.3548649168071846
+    },
+    {
+     "passage": 5,
+     "score": 0.3175955655764996
+    },
+    {
+     "passage": 4,
+     "score": 0.2580205398148635
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "vim motion motion motion fold buffer mark vim window regex vim fold macro yank buffer vim vim motion macro motion",
+    "fold vim regex motion",
+    "fold fold yank register window regex fold jump macro vim macro motion macro fold motion macro window",
+    "fold fold buffer.",
+    "macro yank vim register split window vim fold split window register motion regex fold buffer window regex",
+    "yank vim regex fold motion vim window window motion register macro.",
+    "buffer mark macro!",
+    "motion mark regex vim yank macro yank vim"
+   ],
+   "query": "macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 3.827150410168266
+    },
+    {
+     "passage": 9,
+     "score": 2.939724901414609
+    },
+    {
+     "passage": 3,
+     "score": 2.052410254538792
+    },
+    {
+     "passage": 8,
+     "score": 1.6338766949699126
+    },
+    {
+     "passage": 6,
+     "score": 1.3744258591943577
+    },
+    {
+     "passage": 5,
+     "score": 1.2675038792924567
+    },
+    {
+     "passage": 10,
+     "score": 1.0936428491775487
+    },
+    {
+     "passage": 11,
+     "score": 0.6904722009247389
+    },
+    {
+     "passage": 4,
+     "score": 0.6687737527089376
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "regex motion buffer buffer mark fold vim fold",
+    "window register vim motion split motion!",
+    "window motion jump split jump motion jump macro yank jump split window motion",
+    "buffer vim yank yank vim motion!",
+    "window yank regex regex window!",
+    "macro yank window split jump yank register.",
+    "split mark jump yank window yank motion vim yank motion register register yank mark yank!",
+    "regex motion vim register!",
+    "motion buffer split vim macro split jump register register",
+    "macro window yank regex register split jump register macro mark fold buffer split macro vim yank mark vim",
+    "split split regex regex macro window macro register yank split yank.",
+    "register vim jump register"
+   ],
+   "query": "yank buffer register fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.6850916760401502
+    },
+    {
+     "passage": 0,
+     "score": 1.4732915625227725
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "mark motion register window buffer jump register mark register window regex fold macro.",
+    "jump.",
+    "macro window register split vim mark mark motion window register.",
+    "window regex.",
+    "fold yank vim motion vim motion window yank regex regex register fold buffer register.",
+    "motion jump macro register buffer yank macro jump mark vim regex mark motion split window",
+    "window regex buffer window register fold split yank macro yank regex yank macro mark mark macro macro split!",
+    "fold",
+    "regex macro motion regex regex motion window fold buffer mark motion mark fold.",
+    "window window register split fold!",
+    "regex regex window register vim buffer register buffer window split split split motion yank vim regex macro buffer",
+    "motion split window yank yank jump yank buffer macro yank macro split mark window fold register motion"
+   ],
+   "query": "fold jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.658574260829131
+    },
+    {
+     "passage": 2,
+     "score": 1.378884083603955
+    },
+    {
+     "passage": 3,
+     "score": 1.285051735415906
+    },
+    {
+     "passage": 4,
+     "score": 1.261290323256245
+    },
+    {
+     "passage": 5,
+     "score": 1.176011094388335
+    },
+    {
+     "passage": 1,
+     "score": 0.9156552831674188
+    },
+    {
+     "passage": 7,
+     "score": 0.5175565563080337
+    },
+    {
+     "passage": 8,
+     "score": 0.5175565563080337
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "motion fold register window regex.",
+    "register split window macro register jump mark macro yank regex window macro macro macro jump buffer yank",
+    "buffer jump macro mark fold buffer motion regex",
+    "vim split register vim regex yank regex mark window vim macro macro!",
+    "macro vim motion macro",
+    "split fold yank buffer buffer!",
+    "macro macro!",
+    "buffer register yank regex!",
+    "buffer regex mark jump!"
+   ],
+   "query": "regex regex split motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 2.4886941442634916
+    },
+    {
+     "passage": 3,
+     "score": 0.9640834754924337
+    },
+    {
+     "passage": 0,
+     "score": 0.39149137013665647
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "split yank yank mark buffer jump motion yank buffer",
+    "jump jump register window regex fold vim window mark mark jump fold split split window jump motion mark register",
+    "mark buffer mark buffer.",
+    "register split yank motion split fold vim mark yank buffer yank register macro macro"
+   ],
+   "query": "vim motion window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.4581500901853124
+    },
+    {
+     "passage": 1,
+     "score": 1.1678554190227461
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "register mark mark buffer jump jump yank motion mark regex window motion motion macro buffer fold vim",
+    "buffer vim jump macro vim vim motion split window motion register mark jump buffer jump fold regex.",
+    "regex.",
+    "macro macro buffer split macro yank motion buffer register buffer fold split motion vim split!",
+    "register mark macro vim.",
+    "buffer buffer register register mark window split regex split mark macro jump window jump macro motion jump yank jump split",
+    "regex motion window motion mark split window buffer motion register",
+    "jump jump regex!"
+   ],
+   "query": "mark fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 10,
+     "score": 0.46577168978020356
+    },
+    {
+     "passage": 8,
+     "score": 0.44279077329873223
+    },
+    {
+     "passage": 2,
+     "score": 0.39659767644650995
+    },
+    {
+     "passage": 3,
+     "score": 0.3125829802369619
+    },
+    {
+     "passage": 0,
+     "score": 0.3002396669405846
+    },
+    {
+     "passage": 7,
+     "score": 0.2782634663105723
+    },
+    {
+     "passage": 11,
+     "score": 0.2592849665558885
+    },
+    {
+     "passage": 4,
+     "score": 0.24272997016922818
+    },
+    {
+     "passage": 6,
+     "score": 0.22151483385014809
+    }
+   ],
+   "k": 11,
+   "passages": [
+    "split regex register jump mark buffer window motion motion window fold.",
+    "yank yank",
+    "fold split jump regex register regex split jump register yank jump regex mark.",
+    "yank yank jump split yank buffer mark register macro yank!",
+    "window macro vim jump fold yank mark motion window vim split fold window fold motion regex register!",
+    "split!",
+    "vim split jump window vim split jump macro mark window fold vim motion window regex macro buffer window jump register.",
+    "mark macro vim jump mark register yank buffer vim fold vim split fold.",
+    "window buffer jump register motion jump yank fold register",
+    "split yank jump yank mark split!",
+    "vim register",
+    "yank buffer yank motion vim yank fold register fold mark yank window vim regex fold"
+   ],
+   "query": "register absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 2.2006226940747697
+    },
+    {
+     "passage": 3,
+     "score": 1.9904161899811696
+    },
+    {
+     "passage": 7,
+     "score": 1.6490666908824712
+    },
+    {
+     "passage": 6,
+     "score": 1.6471679046819863
+    },
+    {
+     "passage": 1,
+     "score": 1.526341110956149
+    },
+    {
+     "passage": 5,
+     "score": 1.4614756177833013
+    },
+    {
+     "passage": 8,
+     "score": 1.3486608305781953
+    },
+    {
+     "passage": 4,
+     "score": 1.1901866614145098
+    },
+    {
+     "passage": 0,
+     "score": 0.37218816795645754
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "macro regex macro motion window jump mark macro fold jump mark jump jump motion!",
+    "macro buffer window register split jump.",
+    "register motion motion buffer window regex mark register register split jump buffer macro buffer buffer register vim jump vim",
+    "window split buffer macro register macro motion fold vim buffer mark buffer buffer motion jump mark.",
+    "mark jump motion regex split split macro split yank.",
+    "register vim buffer fold fold fold vim",
+    "fold split mark motion register window jump yank split jump regex jump macro window yank",
+    "regex vim fold motion vim fold split yank jump motion register!",
+    "vim vim vim yank jump motion."
+   ],
+   "query": "buffer motion register yank buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.827378767706967
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "yank window regex split motion window vim split fold yank register jump macro motion regex macro regex!",
+    "motion fold vim motion macro register motion mark buffer window register!",
+    "motion buffer jump macro split buffer split vim motion register window fold."
+   ],
+   "query": "yank vim buffer regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 1.7277967259557114
+    },
+    {
+     "passage": 2,
+     "score": 1.7169863297588153
+    },
+    {
+     "passage": 1,
+     "score": 1.5494626071352038
+    },
+    {
+     "passage": 5,
+     "score": 0.7778666093109606
+    },
+    {
+     "passage": 4,
+     "score": 0.7538161896114208
+    },
+    {
+     "passage": 3,
+     "score": 0.4048027444858099
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "split.",
+    "yank split buffer jump fold regex jump regex register regex jump window motion vim yank split yank mark",
+    "register jump window motion window motion fold split.",
+    "buffer split macro yank buffer register window buffer mark",
+    "regex yank vim macro buffer buffer macro window vim register motion window regex mark yank yank fold regex!",
+    "window jump macro vim.",
+    "fold jump regex motion buffer jump motion split motion register vim mark window regex fold vim mark buffer fold!"
+   ],
+   "query": "fold register jump jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 0.8941998243772469
+    },
+    {
+     "passage": 2,
+     "score": 0.8320703560601265
+    },
+    {
+     "passage": 1,
+     "score": 0.7005950510293028
+    },
+    {
+     "passage": 5,
+     "score": 0.6799619784200557
+    },
+    {
+     "passage": 8,
+     "score": 0.5759048756550988
+    },
+    {
+     "passage": 3,
+     "score": 0.4247226875480924
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "split register",
+    "buffer vim mark vim fold regex",
+    "regex regex register register yank jump yank split vim split window register vim regex yank",
+    "fold window buffer regex vim mark register jump fold jump macro mark fold window macro fold buffer buffer.",
+    "register macro mark fold yank window fold",
+    "jump jump yank jump jump regex register split yank buffer mark regex yank fold motion macro.",
+    "regex macro.",
+    "macro jump mark window window macro vim macro register mark jump",
+    "yank split regex buffer vim macro motion macro fold motion!",
+    "vim vim fold vim jump.",
+    "yank macro jump"
+   ],
+   "query": "regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 1.0024705805353393
+    },
+    {
+     "passage": 5,
+     "score": 0.8585126642704733
+    },
+    {
+     "passage": 2,
+     "score": 0.8039372870796853
+    },
+    {
+     "passage": 6,
+     "score": 0.5403621206501089
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "window register register register vim buffer vim vim macro regex fold.",
+    "vim mark.",
+    "yank vim window macro window regex mark register split yank jump split",
+    "fold vim macro fold split mark fold mark vim motion window fold vim vim window window vim regex!",
+    "macro fold mark register mark register jump fold buffer motion regex!",
+    "motion window split vim split fold register motion vim split fold jump buffer mark yank regex",
+    "split fold register yank vim mark fold vim register macro motion motion window vim.",
+    "regex mark jump buffer regex mark mark buffer buffer yank yank motion",
+    "fold split vim split"
+   ],
+   "query": "split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 2.080890351117454
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "regex mark vim fold split window fold regex mark motion",
+    "buffer jump regex buffer buffer window motion mark regex vim motion buffer macro yank split buffer register mark vim window",
+    "yank yank fold regex mark buffer regex yank register.",
+    "register motion jump window yank!",
+    "register split register mark!",
+    "jump split regex yank buffer jump mark yank regex vim window macro mark vim jump buffer yank motion macro split",
+    "yank vim window mark register motion split fold window buffer mark split motion register register vim mark mark!"
+   ],
+   "query": "register fold jump yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.28802102568281
+    },
+    {
+     "passage": 5,
+     "score": 1.401097472202033
+    },
+    {
+     "passage": 1,
+     "score": 1.299530926819358
+    },
+    {
+     "passage": 4,
+     "score": 0.9422474914134966
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "mark split jump jump regex jump fold regex jump vim fold motion jump",
+    "motion jump jump buffer buffer mark macro macro macro regex window yank window yank split split!",
+    "motion mark register",
+    "yank motion window macro register",
+    "window register window macro macro regex regex mark regex split yank buffer regex window!",
+    "mark macro split window buffer"
+   ],
+   "query": "absent buffer split fold split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 1.3777610828660256
+    },
+    {
+     "passage": 0,
+     "score": 1.3664362343316798
+    },
+    {
+     "passage": 6,
+     "score": 1.2632787842412578
+    },
+    {
+     "passage": 3,
+     "score": 1.0562242751389643
+    },
+    {
+     "passage": 1,
+     "score": 0.9104022670041073
+    },
+    {
+     "passage": 2,
+     "score": 0.6909879468495009
+    },
+    {
+     "passage": 5,
+     "score": 0.6214254018646519
+    },
+    {
+     "passage": 7,
+     "score": 0.5671815306452259
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "vim vim buffer register buffer fold motion register buffer yank vim mark motion window split register!",
+    "mark mark register buffer!",
+    "vim vim yank split!",
+    "register macro vim window buffer buffer buffer window macro macro fold!",
+    "jump yank yank buffer split motion fold window macro buffer mark motion regex split register yank window!",
+    "motion regex mark split register register!",
+    "jump vim jump jump macro split buffer yank motion jump regex vim split!",
+    "yank fold yank fold split fold vim vim macro split yank yank vim macro jump motion register window register!",
+    "macro mark!",
+    "macro regex motion yank."
+   ],
+   "query": "absent buffer split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.2554853375987927
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "mark mark motion window yank mark buffer regex window regex mark window regex window register regex macro register mark",
+    "yank macro mark motion mark jump fold split register!"
+   ],
+   "query": "macro motion buffer register regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 3.5194258344474294
+    },
+    {
+     "passage": 0,
+     "score": 2.174213829674997
+    },
+    {
+     "passage": 5,
+     "score": 1.3336676077186158
+    },
+    {
+     "passage": 2,
+     "score": 0.8908085166059457
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "buffer register regex mark motion motion buffer fold window mark vim regex split mark fold yank split split split register.",
+    "vim buffer vim yank mark regex mark",
+    "regex mark register window buffer buffer jump buffer buffer register jump",
+    "split macro regex macro yank yank split macro buffer split mark.",
+    "yank fold vim jump.",
+    "regex buffer mark yank window vim vim regex window split.",
+    "mark jump regex.",
+    "macro fold.",
+    "regex split motion fold split window window motion split mark window",
+    "register regex regex register!",
+    "yank macro yank vim regex",
+    "split buffer!"
+   ],
+   "query": "motion window window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.5211781353659084
+    },
+    {
+     "passage": 7,
+     "score": 1.5211781353659084
+    },
+    {
+     "passage": 2,
+     "score": 1.0522198386023505
+    },
+    {
+     "passage": 0,
+     "score": 1.0305392674054004
+    },
+    {
+     "passage": 10,
+     "score": 0.9435493788183016
+    },
+    {
+     "passage": 5,
+     "score": 0.7011927536817956
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "yank motion buffer jump jump mark window jump register jump buffer buffer!",
+    "regex motion fold yank fold jump fold yank regex vim motion split macro!",
+    "fold buffer fold motion split fold split",
+    "buffer yank macro.",
+    "motion window regex motion window mark window buffer mark split jump mark window!",
+    "macro macro split buffer fold window regex vim.",
+    "vim mark macro vim mark yank register buffer split register macro vim fold!",
+    "mark regex split macro split jump mark motion fold fold window motion fold!",
+    "macro vim register motion yank",
+    "window split register jump regex mark macro window mark register regex jump split yank split regex split split macro mark!",
+    "register jump window register buffer vim fold register mark buffer regex macro window window buffer motion register register register macro!"
+   ],
+   "query": "jump fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 3.2546873945422057
+    },
+    {
+     "passage": 9,
+     "score": 2.481079782659866
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "macro buffer yank jump buffer buffer vim buffer!",
+    "macro mark window buffer register window vim buffer buffer buffer vim fold yank vim buffer yank buffer buffer!",
+    "window split regex macro split regex vim regex!",
+    "yank mark buffer yank mark jump yank regex mark vim!",
+    "window register register vim!",
+    "macro jump mark mark window buffer regex jump split fold split split yank vim!",
+    "jump!",
+    "macro window buffer mark motion window yank vim motion buffer buffer vim!",
+    "vim jump mark!",
+    "fold split regex fold window split motion buffer yank jump regex register fold motion regex regex",
+    "motion jump fold vim fold yank split vim motion macro!",
+    "window macro split buffer motion macro yank"
+   ],
+   "query": "buffer motion jump window vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.9312511738820639
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "vim register regex register window window motion macro vim fold fold vim motion",
+    "fold split fold!"
+   ],
+   "query": "split split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 1.8532977507180066
+    },
+    {
+     "passage": 1,
+     "score": 1.4631827328120224
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "motion",
+    "buffer fold jump jump fold split register yank motion regex buffer macro motion motion buffer jump split!",
+    "mark buffer buffer split jump buffer buffer window register regex fold mark window macro split.",
+    "split mark",
+    "macro macro jump mark jump yank macro yank jump macro macro macro regex jump fold macro mark motion jump!"
+   ],
+   "query": "jump yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.34977820279330185
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "fold mark register buffer yank register mark window regex buffer yank register vim yank mark split buffer split!",
+    "macro split motion regex regex window mark regex regex regex regex!",
+    "vim vim macro window mark buffer",
+    "vim motion motion yank yank fold macro macro mark window mark fold!",
+    "macro vim vim jump register macro!"
+   ],
+   "query": "window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.7549127709068711
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "macro split yank yank.",
+    "register motion mark mark jump macro"
+   ],
+   "query": "window absent split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 2.8189405819147426
+    },
+    {
+     "passage": 4,
+     "score": 2.768564614706374
+    },
+    {
+     "passage": 7,
+     "score": 2.372300193234481
+    },
+    {
+     "passage": 6,
+     "score": 2.3231655937656734
+    },
+    {
+     "passage": 8,
+     "score": 2.201609226326732
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "fold window yank window motion vim mark fold!",
+    "fold motion jump.",
+    "mark fold register jump register regex fold motion",
+    "split!",
+    "jump macro register motion buffer register fold buffer window vim",
+    "buffer vim fold register buffer yank split regex buffer register motion!",
+    "yank mark jump motion register register jump!",
+    "mark split vim buffer mark mark split buffer buffer register window window vim fold.",
+    "yank fold motion vim jump regex fold yank mark jump buffer regex motion split window.",
+    "split vim motion buffer yank window vim fold window regex regex window motion fold."
+   ],
+   "query": "register split buffer motion jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.459376221318055
+    },
+    {
+     "passage": 3,
+     "score": 2.1921280614576384
+    },
+    {
+     "passage": 4,
+     "score": 2.089590192468082
+    },
+    {
+     "passage": 5,
+     "score": 1.69370920366582
+    },
+    {
+     "passage": 7,
+     "score": 1.6529019861526109
+    },
+    {
+     "passage": 6,
+     "score": 1.5360296292356705
+    },
+    {
+     "passage": 9,
+     "score": 1.3667297432188188
+    },
+    {
+     "passage": 1,
+     "score": 1.3634439967767844
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "register split jump split regex fold register vim mark fold mark buffer regex regex buffer yank motion mark register mark!",
+    "vim mark buffer macro buffer jump buffer split mark vim!",
+    "split buffer mark yank split regex split yank macro buffer vim window.",
+    "fold motion jump jump motion split register yank motion regex split yank fold.",
+    "macro vim mark vim split buffer regex fold split buffer buffer vim motion fold fold!",
+    "jump motion mark vim split buffer window regex jump.",
+    "mark vim regex jump split motion yank motion buffer window jump register",
+    "buffer motion vim yank yank mark jump macro jump register window vim jump mark fold motion jump",
+    "regex regex register buffer window jump.",
+    "fold regex macro!"
+   ],
+   "query": "split mark regex jump fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 1.9468041884061864
+    },
+    {
+     "passage": 5,
+     "score": 1.6997220874774452
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "motion register",
+    "split jump register regex motion regex.",
+    "buffer split window regex!",
+    "register mark yank mark mark macro jump fold motion buffer regex mark window buffer!",
+    "split!",
+    "register fold jump fold yank vim buffer split macro register mark split window",
+    "fold window yank vim macro yank yank window jump register!",
+    "vim register window."
+   ],
+   "query": "regex macro fold absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 2.1671473840204483
+    },
+    {
+     "passage": 0,
+     "score": 1.8221416094417213
+    },
+    {
+     "passage": 4,
+     "score": 1.6248374655690383
+    },
+    {
+     "passage": 1,
+     "score": 1.2790551502781367
+    },
+    {
+     "passage": 2,
+     "score": 1.0202348786521078
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "register buffer motion mark yank split split motion register vim buffer regex motion vim macro fold",
+    "macro regex motion buffer split regex register window regex register buffer buffer split split macro jump window mark register!",
+    "fold fold mark jump window",
+    "jump split vim.",
+    "jump motion yank fold macro buffer window!",
+    "motion yank split vim register regex regex window vim split register vim regex window split buffer register",
+    "vim vim register fold jump regex vim motion regex.",
+    "macro buffer vim fold split jump motion mark yank regex register.",
+    "macro fold window jump window window buffer fold regex"
+   ],
+   "query": "macro mark yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 0.9021625190030962
+    },
+    {
+     "passage": 2,
+     "score": 0.875662071696192
+    },
+    {
+     "passage": 7,
+     "score": 0.7828198246668578
+    },
+    {
+     "passage": 1,
+     "score": 0.7733604719158538
+    },
+    {
+     "passage": 5,
+     "score": 0.6955532694575457
+    },
+    {
+     "passage": 8,
+     "score": 0.6660915558287335
+    },
+    {
+     "passage": 4,
+     "score": 0.5933524726155437
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "motion mark buffer split window macro jump vim split mark mark jump motion regex",
+    "register split register window buffer register buffer yank buffer window macro fold mark jump fold window macro yank mark register!",
+    "regex split fold macro regex window yank regex.",
+    "mark fold macro yank vim regex mark!",
+    "motion macro register yank buffer motion fold fold window macro buffer regex yank motion vim",
+    "buffer macro regex split split.",
+    "fold buffer fold fold regex mark macro jump window mark split register macro vim regex yank macro regex",
+    "split regex split regex register motion jump jump motion fold regex macro register regex mark buffer.",
+    "mark split vim jump fold motion regex vim vim mark fold motion yank regex."
+   ],
+   "query": "absent split macro fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 3.2738312361883635
+    },
+    {
+     "passage": 3,
+     "score": 1.6541132452850156
+    },
+    {
+     "passage": 2,
+     "score": 1.2507393124805408
+    },
+    {
+     "passage": 6,
+     "score": 0.8828024571755937
+    },
+    {
+     "passage": 7,
+     "score": 0.8768846519846714
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "jump jump register jump jump split split",
+    "regex motion regex regex jump motion regex regex window yank fold window regex mark macro.",
+    "yank window split vim jump vim vim split mark vim register buffer register motion register macro split vim!",
+    "macro buffer fold buffer regex window macro fold jump motion.",
+    "vim",
+    "macro yank fold jump motion macro mark yank register jump jump fold motion jump.",
+    "vim register macro yank macro motion fold regex vim vim split macro.",
+    "jump jump window fold yank"
+   ],
+   "query": "regex mark window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.5446156418685285
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "fold vim motion macro regex buffer split fold vim yank!",
+    "vim macro"
+   ],
+   "query": "split split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 5,
+     "score": 1.5856922553236128
+    },
+    {
+     "passage": 6,
+     "score": 1.4159041106686652
+    },
+    {
+     "passage": 0,
+     "score": 1.331099510335108
+    },
+    {
+     "passage": 2,
+     "score": 1.1977992460938276
+    },
+    {
+     "passage": 10,
+     "score": 0.9830843070610318
+    }
+   ],
+   "k": 5,
+   "passages": [
+    "motion split mark regex split register yank vim window mark buffer yank macro motion buffer macro window motion fold vim.",
+    "vim mark window regex fold mark macro!",
+    "register register window motion register register fold macro yank!",
+    "mark regex mark split mark split macro jump buffer fold regex fold window!",
+    "regex macro fold mark motion split window fold window mark split buffer macro mark regex fold window macro buffer",
+    "jump yank motion.",
+    "vim vim yank mark macro register yank motion register yank vim jump split window jump motion macro regex macro",
+    "regex vim yank vim fold mark macro",
+    "window mark motion split fold.",
+    "register vim split register vim jump buffer macro macro motion motion register vim register macro mark.",
+    "register window yank.",
+    "vim motion buffer split buffer mark motion regex!"
+   ],
+   "query": "motion yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.5754429423516527
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "buffer yank regex vim vim window.",
+    "buffer regex."
+   ],
+   "query": "fold yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.073263423452622
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "window yank mark yank vim macro split register yank split vim buffer fold buffer vim yank fold vim.",
+    "window regex fold mark split yank motion motion regex macro",
+    "register macro macro yank regex buffer jump buffer macro fold"
+   ],
+   "query": "jump absent absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.19561218948231
+    },
+    {
+     "passage": 0,
+     "score": 0.1706840106156171
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "vim split mark motion buffer macro fold jump jump split fold buffer macro macro!",
+    "jump motion window regex yank macro window macro regex mark"
+   ],
+   "query": "window register absent window motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 1.2450778337465156
+    },
+    {
+     "passage": 0,
+     "score": 0.4176377423662551
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "vim yank macro jump buffer jump buffer mark buffer vim jump macro jump yank",
+    "mark register fold macro fold register buffer yank register mark register vim jump register split",
+    "yank fold window register fold mark regex yank vim window fold window jump motion fold jump fold"
+   ],
+   "query": "regex jump absent vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 11,
+     "score": 0.7786742926126736
+    },
+    {
+     "passage": 9,
+     "score": 0.7621067544719786
+    },
+    {
+     "passage": 6,
+     "score": 0.7394512275017132
+    },
+    {
+     "passage": 0,
+     "score": 0.6423783619114596
+    },
+    {
+     "passage": 2,
+     "score": 0.6423783619114596
+    },
+    {
+     "passage": 5,
+     "score": 0.5700034605376032
+    },
+    {
+     "passage": 1,
+     "score": 0.5105333161371578
+    }
+   ],
+   "k": 10,
+   "passages": [
+    "vim buffer fold window macro jump!",
+    "motion register yank jump vim macro motion macro buffer motion register",
+    "mark mark fold vim regex regex",
+    "macro regex split fold split yank split register split yank",
+    "regex register fold split yank motion buffer mark.",
+    "buffer motion macro buffer regex regex split jump motion jump mark yank window vim jump motion yank mark macro vim.",
+    "yank regex mark window motion register vim window register vim!",
+    "buffer yank window regex.",
+    "register mark regex jump split split macro split fold mark fold split",
+    "register yank vim split vim regex regex jump yank.",
+    "motion",
+    "vim split yank fold buffer vim register yank jump motion vim macro jump yank"
+   ],
+   "query": "vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 0.4577898507199662
+    },
+    {
+     "passage": 1,
+     "score": 0.37751287053807075
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "register buffer regex buffer mark yank macro vim vim jump macro vim macro!",
+    "macro split vim regex macro jump motion split motion window mark!"
+   ],
+   "query": "regex vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.4507665196838299
+    },
+    {
+     "passage": 0,
+     "score": 0.43811638349064486
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "vim fold vim mark window macro buffer buffer window fold jump jump macro yank macro buffer regex!",
+    "jump register jump window window fold jump window regex window fold split regex.",
+    "window mark register jump regex macro yank vim split split split buffer macro motion macro!",
+    "vim split yank yank jump macro split jump window mark vim buffer register split buffer motion.",
+    "vim yank macro window mark buffer register register yank buffer motion motion macro"
+   ],
+   "query": "macro"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 1.4150775244883709
+    },
+    {
+     "passage": 0,
+     "score": 1.0200164490397248
+    },
+    {
+     "passage": 4,
+     "score": 0.8715504429800344
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "vim vim window regex motion register buffer jump regex yank",
+    "mark.",
+    "yank yank jump buffer motion split window.",
+    "vim motion window jump",
+    "window macro vim vim vim jump split jump jump register split fold yank motion.",
+    "buffer yank window window!",
+    "fold split motion mark motion jump vim mark regex yank regex jump fold fold yank yank",
+    "split split jump motion jump regex mark regex mark motion motion buffer split split split vim split mark",
+    "register buffer split buffer yank register buffer jump jump yank"
+   ],
+   "query": "register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.1903777640164277
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "window motion register mark register window mark jump macro macro buffer buffer split",
+    "motion motion window yank vim register window macro yank mark yank mark."
+   ],
+   "query": "macro vim buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.9203251088626907
+    },
+    {
+     "passage": 0,
+     "score": 0.2674049499644668
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "vim jump!",
+    "yank mark macro jump window fold register regex buffer yank split register vim mark window split"
+   ],
+   "query": "register jump jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 0.4216553858758952
+    },
+    {
+     "passage": 1,
+     "score": 0.39361426415508444
+    },
+    {
+     "passage": 7,
+     "score": 0.3720777444632462
+    },
+    {
+     "passage": 3,
+     "score": 0.35326309200765793
+    },
+    {
+     "passage": 0,
+     "score": 0.30109729862828877
+    },
+    {
+     "passage": 2,
+     "score": 0.23763180854567176
+    },
+    {
+     "passage": 5,
+     "score": 0.23763180854567176
+    }
+   ],
+   "k": 8,
+   "passages": [
+    "fold vim jump regex regex buffer regex macro macro regex",
+    "split vim buffer split macro jump fold motion motion jump yank split fold yank mark register jump fold window!",
+    "register regex mark register buffer split motion buffer register motion register jump split vim window mark vim!",
+    "window motion fold motion fold vim jump mark jump macro yank regex fold fold split buffer",
+    "macro.",
+    "window split yank register register window window regex fold yank mark split jump register mark motion regex.",
+    "register yank fold yank split vim jump jump regex regex jump buffer mark motion fold.",
+    "mark jump register fold macro.",
+    "motion!"
+   ],
+   "query": "absent jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 10,
+     "score": 0.8999054394772807
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "macro macro window regex yank motion yank regex!",
+    "register register window jump regex yank window yank vim fold macro split regex",
+    "yank mark macro fold vim buffer macro vim jump",
+    "jump window split window register motion window.",
+    "jump macro mark yank macro window regex fold motion vim window.",
+    "regex regex register jump mark yank mark regex motion yank fold register yank mark buffer regex split jump vim.",
+    "regex fold fold register macro vim window regex macro macro window window",
+    "mark regex buffer regex fold window regex macro register window.",
+    "regex macro buffer window!",
+    "jump regex fold regex fold mark macro motion vim motion vim motion!",
+    "register buffer register window yank vim yank window fold split vim regex!",
+    "fold yank"
+   ],
+   "query": "register register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.4712363022403347
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "fold motion mark split fold regex regex!",
+    "register register window mark buffer yank vim window vim vim vim vim macro jump fold register motion regex macro",
+    "jump split motion buffer macro",
+    "motion jump motion register fold motion split fold window split vim yank yank split fold regex",
+    "split jump mark split jump vim vim split jump motion.",
+    "register window buffer motion regex motion.",
+    "fold macro vim regex vim window fold vim split yank jump macro fold split split",
+    "yank!"
+   ],
+   "query": "regex window window jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 2.2755252310446403
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "yank vim motion buffer vim register buffer jump mark motion yank macro split vim window window macro jump.",
+    "yank split register fold motion.",
+    "split regex regex macro yank mark vim vim vim vim regex split vim split motion yank!"
+   ],
+   "query": "vim regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 1.5147765068300743
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "regex fold yank yank",
+    "fold fold register register buffer mark fold mark regex!",
+    "regex split window.",
+    "yank macro register split macro macro motion window jump vim jump fold split macro fold macro regex.",
+    "vim split vim yank yank macro register",
+    "vim!",
+    "register split split regex regex split jump register register fold jump jump vim motion.",
+    "buffer yank buffer vim fold mark vim split window split split mark fold vim buffer fold mark vim buffer.",
+    "split yank window vim macro regex macro jump motion motion macro split vim macro window"
+   ],
+   "query": "absent jump"
+  },
+  {
+   "hits": [
+    {
+     "passage": 6,
+     "score": 1.6031783776968873
+    },
+    {
+     "passage": 2,
+     "score": 1.441795305124742
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "split motion jump vim jump window split split regex buffer",
+    "motion macro buffer split regex split split split vim buffer fold buffer macro jump regex jump macro buffer macro fold!",
+    "regex register yank buffer jump vim window.",
+    "register register motion split macro regex buffer split!",
+    "vim fold macro jump motion regex split split.",
+    "regex fold regex macro jump jump mark split motion mark.",
+    "mark mark motion yank register fold regex register buffer vim fold yank buffer",
+    "buffer!"
+   ],
+   "query": "absent yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.6034599608584974
+    },
+    {
+     "passage": 2,
+     "score": 0.39989259062896854
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "yank regex.",
+    "split fold mark split register jump buffer jump mark regex vim yank split regex register register buffer yank yank yank",
+    "regex buffer window register yank register buffer vim yank regex regex buffer buffer buffer fold mark macro buffer macro vim."
+   ],
+   "query": "jump fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.9712890428228533
+    },
+    {
+     "passage": 2,
+     "score": 0.5388423311773426
+    },
+    {
+     "passage": 3,
+     "score": 0.5222341771342054
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "buffer split!",
+    "yank window fold.",
+    "regex motion vim fold jump motion macro split mark macro mark register register yank jump regex yank.",
+    "register window buffer mark regex macro split buffer fold buffer mark motion regex yank macro macro split window",
+    "buffer regex mark macro jump split window vim motion regex macro",
+    "yank split buffer buffer jump yank yank register window."
+   ],
+   "query": "fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 2.2604825184455968
+    },
+    {
+     "passage": 7,
+     "score": 2.092914630497009
+    },
+    {
+     "passage": 4,
+     "score": 1.675345888698383
+    },
+    {
+     "passage": 5,
+     "score": 1.2767861093725144
+    },
+    {
+     "passage": 3,
+     "score": 0.9704327890348654
+    },
+    {
+     "passage": 2,
+     "score": 0.9591350748587996
+    },
+    {
+     "passage": 0,
+     "score": 0.7248693033325538
+    }
+   ],
+   "k": 7,
+   "passages": [
+    "buffer macro yank motion split split yank macro buffer.",
+    "buffer macro macro macro regex jump window mark regex yank buffer split macro mark regex fold jump.",
+    "regex motion macro split regex regex mark jump macro split regex jump mark motion fold",
+    "fold buffer split!",
+    "fold fold window",
+    "register regex vim regex jump motion mark jump split buffer jump macro fold vim vim regex macro",
+    "split motion yank macro register jump macro split mark regex macro fold!",
+    "regex fold macro motion regex regex window motion macro mark macro split buffer mark fold motion jump motion!"
+   ],
+   "query": "fold regex window buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.9710757235275456
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "jump buffer window mark split macro jump mark register motion fold window motion",
+    "register yank mark fold macro macro jump window split macro split buffer split register register!",
+    "fold vim split window register motion mark fold register buffer.",
+    "jump split regex motion regex fold jump window vim macro motion regex jump regex regex mark window fold!",
+    "register split yank yank fold regex mark split motion",
+    "yank split split register window vim yank mark vim register split yank regex motion jump buffer.",
+    "regex register register vim macro register buffer register yank.",
+    "yank motion motion fold yank fold macro register window jump yank fold macro fold vim macro motion regex yank macro!",
+    "regex motion macro macro.",
+    "mark register buffer window regex motion motion buffer yank split register macro!",
+    "window fold split fold yank macro regex jump split fold split split register split buffer register fold window macro!"
+   ],
+   "query": "jump absent jump mark window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 4,
+     "score": 4.292291808320605
+    },
+    {
+     "passage": 3,
+     "score": 2.9436560803355705
+    },
+    {
+     "passage": 8,
+     "score": 2.637230093989886
+    },
+    {
+     "passage": 5,
+     "score": 1.8976762879438152
+    },
+    {
+     "passage": 6,
+     "score": 1.8156474420130668
+    },
+    {
+     "passage": 2,
+     "score": 1.1251699355795874
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "fold motion fold",
+    "fold split!",
+    "register macro.",
+    "window split window buffer window regex mark buffer fold mark jump fold motion",
+    "jump yank yank vim regex motion register yank register jump vim",
+    "regex vim macro split macro vim mark fold vim vim motion register fold regex jump mark split macro.",
+    "motion vim macro.",
+    "mark jump regex jump vim split!",
+    "split yank regex register."
+   ],
+   "query": "window register vim motion yank"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 1.5408845783975806
+    },
+    {
+     "passage": 2,
+     "score": 0.38459383051989
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "yank window buffer register motion split mark!",
+    "regex vim vim mark buffer mark jump split window mark",
+    "mark macro window mark yank fold window vim register yank regex macro mark mark vim window motion vim"
+   ],
+   "query": "jump regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.8920453914740326
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "mark macro fold fold!",
+    "fold macro vim mark yank buffer register register fold vim register jump!",
+    "regex regex vim macro motion motion regex macro fold",
+    "split motion register buffer regex jump mark mark yank regex yank motion jump mark jump yank.",
+    "buffer vim mark regex split regex mark regex mark vim macro mark jump regex register split fold jump fold",
+    "vim macro window motion jump macro yank.",
+    "vim register yank window window motion buffer motion mark window window register!"
+   ],
+   "query": "register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 8,
+     "score": 1.4302438223600384
+    },
+    {
+     "passage": 5,
+     "score": 1.2949753605149368
+    },
+    {
+     "passage": 9,
+     "score": 1.07302006768331
+    },
+    {
+     "passage": 4,
+     "score": 0.9987842338603604
+    },
+    {
+     "passage": 3,
+     "score": 0.9072078875451178
+    },
+    {
+     "passage": 2,
+     "score": 0.7633527126380704
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "register split!",
+    "motion regex vim",
+    "regex fold macro mark mark",
+    "fold split!",
+    "macro buffer macro jump motion motion motion fold register yank vim motion macro split buffer!",
+    "register buffer jump yank mark yank vim regex macro buffer fold register motion yank register mark motion!",
+    "regex macro macro buffer.",
+    "vim jump buffer register mark split motion yank regex window buffer window window",
+    "register register motion register regex yank jump macro fold yank mark motion yank jump vim window buffer fold split macro.",
+    "regex yank motion buffer regex vim split register jump macro jump window fold macro vim split jump fold split window",
+    "buffer jump split yank vim!"
+   ],
+   "query": "yank absent fold fold"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 1.4488503534679484
+    },
+    {
+     "passage": 2,
+     "score": 1.0498221244986776
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "buffer yank mark",
+    "buffer fold buffer macro macro jump split jump register motion yank mark vim yank fold regex jump motion",
+    "motion regex macro split split mark yank split buffer buffer split motion window",
+    "regex regex fold register vim yank macro yank motion window window buffer split macro fold split regex window"
+   ],
+   "query": "macro window"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.0795920688367289
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "buffer!",
+    "motion fold jump fold jump jump fold window regex motion vim yank yank vim fold."
+   ],
+   "query": "split buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 2.3128581440368423
+    },
+    {
+     "passage": 0,
+     "score": 1.7208463898324107
+    },
+    {
+     "passage": 10,
+     "score": 1.7092981458094956
+    },
+    {
+     "passage": 8,
+     "score": 1.6391245601934905
+    },
+    {
+     "passage": 4,
+     "score": 1.5513890536435437
+    },
+    {
+     "passage": 1,
+     "score": 1.5026701178266733
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "buffer motion yank regex jump register yank regex window motion buffer!",
+    "macro window register register fold macro jump macro buffer motion regex motion regex register register",
+    "register mark regex vim regex fold yank split register fold vim fold register motion split window fold mark motion window",
+    "register vim motion vim jump regex macro yank vim vim!",
+    "jump regex split yank yank fold fold mark macro fold vim yank register regex macro fold vim yank macro split.",
+    "motion buffer regex mark fold jump vim mark motion macro fold jump mark.",
+    "register.",
+    "motion regex register macro.",
+    "macro fold vim regex buffer register window jump.",
+    "regex vim vim window fold buffer split yank register register buffer mark motion mark jump register vim fold.",
+    "vim mark macro split buffer motion window yank vim!",
+    "fold yank jump split vim window window motion fold fold."
+   ],
+   "query": "split register jump absent buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.980864867928258
+    },
+    {
+     "passage": 6,
+     "score": 1.4940415015079886
+    },
+    {
+     "passage": 7,
+     "score": 1.4940415015079886
+    },
+    {
+     "passage": 9,
+     "score": 1.3771989090948873
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "vim vim motion fold register fold window split mark jump mark split vim yank vim vim",
+    "jump yank macro regex jump jump fold register yank vim buffer!",
+    "fold split buffer jump window vim split macro fold split motion buffer!",
+    "window mark register split buffer buffer jump jump window jump!",
+    "motion buffer register register jump split register register split window split!",
+    "fold macro window motion buffer window macro split jump jump split window.",
+    "buffer buffer buffer vim jump split mark regex window yank regex buffer macro vim.",
+    "fold split window motion vim regex window motion vim split buffer window mark regex!",
+    "jump macro yank macro register split yank register buffer register.",
+    "fold window regex buffer split regex vim fold yank regex split mark jump window vim regex fold.",
+    "regex",
+    "vim regex vim motion register macro macro fold."
+   ],
+   "query": "vim vim mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 2.0899053736298074
+    },
+    {
+     "passage": 1,
+     "score": 1.1651103169861552
+    }
+   ],
+   "k": 4,
+   "passages": [
+    "split window macro vim fold motion jump mark mark macro regex buffer regex yank split yank",
+    "mark mark buffer.",
+    "jump window jump split yank register split window yank macro buffer fold buffer vim.",
+    "vim!"
+   ],
+   "query": "mark regex"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 0.9687330437173228
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "yank split jump fold window buffer!",
+    "split fold mark buffer vim motion register jump jump window fold vim fold!",
+    "motion buffer motion macro vim jump regex register fold split fold regex window!",
+    "yank buffer fold macro register yank register window jump yank yank fold vim split motion!",
+    "yank jump",
+    "fold regex motion",
+    "split regex split regex jump buffer register mark split window regex regex.",
+    "register mark regex register!",
+    "yank regex fold window yank macro motion buffer jump jump!"
+   ],
+   "query": "register"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.3664898441459592
+    },
+    {
+     "passage": 6,
+     "score": 1.2611337807774061
+    },
+    {
+     "passage": 3,
+     "score": 1.0126408950302688
+    },
+    {
+     "passage": 5,
+     "score": 0.6174639603843103
+    },
+    {
+     "passage": 4,
+     "score": 0.5563960961704774
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "fold yank regex regex regex fold motion vim macro macro macro motion",
+    "mark.",
+    "macro macro macro yank register mark macro fold register macro regex register regex split yank window split",
+    "mark buffer regex buffer split window buffer jump yank fold motion vim window fold register register!",
+    "split regex regex mark macro register buffer register vim mark yank macro window.",
+    "buffer macro split yank motion buffer mark window regex mark.",
+    "macro yank buffer buffer yank vim mark window register fold split motion motion regex window."
+   ],
+   "query": "vim motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 2.0492571090108775
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "macro jump window buffer regex register mark split motion split regex!",
+    "vim yank buffer mark yank regex mark yank buffer macro split fold",
+    "buffer regex mark register",
+    "buffer regex vim.",
+    "jump regex buffer buffer yank buffer yank window window window fold mark motion buffer split split window buffer yank regex!",
+    "macro macro jump split window register regex split register regex register vim",
+    "fold regex regex buffer register buffer vim mark fold vim buffer macro fold!",
+    "buffer window",
+    "jump split mark window window yank yank macro split fold window regex window regex fold regex yank!",
+    "motion mark buffer jump mark yank yank fold split window split regex macro buffer fold jump",
+    "macro",
+    "mark buffer macro mark window fold register macro jump yank window macro mark register mark regex buffer!"
+   ],
+   "query": "buffer jump split buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 9,
+     "score": 0.9388162241073137
+    },
+    {
+     "passage": 7,
+     "score": 0.8967796767592251
+    },
+    {
+     "passage": 1,
+     "score": 0.8871498278812738
+    },
+    {
+     "passage": 0,
+     "score": 0.7987028661891828
+    },
+    {
+     "passage": 3,
+     "score": 0.5369022110248163
+    },
+    {
+     "passage": 8,
+     "score": 0.5095810499395134
+    }
+   ],
+   "k": 6,
+   "passages": [
+    "regex regex jump mark mark window yank vim jump buffer yank motion motion regex regex regex",
+    "buffer vim macro jump motion mark buffer mark macro buffer buffer.",
+    "yank window jump vim buffer jump buffer regex split macro window fold split split!",
+    "macro vim window vim split register split jump macro fold regex yank regex regex window yank vim mark.",
+    "yank regex window!",
+    "split regex vim motion vim macro window motion",
+    "buffer macro fold macro motion fold window register buffer yank register register motion motion",
+    "macro regex regex regex register split mark macro register yank vim mark mark window jump yank register split",
+    "regex macro fold yank regex yank vim motion split register fold jump jump mark buffer window register motion buffer macro!",
+    "mark yank register vim mark window mark vim window fold buffer split regex split fold",
+    "motion yank fold jump register vim fold jump split yank."
+   ],
+   "query": "mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 10,
+     "score": 2.8692315567320192
+    },
+    {
+     "passage": 6,
+     "score": 2.5594796697507283
+    },
+    {
+     "passage": 4,
+     "score": 2.0503635631913326
+    },
+    {
+     "passage": 5,
+     "score": 1.5951568839617751
+    },
+    {
+     "passage": 7,
+     "score": 1.4209767559874602
+    },
+    {
+     "passage": 0,
+     "score": 1.4186236865358515
+    },
+    {
+     "passage": 2,
+     "score": 1.4186236865358515
+    },
+    {
+     "passage": 1,
+     "score": 1.2609079354007455
+    },
+    {
+     "passage": 3,
+     "score": 0.6713623948843429
+    },
+    {
+     "passage": 11,
+     "score": 0.5599843017238068
+    },
+    {
+     "passage": 8,
+     "score": 0.45855318292100405
+    }
+   ],
+   "k": 11,
+   "passages": [
+    "buffer window motion fold fold macro jump regex mark split buffer jump mark regex motion buffer.",
+    "fold yank register vim split register split regex register macro window split jump regex",
+    "buffer mark fold register buffer macro mark motion fold regex buffer motion yank jump regex window",
+    "motion",
+    "jump register vim register register macro buffer split yank macro!",
+    "motion macro buffer buffer window fold mark.",
+    "mark buffer jump macro split macro vim window regex motion regex split jump register register split buffer vim vim split.",
+    "motion jump jump macro macro regex window yank buffer split",
+    "register jump mark register buffer fold regex split",
+    "jump.",
+    "motion motion split vim vim macro yank buffer regex split",
+    "window jump motion fold!"
+   ],
+   "query": "macro vim motion motion buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 0.9181803172917746
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "jump split fold regex yank mark jump yank macro.",
+    "regex vim yank yank yank window fold vim fold regex register mark yank window.",
+    "yank macro regex motion mark mark jump register.",
+    "split mark macro mark split regex register regex vim register.",
+    "motion yank jump buffer fold fold macro jump motion register macro yank split.",
+    "mark window motion fold regex mark yank buffer buffer register motion jump register fold regex macro buffer vim fold vim."
+   ],
+   "query": "vim"
+  },
+  {
+   "hits": [
+    {
+     "passage": 2,
+     "score": 0.20936770692130044
+    },
+    {
+     "passage": 1,
+     "score": 0.18200600272538994
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "jump jump regex macro yank jump mark vim macro window split vim buffer fold regex",
+    "split vim regex regex motion jump macro macro split register yank.",
+    "split fold motion jump split yank!"
+   ],
+   "query": "split"
+  },
+  {
+   "hits": [
+    {
+     "passage": 3,
+     "score": 0.6759132187702037
+    },
+    {
+     "passage": 2,
+     "score": 0.6476191770542417
+    },
+    {
+     "passage": 0,
+     "score": 0.5355312425640846
+    }
+   ],
+   "k": 3,
+   "passages": [
+    "split regex buffer jump split fold mark buffer yank vim vim fold macro.",
+    "register regex regex buffer window motion macro regex jump yank jump mark macro buffer!",
+    "register vim regex jump regex split regex mark!",
+    "split buffer split buffer fold window mark.",
+    "vim regex yank yank fold yank register vim split motion macro regex vim split macro vim",
+    "register split macro fold window register window yank regex split yank split",
+    "window split fold window split yank motion!"
+   ],
+   "query": "mark"
+  },
+  {
+   "hits": [
+    {
+     "passage": 0,
+     "score": 1.6659782852326357
+    },
+    {
+     "passage": 1,
+     "score": 1.0885179481743115
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "macro macro buffer mark regex window register fold jump mark buffer motion!",
+    "buffer fold fold window yank fold buffer yank jump motion fold buffer split mark split mark."
+   ],
+   "query": "regex register yank motion"
+  },
+  {
+   "hits": [
+    {
+     "passage": 7,
+     "score": 2.4165957180182955
+    },
+    {
+     "passage": 6,
+     "score": 2.410640708188768
+    }
+   ],
+   "k": 2,
+   "passages": [
+    "regex.",
+    "fold register vim split.",
+    "buffer fold regex vim mark jump macro fold jump fold register buffer",
+    "mark fold jump motion.",
+    "mark regex split!",
+    "regex split vim motion macro window motion split register regex regex macro register motion vim!",
+    "regex yank split window split fold fold window split yank vim macro split macro window macro vim!",
+    "split mark vim motion vim split buffer yank fold yank split register fold motion window vim window motion mark vim.",
+    "split register motion macro regex fold regex buffer regex yank macro motion regex!"
+   ],
+   "query": "split window regex window buffer"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 3.2311708003653807
+    }
+   ],
+   "k": 1,
+   "passages": [
+    "jump fold jump regex regex macro motion",
+    "yank buffer vim macro fold jump yank yank jump vim buffer macro window window macro buffer",
+    "fold motion split yank split!",
+    "split window mark buffer register split vim register regex buffer macro macro motion register mark",
+    "fold macro split motion macro."
+   ],
+   "query": "yank vim jump"
+  },
+  {
+   "hits": [],
+   "k": 1,
+   "passages": [
+    "register fold vim vim mark buffer macro regex fold!",
+    "buffer split regex macro register buffer fold motion fold window macro vim",
+    "regex regex macro yank macro mark vim register vim vim motion yank macro motion.",
+    "mark yank split macro macro window motion register vim macro jump regex motion macro yank regex fold motion"
+   ],
+   "query": "absent"
+  },
+  {
+   "hits": [
+    {
+     "passage": 1,
+     "score": 2.0746115832044563
+    },
+    {
+     "passage": 0,
+     "score": 1.807882366598617
+    },
+    {
+     "passage": 4,
+     "score": 1.3472658995150315
+    },
+    {
+     "passage": 5,
+     "score": 1.0960317164823115
+    },
+    {
+     "passage": 2,
+     "score": 1.040741454096707
+    },
+    {
+     "passage": 9,
+     "score": 0.9453622326613227
+    },
+    {
+     "passage": 10,
+     "score": 0.9118103141360658
+    }
+   ],
+   "k": 9,
+   "passages": [
+    "split buffer split window register motion yank motion buffer fold vim mark vim yank window buffer buffer register.",
+    "motion regex regex yank macro split vim fold jump buffer mark split yank yank regex jump split window fold register",
+    "fold jump window jump buffer yank yank macro register motion fold window!",
+    "motion buffer regex buffer mark mark regex",
+    "regex buffer register split motion mark window window jump motion window vim vim regex yank.",
+    "macro jump mark macro yank yank register window mark jump!",
+    "register vim!",
+    "motion fold macro!",
+    "fold regex regex fold regex register fold fold regex.",
+    "jump mark motion split register window jump split vim register mark fold regex jump regex buffer.",
+    "vim buffer split window macro jump fold."
+   ],
+   "query": "yank split yank"
+  }
+ ],
+ "fixture": "retrieval/bm25",
+ "references": [
+  "rank-bm25"
+ ]
+}

@@ -5232,6 +5232,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "splinter-conformance",
  "splinter-core",
  "splinter-data",
  "splinter-eval",
