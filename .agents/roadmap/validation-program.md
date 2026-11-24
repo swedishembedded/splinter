@@ -192,6 +192,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - compaction (10C): a stale or crashed compaction never destroys the only copy of a record, model-checked
   (`validation/tla/compaction`); the guard that keeps a merge equal to one of its inputs is pinned by source mutants
   in both compactors, the blob one by a new spec (it had none).
+- retrieval benchmark (3C): a corpus whose relevant passages are known, every kind of query the plan lists, the
+  corpus also reordered; BM25, dense and fused rankings equal an independent implementation's, and the fixture
+  records recall, precision, MRR and nDCG of each against rank_bm25's (`validation/oracles/retrieval/benchmark.py`).
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
@@ -205,6 +208,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   than one live path (G-NEW-14, a refactor of live callers); the preference, feedback, distill and retrieval
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
-  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and
-  retrieval benchmarks (3A-3C), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and claims (3A-3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

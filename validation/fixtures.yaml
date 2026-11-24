@@ -33,6 +33,13 @@ fixtures:
     oracle_sha256: "dc79ee1ee82de9ba025ea6a92350522a3b55412834f19180b71318d1d756e9f8"
     references: ["networkx"]
     test: "splinter-knowledge/it/external_skill_order"
+  retrieval/benchmark:
+    path: "validation/fixtures/retrieval/benchmark.json"
+    sha256: "ea899e50620168e88b8b899c375953b352dc10a79f5b478c42b403c383394ac2"
+    oracle: "validation/oracles/retrieval/benchmark.py"
+    oracle_sha256: "714dcd1877c0b2de73ef04264a59c8e434420dd066ec26a8e975945b62ed2a28"
+    references: ["rank-bm25"]
+    test: "splinter-knowledge/it/external_retrieval"
   retrieval/bm25:
     path: "validation/fixtures/retrieval/bm25.json"
     sha256: "bc78a51b6cdab5e2d89bb88894da2292f49b8e63759fe103282fe1969ba5e0d0"

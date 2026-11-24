@@ -1,0 +1,1686 @@
+{
+ "cases": [
+  {
+   "kind": "exact",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7653606369886217,
+     "ndcg@5": 0.9674679834891693,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.6666666666666666,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7653606369886217,
+     "ndcg@5": 0.9674679834891693,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.6666666666666666,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "115200 baud",
+   "rankings": {
+    "bm25": [
+     0,
+     6,
+     8,
+     7
+    ],
+    "dense": [
+     0,
+     6,
+     7,
+     8,
+     1,
+     2,
+     3,
+     4,
+     5,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     6,
+     7,
+     8,
+     1,
+     2,
+     3,
+     4,
+     5,
+     9,
+     10,
+     11
+    ]
+   },
+   "relevant": [
+    0,
+    6,
+    8
+   ]
+  },
+  {
+   "kind": "meaning",
+   "measures": {
+    "bm25": {
+     "mrr": 0.2,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.0,
+     "ndcg@5": 0.15101961822780524,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 0.0,
+     "recall@5": 0.25
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.8,
+     "recall@1": 0.25,
+     "recall@3": 0.75,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7039180890341347,
+     "ndcg@5": 0.75369761125927,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.25,
+     "recall@3": 0.5,
+     "recall@5": 0.75
+    },
+    "rank_bm25": {
+     "mrr": 0.2,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.0,
+     "ndcg@5": 0.15101961822780524,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 0.0,
+     "recall@5": 0.25
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "what speed does the serial console use",
+   "rankings": {
+    "bm25": [
+     3,
+     9,
+     4,
+     11,
+     0,
+     6,
+     7,
+     8,
+     5,
+     1
+    ],
+    "dense": [
+     0,
+     6,
+     7,
+     8,
+     1,
+     2,
+     3,
+     4,
+     5,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     3,
+     6,
+     7,
+     4,
+     9,
+     8,
+     1,
+     11,
+     5,
+     2,
+     10
+    ]
+   },
+   "relevant": [
+    0,
+    6,
+    7,
+    8
+   ]
+  },
+  {
+   "kind": "several",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.46927872602275644,
+     "ndcg@5": 0.46927872602275644,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.3333333333333333,
+     "recall@5": 0.3333333333333333
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.46927872602275644,
+     "ndcg@5": 0.46927872602275644,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.3333333333333333,
+     "recall@5": 0.3333333333333333
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "where are settings saved",
+   "rankings": {
+    "bm25": [
+     10
+    ],
+    "dense": [
+     2,
+     5,
+     10,
+     0,
+     1,
+     3,
+     4,
+     6,
+     7,
+     8,
+     9,
+     11
+    ],
+    "fused": [
+     10,
+     2,
+     5,
+     0,
+     1,
+     3,
+     4,
+     6,
+     7,
+     8,
+     9,
+     11
+    ]
+   },
+   "relevant": [
+    2,
+    5,
+    10
+   ]
+  },
+  {
+   "kind": "distractors",
+   "measures": {
+    "bm25": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6934264036172708,
+     "ndcg@5": 0.6934264036172708,
+     "precision@1": 0.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.6131471927654584,
+     "ndcg@5": 0.6131471927654584,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.5,
+     "recall@3": 0.5,
+     "recall@5": 0.5
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.9197207891481876,
+     "ndcg@5": 0.9197207891481876,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6934264036172708,
+     "ndcg@5": 0.6934264036172708,
+     "precision@1": 0.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "what is on the debug header of the board",
+   "rankings": {
+    "bm25": [
+     9,
+     0,
+     6,
+     7,
+     8,
+     11,
+     1,
+     2,
+     4,
+     3,
+     5
+    ],
+    "dense": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     1,
+     6,
+     9,
+     2,
+     7,
+     3,
+     4,
+     8,
+     5,
+     11,
+     10
+    ]
+   },
+   "relevant": [
+    0,
+    6
+   ]
+  },
+  {
+   "kind": "no answer",
+   "measures": {
+    "bm25": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "dense": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "fused": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "rank_bm25": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "bluetooth pairing code",
+   "rankings": {
+    "bm25": [],
+    "dense": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ]
+   },
+   "relevant": []
+  },
+  {
+   "kind": "repeated",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "UART debug header",
+   "rankings": {
+    "bm25": [
+     0,
+     6,
+     9,
+     7,
+     8
+    ],
+    "dense": [
+     0,
+     6,
+     7,
+     8,
+     1,
+     2,
+     3,
+     4,
+     5,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     6,
+     7,
+     8,
+     9,
+     1,
+     2,
+     3,
+     4,
+     5,
+     10,
+     11
+    ]
+   },
+   "relevant": [
+    0,
+    6
+   ]
+  },
+  {
+   "kind": "versions",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 0.3333333333333333,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.5,
+     "ndcg@5": 0.5,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6309297535714575,
+     "ndcg@5": 0.6309297535714575,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "query": "which version of the board runs the UART at 9600 baud",
+   "rankings": {
+    "bm25": [
+     7,
+     8,
+     0,
+     6,
+     9,
+     4,
+     11,
+     3,
+     5,
+     1
+    ],
+    "dense": [
+     0,
+     6,
+     7,
+     8,
+     1,
+     2,
+     3,
+     4,
+     5,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     7,
+     6,
+     8,
+     4,
+     1,
+     9,
+     3,
+     5,
+     11,
+     2,
+     10
+    ]
+   },
+   "relevant": [
+    7
+   ]
+  },
+  {
+   "kind": "exact",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7039180890341347,
+     "ndcg@5": 0.9060254355346823,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.6666666666666666,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7653606369886217,
+     "ndcg@5": 0.9674679834891693,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.6666666666666666,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "115200 baud",
+   "rankings": {
+    "bm25": [
+     5,
+     11,
+     3,
+     4
+    ],
+    "dense": [
+     3,
+     4,
+     5,
+     11,
+     0,
+     1,
+     2,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "fused": [
+     3,
+     5,
+     4,
+     11,
+     0,
+     1,
+     2,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   "relevant": [
+    3,
+    5,
+    11
+   ]
+  },
+  {
+   "kind": "meaning",
+   "measures": {
+    "bm25": {
+     "mrr": 0.2,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.0,
+     "ndcg@5": 0.15101961822780524,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 0.0,
+     "recall@5": 0.25
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.8,
+     "recall@1": 0.25,
+     "recall@3": 0.75,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.7653606369886217,
+     "ndcg@5": 0.787702056960637,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.6,
+     "recall@1": 0.25,
+     "recall@3": 0.5,
+     "recall@5": 0.75
+    },
+    "rank_bm25": {
+     "mrr": 0.2,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.0,
+     "ndcg@5": 0.15101961822780524,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 0.0,
+     "recall@5": 0.25
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "what speed does the serial console use",
+   "rankings": {
+    "bm25": [
+     8,
+     2,
+     7,
+     0,
+     5,
+     11,
+     3,
+     4,
+     6,
+     10
+    ],
+    "dense": [
+     3,
+     4,
+     5,
+     11,
+     0,
+     1,
+     2,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "fused": [
+     3,
+     5,
+     2,
+     0,
+     4,
+     11,
+     8,
+     7,
+     6,
+     10,
+     1,
+     9
+    ]
+   },
+   "relevant": [
+    3,
+    4,
+    5,
+    11
+   ]
+  },
+  {
+   "kind": "several",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.46927872602275644,
+     "ndcg@5": 0.46927872602275644,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.3333333333333333,
+     "recall@5": 0.3333333333333333
+    },
+    "dense": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 1.0,
+     "precision@5": 0.6,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.46927872602275644,
+     "ndcg@5": 0.46927872602275644,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.3333333333333333,
+     "recall@3": 0.3333333333333333,
+     "recall@5": 0.3333333333333333
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "where are settings saved",
+   "rankings": {
+    "bm25": [
+     1
+    ],
+    "dense": [
+     6,
+     9,
+     1,
+     0,
+     2,
+     3,
+     4,
+     5,
+     7,
+     8,
+     10,
+     11
+    ],
+    "fused": [
+     1,
+     6,
+     9,
+     0,
+     2,
+     3,
+     4,
+     5,
+     7,
+     8,
+     10,
+     11
+    ]
+   },
+   "relevant": [
+    1,
+    6,
+    9
+   ]
+  },
+  {
+   "kind": "distractors",
+   "measures": {
+    "bm25": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6934264036172708,
+     "ndcg@5": 0.6934264036172708,
+     "precision@1": 0.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 0.16666666666666666,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.0,
+     "ndcg@5": 0.0,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": 0.0,
+     "recall@3": 0.0,
+     "recall@5": 0.0
+    },
+    "fused": {
+     "mrr": 0.3333333333333333,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.3065735963827292,
+     "ndcg@5": 0.3065735963827292,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 0.5,
+     "recall@5": 0.5
+    },
+    "rank_bm25": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6934264036172708,
+     "ndcg@5": 0.6934264036172708,
+     "precision@1": 0.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "what is on the debug header of the board",
+   "rankings": {
+    "bm25": [
+     2,
+     5,
+     11,
+     3,
+     4,
+     0,
+     10,
+     9,
+     7,
+     8,
+     6
+    ],
+    "dense": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     2,
+     0,
+     5,
+     3,
+     4,
+     11,
+     7,
+     6,
+     10,
+     9,
+     8,
+     1
+    ]
+   },
+   "relevant": [
+    5,
+    11
+   ]
+  },
+  {
+   "kind": "no answer",
+   "measures": {
+    "bm25": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "dense": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "fused": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    },
+    "rank_bm25": {
+     "mrr": null,
+     "ndcg@1": null,
+     "ndcg@3": null,
+     "ndcg@5": null,
+     "precision@1": 0.0,
+     "precision@3": 0.0,
+     "precision@5": 0.0,
+     "recall@1": null,
+     "recall@3": null,
+     "recall@5": null
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "bluetooth pairing code",
+   "rankings": {
+    "bm25": [],
+    "dense": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ],
+    "fused": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ]
+   },
+   "relevant": []
+  },
+  {
+   "kind": "repeated",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 0.3333333333333333,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.3065735963827292,
+     "ndcg@5": 0.5706417189553201,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.4,
+     "recall@1": 0.0,
+     "recall@3": 0.5,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 0.9197207891481876,
+     "ndcg@5": 0.9197207891481876,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.6666666666666666,
+     "precision@5": 0.4,
+     "recall@1": 0.5,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "UART debug header",
+   "rankings": {
+    "bm25": [
+     5,
+     11,
+     2,
+     3,
+     4
+    ],
+    "dense": [
+     3,
+     4,
+     5,
+     11,
+     0,
+     1,
+     2,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "fused": [
+     5,
+     3,
+     11,
+     4,
+     2,
+     0,
+     1,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   "relevant": [
+    5,
+    11
+   ]
+  },
+  {
+   "kind": "versions",
+   "measures": {
+    "bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "dense": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6309297535714575,
+     "ndcg@5": 0.6309297535714575,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "fused": {
+     "mrr": 0.5,
+     "ndcg@1": 0.0,
+     "ndcg@3": 0.6309297535714575,
+     "ndcg@5": 0.6309297535714575,
+     "precision@1": 0.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 0.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    },
+    "rank_bm25": {
+     "mrr": 1.0,
+     "ndcg@1": 1.0,
+     "ndcg@3": 1.0,
+     "ndcg@5": 1.0,
+     "precision@1": 1.0,
+     "precision@3": 0.3333333333333333,
+     "precision@5": 0.2,
+     "recall@1": 1.0,
+     "recall@3": 1.0,
+     "recall@5": 1.0
+    }
+   },
+   "order": [
+    11,
+    10,
+    9,
+    8,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+   ],
+   "query": "which version of the board runs the UART at 9600 baud",
+   "rankings": {
+    "bm25": [
+     4,
+     3,
+     5,
+     11,
+     2,
+     7,
+     0,
+     8,
+     6,
+     10
+    ],
+    "dense": [
+     3,
+     4,
+     5,
+     11,
+     0,
+     1,
+     2,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "fused": [
+     3,
+     4,
+     5,
+     11,
+     0,
+     2,
+     7,
+     6,
+     8,
+     10,
+     1,
+     9
+    ]
+   },
+   "relevant": [
+    4
+   ]
+  }
+ ],
+ "fixture": "retrieval/benchmark",
+ "passages": [
+  "The UART runs at 115200 baud on the debug header.",
+  "Battery voltage is read every second by the charger.",
+  "Configuration is kept in EEPROM and survives a reset.",
+  "The Ethernet port negotiates its speed with the router.",
+  "The LCD screen shows the battery level.",
+  "Flash memory holds the firmware image.",
+  "The UART runs at 115200 baud on the debug header.",
+  "Version 1 of the board: the UART runs at 9600 baud.",
+  "Version 2 of the board: the UART runs at 115200 baud.",
+  "The debug header sits next to the reset button on the board.",
+  "Wifi credentials are stored in flash memory.",
+  "The charger stops when the battery is full."
+ ],
+ "references": [
+  "rank-bm25"
+ ],
+ "vectors": {
+  "battery": [
+   0,
+   3,
+   0,
+   0,
+   0
+  ],
+  "baud": [
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "charger": [
+   0,
+   2,
+   0,
+   0,
+   0
+  ],
+  "console": [
+   2,
+   0,
+   0,
+   0,
+   0
+  ],
+  "eeprom": [
+   0,
+   0,
+   3,
+   0,
+   0
+  ],
+  "ethernet": [
+   0,
+   0,
+   0,
+   3,
+   0
+  ],
+  "flash": [
+   0,
+   0,
+   3,
+   0,
+   0
+  ],
+  "lcd": [
+   0,
+   0,
+   0,
+   0,
+   3
+  ],
+  "memory": [
+   0,
+   0,
+   2,
+   0,
+   0
+  ],
+  "network": [
+   0,
+   0,
+   0,
+   2,
+   0
+  ],
+  "router": [
+   0,
+   0,
+   0,
+   2,
+   0
+  ],
+  "saved": [
+   0,
+   0,
+   2,
+   0,
+   0
+  ],
+  "screen": [
+   0,
+   0,
+   0,
+   0,
+   2
+  ],
+  "serial": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "stored": [
+   0,
+   0,
+   1,
+   0,
+   0
+  ],
+  "uart": [
+   3,
+   0,
+   0,
+   0,
+   0
+  ],
+  "voltage": [
+   0,
+   2,
+   0,
+   0,
+   0
+  ],
+  "wifi": [
+   0,
+   0,
+   0,
+   3,
+   0
+  ]
+ }
+}
