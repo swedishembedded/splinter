@@ -91,8 +91,8 @@ pub struct Stats {
     /// Finished rollouts without exact ids and behaviour log-probabilities:
     /// never sent.
     pub rollouts_not_exact: u64,
-    /// Finished rollouts that hit a length limit (counted, trained as
-    /// scored).
+    /// Finished rollouts that hit a length limit: counted in the reward
+    /// statistics, never sent (a learner trains none of them).
     pub rollouts_truncated: u64,
     /// Infrastructure failures of rollouts (each retried or abandoned).
     pub rollout_failures: u64,

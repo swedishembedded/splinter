@@ -157,8 +157,35 @@ pub struct LearnerState {
 
 /// The learner failed (not a full queue: that is [`SendOutcome::Full`]).
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("learner: {0}")]
-pub struct LearnerError(pub String);
+#[error("learner: {message}")]
+pub struct LearnerError {
+    /// What failed.
+    pub message: String,
+    /// The learner was restarted under the run and lost what it had not
+    /// committed: the run is resumed against it started anew, and sends
+    /// again everything not committed.
+    pub restarted: bool,
+}
+
+impl LearnerError {
+    /// A failure of the learner.
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            restarted: false,
+        }
+    }
+
+    /// The learner restarted under the run.
+    #[must_use]
+    pub fn restarted(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            restarted: true,
+        }
+    }
+}
 
 /// What trains on groups as they are produced and publishes the policy.
 pub trait Learner {
@@ -273,4 +300,94 @@ impl RunClock for SystemRunClock {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
     }
+}
+
+/// What a learner measured of its own side, for a run's report. A figure it
+/// did not report is `None`, never zero.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+pub struct LearnerTelemetry {
+    /// Optimiser steps it reported.
+    pub steps: u64,
+    /// Policy tokens its steps trained.
+    pub trained_tokens: u64,
+    /// How long it waited for groups, over every step, in seconds.
+    pub learner_wait_seconds: Option<f64>,
+    /// The mean over steps of each step's mean staleness, in versions.
+    pub staleness_mean: Option<f64>,
+    /// The largest staleness a step trained, in versions.
+    pub staleness_max: Option<u64>,
+    /// The mean time a group waited in its queue, in seconds.
+    pub time_in_queue_seconds: Option<f64>,
+    /// Groups it dropped as too old.
+    pub dropped_stale: u64,
+    /// Every version it published: `(version, digest, step)`.
+    pub published: Vec<(u64, String, u64)>,
+    /// The step of its last durable checkpoint.
+    pub committed_step: Option<u64>,
+}
+
+impl LearnerTelemetry {
+    /// The newest published version that a durable checkpoint holds:
+    /// `(version, digest)`.
+    #[must_use]
+    pub fn committed_version(&self) -> Option<(u64, &str)> {
+        let step = self.committed_step?;
+        self.published
+            .iter()
+            .filter(|(_, _, at)| *at <= step)
+            .max_by_key(|(version, _, _)| *version)
+            .map(|(version, digest, _)| (*version, digest.as_str()))
+    }
+}
+
+/// A learner that reports its own side and hands back what it published.
+pub trait StreamLearner: Learner {
+    /// What it measured so far.
+    fn telemetry(&self) -> LearnerTelemetry;
+
+    /// The adapter it published as `digest`, copied to `to`.
+    ///
+    /// # Errors
+    /// It holds no such adapter, or it cannot be copied.
+    fn adapter(&self, digest: &str, to: &std::path::Path) -> Result<(), LearnerError>;
+
+    /// The id every published version is served under.
+    fn served_as(&self) -> String;
+}
+
+/// What a run's rollouts are asked to be.
+#[derive(Clone, Debug)]
+pub struct RolloutsRequest<'a> {
+    /// The pinned task collection, one task folder per task.
+    pub tasks: &'a std::path::Path,
+    /// The id the learner serves the policy under.
+    pub policy: &'a str,
+    /// The sampling temperature (the whole distribution, nothing cut).
+    pub temperature: f32,
+    /// The sampler's top-K asked of every request.
+    pub top_logprobs: Option<u32>,
+    /// The seed every rollout's draws derive from.
+    pub seed: u64,
+    /// Where running rollouts keep their scratch files.
+    pub scratch: &'a std::path::Path,
+}
+
+/// Runs an online run's rollouts: the agent runtime's side of an online
+/// training stage.
+pub trait OnlineRollouts: Sync {
+    /// Its identity, part of every online stage's.
+    fn identity(&self) -> String;
+
+    /// Runs `body` with an executor of rollouts of `request`'s tasks and the
+    /// tasks' ids as the executor names them; every rollout still running
+    /// when `body` returns is stopped.
+    ///
+    /// # Errors
+    /// The rollouts cannot be run (the tasks cannot be read, the policy
+    /// cannot be reached, the sampling is refused).
+    fn run(
+        &self,
+        request: &RolloutsRequest<'_>,
+        body: &mut dyn FnMut(&mut dyn RolloutExecutor, &[String]),
+    ) -> Result<(), String>;
 }

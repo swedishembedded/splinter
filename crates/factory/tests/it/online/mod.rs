@@ -9,6 +9,7 @@
 //! Online runs: the controller core against hand arithmetic, and the
 //! driver over scripted doubles, killed and resumed.
 
+mod brain;
 mod doubles;
 mod simulation;
 

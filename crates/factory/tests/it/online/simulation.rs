@@ -231,7 +231,7 @@ fn simulate(seed: u64, tally: &mut Tally) {
                 assert_eq!((interrupt, e.0.as_str()), (0, "killed"), "seed {seed}")
             }
             Err(OnlineError::Learner(e)) => assert_eq!(
-                (interrupt, e.0.as_str()),
+                (interrupt, e.message.as_str()),
                 (2, "connection lost"),
                 "seed {seed}"
             ),

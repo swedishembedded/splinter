@@ -347,10 +347,13 @@ impl RolloutOutcome {
         }
     }
 
-    /// Whether this rollout may be trained on: scored and exact.
+    /// Whether this rollout may be trained on: scored, exact, and not cut at
+    /// a length limit (a learner trains none of a truncated rollout and
+    /// leaves it out of its group's advantages, so it cannot make a group
+    /// one).
     #[must_use]
     pub fn trainable(&self) -> bool {
-        self.reward.is_some() && self.exact
+        self.reward.is_some() && self.exact && !self.truncated
     }
 }
 

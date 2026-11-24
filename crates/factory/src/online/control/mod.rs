@@ -27,9 +27,10 @@
 //!   `max_failures` times, is left out of the baseline, never read as zero.
 //!   No reward at all: filtered `unscored`. Rewards that do not differ
 //!   ([`splinter_core::rewards::differ`]): filtered `zero-variance`, counted in
-//!   the reward statistics. Rewards of the exact rollouts (exact ids and
-//!   behaviour log-probabilities) that do not differ: filtered `not-exact`;
-//!   an inexact rollout is never sent.
+//!   the reward statistics. Rewards of the trainable rollouts (exact ids and
+//!   behaviour log-probabilities, not cut at a length limit) that do not
+//!   differ: filtered `not-exact`; an inexact or truncated rollout is never
+//!   sent.
 //! * **Staleness.** A group whose oldest policy version among its exact
 //!   rollouts is more than `max_staleness` behind the learner is dropped
 //!   (checked when it is scored and whenever the learner publishes).

@@ -18,7 +18,9 @@
 //! * [`driver`] - the loop over those seams, every change durable before
 //!   it takes effect, resumable after a crash at any point.
 //! * [`stats`] - what a run reports.
+//! * [`brain`] - the learner on brain's streaming policy-gradient job.
 
+pub mod brain;
 pub mod control;
 pub mod driver;
 pub mod seams;

@@ -118,6 +118,54 @@ pub trait Trainer: Send + Sync {
     /// # Errors
     /// The endpoint does not serve it.
     fn serve(&self, base: &ModelRef, adapter: Option<&Path>) -> Result<String, TrainError>;
+
+    /// Start (or continue, under the same resume key) an online
+    /// policy-gradient run that takes groups while it trains and serves every
+    /// version it publishes.
+    ///
+    /// # Errors
+    /// The trainer cannot train online, or the run is refused.
+    fn stream(
+        &self,
+        request: &OnlineTrain<'_>,
+    ) -> Result<Box<dyn crate::online::seams::StreamLearner>, TrainError> {
+        let _ = request;
+        Err(TrainError(format!(
+            "{} cannot train online",
+            self.identity()
+        )))
+    }
+}
+
+/// An online policy-gradient run to start.
+#[derive(Clone, Debug)]
+pub struct OnlineTrain<'a> {
+    /// The base model.
+    pub base: &'a ModelRef,
+    /// The run's policy-gradient settings (`estimator`, `max_block`, ...),
+    /// as the recipe wrote them.
+    pub params: &'a serde_json::Map<String, Value>,
+    /// The run's durable identity: asked again under it, a restarted run
+    /// continues from its last checkpoint.
+    pub resume_key: &'a str,
+    /// Steps between durable checkpoints.
+    pub checkpoint_every: Option<u32>,
+    /// The id every published version is served under.
+    pub publish_adapter: &'a str,
+    /// Steps between two published versions.
+    pub publish_every: u32,
+    /// Policy tokens a step trains.
+    pub step_tokens: u64,
+    /// Policy tokens the learner's queue holds at most.
+    pub queue_tokens: u64,
+    /// Versions a group may lag before the learner drops it.
+    pub max_staleness: u64,
+    /// Steps after which the run ends.
+    pub max_steps: Option<u32>,
+    /// The sampler's top-K a score-centred estimator centres over.
+    pub top_k: Option<u32>,
+    /// The adapter the run continues, if it continues one.
+    pub start: Option<&'a Path>,
 }
 
 /// The LoRA parameters brain's fine-tune takes, from a recipe's `params`.
@@ -523,6 +571,43 @@ impl Trainer for BrainTrainer {
             params: serde_json::to_value(&params).map_err(error)?,
             report,
         })
+    }
+
+    fn stream(
+        &self,
+        request: &OnlineTrain<'_>,
+    ) -> Result<Box<dyn crate::online::seams::StreamLearner>, TrainError> {
+        use splinter_model::served_train::{StreamDoc, StreamJob, StreamSpec};
+        let store = self.endpoints.artifact_store().map_err(error)?.clone();
+        let start_adapter = request
+            .start
+            .map(|adapter| {
+                store
+                    .publish(adapter)
+                    .map(|digest| serde_json::json!({ "digest": digest.hex() }))
+                    .map_err(error)
+            })
+            .transpose()?;
+        let spec = StreamSpec {
+            base: request.base.model.clone(),
+            params: request.params.clone(),
+            resume_key: Some(request.resume_key.to_string()),
+            checkpoint_every: request.checkpoint_every,
+            stream: StreamDoc {
+                publish_adapter: request.publish_adapter.to_string(),
+                publish_every: request.publish_every,
+                step_tokens: request.step_tokens,
+                queue_tokens: request.queue_tokens,
+                max_staleness: Some(request.max_staleness),
+                max_steps: request.max_steps,
+                top_k: request.top_k,
+                start_adapter,
+            },
+        };
+        let job = StreamJob::start(&self.endpoints, &spec).map_err(error)?;
+        Ok(Box::new(crate::online::brain::BrainLearner::new(
+            job, store,
+        )))
     }
 
     fn serve(&self, base: &ModelRef, adapter: Option<&Path>) -> Result<String, TrainError> {

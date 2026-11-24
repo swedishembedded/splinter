@@ -350,7 +350,7 @@ impl Learner for ScriptedLearner {
         if answer == SendOutcome::Accepted {
             self.accepts += 1;
             if self.die_after_accepts == Some(self.accepts) {
-                return Err(LearnerError("connection lost".into()));
+                return Err(LearnerError::new("connection lost"));
             }
         }
         Ok(answer)
