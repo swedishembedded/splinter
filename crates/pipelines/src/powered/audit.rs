@@ -164,8 +164,9 @@ pub struct Agreement {
     pub items: usize,
     /// Items that were left unlabelled or that the judge abstained on.
     pub left_out: usize,
-    /// The share on which the judge and the person agree.
-    pub agreement: f64,
+    /// The share on which the judge and the person agree; `None` when no
+    /// labelled answer was also decided by the judge.
+    pub agreement: Option<f64>,
     /// Cohen's kappa: agreement beyond what the two would reach by chance.
     pub kappa: Option<f64>,
     /// Answers the judge called right that the person called wrong, over the
@@ -214,11 +215,7 @@ pub fn agreement(labels: &BTreeMap<String, String>, key: &BTreeMap<String, Keyed
         let (a, b) = (judge_right as f64 / n, person_right as f64 / n);
         a * b + (1.0 - a) * (1.0 - b)
     };
-    let observed = if pairs.is_empty() {
-        0.0
-    } else {
-        agreed as f64 / n
-    };
+    let observed = share(agreed, pairs.len());
     let long = |is_long: bool| pairs.iter().filter(move |(_, _, l)| *l == is_long);
     let rate_right = |is_long: bool, who: fn(&(bool, bool, bool)) -> bool| {
         let members: Vec<_> = long(is_long).collect();
@@ -233,8 +230,9 @@ pub fn agreement(labels: &BTreeMap<String, String>, key: &BTreeMap<String, Keyed
         items: pairs.len(),
         left_out,
         agreement: observed,
-        kappa: (expected < 1.0 && !pairs.is_empty())
-            .then(|| (observed - expected) / (1.0 - expected)),
+        kappa: observed
+            .filter(|_| expected < 1.0)
+            .map(|observed| (observed - expected) / (1.0 - expected)),
         false_right_rate: share(
             pairs.iter().filter(|(j, p, _)| *j && !*p).count(),
             judge_right,
@@ -351,7 +349,7 @@ mod tests {
             })
             .collect();
         let perfect = agreement(&same, &key);
-        assert_eq!((perfect.items, perfect.agreement), (8, 1.0));
+        assert_eq!((perfect.items, perfect.agreement), (8, Some(1.0)));
         assert_eq!(perfect.kappa, Some(1.0));
         assert_eq!(perfect.false_right_rate, Some(0.0));
         // The person calls every answer wrong; the judge calls the long ones
@@ -373,5 +371,24 @@ mod tests {
         assert_eq!(biased.length_bias, Some(1.0));
         assert_eq!(biased.agreement_short, Some(1.0));
         assert_eq!(biased.agreement_long, Some(0.0));
+    }
+
+    #[test]
+    fn with_no_labelled_answer_the_agreement_is_absent_not_zero() {
+        let key: BTreeMap<String, Keyed> = BTreeMap::from([(
+            "a".to_string(),
+            Keyed {
+                task: "t".into(),
+                family: "f".into(),
+                arm: "a".into(),
+                judged: Some(true),
+                chars: 10,
+                long: false,
+            },
+        )]);
+        let none = agreement(&BTreeMap::new(), &key);
+        assert_eq!((none.items, none.left_out), (0, 1));
+        assert_eq!(none.agreement, None);
+        assert_eq!(none.kappa, None);
     }
 }

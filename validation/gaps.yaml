@@ -659,9 +659,9 @@ gaps:
     that an absent measurement is never zero (other fields are Option).
   severity: low
   confidence: high
-  status: confirmed
-  resolution: 'Agreement.agreement reads 0.0 with no labelled pairs, against the repository''s absent-is-never-zero convention:
-    an Option, with its callers'
+  status: fixed
+  resolution: Agreement.agreement is an Option, absent when no labelled answer was also decided (kappa follows it); the
+    exam report prints '-' for it
 - id: G-EK-11
   source_id: null
   where: crates/eval/src/intervention.rs:73,196

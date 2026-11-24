@@ -251,12 +251,12 @@ impl Report for crate::exam_session::LabelsExported {
 impl Report for splinter_sdk::powered::audit::Agreement {
     fn human(&self) -> String {
         format!(
-            "{} labelled answer(s) the judge also decided ({} left out): agreement {:.3}, kappa {}; \
+            "{} labelled answer(s) the judge also decided ({} left out): agreement {}, kappa {}; \
              of what the judge called right the person called wrong {}, of what it called wrong the \
              person called right {}; agreement on short answers {}, on long {}; length bias {} ({})\n",
             self.items,
             self.left_out,
-            self.agreement,
+            share(self.agreement),
             share(self.kappa),
             share(self.false_right_rate),
             share(self.false_wrong_rate),
