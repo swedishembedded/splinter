@@ -81,7 +81,7 @@ pub(crate) fn produce(
     let params: PromotionParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
     let mut evaluated = Vec::new();
     for key in stage.sources("evaluations") {
-        evaluated.push((purpose_of(factory, key), result_of(&factory.view(key))?));
+        evaluated.push((purpose_of(factory, key)?, result_of(&factory.view(key))?));
     }
     // Each candidate's gates, by purpose: the weakest evaluation decides.
     let mut gates: std::collections::BTreeMap<String, std::collections::BTreeMap<Purpose, Gate>> =
@@ -310,21 +310,7 @@ fn gate(
         return Gate::Unsigned;
     }
     if purpose == Purpose::Retention {
-        let number = |key: &str| {
-            result
-                .statistics
-                .get(key)
-                .and_then(serde_json::Value::as_f64)
-        };
-        let count = |key: &str| number(key).map_or(0, |n| n as usize);
-        let alpha = number("alpha").unwrap_or(0.05);
-        let difference = number("difference").unwrap_or(0.0);
-        let lost = splinter_model::stats::one_sided_p(count("losses"), count("wins")) < alpha;
-        return if lost || difference < -margin {
-            Gate::Regressed
-        } else {
-            Gate::Retained
-        };
+        return retention(&result.statistics, margin);
     }
     match result.decision {
         Decision::Improved => Gate::Improved,
@@ -333,15 +319,57 @@ fn gate(
     }
 }
 
-/// The purpose the evaluation stage `key` states.
-fn purpose_of(factory: &Factory<'_>, key: &str) -> Purpose {
-    factory
-        .resolved
-        .plan
-        .stage(key)
-        .and_then(|s| s.params::<EvaluationParams>().ok())
+/// The retention gate of an evaluation's `statistics`, whichever measured
+/// them; a measurement that is not there retains nothing (inconclusive).
+///
+/// * A development plan's paired sign test (`wins`, `losses`, `difference`,
+///   `alpha`): regressed on a significant loss or a mean loss past `margin`,
+///   else retained.
+/// * An examiner's aggregate (`gain`, `one_sided_lower`): retained only when
+///   the one-sided lower bound clears `-margin` (non-inferiority);
+///   regressed when the gain itself is past it; else inconclusive.
+fn retention(statistics: &serde_json::Value, margin: f64) -> Gate {
+    let number = |key: &str| statistics.get(key).and_then(serde_json::Value::as_f64);
+    let count = |key: &str| {
+        statistics
+            .get(key)
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|n| usize::try_from(n).ok())
+    };
+    if let (Some(wins), Some(losses), Some(difference), Some(alpha)) = (
+        count("wins"),
+        count("losses"),
+        number("difference"),
+        number("alpha"),
+    ) {
+        let lost = splinter_model::stats::one_sided_p(losses, wins) < alpha;
+        return if lost || difference < -margin {
+            Gate::Regressed
+        } else {
+            Gate::Retained
+        };
+    }
+    match (number("gain"), number("one_sided_lower")) {
+        (_, Some(lower)) if lower > -margin => Gate::Retained,
+        (Some(gain), Some(_)) if gain < -margin => Gate::Regressed,
+        _ => Gate::Inconclusive,
+    }
+}
+
+/// The purpose the evaluation stage `key` states: an evaluation the plan
+/// does not hold, or whose parameters do not read, is an error, never
+/// counted as a target evaluation.
+fn purpose_of(factory: &Factory<'_>, key: &str) -> Result<Purpose, RunError> {
+    let stage = factory.resolved.plan.stage(key).ok_or_else(|| {
+        stage_error(
+            key,
+            "the promotion names an evaluation the plan does not hold",
+        )
+    })?;
+    stage
+        .params::<EvaluationParams>()
         .map(|p| p.purpose)
-        .unwrap_or_default()
+        .map_err(|e| stage_error(key, e))
 }
 
 /// The stage identity's parameters: whether it promotes, the champion it
@@ -356,11 +384,11 @@ fn gates_of(
         json!({ "promote": promote, "kept": kept.0, "kept_digest": kept.1.map(|c| c.digest) });
     if promote {
         let params: PromotionParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
-        let purposes: Vec<&str> = stage
+        let purposes = stage
             .sources("evaluations")
             .iter()
-            .map(|key| purpose_of(factory, key).name())
-            .collect();
+            .map(|key| purpose_of(factory, key).map(Purpose::name))
+            .collect::<Result<Vec<_>, _>>()?;
         parameters["requires"] = json!(params.required());
         parameters["retention_margin"] = json!(params.retention_margin);
         parameters["divergence_window"] = json!(params.divergence_window);
@@ -457,5 +485,62 @@ mod divergence_spec {
             divergence(&unmeasured, &point(2, 0.8, None), 3),
             Signal::Unconfirmed { .. }
         ));
+    }
+}
+
+#[cfg(test)]
+mod retention_spec {
+    use super::*;
+    use splinter_core::factory::product::{EvalResult, EVAL_SCHEMA};
+
+    fn result(protected: bool, statistics: serde_json::Value) -> EvalResult {
+        EvalResult {
+            schema: EVAL_SCHEMA.into(),
+            plan: Digest::of(b"plan"),
+            protected,
+            name: "lora".into(),
+            baseline: None,
+            candidate: None,
+            decision: Decision::Inconclusive,
+            statistics,
+            signature: protected.then(|| "signed".into()),
+        }
+    }
+
+    fn retention(protected: bool, statistics: serde_json::Value) -> Gate {
+        gate(Purpose::Retention, &result(protected, statistics), 0.05)
+    }
+
+    /// A development plan's retention: a significant loss or a mean loss past
+    /// the margin regresses; anything else is retained.
+    #[test]
+    fn a_measured_retention_is_retained_unless_it_lost() {
+        let kept = json!({ "wins": 3, "losses": 2, "difference": -0.01, "alpha": 0.05 });
+        assert_eq!(retention(false, kept), Gate::Retained);
+        let lost = json!({ "wins": 0, "losses": 9, "difference": -0.02, "alpha": 0.05 });
+        assert_eq!(retention(false, lost), Gate::Regressed);
+        let past_margin = json!({ "wins": 2, "losses": 3, "difference": -0.10, "alpha": 0.05 });
+        assert_eq!(retention(false, past_margin), Gate::Regressed);
+    }
+
+    /// An examiner's retention is retained only when its one-sided lower bound
+    /// clears the margin; a gain past the margin is a regression, and a bound
+    /// that does not clear it otherwise decides nothing.
+    #[test]
+    fn a_signed_retention_is_held_to_its_one_sided_bound() {
+        let kept = json!({ "gain": 0.0, "one_sided_lower": -0.02, "alpha": 0.05 });
+        assert_eq!(retention(true, kept), Gate::Retained);
+        let lost = json!({ "gain": -0.20, "one_sided_lower": -0.30, "alpha": 0.05 });
+        assert_eq!(retention(true, lost), Gate::Regressed);
+        let unsure = json!({ "gain": 0.0, "one_sided_lower": -0.12, "alpha": 0.05 });
+        assert_eq!(retention(true, unsure), Gate::Inconclusive);
+    }
+
+    /// A retention evaluation that measured nothing retains nothing.
+    #[test]
+    fn a_retention_without_its_measurement_is_inconclusive() {
+        assert_eq!(retention(false, json!({})), Gate::Inconclusive);
+        assert_eq!(retention(false, json!({ "wins": 1 })), Gate::Inconclusive);
+        assert_eq!(retention(true, json!({ "gain": 0.1 })), Gate::Inconclusive);
     }
 }

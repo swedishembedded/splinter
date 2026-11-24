@@ -178,6 +178,11 @@ pub(crate) fn produce(
     std::fs::create_dir_all(&candidates_dir).map_err(io(&candidates_dir))?;
     let mut rng = SearchRng::from_seed(params.seed);
     let mut candidates = Vec::new();
+    // Every candidate is a comparison with the baseline; the best of them is
+    // chosen, so each is tested at alpha / candidates (Bonferroni: valid
+    // whatever the dependence between candidates, a hill climb's included)
+    // and the chance that any useless candidate wins stays within alpha.
+    let alpha_per_candidate = params.alpha / f64::from(params.candidates.max(1));
     // The winner: its difference over the baseline, its file and its text.
     let mut best: Option<(f64, String, String)> = None;
     for drawn in 0..params.candidates {
@@ -206,7 +211,7 @@ pub(crate) fn produce(
             &arm(factory, stage, &params, &name, Some(path))?,
             pin,
         )?;
-        let (decision, statistics) = decide(&baseline, &trials, params.alpha, 0.0);
+        let (decision, statistics) = decide(&baseline, &trials, alpha_per_candidate, 0.0);
         let difference = statistics
             .get("difference")
             .and_then(serde_json::Value::as_f64)
@@ -233,6 +238,7 @@ pub(crate) fn produce(
                 "harness": params.harness, "pass_rate": pass_rate(&baseline),
             },
             "strategy": params.strategy, "alpha": params.alpha,
+            "alpha_per_candidate": alpha_per_candidate,
             "candidates": candidates, "winner": winner,
         }),
     )

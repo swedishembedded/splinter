@@ -269,7 +269,9 @@ best-of-n`) or of the best found so far (`hill-climb`), drawn by the seed from
 a mutation space (knobs: a path into the harness and the values it may take)
 and kept only when Sven's compiler accepts it. Each runs as an arm with the
 same agent, model, environment, attempts and attempt seeds, and is compared
-with the baseline by the evaluation's paired sign test at `alpha`. Every arm
+with the baseline by the evaluation's paired sign test at `alpha` divided by
+the candidates (the best is chosen, so the split keeps the chance that a
+candidate no better than the baseline wins within `alpha`). Every arm
 is a committed product, so a stopped search resumes without running one
 again. The product holds `harness.yaml` (the winner, else the baseline),
 each candidate under `candidates/` and `search.json` with every candidate's

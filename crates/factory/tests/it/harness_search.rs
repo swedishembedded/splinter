@@ -98,3 +98,21 @@ fn without_a_verified_gain_the_baseline_stays_the_harness() {
     assert_eq!(found, harness(PLAIN));
     assert_eq!(search(dir.path())["winner"], Value::Null);
 }
+
+/// Picking the best of N candidates each tested at the search's alpha would
+/// find a "winner" in most searches of N useless candidates: each is tested
+/// at alpha / N (Bonferroni, valid however the candidates depend on each
+/// other, as a hill climb's do), so the chance that any useless candidate
+/// wins stays within alpha.
+#[test]
+fn each_candidate_is_tested_at_the_searchs_alpha_split_over_the_candidates() {
+    let (dir, _) = searched(Outcome::Pass);
+    let search = search(dir.path());
+    assert_eq!(search["alpha"], 0.05, "{search:#}");
+    assert_eq!(search["alpha_per_candidate"], 0.025, "{search:#}");
+    for candidate in search["candidates"].as_array().unwrap() {
+        if candidate.get("statistics").is_some() {
+            assert_eq!(candidate["statistics"]["alpha"], 0.025, "{candidate:#}");
+        }
+    }
+}

@@ -74,6 +74,8 @@ of the package) or an integration test binary; filter a substring of the test na
 | Solve concurrency | algorithmic | a remote model is asked up to its width at once, a served one as wide as its slots; one experience per attempt in task order (read with a barrier, no clock) | `splinter-pipelines/it/solve_concurrency` | per-PR | |
 | Learning methods | learning | each method moves a held-out score on a toy model | `make test/methods` | integration | |
 
+| Factory release gate (`promotion`) | algorithmic | a candidate is promoted only when every required purpose's gate is met: target and transfer by their evaluation's decision, retention by a development plan's sign test (no significant loss, mean loss within the margin) or an examiner's one-sided bound above `-margin`; a retention that measured neither is inconclusive and meets nothing; a protected verdict without its signature meets nothing | `splinter-factory/lib/release::` | per-PR | missing statistics read as retained, signed retention always retained (in-test) |
+| Harness search selection (`harness.search`) | algorithmic | each candidate is tested against the baseline at `alpha / candidates`, the best improving one kept, so `alpha` bounds the chance a useless candidate wins | `splinter-factory/it/harness_search::` | per-PR | |
 ## Not yet certified
 
 - brain's advantage normalisation, losses, gradients and updates on CUDA, bf16 and quantised paths: brain's

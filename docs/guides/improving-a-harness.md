@@ -31,7 +31,8 @@ take (`[execution, limits, model_turns]` with `[4, 6, 8]`, or a task's prompt,
 `[workflow, "0", task]`, with alternatives; a number, quoted, indexes a list); a candidate is the
 baseline with a few knobs changed. Each candidate runs as an arm with the same agent, model,
 environment, attempts and attempt seeds, and is compared with the baseline by the evaluation's
-paired sign test at `alpha`. The product holds `harness.yaml` (the winner, else the baseline), each
+paired sign test at `alpha / candidates`: the best of several is chosen, so the split keeps the
+chance that any candidate no better than the baseline wins within `alpha`. The product holds `harness.yaml` (the winner, else the baseline), each
 candidate under `candidates/` and `search.json` with every candidate's decision; every arm is a
 committed product, so a stopped search resumes without running one again. The [learning
 factory](learning-factory.md#searching-for-a-harness) describes the stage's parameters. How a decision

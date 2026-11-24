@@ -422,7 +422,9 @@ pub struct HarnessSearchParams {
     /// Attempts run at once.
     #[serde(default = "one_at_a_time")]
     pub concurrency: u32,
-    /// The paired sign test's level a candidate must beat the baseline at.
+    /// The family-wise level of the search: the chance that any candidate
+    /// is chosen when none beats the baseline. Each candidate is tested at
+    /// `alpha / candidates` (Bonferroni).
     #[serde(default = "harness_alpha")]
     pub alpha: f64,
     /// The seed candidates and attempt seeds are drawn from.
@@ -585,6 +587,9 @@ fn port(name: &str, kind: ArtifactKind) -> Port {
 /// A built-in operation: its contract, and its parameters' type.
 struct Builtin<P> {
     name: &'static str,
+    /// Raised whenever what the operation decides or writes changes, so a
+    /// product an earlier revision computed is never reused as this one's.
+    revision: u32,
     summary: &'static str,
     inputs: Vec<Port>,
     output: Port,
@@ -598,7 +603,7 @@ impl<P: JsonSchema + DeserializeOwned + Send + Sync> OperationSpec for Builtin<P
         OperationDescriptor {
             schema: OPERATION_SCHEMA.into(),
             name: self.name.into(),
-            revision: 1,
+            revision: self.revision,
             summary: self.summary.into(),
             inputs: self.inputs.clone(),
             outputs: vec![self.output.clone()],
@@ -636,6 +641,7 @@ pub fn registry() -> Registry {
         .with(crate::env_ops::Qualify)
         .with(Builtin::<PinParams> {
             name: names::PIN,
+            revision: 1,
             summary: "pin a collection's tasks (one split) into the run",
             inputs: vec![port("collection", ArtifactKind::Files)],
             output: port("tasks", ArtifactKind::Tasks),
@@ -645,6 +651,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<AttemptParams> {
             name: names::ATTEMPTS,
+            revision: 1,
             summary: "agents attempt tasks; every attempt graded by the one classifier",
             inputs: vec![
                 port("tasks", ArtifactKind::Tasks),
@@ -674,6 +681,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<ImportParams> {
             name: names::IMPORT,
+            revision: 1,
             summary: "the trials of Harbor jobs run elsewhere, matched to the pinned tasks and \
                       graded by the one classifier; runs nothing",
             inputs: vec![
@@ -690,6 +698,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<ImportDatasetParams> {
             name: names::IMPORT_DATASET,
+            revision: 1,
             summary: "training records made elsewhere (a directory of train.jsonl and \
                       validation.jsonl), carried over unchanged as a dataset",
             inputs: vec![port("records", ArtifactKind::Files)],
@@ -700,6 +709,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<ExtendDatasetParams> {
             name: names::EXTEND_DATASET,
+            revision: 1,
             summary: "new verified records added to an existing dataset only when they are a \
                       new solution of their task, a task's side never changing",
             inputs: vec![
@@ -713,6 +723,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<MutateParams> {
             name: names::MUTATE,
+            revision: 1,
             summary: "a revision of a repository made into Harbor tasks by its own tests",
             inputs: Vec::new(),
             output: port("tasks", ArtifactKind::Files),
@@ -722,6 +733,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<HarnessSearchParams> {
             name: names::HARNESS_SEARCH,
+            revision: 2,
             summary: "candidates from a harness's mutation space, each run on the tasks; the \
                       one that verifiably beats the baseline",
             inputs: vec![port("tasks", ArtifactKind::Tasks)],
@@ -732,6 +744,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<TextDatasetParams> {
             name: names::TEXT_DATASET,
+            revision: 1,
             summary: "documents as a continued-pretraining dataset, each text once",
             inputs: vec![port("documents", ArtifactKind::Files)],
             output: port("dataset", ArtifactKind::Dataset),
@@ -741,6 +754,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<ProjectParams> {
             name: names::PROJECT,
+            revision: 1,
             summary: "project attempts, or answers made in process, into training records",
             inputs: vec![
                 Port {
@@ -761,6 +775,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<TrainParams> {
             name: names::TRAIN,
+            revision: 1,
             summary: "train one candidate from a base through the training engine",
             inputs: vec![
                 port("dataset", ArtifactKind::Dataset),
@@ -781,6 +796,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<EvaluationParams> {
             name: names::EVALUATION,
+            revision: 1,
             summary: "evaluate a candidate against a baseline under an evaluation plan",
             inputs: vec![
                 port("candidate", ArtifactKind::Model),
@@ -796,6 +812,7 @@ pub fn registry() -> Registry {
         })
         .with(Builtin::<PromotionParams> {
             name: names::PROMOTION,
+            revision: 2,
             summary: "record every decision and promote the best improved candidate",
             inputs: vec![Port {
                 many: true,
