@@ -225,7 +225,10 @@ gaps:
     are checked, never file contents or system_prompt files.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'the controller''s rule gained PASSWD, AUTH, COOKIE and the provider prefixes (the sandbox''s broader list)
+    so a literal under them is refused too; a name remains a heuristic, said on credential_like: a secret under an innocuous
+    name passes, which only the sandbox''s allowlist bounds'
 - id: G-DC-24
   source_id: F24
   where: docs/contributing/validation.md rows 'Verified-only admission, exposure exclusion' and 'Held-out splits'; scripts/conformance/mutants.tsv
@@ -301,7 +304,9 @@ gaps:
     the outer sender.
   severity: high
   confidence: medium-high
-  status: unverified
+  status: fixed
+  resolution: a panicking item's operation is caught and fails its stage naming the panic (foreach::a_panicking_item_fails_its_stage_and_never_hangs_the_controller;
+    seen to hang without the fix)
 - id: G-FS-02
   source_id: F-02
   where: crates/factory/src/run/mod.rs:272,324; crates/store/src/factory/runstate/mod.rs:251-300
@@ -311,7 +316,9 @@ gaps:
     then fails with StaleFence mid-stage and the work is duplicated. No heartbeat test.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: RunState::renew (fenced, keeps the token) and a heartbeat thread renewing every third of the lease while the
+    controller lives (foreach::a_stage_longer_than_the_lease_keeps_it_for_its_controller; seen red without the heartbeat)
 - id: G-FS-03
   source_id: F-03
   where: crates/factory/src/run/release.rs:318-322
@@ -321,7 +328,9 @@ gaps:
     when statistics keys are absent.'
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: the retention gate reads a development plan's sign test or an examiner's one-sided bound, and is inconclusive
+    without either; a signed retention verdict was ALWAYS retained before (release::retention_spec)
 - id: G-FS-04
   source_id: F-04
   where: crates/factory/src/run/release.rs:337-345
@@ -330,7 +339,8 @@ gaps:
     counted as a target evaluation instead of erroring (and can satisfy `required()`-purpose checks wrongly).'
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: purpose_of returns an error for an evaluation the plan does not hold or whose parameters do not read
 - id: G-FS-05
   source_id: F-05
   where: crates/factory/src/external_op.rs:286-307 (readable includes self.repository), 160-170 (identity = file + `code`
@@ -342,7 +352,10 @@ gaps:
     effects. Needs adversarial test.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'an operator''s sandbox reads of the repository only its own file and its code (what its identity pins; external::an_operator_reads_only_what_its_identity_pins),
+    plus the top directory of a ./ program outside its code (a repository-kept virtualenv, the machine''s, unpinned like
+    PATH: bench''s collection.compile runs ./.venv/bin/python). The operator specs return early without Landlock (G-AS-14)'
 - id: G-FS-06
   source_id: F-06
   where: crates/factory/src/run/mod.rs:498; crates/store/src/factory/products/transfer.rs:99-116
@@ -352,7 +365,10 @@ gaps:
     log, hiding product-store damage.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: a reused product is verified (every blob and every view file); an edited view is materialised again from its
+    blobs, a rotted blob is refused (store factory_products::a_reused_product_is_its_committed_bytes_or_refused); the controller
+    computes afresh only a product that is not committed and propagates every other error
 - id: G-FS-07
   source_id: F-07
   where: crates/factory/src/run/compute.rs:378-460 vs crates/core concurrency::fan_out (re-exported crates/orchestrator/src/concurrency.rs)
@@ -395,7 +411,8 @@ gaps:
     it; adding/removing an op changes no test. graph.rs:307 only iterates registry.names(). Recommend a descriptor golden.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'ops::registry_spec: the registry is exactly the 23 documented operations, each in the module''s table'
 - id: G-FS-12
   source_id: F-12
   where: crates/store/src/factory/mod.rs and crates/store/src/lib.rs doc ('independent of the experience database')
@@ -412,7 +429,10 @@ gaps:
     so a persistence failure is indistinguishable from a benign race and the job is simply not updated this round.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: 'only a pointer conflict (another controller moved first) is a lost race; any other failure to record an observation
+    is returned, and a launch failure that could not be recorded says so. Verified by inspection and the existing controller
+    specs: the store has no fault-injection seam (recorded for Phase 10)'
 - id: G-FS-14
   source_id: F-14
   where: crates/factory/src/run/mod.rs:623-630 exited_here
@@ -421,7 +441,10 @@ gaps:
     is wrongly judged dead (stealing a live lease). No test of these.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: an owner is host:pid@pidns:start (run::controller_owner); a held lease is taken over at once only when its
+    holder is provably gone (same host and pid namespace, the pid absent or another process by its start time), otherwise
+    when it lapses (lease::tests); documented with resume
 - id: G-FS-15
   source_id: F-15
   where: crates/factory/src/connections.rs:108
@@ -429,7 +452,9 @@ gaps:
     correct but obscure; the error name hides that a token missing `env:` is the cause. No value leak, just poor diagnostics.'
   severity: medium
   confidence: low
-  status: unverified
+  status: rejected
+  resolution: the refusal already names the rule ('a token must be env:NAME, never the credential itself') and leaks nothing;
+    the strip_prefix chain is internal
 - id: G-FS-16
   source_id: F-16
   where: crates/factory/src/run/directory.rs:30-45 fork
@@ -437,7 +462,8 @@ gaps:
     a corrupted source product is copied and then reused (see F-06).
   severity: medium
   confidence: low-medium
-  status: unverified
+  status: fixed
+  resolution: a forked product is checked when reused, as every reuse is (see G-FS-06)
 - id: G-FS-17
   source_id: F-17
   where: crates/factory/tests/it/golden.rs
@@ -472,7 +498,9 @@ gaps:
     1.959963984540054.
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: one Wilson interval (eval::pilot::Share::wilson), proven against statsmodels (statistics/wilson); the band
+    reads it, its stale z = 1.96 doc is gone
 - id: G-EK-03
   source_id: null
   where: crates/pipelines/src/improve/arms.rs:111 vs crates/model/src/stats.rs:87
@@ -481,7 +509,10 @@ gaps:
     but the map row for it claims the unbiased estimator).
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: the samples arm counts a task by splinter_model::stats::pass_at_k over its graded attempts, absent with fewer
+    than k graded (improve::arms::a_samples_arm_is_the_unbiased_pass_at_k_and_never_any_of_fewer); the mutant follows the
+    code
 - id: G-EK-04
   source_id: null
   where: crates/eval/src/gate.rs, crates/pipelines/src/exam.rs:519, crates/pipelines/src/compare.rs:206, crates/pipelines/src/powered/analysis.rs:204
@@ -511,7 +542,10 @@ gaps:
     n>=2).
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'release task level: the interval is None with fewer than two families (statistics::a_single_family_has_no_interval)
+    and the CLI says so; goal/report.rs Metric kept: it reports n beside the interval and its one decision (above_zero)
+    requires n >= 2'
 - id: G-EK-07
   source_id: null
   where: crates/knowledge/src/skills.rs:186
@@ -519,7 +553,9 @@ gaps:
     that skips validate() silently gets an empty curriculum.
   severity: medium
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: SkillGraph::order returns GraphError::Cycle naming exactly the skills on or behind the cycle (proven against
+    NetworkX, graphs/skill-order); see the knowledge commit
 - id: G-EK-08
   source_id: null
   where: crates/knowledge/src/skills.rs:301
@@ -535,7 +571,10 @@ gaps:
     the power of the maximum possible lead instead of an error. Verdict::of compensates for one caller only.
   severity: low
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: exam-set power refuses a plan whose effect is outside [0, discordance] or whose discordance is outside [0,
+    1] (exam_session::an_effect_beyond_the_discordance_is_refused); power() itself keeps its documented clamp for internal
+    searches, which never ask past the discordance
 - id: G-EK-10
   source_id: null
   where: crates/pipelines/src/powered/audit.rs:229-232
@@ -552,7 +591,9 @@ gaps:
     were measured does not win' claim is not met. No test states the coverage.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: the lower bound uses Student's t at n-1 degrees of freedom (crates/eval/src/student.rs, proven against scipy.stats.t,
+    frozen and differential); Pricing.confidence_z became a one-sided confidence level; one unit is never eligible
 - id: G-EK-12
   source_id: null
   where: scripts/conformance/mutants.tsv, docs/contributing/validation.md
@@ -591,7 +632,9 @@ gaps:
     Validation.md also references splinter-data tests that live outside this inventory.
   severity: low
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'the map row and the ''Not yet certified'' bullet no longer disagree: the bullet is gone with the any-of-fewer
+    it described; band.rs''s z doc is G-EK-02''s'
 - id: G-EK-16
   source_id: null
   where: crates/knowledge/src/factory/band.rs:105-175
@@ -599,7 +642,9 @@ gaps:
     small an environment can be admitted or rejected on noise. Interval is informational only.
   severity: medium
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'by design: the band aims an environment''s difficulty at a base pass rate (a calibration policy with min_attempts,
+    not a hypothesis test); the Wilson interval is reported beside it so a reader sees its noise'
 - id: G-EK-17
   source_id: null
   where: crates/knowledge/tests/it/factory_firmware.rs:66,94,119
@@ -615,7 +660,9 @@ gaps:
     (tasks/mod.rs:186) prevents it; held.rs and fixtures.rs pass plan values straight through.
   severity: low
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: every production caller passes a validated policy value (GenerationPolicy::validate refuses 0) or a constant;
+    the precondition is now stated on Seen::new
 - id: G-EK-19
   source_id: null
   where: crates/core/src/rng.rs:35-42
@@ -668,7 +715,10 @@ gaps:
     by design; an exact formula oracle must be written.
   severity: low
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: BM25 is proven against an independent implementation of its stated (Lucene) formula, itself cross-checked
+    against rank_bm25 where their conventions agree (fixture retrieval/bm25; the conventions are stated in the oracle and
+    the lock)
 - id: G-EK-25
   source_id: null
   where: crates/eval/src/promotion/mod.rs:272 decide_unexamined
@@ -677,7 +727,10 @@ gaps:
     can never turn a not-exam-verified promotion into an alias move without an explicit opt-in.
   severity: high
   confidence: medium
-  status: unverified
+  status: rejected
+  resolution: 'by design: decide_unexamined labels its record exam_verified=false with why (pipelines release/decision.rs
+    tests check the label); exam_verified=true is set only in promotion::decide after verify() (mod.rs:347), and no crate
+    outside splinter-eval constructs a Promotion'
 - id: G-AS-01
   source_id: F1
   where: crates/factory/src/connections.rs:106-116 (parse accepts any env:NAME), :168-174 (bind), :124-143 (layered adds
@@ -690,7 +743,9 @@ gaps:
     there. The worker''s credential_like() only polices literal values in agent environments, not token_env.'
   severity: medium
   confidence: high (read both ends; no allowlist found in Rust or Python)
-  status: unverified
+  status: fixed
+  resolution: a connection whose credential only the task repository names is refused at bind unless this machine's connections
+    file defines it (resolve::...layer...); the repository file may still name it as a shared default
 - id: G-AS-02
   source_id: F2
   where: crates/hub/src/lib.rs:138-160 (Hub::new accepts http:// for any host), http.rs:187-196 (owns() only compares endpoint
@@ -700,7 +755,8 @@ gaps:
     http.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: a hub client that would send its token over plain http to a host other than this machine is refused (endpoint_spec)
 - id: G-AS-03
   source_id: F3
   where: crates/orchestrator/src/config.rs:431 (var("HOME").unwrap_or_else(|| ".".into()))
@@ -709,7 +765,9 @@ gaps:
     against an unintended state root. Should be an error (or use getpwuid as runner/claude_code.rs:real_home does).'
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: the home directory is HOME else the account's (std::env::home_dir); with none, paths stay relative and Runtime::new
+    refuses a state root that is not absolute
 - id: G-AS-04
   source_id: F4
   where: crates/sandbox/src/tagged.rs:33-60 (tagged() matches SPLINTER_RUN=<token> in /proc/<pid>/environ), process.rs:569-572
@@ -740,7 +798,11 @@ gaps:
     it.'
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'behaviour kept and documented truthfully: limitations.md claimed a kernel without a private pid namespace
+    refuses the command; it runs with the host''s /proc visible, recorded per run (host_proc_visible), and a workload that
+    must not see it sets require_private_proc and is refused (fail closed). Kept because hosts without user namespaces (this
+    one) are supported by design'
 - id: G-AS-07
   source_id: F7
   where: scripts/tasks/families.py:12,114,390; samples/agent/loop/fixtures/eval-candidate.sh:16
@@ -749,7 +811,9 @@ gaps:
     scripts/samples are unchecked.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: the three references name the factory's task.mutate operation (repository-practice template) and the recipe's
+    held-out families
 - id: G-AS-08
   source_id: F8
   where: scripts/gates/check-no-machine-paths.sh:15 (ROOTS covers /data /home /opt /mnt /root only)
@@ -758,7 +822,10 @@ gaps:
     2026-11-23 request (validation-program.md Carried-in requests) is not enforced.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: the gate refuses home-relative project/code trees outside the history records (.agents/, papers/); the Makefile
+    (LEASE_ROOT, BRAIN_DIR), workspace-init.sh (models, code), the workspace guide and the goal-selection sample no longer
+    assume one machine's layout
 - id: G-AS-09
   source_id: F9
   where: crates/pipelines/src/experiment/mod.rs:180 (toml::from_str, no deny_unknown_fields found); schemas/factory has
@@ -778,7 +845,8 @@ gaps:
     candidates and the winner's difference is optimistically biased. unwrap_or(0.0) coerces a missing difference to 0.
   severity: high
   confidence: medium-high
-  status: unverified
+  status: fixed
+  resolution: each candidate is tested at alpha / candidates (Bonferroni) and search.json records it (harness_search::each_candidate_is_tested_at_the_searchs_alpha_split_over_the_candidates)
 - id: G-AS-11
   source_id: F11
   where: crates/splinter/src/cli.rs:Command (tasks generate/solve/verify/dataset/train/release/eval vs factory generate/attempt.collect/verify/dataset/training/release/eval);
@@ -799,7 +867,10 @@ gaps:
     shown to fire; regex evasion (base64, python -c, globbing) is untested.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'the audit had no test at all: workers/harbor/tests/test_audit.py shows every pattern firing, ordinary work
+    not flagged, subagents audited, the library-under-test rule, and pins the textual limit (run-time-built paths) as the
+    sandbox''s, stated in limitations.md'
 - id: G-AS-13
   source_id: F13
   where: crates/agent (solve.rs, work.rs, correction.rs), workers/harbor tests (validate only splinter.attempt.v1)
@@ -808,7 +879,9 @@ gaps:
     with custom provenance.
   severity: high
   confidence: high
-  status: unverified
+  status: confirmed
+  resolution: 'captured: a real sven trajectory through the worker now passes Harbor''s own ATIF validator (test_agents::test_sven_runs_headless...).
+    Open: trajectories splinter-agent composes (correction.rs) are not yet checked by it'
 - id: G-AS-14
   source_id: F14
   where: crates/sandbox/src/landlock.rs:227-240 (NotFound => Ok(())), :228-230 (CString error => Ok(()))
@@ -827,7 +900,10 @@ gaps:
     claim in SandboxSpec is an AF_INET claim.
   severity: medium
   confidence: low (not executed; needs adversarial test)
-  status: unverified
+  status: fixed
+  resolution: 'a real escape, found by the new spec: a confined command connected to a Unix socket outside its tree (no
+    Landlock right governs connect to an existing socket). The seccomp filter now refuses Unix-domain and netlink sockets
+    too (socketpair stays), in both the no-network and the port-granted filters (containment::no_socket_reaches_outside_the_commands_tree)'
 - id: G-AS-16
   source_id: F16
   where: crates/hub/src/http.rs:306-308 (fetched.is_err() => remove_file(dest)); File::create truncates first
@@ -835,7 +911,9 @@ gaps:
     verified copy; write to a temp name and rename.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: a download is written to a sibling and renamed onto its destination once complete; a failed one leaves the
+    earlier copy and no partial file (http::download_spec, a truncated body from a local server)
 - id: G-AS-17
   source_id: F17
   where: crates/sandbox/tests/it/containment.rs::a_fork_bomb_is_stopped_at_the_process_budget...; .agents/roadmap/validation-program.md
@@ -862,7 +940,9 @@ gaps:
     but would be dropped by the sandbox; two lists, no single source of truth.
   severity: high
   confidence: high
-  status: unverified
+  status: fixed
+  resolution: 'one rule (splinter_core::factory::execution::credential_like with CREDENTIAL_MARKERS and CREDENTIAL_PREFIXES):
+    the sandbox calls it, the worker''s lists are held to the Rust constants by workers/harbor/tests/test_spec_contract.py'
 - id: G-AS-20
   source_id: F20
   where: crates/splinter/src/cli/hub.rs:24-26 ('the hf CLI keeps one at ~/.cache/huggingface/token; without it, calls are
@@ -871,7 +951,8 @@ gaps:
     reads only --token-file. A user with a private repo gets an anonymous 401/404 rather than a hint. Minor usability.
   severity: medium
   confidence: medium
-  status: unverified
+  status: fixed
+  resolution: the help says the hf CLI's token is used only when --token-file names it
 - id: G-NEW-01
   source_id: null
   where: crates/pipelines/src/exam_seal.rs:71-120 (remember_reserved), :22 (doc link to crate::practice)
@@ -880,7 +961,9 @@ gaps:
     module. The live mechanism is the factory's examination_material (split eval, same content).
   severity: high
   confidence: 'high (read: every caller listed)'
-  status: unverified
+  status: confirmed
+  resolution: doc link fixed; the reserved/trained store records and the legacy seal are to be deleted with the legacy dataset
+    build path (G-AS-11), the factory's check being the one seal
 - id: G-NEW-02
   source_id: null
   where: crates/factory/src/stage_checks.rs:316 examined_tasks
@@ -891,4 +974,7 @@ gaps:
     refuse every current recipe.'
   severity: high
   confidence: high (read)
-  status: unverified
+  status: confirmed
+  resolution: 'open, a policy decision: refuse a training task of an examined family where the eval plan declares family
+    hold-out (task.mutate''s held-out families do), and a content-overlap check (normalised instruction and file shingles,
+    splinter-data overlap) for near copies'
