@@ -28,8 +28,10 @@ pub struct OverlapRule {
     /// The Jaccard similarity of two records' features at or above which they
     /// overlap: 1.0 is an exact duplicate.
     pub min_similarity: f64,
-    /// A record with fewer features than this is too small to be compared
-    /// (a handful of common lines would match anything).
+    /// A record with fewer features than this is too small for a similarity
+    /// (a handful of common lines would match anything): it is compared only
+    /// for having exactly the features of another record, which is a copy
+    /// whatever its size.
     pub min_features: usize,
 }
 
@@ -52,7 +54,9 @@ pub struct Overlap {
 /// The pairs of records in different parts of `split` whose `features` (what
 /// the caller extracts from the record's content, normalised so that a change
 /// and its revert or copy share features) are at least as alike as `rule`
-/// says. A record with no entry in `features` is not compared. The result is
+/// says, and the pairs of records too small for a similarity
+/// ([`OverlapRule::min_features`]) that have the same features. A record with
+/// no entry in `features`, or none of them, is not compared. The result is
 /// ordered by record ids.
 #[must_use]
 pub fn content_overlaps(
@@ -61,11 +65,14 @@ pub fn content_overlaps(
     rule: &OverlapRule,
 ) -> Vec<Overlap> {
     let part_of = split.part_of();
-    let comparable: Vec<(&str, &BTreeSet<String>)> = features
+    let placed: Vec<(&str, &BTreeSet<String>)> = features
         .iter()
-        .filter(|(id, set)| part_of.contains_key(id.as_str()) && set.len() >= rule.min_features)
+        .filter(|(id, set)| part_of.contains_key(id.as_str()) && !set.is_empty())
         .map(|(id, set)| (id.as_str(), set))
         .collect();
+    let (comparable, small): (Vec<_>, Vec<_>) = placed
+        .into_iter()
+        .partition(|(_, set)| set.len() >= rule.min_features);
     // Only records that share a feature can be alike: index them by it.
     let mut by_feature: HashMap<&str, Vec<usize>> = HashMap::new();
     for (at, (_, set)) in comparable.iter().enumerate() {
@@ -82,6 +89,17 @@ pub fn content_overlaps(
         }
     }
     let mut found = Vec::new();
+    let mut copies: BTreeMap<&BTreeSet<String>, Vec<&str>> = BTreeMap::new();
+    for (id, set) in small {
+        copies.entry(set).or_default().push(id);
+    }
+    for ids in copies.values() {
+        for (i, id_i) in ids.iter().enumerate() {
+            for id_j in &ids[i + 1..] {
+                found.extend(overlap(id_i, id_j, part_of[id_i], part_of[id_j], 1.0));
+            }
+        }
+    }
     for ((i, j), common) in shared {
         let (id_i, set_i) = comparable[i];
         let (id_j, set_j) = comparable[j];
@@ -93,21 +111,28 @@ pub fn content_overlaps(
         if similarity < rule.min_similarity {
             continue;
         }
-        let ((a, part_a), (b, part_b)) = if part_i < part_j {
-            ((id_i, part_i), (id_j, part_j))
-        } else {
-            ((id_j, part_j), (id_i, part_i))
-        };
-        found.push(Overlap {
-            a: a.to_owned(),
-            b: b.to_owned(),
-            part_a,
-            part_b,
-            similarity,
-        });
+        found.extend(overlap(id_i, id_j, part_i, part_j, similarity));
     }
     found.sort_by(|x, y| (&x.a, &x.b).cmp(&(&y.a, &y.b)));
     found
+}
+
+/// The pair `x`, `y` of records in parts `part_x` and `part_y` as an
+/// [`Overlap`] with the record nearer the training side first; `None` when
+/// they are in the same part.
+fn overlap(x: &str, y: &str, part_x: Part, part_y: Part, similarity: f64) -> Option<Overlap> {
+    let ((a, part_a), (b, part_b)) = match part_x.cmp(&part_y) {
+        std::cmp::Ordering::Equal => return None,
+        std::cmp::Ordering::Less => ((x, part_x), (y, part_y)),
+        std::cmp::Ordering::Greater => ((y, part_y), (x, part_x)),
+    };
+    Some(Overlap {
+        a: a.to_owned(),
+        b: b.to_owned(),
+        part_a,
+        part_b,
+        similarity,
+    })
 }
 
 impl DataSplit {

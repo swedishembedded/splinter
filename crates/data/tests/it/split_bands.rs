@@ -177,7 +177,7 @@ fn near_duplicates_count_and_dissimilar_records_do_not() {
 }
 
 #[test]
-fn records_in_the_same_part_may_repeat_each_other_and_too_small_records_are_not_compared() {
+fn records_in_the_same_part_may_repeat_each_other() {
     let m = commits();
     let split = temporal_bands(&m, 13.5, 16.5, 1, &data()).unwrap();
     let same = ["a", "b", "c", "d"];
@@ -188,6 +188,30 @@ fn records_in_the_same_part_may_repeat_each_other_and_too_small_records_are_not_
         ("c19/terse", &["tiny"]),
     ]);
     assert!(content_overlaps(&split, &table, &RULE).is_empty());
+}
+
+#[test]
+fn a_short_test_record_that_duplicates_a_short_training_record_is_reported() {
+    let m = commits();
+    let split = temporal_bands(&m, 13.5, 16.5, 1, &data()).unwrap();
+    // Below min_features a few shared lines prove nothing, so such records
+    // are compared only for being the same set: a copy is leakage whatever
+    // its size, a record that merely shares a line with another is not.
+    let table = with_features(&[
+        ("c2/terse", &["tiny", "copy"]),
+        ("c18/terse", &["tiny", "copy"]),
+        ("c3/terse", &["tiny", "other"]),
+        ("c19/terse", &["tiny"]),
+        ("c4/terse", &[]),
+        ("c17/terse", &[]),
+    ]);
+    let found = content_overlaps(&split, &table, &RULE);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (found[0].a.as_str(), found[0].b.as_str()),
+        ("c2/terse", "c18/terse")
+    );
+    assert!((found[0].similarity - 1.0).abs() < 1e-9);
 }
 
 #[test]
