@@ -90,3 +90,4 @@ heading-indent-four	sections	crates/knowledge/src/sections.rs	    indent <= 3\n 
 whitespace-line-is-text	sections	crates/knowledge/src/sections.rs	        self.text.trim().is_empty()	        self.text.is_empty()	splinter-knowledge	it	external_sections
 crlf-kept-in-range	sections	crates/knowledge/src/sections.rs	        let content = content.strip_suffix('\\r').unwrap_or(content);	        let content = content;	splinter-knowledge	it	external_sections
 fence-never-closes	sections	crates/knowledge/src/sections.rs	                in_fence = None;	                in_fence = Some((c, n));	splinter-knowledge	it	external_sections
+observation-backs-a-fact	claims	crates/knowledge/src/claims/gates.rs	    if proposal.kind != ClaimKind::Procedure && !proposal.observations.is_empty() {	    if false && !proposal.observations.is_empty() {	splinter-knowledge	it	claim_gates::

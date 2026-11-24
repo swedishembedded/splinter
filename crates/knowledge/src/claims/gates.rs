@@ -112,6 +112,12 @@ fn check_shape(proposal: &ClaimProposal) -> Result<(), Refusal> {
     if proposal.kind != ClaimKind::Procedure && !proposal.calls.is_empty() {
         return Err(procedure("tool calls belong to a procedure"));
     }
+    // What a tool returned is a procedure's proof, never the person's word: a
+    // fact or correction that leaned on it could be written by whatever the
+    // agent read, an instruction planted in a file included.
+    if proposal.kind != ClaimKind::Procedure && !proposal.observations.is_empty() {
+        return Err(procedure("tool observations belong to a procedure"));
+    }
     if proposal.kind != ClaimKind::Correction && proposal.said_wrong.is_some() {
         return Err(malformed(
             "what the agent said wrong belongs to a correction",
