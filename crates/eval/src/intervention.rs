@@ -22,9 +22,11 @@
 //! reader can check it:
 //!
 //! 1. **Utility** - the mean of the unit deltas and its standard error over
-//!    units. An arm is judged by its lower confidence bound,
-//!    `mean - z * se`: an arm that looks good because few units were
-//!    measured does not win.
+//!    units. An arm is judged by its one-sided lower confidence bound,
+//!    `mean - t * se` with `t` Student's quantile at the pricing's
+//!    `confidence` over `n - 1` degrees of freedom (the standard error is
+//!    estimated from the same `n` units): an arm that looks good because few
+//!    units were measured does not win.
 //! 2. **Cost** - `one_time + expected_uses * per_use`.
 //! 3. **Net value** - `expected_uses * value_per_success * lcb - cost`. The
 //!    pricing says what a verified success is worth in seconds and how many
@@ -61,16 +63,17 @@ pub struct Pricing {
     pub value_per_success: f64,
     /// The uses the choice is amortised over.
     pub expected_uses: f64,
-    /// Standard errors subtracted from the mean gain.
-    pub confidence_z: f64,
-    /// The fewest units an arm must be measured on to be eligible.
+    /// The one-sided confidence of the gain's lower bound, in `(0.5, 1)`.
+    pub confidence: f64,
+    /// The fewest units an arm must be measured on to be eligible (never
+    /// fewer than two: one unit has no spread to bound).
     pub min_units: usize,
     /// The most an arm's total cost may be, in seconds; `None` sets none.
     pub budget: Option<f64>,
 }
 
-/// One-sided 95 percent: the z of the lower confidence bound.
-pub const DEFAULT_CONFIDENCE_Z: f64 = 1.645;
+/// One-sided 95 percent.
+pub const DEFAULT_CONFIDENCE: f64 = 0.95;
 
 /// Why an arm was not scored.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,10 +179,10 @@ pub fn score(arm: &ArmResult, pricing: &Pricing) -> Score {
         score.mean_gain = Some(mean(&arm.deltas));
         score.standard_error = standard_error(&arm.deltas);
     }
-    if units < pricing.min_units.max(1) {
+    if units < pricing.min_units.max(2) {
         score.ineligible = Some(Ineligible::TooFewUnits {
             units,
-            required: pricing.min_units.max(1),
+            required: pricing.min_units.max(2),
         });
         return score;
     }
@@ -187,10 +190,18 @@ pub fn score(arm: &ArmResult, pricing: &Pricing) -> Score {
         score.ineligible = Some(Ineligible::OverBudget);
         return score;
     }
-    // One unit has no spread to speak of: its bound is its mean, which
-    // `min_units` exists to refuse.
-    let gain = score.mean_gain.unwrap_or_default();
-    let bound = gain - pricing.confidence_z * score.standard_error.unwrap_or_default();
+    // At least two units here, so a standard error and n - 1 >= 1 degrees
+    // of freedom; a confidence outside (0.5, 1) has no quantile and scores
+    // nothing.
+    let (Some(gain), Some(se), Some(t)) = (
+        score.mean_gain,
+        score.standard_error,
+        crate::student::quantile(pricing.confidence, (units - 1) as f64).filter(|t| *t > 0.0),
+    ) else {
+        score.ineligible = Some(Ineligible::NotFinite);
+        return score;
+    };
+    let bound = gain - t * se;
     score.lower_bound = Some(bound);
     score.net_value = Some(pricing.expected_uses * pricing.value_per_success * bound - cost);
     score
@@ -226,7 +237,7 @@ mod tests {
     const PRICING: Pricing = Pricing {
         value_per_success: 100.0,
         expected_uses: 1000.0,
-        confidence_z: DEFAULT_CONFIDENCE_Z,
+        confidence: DEFAULT_CONFIDENCE,
         min_units: 4,
         budget: None,
     };
@@ -269,6 +280,33 @@ mod tests {
         assert_eq!(applied(&verdict), Some("steady"));
         let noisy = &verdict.scores[0];
         assert!(noisy.lower_bound.unwrap() < noisy.mean_gain.unwrap());
+    }
+
+    /// The bound over n units is the one-sided Student t bound with n - 1
+    /// degrees of freedom: over four units at a one-sided level of 0.95 the quantile is 2.3534
+    /// (scipy.stats.t.ppf(0.95, 3)), not the normal 1.645, which would
+    /// overstate a gain measured on so few units.
+    #[test]
+    fn the_bound_over_few_units_is_students_not_the_normals() {
+        let verdict = decide(&[arm("four", &[0.2, 0.4, 0.2, 0.4], 0.0, 0.0)], &PRICING);
+        let score = &verdict.scores[0];
+        let se = (0.04_f64 / 3.0 / 4.0).sqrt();
+        let expected = 0.3 - 2.353_363_434_801_826_4 * se;
+        assert!(
+            (score.lower_bound.unwrap() - expected).abs() < 1e-9,
+            "{:?}, expected {expected}",
+            score.lower_bound
+        );
+        // One unit has no spread to bound: never eligible.
+        let one = Pricing {
+            min_units: 1,
+            ..PRICING
+        };
+        let lone = decide(&[arm("lone", &[0.9], 0.0, 0.0)], &one);
+        assert!(matches!(
+            lone.scores[0].ineligible,
+            Some(Ineligible::TooFewUnits { required: 2, .. })
+        ));
     }
 
     #[test]

@@ -133,8 +133,8 @@ memory; nearest-passage similarity and an authorship embedding are not measured.
 `splinter improve EXPERIMENT.toml...` measures each intervention an experiment names (more
 samples, another episode protocol, a candidate that `train` kept, no change)
 against the incumbent on the same target tasks and chooses the one with the greatest net value:
-the lower confidence bound of the paired gain per family, times what a success is worth and how
-often it is used, less its one-time and per-use cost, or no change when none pays. Nothing is
+the one-sided lower confidence bound of the paired gain per family (Student's t over the families, at the
+pricing's `confidence`, 0.95 unless named), times what a success is worth and how often it is used, less its one-time and per-use cost, or no change when none pays. Nothing is
 applied. An intervention whose mechanism is not there yet is reported as not measured.
 `--compare-fixed` shows what applying one intervention to every experiment would have come to.
 

@@ -200,11 +200,12 @@ impl ImprovementExperiment {
         let positive = |v: f64| v.is_finite() && v > 0.0;
         if !(positive(pricing.value_per_success)
             && positive(pricing.expected_uses)
-            && positive(pricing.confidence_z))
+            && pricing.confidence > 0.5
+            && pricing.confidence < 1.0)
         {
             return Err(OrchestratorError::Refused(
-                "the pricing's value of a success, expected uses and confidence must be positive \
-                 numbers"
+                "the pricing's value of a success and expected uses must be positive numbers, and \
+                 its confidence a level between 0.5 and 1"
                     .into(),
             ));
         }

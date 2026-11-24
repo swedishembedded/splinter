@@ -20,6 +20,8 @@ mod diagnosis;
 mod evidence_gate;
 mod executable_verifier;
 mod exposure_audit;
+mod external_student;
+mod external_wilson;
 mod form_verifiers;
 mod gate;
 mod golden;

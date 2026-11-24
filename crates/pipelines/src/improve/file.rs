@@ -51,7 +51,7 @@
 
 use serde::Deserialize;
 use splinter_core::model_ref::ModelRef;
-use splinter_eval::intervention::{Pricing, DEFAULT_CONFIDENCE_Z};
+use splinter_eval::intervention::{Pricing, DEFAULT_CONFIDENCE};
 use splinter_store::tasks::TaskSetId;
 
 use super::{training_seconds, Evaluation, ImprovementExperiment, InterventionSpec, ProtocolSpec};
@@ -98,7 +98,7 @@ struct ProtocolFile {
 struct PricingFile {
     value_per_success: f64,
     expected_uses: f64,
-    confidence_z: Option<f64>,
+    confidence: Option<f64>,
     min_units: Option<usize>,
     budget: Option<f64>,
 }
@@ -242,7 +242,7 @@ impl ExperimentFile {
             pricing: Pricing {
                 value_per_success: self.pricing.value_per_success,
                 expected_uses: self.pricing.expected_uses,
-                confidence_z: self.pricing.confidence_z.unwrap_or(DEFAULT_CONFIDENCE_Z),
+                confidence: self.pricing.confidence.unwrap_or(DEFAULT_CONFIDENCE),
                 min_units: self.pricing.min_units.unwrap_or(DEFAULT_MIN_UNITS),
                 budget: self.pricing.budget,
             },

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The frozen reference fixtures: written by scripts/conformance/external.py generate, checked by its
+# `check` and, digest by digest, by every test that reads one (crates/conformance).
+schema: splinter.validation-fixtures/v1
+fixtures:
+  statistics/paired-tests:
+    path: "validation/fixtures/statistics/paired-tests.json"
+    sha256: "4ca2a9db93bb2ee2fb3b865c2d4b90f092ccfe7b6329e15b900fbe2a06fb316e"
+    oracle: "validation/oracles/statistics/paired_tests.py"
+    oracle_sha256: "785a9d6029a089bb7dad380c2e58580567708866807441b2bb05d4cd12b608d9"
+    references: ["scipy", "statsmodels", "humaneval-pass-at-k"]
+    test: "splinter-model/it/external_statistics"
+  statistics/student-t:
+    path: "validation/fixtures/statistics/student-t.json"
+    sha256: "a0ba80438be4998dc79463c2dae4470e61140eaa394a92d283e07bad92e14540"
+    oracle: "validation/oracles/statistics/student_t.py"
+    oracle_sha256: "593764a01a1f92b0d6596102dc278bc42376d3ecaf2d01ce2f9fd35858329697"
+    references: ["scipy"]
+    test: "splinter-eval/it/external_student"

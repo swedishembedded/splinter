@@ -35,7 +35,7 @@ use splinter_agent::CancelToken;
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
 use splinter_core::model_ref::ModelRef;
-use splinter_eval::intervention::{Decision, Pricing, DEFAULT_CONFIDENCE_Z};
+use splinter_eval::intervention::{Decision, Pricing, DEFAULT_CONFIDENCE};
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_orchestrator::Context;
 use splinter_pipelines::curriculum::frontier::PassAtK;
@@ -177,7 +177,7 @@ fn pricing() -> Pricing {
     Pricing {
         value_per_success: 60.0,
         expected_uses: 200.0,
-        confidence_z: DEFAULT_CONFIDENCE_Z,
+        confidence: DEFAULT_CONFIDENCE,
         min_units: 4,
         budget: None,
     }

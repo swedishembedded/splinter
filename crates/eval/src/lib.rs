@@ -98,6 +98,7 @@ pub mod speech_features;
 pub mod speech_judge;
 pub mod speech_reward;
 pub mod strata;
+pub mod student;
 pub mod teaching_check;
 pub mod timeline_metrics;
 pub mod verifiers;
