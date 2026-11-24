@@ -21,7 +21,9 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use splinter_core::digest::Digest;
 use splinter_model::endpoint::BrainEndpoints;
-use splinter_model::policy_gradient::{Behaviour, PolicyGradientOptions, PolicyGradientTune};
+use splinter_model::policy_gradient::{
+    Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, PolicyGradientTune,
+};
 use splinter_model::served_train::{
     check_dataset, fine_tune_served, train_feedback_served, train_policy_gradient_served,
     train_preference_served, CheckSpec, DEFAULT_DPO_BETA,
@@ -165,6 +167,10 @@ pub struct LoraParams {
     /// rollouts were sampled from it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub behaviour: Option<String>,
+    /// For rollouts: the settings of the policy-gradient objective beyond the behaviour source (brain's
+    /// defaults where unnamed, which the run's training record states).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_gradient: Option<PolicyGradientParams>,
     /// Steps between evaluations of the validation records, which then
     /// pick the step the adapter is exported at; 0 evaluates nothing and
     /// exports the last step.
@@ -363,15 +369,7 @@ impl BrainTrainer {
                 max_block: params.max_block,
                 thinking: request.thinking,
                 pack_answers: true,
-                options: PolicyGradientOptions {
-                    behaviour: params
-                        .behaviour
-                        .as_deref()
-                        .map(str::parse::<Behaviour>)
-                        .transpose()
-                        .map_err(TrainError)?,
-                    ..Default::default()
-                },
+                options: policy_gradient_options(params)?,
             },
         )
         .map_err(error)?;
@@ -546,4 +544,62 @@ impl Trainer for BrainTrainer {
 /// It cannot be read.
 pub fn sha256(path: &Path) -> std::io::Result<Digest> {
     Digest::sha256_of_reader(std::fs::File::open(path)?)
+}
+
+/// The policy-gradient settings a recipe names under `params.policy_gradient`.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyGradientParams {
+    /// `grpo`, `dr-grpo`, `dapo` or `rloo`: the algorithm whose settings are the run's defaults.
+    #[serde(default)]
+    pub algorithm: Option<String>,
+    /// Half-width of the clip band of the importance ratio.
+    #[serde(default)]
+    pub clip_eps: Option<f32>,
+    /// The upper edge of the band when wider than the lower one (clip-higher).
+    #[serde(default)]
+    pub clip_eps_high: Option<f32>,
+    /// Coefficient of the KL term to the reference policy.
+    #[serde(default)]
+    pub kl_beta: Option<f32>,
+    /// `seq-mean` or `token-sum`.
+    #[serde(default)]
+    pub loss_agg: Option<String>,
+    /// Skip an optimiser step whose mean KL to the reference exceeds this.
+    #[serde(default)]
+    pub max_step_kl: Option<f32>,
+    /// The temperature the rollouts were sampled at.
+    #[serde(default)]
+    pub temperature: Option<f32>,
+}
+
+/// The options brain's policy-gradient job is given: the behaviour source and whatever `params.policy_gradient` names.
+fn policy_gradient_options(params: &LoraParams) -> Result<PolicyGradientOptions, TrainError> {
+    let named = params.policy_gradient.clone().unwrap_or_default();
+    Ok(PolicyGradientOptions {
+        behaviour: params
+            .behaviour
+            .as_deref()
+            .map(str::parse::<Behaviour>)
+            .transpose()
+            .map_err(TrainError)?,
+        algorithm: named
+            .algorithm
+            .as_deref()
+            .map(str::parse::<Algorithm>)
+            .transpose()
+            .map_err(TrainError)?,
+        clip_eps: named.clip_eps,
+        clip_eps_high: named.clip_eps_high,
+        kl_beta: named.kl_beta,
+        loss_agg: named
+            .loss_agg
+            .as_deref()
+            .map(str::parse::<LossAggregation>)
+            .transpose()
+            .map_err(TrainError)?,
+        max_step_kl: named.max_step_kl,
+        temperature: named.temperature,
+        ..PolicyGradientOptions::default()
+    })
 }

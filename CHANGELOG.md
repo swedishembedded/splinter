@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (the policy-gradient objective's settings in a recipe)
+- `model.train` params take `policy_gradient: { algorithm, clip_eps, clip_eps_high, kl_beta, loss_agg, max_step_kl, temperature }` for a rollout dataset; what a recipe leaves out is brain's default, which the run's training record states. A misspelt setting is refused.
+
 ### Added (failures of a task the policy sometimes solves)
 - `attempts.failures` takes `include_solved: true`: a task with a failed attempt is a failure even when another attempt solved it. A fork correction continues such a task's failed attempt when its brief has a fork point, so the recovery data covers the policy's partial failures and not only the tasks it never solved.
 

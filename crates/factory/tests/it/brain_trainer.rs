@@ -200,6 +200,13 @@ fn a_variants_parameters_are_resolved_with_the_trainers_defaults_and_refused_ear
         trainer.resolve("lora", &json!({"rank": 8})).is_err(),
         "steps is required"
     );
+    let pg = json!({"rank": 8, "steps": 10, "policy_gradient": {"clip_eps": 0.2, "kl_beta": 0.02}});
+    assert!(trainer.resolve("lora", &pg).is_ok());
+    let typo = json!({"rank": 8, "steps": 10, "policy_gradient": {"clip_epsilon": 0.2}});
+    assert!(
+        trainer.resolve("lora", &typo).is_err(),
+        "a misspelt setting is refused"
+    );
     assert!(
         trainer
             .resolve("dpo", &json!({"rank": 8, "steps": 1}))
