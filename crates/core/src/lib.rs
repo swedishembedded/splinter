@@ -102,6 +102,7 @@ pub mod longitudinal;
 pub mod model_ref;
 pub mod outcome;
 pub mod prompt;
+pub mod quantile;
 pub mod release;
 pub mod repository_history;
 pub mod rewards;

@@ -49,6 +49,13 @@ references:
     functions: [numpy.prod, numpy.arange]
     confidence: high
     conventions: "1 - prod(1 - k / arange(n - c + 1, n + 1)); 1.0 when n - c < k"
+  numpy-quantile:
+    package: numpy
+    repository: https://github.com/numpy/numpy
+    release: "2.5.5 (the wheel pinned in packages)"
+    functions: [numpy.quantile]
+    confidence: high
+    conventions: "method='nearest': the sorted value at index q * (n - 1) rounded to the nearest, a half-way index to the even one"
   reference-projector:
     package: null
     repository: this repository (validation/oracles/data/sft_projection.py)

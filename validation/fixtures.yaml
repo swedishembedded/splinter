@@ -33,6 +33,13 @@ fixtures:
     oracle_sha256: "785a9d6029a089bb7dad380c2e58580567708866807441b2bb05d4cd12b608d9"
     references: ["scipy", "statsmodels", "humaneval-pass-at-k"]
     test: "splinter-model/it/external_statistics"
+  statistics/quantile:
+    path: "validation/fixtures/statistics/quantile.json"
+    sha256: "52c242ae896ca97aef490824d2d61120b0fe3532b96b51bfbc7212a646293886"
+    oracle: "validation/oracles/statistics/quantile.py"
+    oracle_sha256: "62fb868f709891f12999d7ea9f691c5c124afa43b998419cd2921efd6476e893"
+    references: ["numpy-quantile"]
+    test: "splinter-core/it/external_quantile"
   statistics/student-t:
     path: "validation/fixtures/statistics/student-t.json"
     sha256: "a0ba80438be4998dc79463c2dae4470e61140eaa394a92d283e07bad92e14540"

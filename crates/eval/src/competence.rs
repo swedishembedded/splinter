@@ -313,6 +313,6 @@ fn interval(value: Option<f64>, draws: &mut [f64]) -> (Option<f64>, Option<f64>)
     }
     draws.sort_by(f64::total_cmp);
     let tail = (1.0 - INTERVAL_LEVEL) / 2.0;
-    let at = |q: f64| draws[((q * (draws.len() - 1) as f64).round() as usize).min(draws.len() - 1)];
+    let at = |q: f64| splinter_core::quantile::nearest_rank(draws, q).unwrap_or(f64::NAN);
     (Some(at(tail).min(value)), Some(at(1.0 - tail).max(value)))
 }

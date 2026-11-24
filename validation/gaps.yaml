@@ -559,9 +559,10 @@ gaps:
     and Resampled share a golden; competence.rs does not reuse Resampled. A fix in one will not reach the others.
   severity: high
   confidence: high
-  status: confirmed
-  resolution: 'four copies of the percentile rule and three resamplers: a Phase 16 consolidation into splinter-model''s
-    stats (one rule, one golden)'
+  status: fixed
+  resolution: the percentile rule is one function, splinter_core::quantile::nearest_rank, used by the item bootstrap, the
+    family competence interval, the powered analysis, harmonize and the timeline knots (five copies before); the three resamplers
+    stay apart by what they resample (items, families, clusters)
 - id: G-EK-02
   source_id: null
   where: crates/eval/src/pilot.rs:53 vs crates/knowledge/src/factory/band.rs:72
@@ -805,9 +806,9 @@ gaps:
     at the 0.025 quantile of 10_000 resamples carry Monte Carlo error unaccounted for in the decision.
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: nearest-rank quantiles with a five-Monte-Carlo-error tolerance admit another convention; an exact enumeration
-    golden at a small size would pin the rule
+  status: fixed
+  resolution: 'the rule is pinned exactly to numpy.quantile(method=''nearest'') by a frozen external golden (statistics/quantile:
+    every size 1-12, shares in 1/24 steps, ties included), which the old half-away rounding fails'
 - id: G-EK-24
   source_id: null
   where: crates/knowledge/src/retrieve/lexical.rs:90

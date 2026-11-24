@@ -463,8 +463,7 @@ impl Resampled {
 
     /// The resampled mean below which `share` of the draws fall.
     pub(crate) fn quantile(&self, share: f64) -> f64 {
-        let last = self.means.len() - 1;
-        self.means[((share * last as f64).round() as usize).min(last)]
+        splinter_core::quantile::nearest_rank(&self.means, share).unwrap_or(f64::NAN)
     }
 }
 

@@ -7,6 +7,7 @@
 //! process-wide state (the current directory, environment variables): the
 //! others run beside it.
 
+mod external_quantile;
 mod factory;
 mod fuzz;
 mod recorded_calls;

@@ -173,7 +173,7 @@ pub fn bootstrap_interval(
         })
         .collect();
     means.sort_by(f64::total_cmp);
-    let at = |q: f64| means[((q * (iterations - 1) as f64).round() as usize).min(iterations - 1)];
+    let at = |q: f64| splinter_core::quantile::nearest_rank(&means, q).unwrap_or(f64::NAN);
     let tail = (1.0 - level) / 2.0;
     Some(Interval {
         mean: observations.iter().sum::<f64>() / n as f64,

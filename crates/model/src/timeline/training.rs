@@ -252,7 +252,8 @@ pub fn derive_knots(
     }
     times.sort_by(f64::total_cmp);
     let last = times[times.len() - 1];
-    let quantile = times[((times.len() - 1) as f64 * FIRST_KNOT_QUANTILE).round() as usize];
+    let quantile =
+        splinter_core::quantile::nearest_rank(&times, FIRST_KNOT_QUANTILE).unwrap_or(last);
     let first = quantile.max(last / MAX_KNOT_SPAN);
     if first >= last {
         return Err(TimelineError::Request(format!(

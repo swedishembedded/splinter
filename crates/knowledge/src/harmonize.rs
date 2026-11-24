@@ -125,7 +125,7 @@ pub fn non_measurement_codes(variable: &VariableDoc) -> Vec<f64> {
 }
 
 fn quantile(sorted: &[f64], q: f64) -> f64 {
-    sorted[((sorted.len() - 1) as f64 * q).round() as usize]
+    splinter_core::quantile::nearest_rank(sorted, q).unwrap_or(f64::NAN)
 }
 
 /// Values a reference needs before a distribution check is made.
