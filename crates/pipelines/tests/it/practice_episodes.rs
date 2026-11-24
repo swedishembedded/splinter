@@ -49,7 +49,7 @@ use sven_sdk::model::{
 };
 
 /// A line every task's verifier carries and no agent may ever see.
-const MARKER: &str = "hidden-verifier-marker-5c1e";
+pub(crate) const MARKER: &str = "hidden-verifier-marker-5c1e";
 
 /// What the scripted policy does with a request.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -144,7 +144,7 @@ impl ModelProvider for Policy {
 
 /// A practice task folder that ships its starting files: `file` holds
 /// `start`, and the verifier rewards `check` (a shell condition) on the tree.
-fn task(root: &Path, name: &str, instruction: &str, file: &str, check: &str) -> PathBuf {
+pub(crate) fn task(root: &Path, name: &str, instruction: &str, file: &str, check: &str) -> PathBuf {
     let dir = root.join(name);
     write(&dir.join(format!("workspace/{file}")), "start\n");
     write(&dir.join("instruction.md"), &format!("{instruction}\n"));
@@ -163,7 +163,7 @@ fn task(root: &Path, name: &str, instruction: &str, file: &str, check: &str) -> 
     dir
 }
 
-fn greet(root: &Path) -> PathBuf {
+pub(crate) fn greet(root: &Path) -> PathBuf {
     task(
         root,
         "greet",

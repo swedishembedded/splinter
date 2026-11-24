@@ -109,6 +109,25 @@ pub fn policy_calls(log: &[u8]) -> Result<Vec<ModelCall>, String> {
         .collect())
 }
 
+/// Files the policy's calls of the request log `log` (its bytes) on
+/// `trajectory` as its recorded calls ([`CALLS_KEY`]): what its records are
+/// built from, each request as sent.
+///
+/// # Errors
+/// The log cannot be read as requests.
+pub fn file_calls(trajectory: &mut atif::Trajectory, log: &[u8]) -> Result<(), String> {
+    let calls = policy_calls(log)?;
+    let recorded = RecordedCalls::record(Digest::sha256_of(log).hex(), &calls);
+    let mut extra = match trajectory.extra.take() {
+        Some(serde_json::Value::Object(map)) => map,
+        Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
+        None => serde_json::Map::new(),
+    };
+    extra.insert(CALLS_KEY.to_string(), recorded.to_value());
+    trajectory.extra = Some(serde_json::Value::Object(extra));
+    Ok(())
+}
+
 /// The experience `trial` of the attempts product at `view` is. A task's
 /// `reference` (its folder's `solution/solve.sh`), when given, is privileged
 /// context of the experience: what a teacher may be shown and the student
@@ -135,15 +154,7 @@ pub fn experience_of(
         .ok_or("the trajectory has no user step with text: the instruction is unknown")?;
     let log = view.join(&trial.native_dir).join(CALL_LOG);
     if let Ok(requests) = std::fs::read(&log) {
-        let calls = policy_calls(&requests).map_err(|e| format!("{CALL_LOG}: {e}"))?;
-        let recorded = RecordedCalls::record(Digest::sha256_of(&requests).hex(), &calls);
-        let mut extra = match trajectory.extra.take() {
-            Some(serde_json::Value::Object(map)) => map,
-            Some(other) => serde_json::Map::from_iter([("exported".to_string(), other)]),
-            None => serde_json::Map::new(),
-        };
-        extra.insert(CALLS_KEY.to_string(), recorded.to_value());
-        trajectory.extra = Some(serde_json::Value::Object(extra));
+        file_calls(&mut trajectory, &requests).map_err(|e| format!("{CALL_LOG}: {e}"))?;
     }
     // What is the task's, not the trial's: another trial of the task, by any
     // agent, has the same task address.

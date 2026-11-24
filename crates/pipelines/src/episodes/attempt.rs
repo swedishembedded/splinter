@@ -9,13 +9,14 @@
 //! One attempt: found recorded, or run, graded and recorded.
 
 use serde::Serialize;
-use splinter_agent::solve::{Model, SolveOptions};
+use splinter_agent::solve::{Model, RequestRecording, SolveOptions};
 use splinter_agent::work::WorkProtocol;
 use splinter_agent::CancelToken;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::Provenance;
 use splinter_core::model_ref::ModelRef;
 use splinter_eval::verifiers::verify_and_annotate;
+use splinter_factory::run::corpus::file_calls;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_sandbox::ResolvedEnvironment;
@@ -39,7 +40,19 @@ const POINTER_PREFIX: &str = "practice-episode/";
 pub(super) struct Planned<'a> {
     pub(super) task: &'a PracticeTask,
     pub(super) attempt: u32,
+    /// The online group the attempt is a rollout of, when it is one.
+    pub(super) group: Option<&'a str>,
     pub(super) key: Digest,
+}
+
+/// What an online rollout records besides an episode's own: its requests as
+/// sent (filed on the trajectory as its recorded calls) and, when asked, the
+/// sampler's top-K.
+pub(super) struct Capture {
+    /// Where the request logs of running rollouts are kept until they are
+    /// filed on their trajectories.
+    pub(super) scratch: std::path::PathBuf,
+    pub(super) top_logprobs: Option<u32>,
 }
 
 /// What became of an attempt.
@@ -61,6 +74,7 @@ pub(super) struct Run<'a> {
     pub(super) config: &'a Digest,
     pub(super) settings: &'a EpisodeSettings,
     pub(super) cancel: &'a CancelToken,
+    pub(super) capture: Option<&'a Capture>,
 }
 
 /// What an attempt's key is the digest of.
@@ -72,6 +86,8 @@ struct KeyOf<'a> {
     policy: &'a PolicyIdentity,
     config: &'a Digest,
     seed: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    group: Option<&'a str>,
     attempt: u32,
 }
 
@@ -81,6 +97,7 @@ pub(super) fn key(
     policy: &PolicyIdentity,
     config: &Digest,
     seed: u64,
+    group: Option<&str>,
     attempt: u32,
 ) -> Result<Digest, EpisodeError> {
     let bytes = canonical_json(&KeyOf {
@@ -90,16 +107,22 @@ pub(super) fn key(
         policy,
         config,
         seed,
+        group,
         attempt,
     })
     .map_err(|e| EpisodeError::Settings(format!("an attempt's key: {e}")))?;
     Ok(Digest::of(&bytes))
 }
 
-/// The seed of the draws of attempt `attempt` at `task` in a run seeded
-/// `seed`: a function of the three alone.
-fn attempt_seed(seed: u64, task: &Digest, attempt: u32) -> u64 {
-    let digest = Digest::of(format!("{seed}/{task}/{attempt}").as_bytes());
+/// The seed of the draws of attempt `attempt` at `task` (of the online
+/// `group`, when it is a rollout of one) in a run seeded `seed`: a function
+/// of these alone.
+fn attempt_seed(seed: u64, task: &Digest, group: Option<&str>, attempt: u32) -> u64 {
+    let text = match group {
+        Some(group) => format!("{seed}/{group}/{task}/{attempt}"),
+        None => format!("{seed}/{task}/{attempt}"),
+    };
+    let digest = Digest::of(text.as_bytes());
     // The first 16 hex digits of the address: 64 bits.
     u64::from_str_radix(&digest.hex()[..16], 16).unwrap_or_default()
 }
@@ -166,8 +189,13 @@ impl Run<'_> {
     /// when the run's cancel stopped the episode.
     fn run(&self, planned: &Planned<'_>) -> Result<Option<EpisodeRecord>, EpisodeError> {
         let ctx = self.ctx;
-        let seed = attempt_seed(self.settings.seed, &planned.task.task, planned.attempt);
-        let sampling = exact_sampling(seed);
+        let seed = attempt_seed(
+            self.settings.seed,
+            &planned.task.task,
+            planned.group,
+            planned.attempt,
+        );
+        let sampling = exact_sampling(self.settings.temperature, seed);
         // A model brain serves is asked from the endpoint the seed pins the
         // attempt to; every model, whoever serves it, is sent the sampling
         // with each request.
@@ -222,6 +250,22 @@ impl Run<'_> {
         options.cancel = Some(self.cancel.clone());
         options.want_logprobs = true;
         options.request_sampling = Some(sampling.request_params());
+        let log = match self.capture {
+            Some(capture) => {
+                options.top_logprobs = capture.top_logprobs;
+                let path = capture.scratch.join(format!("{}.jsonl", planned.key.hex()));
+                // A log a killed earlier run left is not this run's.
+                let _ = std::fs::remove_file(&path);
+                match RequestRecording::open(&path) {
+                    Ok(log) => {
+                        options.request_log = Some(log);
+                        Some(path)
+                    }
+                    Err(e) => return infrastructure(record, format!("the request log: {e}")),
+                }
+            }
+            None => None,
+        };
         let options = model.solving(options);
         let protocol = WorkProtocol {
             max_tool_calls: self.settings.max_tool_calls,
@@ -234,10 +278,22 @@ impl Run<'_> {
         if self.cancel.is_cancelled() {
             return Ok(None);
         }
-        let (solution, report) = match solved {
+        let (mut solution, report) = match solved {
             Ok(solved) => solved,
             Err(e) => return infrastructure(record, e.to_string()),
         };
+        if let Some(path) = log {
+            let filed = std::fs::read(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|log| file_calls(&mut solution.trajectory, &log));
+            let _ = std::fs::remove_file(&path);
+            if let Err(why) = filed {
+                return infrastructure(
+                    record,
+                    format!("the request log {}: {why}", path.display()),
+                );
+            }
+        }
         record.conclusion = Some(conclusion_label(solution.conclusion, &report));
         record.trace = trace_summary(&solution.trajectory);
         record.usage = usage(&solution.trajectory, &report);

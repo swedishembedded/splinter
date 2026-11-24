@@ -70,9 +70,29 @@ re-sent until brain reports it committed (applied is not durable).
       holds less than a step (a 429 only once it holds a step's worth); a learner that loses uncommitted work (a job
       restart) fails the run's learner calls, so the resumed controller sends again (an unreported restart would
       leave applied groups waiting).
-- [ ] Rollout executor on the sven SDK (A22): concurrent isolated sessions against the served policy, the policy trace
-      on every request, infrastructure failures separated from verified failures (an unknown outcome is never reward
-      zero); records from sven's per-request recording, one per model call (A14).
+- [x] Rollout executor on the sven SDK (A22): `splinter_pipelines::episodes::online` (`run_online`, the
+      `OnlineEpisodes` executor): each rollout one practice episode on a scoped thread, an isolated sven session in a
+      fresh copy of the task's tree, the policy trace and the optional top-K (`top_logprobs`) on every request,
+      untruncated sampling at the run's temperature (a sampler with top_k, top_p below 1 or min_p above 0 is refused
+      by name), the episode's deadline, `cancel` stopping every running rollout; the task's verifier rewards it
+      afterwards and a verifier error, verifier timeout or infrastructure failure is an `Err` (retried by the
+      controller, never reward 0), an ungraded episode an outcome with no reward. An episode is keyed by its content
+      and its group (seed, task, policy, configuration, group key, index), so a rollout relaunched after it finished
+      is answered from its record. Each session's requests are recorded by a request log of its own
+      (`SolveOptions::request_log`, sven's `RecordingProvider` through `sven_sdk::drivers::request_log`) and filed
+      on the trajectory as its recorded calls (`run::corpus::file_calls`, shared with the corpus import).
+      Tests `splinter-pipelines/it/online_episodes` (scripted provider through the SDK).
+- [x] Records one per model call (A14): `splinter_data::calls::project_calls` (see the validation map, "Per-call
+      records (online)"); the canonical producer writes brain's additive v2 fields (`behavior_top_ids`,
+      `behavior_top_logprobs`, `policy_version`, `sampler`, `truncated`); `CallRecord::record` makes the v2 line once
+      the group is scored. A rollout is exact only when every call is; the scrub must leave every call's text as the
+      model saw it (a run whose tool output names its scratch tree is inexact, counted `scrubbed`: a fixed sandbox
+      path is the remedy, not yet done). Not yet checked against brain's own `check_dataset` with these fields (brain
+      `agrpo-score` is landing them; `make test/contract/brain` once it has).
+      Dependency: needs sven `sdk: record a session's model requests to a log of its own` and `sdk: re-export the
+      identity a provider reports of its reply` (sven branch `agrpo-exec`), plus sven's per-request identity and
+      top-K; the lock pins the public sven remote, which has none of them, so this builds with `make deps/local`
+      until those commits are published and the lock is re-pinned.
 - [ ] Learner adapter for brain's streaming policy-gradient job (scripted double first, then the real API).
 - [ ] The `train.online` factory operation (A24) over an executable task collection (`dataset.rlvr` frozen as the
       first curriculum); its candidate goes through the existing evaluation and promotion stages.

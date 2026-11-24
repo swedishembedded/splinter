@@ -47,6 +47,7 @@ mod judging;
 mod lineage;
 mod model_refs;
 mod monitoring;
+mod online_episodes;
 mod pipeline_seeds;
 mod powered;
 mod practice_episodes;

@@ -43,6 +43,7 @@ mod attempt;
 mod collection;
 mod executor;
 mod grade;
+pub mod online;
 
 use std::time::Duration;
 
@@ -144,6 +145,9 @@ pub struct EpisodeSettings {
     pub max_tool_calls: Option<u32>,
     /// Output tokens one attempt may generate; `None` sets no budget.
     pub max_output_tokens: Option<u64>,
+    /// The temperature every request samples at, from the whole
+    /// distribution ([`exact_sampling`]).
+    pub temperature: f32,
 }
 
 mod seconds {
@@ -168,6 +172,7 @@ impl EpisodeSettings {
             deadline: crate::solving::DEFAULT_SOLVE_DEADLINE,
             max_tool_calls: harness_protocol().max_tool_calls,
             max_output_tokens: None,
+            temperature: EXACT_SAMPLING.temperature,
         }
     }
 
@@ -191,10 +196,11 @@ pub const EXACT_SAMPLING: Sampling = Sampling {
     ..splinter_model::local::AGENT_SAMPLING
 };
 
-/// [`EXACT_SAMPLING`] drawing from `seed`.
+/// [`EXACT_SAMPLING`] at `temperature`, drawing from `seed`.
 #[must_use]
-pub fn exact_sampling(seed: u64) -> Sampling {
+pub fn exact_sampling(temperature: f32, seed: u64) -> Sampling {
     Sampling {
+        temperature,
         seed: Some(seed),
         ..EXACT_SAMPLING
     }
@@ -386,10 +392,18 @@ struct Configuration<'a> {
     coding_prompt: &'a str,
     sampling: Sampling,
     policy_trace: bool,
+    /// The sampler's top-K asked of every request, by an online run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_logprobs: Option<u32>,
 }
 
-/// The digest of the configuration `settings` runs attempts under.
-fn configuration(settings: &EpisodeSettings, prompt: CodingPrompt) -> Result<Digest, EpisodeError> {
+/// The digest of the configuration `settings` runs attempts under, asking
+/// each request for the sampler's top `top_logprobs` when set.
+fn configuration(
+    settings: &EpisodeSettings,
+    prompt: CodingPrompt,
+    top_logprobs: Option<u32>,
+) -> Result<Digest, EpisodeError> {
     let protocol = harness_protocol();
     let config = Configuration {
         format: RECORD_FORMAT,
@@ -400,8 +414,12 @@ fn configuration(settings: &EpisodeSettings, prompt: CodingPrompt) -> Result<Dig
         max_repeated_results: protocol.max_repeated_results,
         coding_prompt: prompt.id(),
         // The seed is the attempt's, not the configuration's.
-        sampling: EXACT_SAMPLING,
+        sampling: Sampling {
+            temperature: settings.temperature,
+            ..EXACT_SAMPLING
+        },
         policy_trace: true,
+        top_logprobs,
     };
     let bytes = canonical_json(&config)
         .map_err(|e| EpisodeError::Settings(format!("the configuration: {e}")))?;
@@ -441,14 +459,15 @@ pub(crate) fn run_with_adapter(
         model: model.identity.clone(),
         adapter,
     };
-    let config = configuration(settings, ctx.config().coding_prompt)?;
+    let config = configuration(settings, ctx.config().coding_prompt, None)?;
     let mut work = Vec::new();
     for task in request.tasks {
         for attempt in 0..settings.attempts {
             work.push(attempt::Planned {
                 task,
                 attempt,
-                key: attempt::key(task, &policy, &config, settings.seed, attempt)?,
+                group: None,
+                key: attempt::key(task, &policy, &config, settings.seed, None, attempt)?,
             });
         }
     }
@@ -460,6 +479,7 @@ pub(crate) fn run_with_adapter(
         config: &config,
         settings,
         cancel: &request.cancel,
+        capture: None,
     };
     let done = fan_out_blocking(&work, settings.jobs, |planned| run.attempt(planned));
     let mut report = EpisodeReport {
