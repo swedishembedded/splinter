@@ -503,7 +503,9 @@ naming its `params`, its `inputs` (each port's paths), the directory `out` it
 writes its product into, and the `repository`. It runs in the process sandbox:
 it reads its inputs, the request, its own operator file and its `code` (what
 its stage's identity pins, nothing else of the repository: a cached product
-never depends on a file whose change would not have invalidated it), writes
+never depends on a file whose change would not have invalidated it), lists the
+directories of the files its `code` names without reading anything else in them
+(so `code` may name the few modules of a package a program imports), writes
 only `out`, and
 reaches the network only with `network: true`, within `timeout_seconds`. A run
 gets the process sandbox's resources (1 GiB of address space per process, files

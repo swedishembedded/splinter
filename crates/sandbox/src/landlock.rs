@@ -102,6 +102,10 @@ pub struct Confinement {
     pub read_only: Vec<PathBuf>,
     /// Paths it may read, write, create and remove beneath.
     pub read_write: Vec<PathBuf>,
+    /// Directories whose entries it may list, and those of the directories
+    /// beneath them, without reading a file there: where a program finds
+    /// the files it was given by name (an interpreter's import path).
+    pub listable: Vec<PathBuf>,
     /// Whether the child may use the network. Off by default: a confinement
     /// is network-less unless it says otherwise.
     pub allow_network: bool,
@@ -190,6 +194,9 @@ impl Confinement {
         }
         for path in &self.read_write {
             add_rule(&ruleset, path, handled)?;
+        }
+        for path in &self.listable {
+            add_rule(&ruleset, path, handled & READ_DIR)?;
         }
         for port in ports {
             add_port_rule(&ruleset, *port)?;

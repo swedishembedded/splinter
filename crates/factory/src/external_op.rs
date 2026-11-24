@@ -157,6 +157,11 @@ pub struct External {
     /// identity pins), and the directory of a `./` program outside its code
     /// (the machine's environment, as a virtualenv).
     pinned_paths: Vec<PathBuf>,
+    /// The directories of its pinned files, which it may list but not read:
+    /// a program finds the files it pins by name (an interpreter importing
+    /// one module of a package lists the package), and a file beside them
+    /// stays unread, so pinning a few files of a directory is enough.
+    listable: Vec<PathBuf>,
     /// What this machine grants it.
     grant: Grant,
     /// The digest of the operator file and its code.
@@ -230,16 +235,24 @@ impl External {
                 ungranted.join(", ")
             ));
         }
-        let pinned_paths = pinned
+        let pinned_paths: Vec<PathBuf> = pinned
             .iter()
             .map(|(path, _)| repository.join(path))
             .chain(environment)
             .collect();
+        let mut listable: Vec<PathBuf> = pinned_paths
+            .iter()
+            .filter(|path| path.is_file())
+            .filter_map(|path| path.parent().map(Path::to_path_buf))
+            .collect();
+        listable.sort();
+        listable.dedup();
         let external = Self {
             code: digest_of(&(pinned, &grant)),
             file,
             repository: repository.to_path_buf(),
             pinned_paths,
+            listable,
             grant,
             validator,
         };
@@ -393,6 +406,7 @@ impl Execute for External {
             .granted_env(variables)
             .read_write(self.grant.write.clone())
             .read_only(readable)
+            .listable(self.listable.clone())
             .allow_network(self.file.network);
         let mut argv = vec![self.program()];
         argv.extend(self.file.command[1..].iter().cloned());

@@ -111,6 +111,8 @@ pub struct ProcessSandbox {
     read_only: Vec<PathBuf>,
     /// Paths every command may write, beside its tree and home.
     read_write: Vec<PathBuf>,
+    /// Directories every command may list, reading no file in them.
+    listable: Vec<PathBuf>,
 }
 
 impl ProcessSandbox {
@@ -157,6 +159,7 @@ impl ProcessSandbox {
             landlock: crate::landlock::abi_version().is_some(),
             read_only: Vec::new(),
             read_write: Vec::new(),
+            listable: Vec::new(),
         }
     }
 
@@ -247,6 +250,15 @@ impl ProcessSandbox {
         self
     }
 
+    /// Lets every command list the entries of the directories `paths` (and
+    /// of those beneath them) without reading any file there: a program
+    /// given some files of a directory can find them by name.
+    #[must_use]
+    pub fn listable(mut self, paths: Vec<PathBuf>) -> Self {
+        self.listable = paths;
+        self
+    }
+
     /// Lets every command write (and read) `paths`: state a program the
     /// caller runs keeps between runs.
     #[must_use]
@@ -303,6 +315,7 @@ impl ProcessSandbox {
         Confinement {
             read_only,
             read_write,
+            listable: self.listable.clone(),
             allow_network: self.allow_network,
             tcp_connect_ports: Vec::new(),
             private_proc: self.private_proc(),

@@ -213,6 +213,7 @@ fn a_confinement_with_tcp_ports_reaches_only_those_ports() {
             "/etc".into(),
         ],
         read_write: vec![work.path().to_path_buf(), "/dev".into()],
+        listable: Vec::new(),
         allow_network: false,
         tcp_connect_ports: vec![a],
         private_proc: false,

@@ -584,3 +584,37 @@ fn an_operator_declares_the_resources_one_run_needs() {
         .join("\n");
     assert!(refused.contains("memory_mib"), "{refused}");
 }
+
+/// Lists its program's directory and tries to read the file beside it that its code does not pin.
+const LISTER: &str = r#"#!/bin/sh
+exec python3 - "$2" "$0" <<'PY'
+import json, os, sys
+request = json.load(open(sys.argv[1]))
+here = os.path.dirname(sys.argv[2])
+source = request["inputs"]["text"][0]
+try:
+    open(os.path.join(here, "secret.txt")).read()
+    secret = "read"
+except OSError:
+    secret = "refused"
+with open(os.path.join(request["out"], os.path.basename(source)), "w") as out:
+    out.write(",".join(sorted(os.listdir(here))) + " " + secret)
+PY
+"#;
+
+#[test]
+fn an_operator_lists_the_directories_of_its_code_and_reads_only_what_it_pins() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = repo();
+    repo.write("notes/c.txt", "gamma");
+    repo.write("bin/secret.txt", "not pinned");
+    program(&repo, LISTER);
+    let dir = tempfile::tempdir().unwrap();
+    run(&repo, dir.path());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("upper/a.txt/a.txt")).unwrap(),
+        "secret.txt,upper.sh refused"
+    );
+}
