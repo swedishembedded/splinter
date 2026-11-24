@@ -34,7 +34,9 @@ const POLICY_KIND: &str = "policy";
 pub struct SampledTurn {
     /// The ids the sampler was given: the context the answer was made from.
     pub prompt_token_ids: Vec<u32>,
-    /// The ids it generated, the end-of-turn marker included.
+    /// The ids it generated, as the sampler produced them: the end-of-turn
+    /// marker is among them when it stopped on one (a generation cut at its
+    /// length limit has none, and the tokenizer is not known here to check).
     pub token_ids: Vec<u32>,
     /// The policy's log-probability of each generated id, one per id.
     pub behavior_logprobs: Vec<f32>,
@@ -66,6 +68,8 @@ pub enum ProxyReason {
     CountMismatch,
     /// An id is not a token id (negative or beyond 32 bits).
     InvalidIds,
+    /// A log-probability is not a finite number at most zero.
+    InvalidLogprobs,
     /// The scrub changed text of the conversation, which the ids decode to
     /// unscrubbed.
     Scrubbed,
@@ -135,8 +139,14 @@ pub(crate) fn trace_of(
         Some(_) => return Err(ProxyReason::SamplerLogprobs),
         None => return Err(ProxyReason::NoTrace),
     }
+    if prompt.is_empty() {
+        return Err(ProxyReason::NoTrace);
+    }
     if completion.is_empty() || completion.len() != logprobs.len() {
         return Err(ProxyReason::CountMismatch);
+    }
+    if logprobs.iter().any(|l| !l.is_finite() || *l > 0.0) {
+        return Err(ProxyReason::InvalidLogprobs);
     }
     let ids = |ids: &[i64]| -> Result<Vec<u32>, ProxyReason> {
         ids.iter()

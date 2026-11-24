@@ -257,6 +257,37 @@ fn a_trace_that_is_not_the_policys_own_or_does_not_add_up_is_a_proxy_and_says_wh
 }
 
 #[test]
+fn a_trace_with_no_prompt_or_an_impossible_logprob_is_never_labelled_the_policys_sample() {
+    let (call_step, answer) = good();
+    // A log-probability is a finite number at most zero; the context the
+    // answer was sampled after is at least one id.
+    for (bad, reason) in [
+        (
+            trace(&[1, 2, 3], &[10, 11], &[-0.5, f64::NAN], "policy"),
+            ProxyReason::InvalidLogprobs,
+        ),
+        (
+            trace(&[1, 2, 3], &[10, 11], &[-0.5, f64::NEG_INFINITY], "policy"),
+            ProxyReason::InvalidLogprobs,
+        ),
+        (
+            trace(&[1, 2, 3], &[10, 11], &[-0.5, 0.25], "policy"),
+            ProxyReason::InvalidLogprobs,
+        ),
+        (
+            trace(&[], &[10, 11], &[-0.5, -0.25], "policy"),
+            ProxyReason::NoTrace,
+        ),
+    ] {
+        let projection = view().project(&traced(bad, answer.clone(), None)).unwrap();
+        assert_eq!(projection.tokens.proxy.get(&reason), Some(&2), "{reason:?}");
+        assert_eq!(projection.tokens.exact, 2, "{reason:?}");
+    }
+    let projection = view().project(&traced(call_step, answer, None)).unwrap();
+    assert_eq!(projection.tokens.exact, 4);
+}
+
+#[test]
 fn a_conversation_the_scrub_would_change_carries_no_ids() {
     let (call_step, answer) = good();
     // A listing of a home directory is anonymised in what a student is shown,

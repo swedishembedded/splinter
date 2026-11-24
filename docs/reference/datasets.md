@@ -129,7 +129,7 @@ attempt did against the others at the same task:
   `exact` actions and `proxy` ones by reason: `context_reconstructed` (the conversation was rebuilt
   from the trajectory, not read from the requests the model was sent, so brain's check of the
   prompt ids would refuse it), `no_trace`, `sampler_logprobs` (figures taken after
-  top-k/top-p), `count_mismatch`, `invalid_ids`, `scrubbed` (the scrub changed text of the
+  top-k/top-p), `count_mismatch`, `invalid_ids`, `invalid_logprobs` (a log-probability that is not a finite number at most zero), `scrubbed` (the scrub changed text of the
   conversation, and ids decode to the unscrubbed text), `mixed_tokenizer` and `split_step`.
   Fields are never attached in part.
 - The build report and the manifest list every group (task, version, policy) with each
