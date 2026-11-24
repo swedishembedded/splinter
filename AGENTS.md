@@ -39,7 +39,7 @@ The ownership table and the boundary rule are in `.agents/rules/architecture.md`
 
 **Naming other projects.** Splinter depends on sven and brain, so it names
 them, and Claude Code, the one other agent runtime its adapter can start
-(`crates/agent/src/runner/claude_code.rs`, `make check/gates/claude-code`).
+(the execution worker's adapter `workers/harbor/splinter_harbor_worker/agents/claude_code.py`, `make check/gates/claude-code`).
 It names no other project: describe an orchestrator or host generically.
 `make check/gates/repo-scope` enforces this.
 
