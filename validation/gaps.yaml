@@ -1124,8 +1124,9 @@ gaps:
     GroupKind labels it all-pass; the campaign''s batch builder and the dataset''s report disagree on the same group.'
   severity: low
   confidence: high (reported by the data-cluster-2 pass, read)
-  status: confirmed
-  resolution: 'open: route the campaign''s sampling through GroupKind, or document why a batch builder classifies differently'
+  status: fixed
+  resolution: 'the batch builder classifies by the dataset''s rule: rewards alike with some attempt passed is all-pass (no
+    cliff), only a group no attempt passed is all-fail; both read splinter_core::rewards::differ for informative'
 - id: G-NEW-06
   source_id: null
   where: crates/model/src/fixture.rs (toy_chat_checkpoint) against brain 87dbd8a32

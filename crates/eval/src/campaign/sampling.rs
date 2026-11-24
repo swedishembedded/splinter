@@ -71,7 +71,8 @@ pub struct Group {
 pub enum GroupKind {
     /// The attempts earned different rewards: advantages exist.
     Informative,
-    /// Every attempt passed and earned the same: nothing to compare.
+    /// Every attempt earned the same and some attempt passed: nothing to
+    /// compare, and no cliff.
     AllPass,
     /// No attempt passed and all earned the same: the cliff.
     AllFail,
@@ -88,7 +89,9 @@ impl Group {
         }
         if splinter_core::rewards::differ(self.attempts.iter().map(|a| a.reward)) {
             GroupKind::Informative
-        } else if self.attempts.iter().all(|a| a.passed) {
+        } else if self.attempts.iter().any(|a| a.passed) {
+            // Alike, but some attempt passed: no cliff, and distilling it
+            // would teach from a pass (the dataset's rule, its GroupKind).
             GroupKind::AllPass
         } else {
             GroupKind::AllFail
@@ -361,6 +364,22 @@ mod tests {
             attempts: rewards.iter().map(|&r| attempt(r, r >= 1.0)).collect(),
             tag: 0,
         }
+    }
+
+    #[test]
+    fn a_flat_group_that_holds_a_pass_is_no_cliff() {
+        // The dataset's rule (splinter-data's GroupKind): rewards alike but
+        // some attempt passed is all-pass; only a group no attempt passed is
+        // the cliff a teacher or distillation is sent to.
+        let mixed = Group {
+            task: "t".into(),
+            attempts: vec![attempt(0.5, true), attempt(0.5, false)],
+            tag: 0,
+        };
+        assert_eq!(mixed.kind(), GroupKind::AllPass);
+        assert_eq!(group("t", &[0.0, 0.0]).kind(), GroupKind::AllFail);
+        assert_eq!(group("t", &[1.0, 1.0]).kind(), GroupKind::AllPass);
+        assert_eq!(group("t", &[0.0, 1.0]).kind(), GroupKind::Informative);
     }
 
     fn policy(target: usize) -> BatchPolicy {
