@@ -427,6 +427,14 @@ fn grading(task: &Task, sources: Option<&SourceStore>, scratch: &Path) -> Result
             out.push(verifier_of(kind, *verifier, sources, &found)?);
         }
     }
+    // A kind graded by a judge alone has nothing here to grade it: its
+    // attempts would be kept with no verdict, as if they had been graded.
+    if out.is_empty() {
+        return Err(format!(
+            "its kind {} is graded by a judge alone, and answer.collect is given none",
+            kind.name
+        ));
+    }
     Ok(Grading {
         environment,
         verifiers: Strongest::new(out),

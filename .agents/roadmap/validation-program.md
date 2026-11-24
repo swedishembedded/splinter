@@ -158,6 +158,8 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   environment reused the evaluation graded under the old one.
 - crash safety (10B, the product store ended at each durability boundary): a view repaired after a crash mid-build
   left its half-built directory in the run for good.
+- task kinds (4A, a kind never graded by less than it declares): a kind only a judge grades was answered where no
+  judge is given, its attempts kept ungraded as if graded.
 
 ## Open
 

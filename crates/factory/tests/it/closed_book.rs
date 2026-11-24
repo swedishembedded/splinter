@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::Value;
 use splinter_agent::solve::Model;
 use splinter_core::factory::execution::ModelBinding;
+use splinter_core::factory::items::{ItemIndex, ITEMS_FILE};
 use splinter_factory::execute::Models;
 use splinter_factory::resolve::resolve;
 use splinter_factory::run::{Factory, Services};
@@ -445,4 +446,54 @@ fn scenario_a_a_document_becomes_a_trained_sft_candidate() {
         backend.executed().is_empty(),
         "nothing ran outside the process"
     );
+}
+
+/// What the answered stage made of the one task the teacher's `proposal`
+/// makes of `document` under `kinds`: the attempts it kept and the reasons
+/// it rejected tasks for.
+fn answered(kinds: &str, proposal: &Value) -> (usize, Vec<String>) {
+    let repo = Repo::new();
+    repo.write("letters/letter.md", LETTER);
+    let resolved = resolve(&repo.root, &classroom(kinds), connections()).unwrap();
+    let backend = FakeBackend::with(Outcome::Pass);
+    let classroom = Classroom {
+        teacher: Arc::new(Answering(Mutex::new(proposal.to_string()))),
+        student: Arc::new(Answering(Mutex::new("Any answer at all.".into()))),
+    };
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: Some(&classroom),
+        variables: None,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let index: ItemIndex = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("answered").join(ITEMS_FILE)).unwrap(),
+    )
+    .unwrap();
+    (
+        index.items.len(),
+        index.rejected.into_iter().map(|r| r.reason).collect(),
+    )
+}
+
+#[test]
+fn a_task_only_a_judge_grades_is_refused_where_no_judge_is_given() {
+    // A counterexample is graded by a judge alone; answer.collect is given
+    // none. Answered anyway, every attempt would be kept with no verdict, as
+    // if it had been graded: it is refused, naming what it needs.
+    let proposal = serde_json::json!({ "tasks": [{
+        "instruction": "Someone claims that the brig Eliza carried no tobacco to Havre that month. Give a counterexample.",
+        "subject": "brig Eliza",
+        "reference": "The hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month.",
+        "evidence": [{ "section": 1, "quote": "the bill of lading for the hogsheads of tobacco shipped on the brig Eliza, which should reach Havre within the month" }],
+    }]});
+    let (kept, rejected) = answered("[counterexample]", &proposal);
+    assert_eq!(kept, 0, "an attempt was kept with nothing to grade it");
+    assert_eq!(rejected.len(), 1, "{rejected:?}");
+    assert!(rejected[0].contains("judge"), "{rejected:?}");
 }

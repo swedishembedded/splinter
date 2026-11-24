@@ -1213,3 +1213,17 @@ gaps:
     per-view sibling sweep is gone. splinter-store/it/crash ends the writer at every durability boundary of a scenario
     (a committed product, a publish with shared and new blobs and a program, a second publish, a repair over its view)
     and holds what survives, what recovery removes and that the resumed scenario ends where an uninterrupted one does'
+- id: G-NEW-12
+  source_id: null
+  where: crates/factory/src/task_ops.rs (grading, answer.collect)
+  what: 'answer.collect is given no judge and drops a kind''s judge, as documented; for a kind graded by a judge alone
+    (counterexample, multi-turn, combine) that left no verifier at all, and every attempt was kept with no verdict while
+    the stage reported it produced, as if the answers had been graded. Any other verifier it cannot make refuses the task
+    with the reason. Found by the task-kind matrix (plan 4A: a kind never graded by less than it declares).'
+  severity: medium
+  confidence: high (the specification kept the attempt before the fix)
+  status: fixed
+  resolution: 'factory: a task of a kind nothing given can grade is refused, naming the judge it needs.
+    splinter-factory/it/closed_book holds it. The legacy verify verb (pipelines/src/verify.rs) still grades such a kind
+    with no verifier when no judge is passed; its tally shows the attempts undecided, and the verb goes with the legacy
+    pipelines (G-AS-11)'
