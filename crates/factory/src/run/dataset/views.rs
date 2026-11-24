@@ -162,6 +162,10 @@ fn rows_of(record: &Record) -> Vec<Record> {
             prompt.iter().chain(completion).cloned().collect(),
             tools,
         )],
+        // A rollout's reward and group are the trainer's to read; the length is that of the conversation.
+        RecordBody::Chat {
+            messages, tools, ..
+        } => vec![chat(messages.clone(), tools)],
         _ => vec![record.clone()],
     }
 }
