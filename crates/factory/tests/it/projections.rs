@@ -79,13 +79,7 @@ fn lines(path: &std::path::Path) -> Vec<Value> {
 
 #[test]
 fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
-    let repo = Repo::new();
-    for task in ["train/001-first", "train/002-second"] {
-        repo.write(
-            &format!("tasks/vim/{task}/solution/solve.sh"),
-            "echo solved\n",
-        );
-    }
+    let repo = repo();
     let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
     let backend = FakeBackend {
         vary_failures: true,
