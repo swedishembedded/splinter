@@ -22,7 +22,7 @@ use serde_json::Value;
 use splinter_core::digest::Digest;
 use splinter_model::endpoint::BrainEndpoints;
 use splinter_model::policy_gradient::{
-    Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, PolicyGradientTune,
+    Algorithm, Behaviour, LossAggregation, PolicyGradientOptions, PolicyGradientTune, Reference,
 };
 use splinter_model::served_train::{
     check_dataset, fine_tune_served, train_feedback_served, train_policy_gradient_served,
@@ -562,6 +562,10 @@ pub struct PolicyGradientParams {
     /// Coefficient of the KL term to the reference policy.
     #[serde(default)]
     pub kl_beta: Option<f32>,
+    /// The policy the KL term keeps the adapter close to: `base` (the frozen base alone) or `start` (the adapter the
+    /// run starts from, which a run that continues a champion wants).
+    #[serde(default)]
+    pub reference: Option<String>,
     /// `seq-mean` or `token-sum`.
     #[serde(default)]
     pub loss_agg: Option<String>,
@@ -592,6 +596,12 @@ fn policy_gradient_options(params: &LoraParams) -> Result<PolicyGradientOptions,
         clip_eps: named.clip_eps,
         clip_eps_high: named.clip_eps_high,
         kl_beta: named.kl_beta,
+        reference: named
+            .reference
+            .as_deref()
+            .map(str::parse::<Reference>)
+            .transpose()
+            .map_err(TrainError)?,
         loss_agg: named
             .loss_agg
             .as_deref()
