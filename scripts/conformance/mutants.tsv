@@ -86,3 +86,7 @@ compaction-removes-its-own-output	compaction	crates/expdb/src/compact/segments.r
 blob-repack-removes-its-own-output	compaction	crates/expdb/src/compact/blobs.rs	                .filter(|o| o.id != merged.id)	                .filter(|_| true)	splinter-expdb	it	compaction
 fusion-reads-one-ranking	retrieval	crates/knowledge/src/retrieve/fuse.rs	    for ranking in rankings {	    for ranking in rankings.iter().take(1) {	splinter-knowledge	it	external_retrieval
 dense-passages-not-normalised	retrieval	crates/knowledge/src/retrieve/dense.rs	            vectors.extend(made.into_iter().map(unit));	            vectors.extend(made);	splinter-knowledge	it	external_retrieval
+heading-indent-four	sections	crates/knowledge/src/sections.rs	    indent <= 3\n        && (1..=6)	    indent <= 4\n        && (1..=6)	splinter-knowledge	it	external_sections
+whitespace-line-is-text	sections	crates/knowledge/src/sections.rs	        self.text.trim().is_empty()	        self.text.is_empty()	splinter-knowledge	it	external_sections
+crlf-kept-in-range	sections	crates/knowledge/src/sections.rs	        let content = content.strip_suffix('\\r').unwrap_or(content);	        let content = content;	splinter-knowledge	it	external_sections
+fence-never-closes	sections	crates/knowledge/src/sections.rs	                in_fence = None;	                in_fence = Some((c, n));	splinter-knowledge	it	external_sections

@@ -33,6 +33,13 @@ fixtures:
     oracle_sha256: "dc79ee1ee82de9ba025ea6a92350522a3b55412834f19180b71318d1d756e9f8"
     references: ["networkx"]
     test: "splinter-knowledge/it/external_skill_order"
+  knowledge/sections:
+    path: "validation/fixtures/knowledge/sections.json"
+    sha256: "5b44e302c491825f5059940790670e3d1ed4f66ecf196ed8b41d4eb154ae5476"
+    oracle: "validation/oracles/knowledge/sections.py"
+    oracle_sha256: "218d7e947e242f18b0765f367869acd163df59e59e60edd17de35dded17def01"
+    references: ["constructed-ground-truth"]
+    test: "splinter-knowledge/it/external_sections"
   retrieval/benchmark:
     path: "validation/fixtures/retrieval/benchmark.json"
     sha256: "ea899e50620168e88b8b899c375953b352dc10a79f5b478c42b403c383394ac2"

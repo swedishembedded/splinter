@@ -22,6 +22,7 @@ mod claim_task;
 mod denoise_task;
 mod external_bm25;
 mod external_retrieval;
+mod external_sections;
 mod external_skill_order;
 mod factory_admission;
 mod factory_documents;

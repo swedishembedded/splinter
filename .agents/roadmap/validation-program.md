@@ -195,6 +195,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - retrieval benchmark (3C): a corpus whose relevant passages are known, every kind of query the plan lists, the
   corpus also reordered; BM25, dense and fused rankings equal an independent implementation's, and the fixture
   records recall, precision, MRR and nDCG of each against rank_bm25's (`validation/oracles/retrieval/benchmark.py`).
+- source sections (3A): documents built section by section, whose spans are known by construction; the sectioner
+  returns exactly them (`validation/oracles/knowledge/sections.py`), four mutants killed. Capture of archives,
+  nested repositories and command output against such ground truth is not built.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
