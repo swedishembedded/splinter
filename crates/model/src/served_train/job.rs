@@ -633,7 +633,7 @@ fn handle(event: &Event, frames: &Sender<Value>) -> Option<Ended> {
 }
 
 /// The message of brain's error body, else the body.
-fn message_of(body: &str) -> String {
+pub(super) fn message_of(body: &str) -> String {
     match serde_json::from_str::<Value>(body) {
         Ok(v) if v["error"].is_object() => brain_reason(&v["error"]),
         _ => bounded(body),

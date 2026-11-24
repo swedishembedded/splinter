@@ -71,6 +71,8 @@ pub mod scratch;
 pub mod scripted_endpoint;
 #[cfg(feature = "scripted")]
 pub mod scripted_jobs;
+#[cfg(feature = "scripted")]
+pub mod scripted_stream;
 pub mod seed;
 pub mod selection;
 pub mod served_train;

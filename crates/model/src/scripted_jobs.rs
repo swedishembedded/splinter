@@ -70,6 +70,8 @@ pub struct JobScript {
     /// forgotten by a `DELETE`, as brain bounds them per caller; a creation
     /// past it is refused (HTTP 429). `None` holds any number.
     pub max_held: Option<usize>,
+    /// How a streaming run (a `train` job with a `stream` document) behaves.
+    pub stream: crate::scripted_stream::StreamScript,
 }
 
 impl JobScript {
@@ -87,6 +89,7 @@ impl JobScript {
             refuse_records_containing: None,
             parallel: None,
             max_held: None,
+            stream: crate::scripted_stream::StreamScript::default(),
         }
     }
 }
@@ -117,6 +120,8 @@ pub struct Jobs {
     /// but the key and `checkpoint_every`) and their report.
     runs: Mutex<std::collections::BTreeMap<String, (String, Value)>>,
     trained: AtomicUsize,
+    /// The streaming runs.
+    pub stream_runs: crate::scripted_stream::Streams,
 }
 
 impl Jobs {
@@ -199,6 +204,19 @@ pub(crate) fn route(
     let Some(script) = jobs.script.lock().unwrap().clone() else {
         return false;
     };
+    if request_line.contains(&format!("/v1/jobs/{JOB_ID}/"))
+        && crate::scripted_stream::route(
+            stream,
+            &jobs.stream_runs,
+            &script.stream,
+            &script.store,
+            request_line,
+            last_event_id,
+            body,
+        )
+    {
+        return true;
+    }
     if request_line.starts_with("POST /v1/jobs ") {
         create(stream, jobs, &script, body);
     } else if request_line.starts_with(&format!("GET /v1/jobs/{JOB_ID}/events")) {
@@ -295,6 +313,23 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
         return;
     }
     let params = call["params"].clone();
+    if action == "train" && params["stream"].is_string() {
+        match crate::scripted_stream::create(&jobs.stream_runs, &params) {
+            Ok(_) => {
+                jobs.created.lock().unwrap().push(params);
+                jobs.actions.lock().unwrap().push(action);
+                let _ = respond(
+                    stream,
+                    "202 Accepted",
+                    "application/json",
+                    &json!({"id": JOB_ID, "status": "running"}).to_string(),
+                );
+            }
+            Err(why) => error(stream, "400 Bad Request", &format!("train: {why}")),
+        }
+        return;
+    }
+    jobs.stream_runs.clear();
     let data: Value =
         serde_json::from_str(params["data"].as_str().unwrap_or("{}")).unwrap_or_default();
     // brain resolves each digest in its store and verifies the file against it.
