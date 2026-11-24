@@ -140,6 +140,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `harness` | `input` (files, any number) | `output` |
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
 | `dataset.rlvr` | `tasks`, `attempts` (one or more) | `tasks` |
+| `train.online` | `tasks` | `model` |
 | `source.ingest` | `documents` (files) | `sections` |
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
 | `knowledge.query` | `sections` | `passages` |
@@ -631,6 +632,23 @@ compiles its collection evaluates on the same compiled tasks:
   rate strictly inside 0 to 1, or inside `min_pass_rate`..`max_pass_rate`),
   each task's folder as the run pinned it, for `tasks.pin`; `rlvr.json` lists
   every attempted task's counts, rate and whether it was kept.
+- **Online training** (`train.online`). A candidate trained on its own rollouts of an executable
+  collection (`dataset.rlvr`'s, pinned) while it trains: brain runs a streaming policy-gradient
+  job that serves each version it publishes, sven rolls the tasks out against it (`group_size`
+  attempts per group, at most `max_concurrent_attempts` at once, sampling the whole
+  distribution at `temperature`, optionally the sampler's `top_logprobs`), every rollout graded
+  by its task's verifier, and the controller streams each group whose rewards differ to the
+  job, `groups` groups in all. Staleness is bounded by `max_staleness` versions; the job
+  trains `step_tokens` per step, holds at most `queue_tokens` and publishes every
+  `publish_every` steps (`max_updates` steps at most); `estimator` is `clipped` or
+  `score-centred` (which needs `top_logprobs`); `rollout_tokens` is what a rollout is assumed
+  to sample until one has finished. Every group is recorded in the run state, so a controller
+  killed mid-stage resumes without repeating a finished rollout or training a group twice,
+  and a restarted job is started again under the same key and sent what it had not
+  committed. The candidate is the newest version a durable checkpoint holds; `report.json`
+  holds the online statistics and `experiences.jsonl` one line per committed group. The run
+  needs the agent runtime's online rollouts (the SDK's embedding gives them; the command
+  line does not yet).
 - **Replay** (`model.train` with `replay`). A candidate trained on new chat records can rehearse
   earlier datasets' records beside them, `replay_share` of the draws (the plain union when
   unset), so what it learned before is kept: `inputs: { dataset: $stages.sft.dataset, replay:

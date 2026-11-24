@@ -34,6 +34,7 @@ pub mod fork;
 pub mod harness_search;
 pub mod import;
 mod lease;
+pub mod online;
 pub use lease::controller_owner;
 mod models;
 mod pass;
@@ -213,6 +214,9 @@ pub struct Services<'a> {
     /// Reads the controller's environment variables, for external
     /// operators their machine grants variables.
     pub variables: Option<&'a crate::execute::Variables>,
+    /// Runs an online stage's rollouts; needed when the recipe trains
+    /// online.
+    pub online: Option<&'a dyn crate::online::seams::OnlineRollouts>,
 }
 
 /// One stage as the run recorded it.
@@ -433,7 +437,8 @@ impl<'a> Factory<'a> {
             | names::PROJECT
             | names::TRAIN
             | names::EVALUATION
-            | names::PROMOTION => self.built_in(stage)?,
+            | names::PROMOTION
+            | online::ONLINE => self.built_in(stage)?,
             _ => compute::stage(self, stage)?,
         };
         let id = identity.digest();
@@ -465,6 +470,7 @@ impl<'a> Factory<'a> {
             names::PROJECT => dataset::identity(self, stage)?,
             names::TRAIN => training::identity(self, stage)?,
             names::EVALUATION => eval::identity(self, stage)?,
+            online::ONLINE => online::identity(self, stage)?,
             _ => release::identity(self, stage)?,
         };
         let produce = |factory: &Self, staging: &Staging| match stage.operation.as_str() {
@@ -479,6 +485,7 @@ impl<'a> Factory<'a> {
             names::PROJECT => dataset::produce(factory, stage, staging),
             names::TRAIN => training::produce(factory, stage, &identity, staging),
             names::EVALUATION => eval::produce(factory, stage, &identity, staging),
+            online::ONLINE => online::produce(factory, stage, &identity, staging),
             _ => release::produce(factory, stage, staging),
         };
         let committed = self.commit(&stage.key, &stage.operation, &identity, &produce)?;

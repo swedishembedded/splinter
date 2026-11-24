@@ -220,6 +220,7 @@ fn run(repo: &Repo, recipe: &str, dir: &Path) -> BTreeMap<String, (Digest, bool)
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let resolved = resolved(repo, recipe);
     let mut factory = Factory::open(&resolved, dir, services, "test-controller").unwrap();

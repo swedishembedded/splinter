@@ -26,6 +26,7 @@
 //! | `attempts.failures` | `tasks`, `attempts` (many) | `failures` ([`crate::failures_op`]) |
 //! | `harness` | `input` (files, many, optional) | `output` ([`crate::harness_op`]) |
 //! | `dataset.rlvr` | `tasks`, `attempts` (many) | `tasks` ([`crate::rlvr_op`]) |
+//! | `train.online` | `tasks` | `model` ([`crate::run::online`]) |
 //! | `source.ingest` | `documents` (files) | `sections` ([`crate::knowledge_ops`]) |
 //! | `knowledge.admit` | `sections`, `proposals` | `knowledge` ([`crate::knowledge_ops`]) |
 //! | `knowledge.query` | `sections` | `passages` ([`crate::knowledge_ops`]) |
@@ -591,6 +592,7 @@ pub fn registry() -> Registry {
         .with(crate::agent_op::Agent)
         .with(crate::failures_op::Failures)
         .with(crate::rlvr_op::Rlvr)
+        .with(crate::run::online::Online)
         .with(crate::harness_op::HarnessOp)
         .with(crate::knowledge_ops::Ingest)
         .with(crate::knowledge_ops::Admit)

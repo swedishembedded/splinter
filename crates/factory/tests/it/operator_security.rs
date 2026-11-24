@@ -97,6 +97,7 @@ stages:
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

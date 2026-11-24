@@ -86,6 +86,7 @@ fn run(repo: &Repo, dir: &Path) {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     Factory::open(&resolved, dir, services, "test")
         .unwrap()
@@ -215,6 +216,7 @@ stages:
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -289,6 +291,7 @@ fn an_operator_gets_only_the_variables_its_machine_grants() {
         trainer: None,
         models: None,
         variables: Some(&host),
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -427,6 +430,7 @@ stages:
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -471,6 +475,7 @@ fn an_operator_reads_only_what_its_identity_pins() {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     let ran = Factory::open(&resolved, dir.path(), services, "test")

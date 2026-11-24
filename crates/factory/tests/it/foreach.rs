@@ -219,6 +219,7 @@ fn run(resolved: &Resolved, dir: &Path) -> Result<(), RunError> {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let mut factory = Factory::open(resolved, dir, services, "test")?;
     let ran = factory.run().map(|_| ());
@@ -320,6 +321,7 @@ fn a_stage_longer_than_the_lease_keeps_it_for_its_controller() {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     std::thread::scope(|scope| {
         let first = scope.spawn(|| {

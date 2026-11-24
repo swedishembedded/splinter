@@ -55,6 +55,7 @@ fn run(
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let mut factory = Factory::open(&resolved, dir, services, "test").map_err(|e| e.to_string())?;
     factory.run().map(|_| ()).map_err(|e| e.to_string())

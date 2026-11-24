@@ -530,7 +530,8 @@ pub(crate) fn produce(
         .map_err(io(staging.path()))
 }
 
-/// The base model the `model.train` stage `training` trained from.
+/// The base model the training stage `training` (`model.train` or
+/// `train.online`) trained from.
 pub(crate) fn training_base<'r>(
     factory: &'r Factory<'_>,
     training: &str,
@@ -539,13 +540,20 @@ pub(crate) fn training_base<'r>(
         .resolved
         .plan
         .stage(training)
-        .filter(|s| s.operation == names::TRAIN)
+        .filter(|s| s.operation == names::TRAIN || s.operation == super::online::ONLINE)
         .ok_or_else(|| stage_error(training, "is not a training stage"))?;
-    let params: TrainParams = stage.params().map_err(|e| stage_error(training, e))?;
+    let base = if stage.operation == names::TRAIN {
+        stage.params::<TrainParams>().map(|p| p.base)
+    } else {
+        stage
+            .params::<super::online::OnlineParams>()
+            .map(|p| p.base)
+    }
+    .map_err(|e| stage_error(training, e))?;
     factory
         .resolved
-        .model(&params.base)
-        .ok_or_else(|| stage_error(training, format!("model role {} is not bound", params.base)))
+        .model(&base)
+        .ok_or_else(|| stage_error(training, format!("model role {base} is not bound")))
 }
 
 fn tasks_identity_id(

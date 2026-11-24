@@ -131,6 +131,7 @@ fn run_text(repo: &Path, text: &str, out: &Path, fakes: &Fakes) {
         trainer: Some(&fakes.trainer),
         models: Some(&fakes.models),
         variables: None,
+        online: None,
     };
     Factory::open(&resolved, out, services, "template-test")
         .unwrap()

@@ -271,6 +271,7 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
         trainer: brain.as_ref().map(|b| b as _),
         models: Some(&HostModels),
         variables: Some(&host_variable),
+        online: None,
     };
     let mut factory =
         Factory::open(resolved, dir, services, &owner(config)).map_err(|e| match e {
@@ -536,6 +537,7 @@ pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error>
         trainer: brain.as_ref().map(|b| b as _),
         models: Some(&HostModels),
         variables: Some(&host_variable),
+        online: None,
     };
     let trial = {
         let mut factory =

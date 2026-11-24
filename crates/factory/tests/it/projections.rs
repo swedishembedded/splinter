@@ -99,6 +99,7 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -201,6 +202,7 @@ fn each_dataset_is_trained_by_its_objectives_regime() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -273,6 +275,7 @@ fn a_preference_dataset_leaves_out_the_pairs_longer_than_the_block() {
             trainer: Some(&trainer),
             models: None,
             variables: None,
+            online: None,
         };
         let dir = tempfile::tempdir().unwrap();
         let outcome = Factory::open(&resolved, dir.path(), services, "test")
@@ -312,6 +315,7 @@ fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -374,6 +378,7 @@ fn an_earlier_dataset_is_replayed_beside_the_new_records() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

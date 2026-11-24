@@ -74,6 +74,7 @@ fn documents_become_a_continued_pretraining_dataset() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let dir = tempfile::tempdir().unwrap();
     let mut factory = Factory::open(&resolved, dir.path(), services, "test").unwrap();

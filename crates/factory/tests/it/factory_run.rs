@@ -40,6 +40,7 @@ pub(crate) fn run(
         trainer: Some(trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let mut factory = Factory::open(resolved, dir, services, OWNER)?;
     Ok(factory
@@ -364,6 +365,7 @@ fn a_run_refuses_changed_inputs_and_a_second_live_controller() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let _held = Factory::open(&resolved_now, dir.path(), services, OWNER).unwrap();
     let second = Factory::open(&resolved_now, dir.path(), services, "another-controller");
@@ -398,6 +400,7 @@ fn a_finished_controller_gives_up_its_lease_and_a_dead_ones_is_taken_over() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     // Owners are `host:pid@pidns:start`: this host and pid namespace, as a
     // controller of this process names itself.
@@ -454,6 +457,7 @@ fn a_cancelled_run_stops_at_a_boundary_and_resumes_from_what_it_recorded() {
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let stopped = {
         let mut factory = Factory::open(&resolved_first, dir.path(), services, OWNER).unwrap();
@@ -504,6 +508,7 @@ fn a_played_session_is_a_guided_trial_that_the_next_run_trains_on_with_the_rest_
         trainer: Some(&trainer),
         models: None,
         variables: None,
+        online: None,
     };
     let first = {
         let mut factory = Factory::open(&resolved, dir.path(), services, OWNER).unwrap();

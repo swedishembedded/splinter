@@ -38,6 +38,7 @@ fn the_registry_holds_exactly_the_documented_operations() {
         "task.generate",
         "task.mutate",
         "tasks.pin",
+        "train.online",
     ];
     assert_eq!(names, documented);
     let table = include_str!("../../src/ops.rs");
