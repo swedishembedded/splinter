@@ -87,14 +87,28 @@ in `--out-dir` (for `speak` and `turn`, `NAME.voice.json` beside `--out`);
 every later command that writes to the same place reads it back and refuses a
 different `--seed`, and the reports carry the speaker with its seed.
 
-**The seed does not choose the voice today.** brain's `/v1/audio/speech`
-takes the model and the text and nothing that steers the voice (no seed, no
-reference recording); the voice is the server's configuration and two takes
-of a sentence differ as the server samples them. The synthesizer says so on
-standard error when it is made. So `speak-set --attempts` and `spoken-set
---voices` still draw several takes and keep those heard back within the
-bound, but different seeds are not different voices until brain's route
-takes a seed or a voice.
+The seed reaches brain's `/v1/audio/speech` and chooses the take: the same
+seed, model and text give the same clip, and a server that says it drew
+another seed is refused. `speak-set --attempts` and `spoken-set --voices`
+draw their takes from successive seeds.
+
+A speaker may imitate a recorded voice instead of the model's own: `--voice
+FILE` names a few seconds of one person speaking (WAV, Ogg/Opus or
+WebM/Opus, at most 30 seconds), `--voice-text` what it says (Qwen3-TTS then
+imitates the delivery and the room as well as the timbre; CosyVoice needs it),
+and `--portrayal` what the voice declares itself to be wherever it is heard,
+which is required because the theatrical label says no recording exists.
+Only clone a voice whose owner agreed to it:
+
+```bash
+$V speak --voice me.wav --voice-text "what me.wav says" \
+    --portrayal "Synthetic speech in my own recorded voice" \
+    --text "Good morning." --out morning.wav
+```
+
+The recording is named on every run; only the seed is recorded in
+`voice.json`. A model that cannot take what is asked (a reference on a model
+that does not clone) is refused by brain with the field named.
 
 ## Retired
 
@@ -108,9 +122,9 @@ were deleted rather than kept as a path that cannot run:
 * `speech-rl`: the reinforcement trainer that updated the synthesizer from
   scored takes. The API has no synthesizer update.
 * `takes`: several takes per sentence in one voice pinned to a reference
-  recording, heard by two recognisers with a fixed decode window. The speech
-  route takes no reference voice or seed, and the transcription route no
-  window.
+  recording, heard by two recognisers with a fixed decode window. The
+  transcription route takes no window; the reference voice and the seed are
+  `--voice` and `--seed` of `speak` and `speak-set` now.
 * `bundle`: content addresses of the parts of a listening persona (its
   projector among them); with the projector gone it named nothing that runs.
 

@@ -503,8 +503,9 @@ fn transcription(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
 }
 
 /// `POST /v1/audio/speech`: a scripted clip of `input` as a WAV, for a model
-/// the endpoint lists. Like brain it takes `model`, `input` and
-/// `response_format` and refuses any other field by name.
+/// the endpoint lists. Like brain it takes `model`, `input`,
+/// `response_format`, `seed` (echoed in `x-seed` when given) and
+/// `input_references`, and refuses any other field by name.
 fn speech(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
     let request: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
     shared
@@ -513,8 +514,12 @@ fn speech(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
         .unwrap()
         .push(("speech".into(), request.clone()));
     if let Some(field) = request.as_object().and_then(|o| {
-        o.keys()
-            .find(|k| !matches!(k.as_str(), "model" | "input" | "response_format"))
+        o.keys().find(|k| {
+            !matches!(
+                k.as_str(),
+                "model" | "input" | "response_format" | "seed" | "input_references"
+            )
+        })
     }) {
         return refuse(
             stream,
@@ -533,8 +538,9 @@ fn speech(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
     let wav = clip.to_wav();
     let _ = write!(
         stream,
-        "HTTP/1.1 200 OK\r\ncontent-type: audio/wav\r\nx-sample-rate: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        "HTTP/1.1 200 OK\r\ncontent-type: audio/wav\r\nx-sample-rate: {}\r\n{}content-length: {}\r\nconnection: close\r\n\r\n",
         clip.sample_rate(),
+        request["seed"].as_u64().map(|seed| format!("x-seed: {seed}\r\n")).unwrap_or_default(),
         wav.len()
     )
     .and_then(|()| stream.write_all(&wav))

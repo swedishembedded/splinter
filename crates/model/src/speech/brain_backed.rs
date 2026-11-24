@@ -14,8 +14,11 @@
 //!   the answer is `{"text", ...}`. The server refuses a recording longer
 //!   than it takes (300 seconds) instead of cutting it.
 //! * Synthesis is `POST {url}/audio/speech` with `{"model", "input",
-//!   "response_format": "wav"}`; the answer is the speech itself, a 16-bit
-//!   mono WAV at the model's own rate.
+//!   "response_format": "wav", "seed"}` and, for a speaker that imitates a
+//!   recorded voice, `"input_references"`: the recording as an `input_audio`
+//!   part and its transcript as a `text` part. The answer is the speech
+//!   itself, a 16-bit mono WAV at the model's own rate, with the seed it was
+//!   drawn with in `X-Seed`.
 //!
 //! The model is named by the id the server lists it under (`GET /v1/models`),
 //! such as `Qwen/Qwen3-TTS-12Hz-0.6B-Base`. Every request for one model goes to
@@ -23,18 +26,19 @@
 //! resident. The calls block, on a thread of their own, so a caller inside an
 //! async runtime may make them.
 //!
-//! The speech route takes the text and nothing that steers the voice: no
-//! seed, no reference recording. A [`SpeakerProfile`]'s seed therefore does
-//! not reach the server; which voice speaks is the server's configuration,
-//! and two takes of one sentence differ as the server's sampling makes them.
-//! [`BrainSynthesizer::new`] says so on standard error once per synthesizer,
-//! so no run believes its seed chose the voice.
+//! A [`SpeakerProfile`]'s seed chooses the take: the same seed, text and
+//! recording give the same clip. A server that answers with another seed than
+//! the one asked for is refused, so no run believes a seed chose a take it did
+//! not. A model that cannot take what the speaker asks (a reference voice on a
+//! model that does not clone, say) is refused by the server with the field
+//! named, never spoken in another voice.
 
+use std::path::Path;
 use std::time::Duration;
 
 use base64::Engine as _;
 use serde_json::json;
-use splinter_core::speech::SpeakerProfile;
+use splinter_core::speech::{SpeakerProfile, VoiceReference};
 
 use super::{Clip, Recognizer, Synthesizer, Transcription};
 use crate::endpoint::{post_for_bytes, post_json, BrainEndpoints};
@@ -50,6 +54,11 @@ pub const DEFAULT_SYNTHESIZER: &str = "Qwen/Qwen3-TTS-12Hz-0.6B-Base";
 /// How long one recognition or synthesis may take, a server loading the
 /// model on first use included.
 const SPEECH_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The largest recording a speaker may imitate, read whole into the request.
+/// The server takes at most 30 seconds of it; this bounds the read before
+/// that, at a minute of 48 kHz stereo 16-bit audio.
+const MAX_REFERENCE_BYTES: u64 = 12 * 1024 * 1024;
 
 /// One endpoint of `endpoints`, the one requests for `model` are pinned to.
 fn endpoint_for(endpoints: &BrainEndpoints, model: &str) -> String {
@@ -114,10 +123,6 @@ impl BrainSynthesizer {
     /// The synthesis model the servers of `endpoints` list as `model`.
     #[must_use]
     pub fn new(endpoints: &BrainEndpoints, model: &str) -> Self {
-        eprintln!(
-            "speech: {model} is asked through brain's /audio/speech, which takes no seed and no \
-             voice: a speaker's seed is recorded but does not choose the voice"
-        );
         Self {
             url: endpoint_for(endpoints, model),
             key: endpoints.key().to_string(),
@@ -127,11 +132,14 @@ impl BrainSynthesizer {
 }
 
 impl Synthesizer for BrainSynthesizer {
-    fn speak(&self, text: &str, _speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
+    fn speak(&self, text: &str, speaker: &SpeakerProfile) -> Result<Clip, PolicyError> {
         let failed = |reason: String| PolicyError::Synthesis {
             reason: format!("{} at {}: {reason}", self.model, self.url),
         };
-        let body = json!({"model": self.model, "input": text, "response_format": "wav"});
+        let mut body = json!({"model": self.model, "input": text, "response_format": "wav", "seed": speaker.seed()});
+        if let Some(voice) = speaker.voice() {
+            body["input_references"] = reference_parts(voice).map_err(failed)?;
+        }
         let reply = post_for_bytes(
             &format!("{}/audio/speech", self.url),
             &self.key,
@@ -155,6 +163,43 @@ impl Synthesizer for BrainSynthesizer {
                 )));
             }
         }
+        let drawn = reply
+            .headers
+            .get("x-seed")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok());
+        if drawn != Some(speaker.seed()) {
+            return Err(failed(format!(
+                "asked for seed {}, the server says it drew {}",
+                speaker.seed(),
+                drawn.map_or_else(|| "none".to_string(), |d| d.to_string())
+            )));
+        }
         Ok(clip)
     }
+}
+
+/// The `input_references` of a speaker imitating `voice`: the recording as an
+/// `input_audio` part, and its transcript as a `text` part when known.
+fn reference_parts(voice: &VoiceReference) -> Result<serde_json::Value, String> {
+    let recording = read_recording(voice.recording())?;
+    let mut parts = vec![json!({
+        "type": "input_audio",
+        "input_audio": {"data": base64::engine::general_purpose::STANDARD.encode(recording)},
+    })];
+    if let Some(text) = voice.transcript() {
+        parts.push(json!({"type": "text", "text": text}));
+    }
+    Ok(serde_json::Value::Array(parts))
+}
+
+fn read_recording(path: &Path) -> Result<Vec<u8>, String> {
+    let shown = path.display();
+    let size = std::fs::metadata(path)
+        .map_err(|e| format!("the voice recording {shown}: {e}"))?
+        .len();
+    if size > MAX_REFERENCE_BYTES {
+        return Err(format!("the voice recording {shown} is {size} bytes, more than the {MAX_REFERENCE_BYTES} a speaker may imitate"));
+    }
+    std::fs::read(path).map_err(|e| format!("the voice recording {shown}: {e}"))
 }

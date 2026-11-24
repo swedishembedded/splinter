@@ -103,7 +103,28 @@ impl SchemaCall {
             .enable_all()
             .build()
             .map_err(|e| e.to_string())?;
-        let measured = runtime.block_on(session.call_measured(input));
+        // A connection that drops while the reply streams is transient: the reply is only used
+        // whole, so the call is asked again from the start, under the retries of every model call.
+        let mut pause = crate::retry::FIRST_PAUSE;
+        let mut attempt = 0;
+        let measured = loop {
+            let measured = runtime.block_on(session.call_measured(input));
+            let transient = measured
+                .result
+                .as_ref()
+                .err()
+                .is_some_and(|e| crate::retry::is_transient_text(&e.to_string()));
+            if !transient || attempt >= crate::retry::RETRIES {
+                break measured;
+            }
+            attempt += 1;
+            eprintln!(
+                "splinter: the model call failed transiently; asking again in {pause:?} ({attempt}/{})",
+                crate::retry::RETRIES
+            );
+            runtime.block_on(async { tokio::time::sleep(pause).await });
+            pause = pause.saturating_mul(2);
+        };
         let reply = match measured.result {
             Ok(value) => SchemaReply::Answered(value),
             Err(e @ (CallError::Invalid { .. } | CallError::Postcondition { .. })) => {
@@ -112,5 +133,67 @@ impl SchemaCall {
             Err(e) => return Err(e.to_string()),
         };
         Ok((reply, measured.spent))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+
+    use serde_json::json;
+    use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
+
+    use super::*;
+
+    /// Starts a reply and loses the connection in the middle of it the first
+    /// time, then answers with the JSON object asked for.
+    struct DropsMidReply(AtomicU32);
+
+    #[async_trait::async_trait]
+    impl ModelProvider for DropsMidReply {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn model_name(&self) -> &str {
+            "scripted"
+        }
+
+        async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            let events: Vec<anyhow::Result<ResponseEvent>> =
+                if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                    vec![
+                        Ok(ResponseEvent::TextDelta("{\"keep".into())),
+                        Err(anyhow::anyhow!(
+                        "error decoding response body: connection closed before message completed"
+                    )),
+                    ]
+                } else {
+                    vec![
+                        Ok(ResponseEvent::TextDelta("{\"keep_through\": 2}".into())),
+                        Ok(ResponseEvent::Done),
+                    ]
+                };
+            Ok(Box::pin(futures::stream::iter(events)))
+        }
+    }
+
+    #[test]
+    fn a_schema_call_whose_connection_drops_mid_reply_is_asked_again() {
+        let provider = Arc::new(DropsMidReply(AtomicU32::new(0)));
+        let model = Model::new(provider.clone(), "scripted");
+        let call = SchemaCall {
+            instruction: "Locate.".into(),
+            role: "You locate.".into(),
+            schema: json!({"type": "object", "required": ["keep_through"],
+                "properties": {"keep_through": {"type": "integer"}}}),
+            deadline: Duration::from_secs(30),
+            max_output_tokens: None,
+            repairs: 1,
+        };
+        let (reply, _) = call.run(&model, &json!({"input": "x"})).unwrap();
+        assert_eq!(reply, SchemaReply::Answered(json!({"keep_through": 2})));
+        assert_eq!(provider.0.load(Ordering::SeqCst), 2);
     }
 }

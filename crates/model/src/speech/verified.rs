@@ -46,10 +46,7 @@ pub fn speak_verified(
     attempts: usize,
 ) -> Result<Option<Verified>, PolicyError> {
     for attempt in 0..attempts {
-        let candidate = SpeakerProfile::new(
-            speaker.seed().wrapping_add(attempt as u64),
-            speaker.portrayal().clone(),
-        );
+        let candidate = speaker.with_seed(speaker.seed().wrapping_add(attempt as u64));
         let clip = synthesizer.speak(text, &candidate)?;
         let heard = recognizer.transcribe(&clip)?.text;
         let word_error_rate = super::wer::word_error_rate(text, &heard);

@@ -14,6 +14,13 @@
 //! portrayal and must be labelled as one wherever it is heard or recorded. A
 //! [`SpeakerProfile`] therefore cannot be built, or read from a file, without
 //! a [`Portrayal`].
+//!
+//! A speaker may also imitate a recorded voice ([`VoiceReference`]): a few
+//! seconds of someone speaking, and what they say. Its portrayal then says
+//! whose voice it imitates; the synthetic-theatrical label, which states that
+//! no recording exists, does not describe it.
+
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -68,19 +75,77 @@ impl From<Portrayal> for String {
     }
 }
 
-/// A synthetic speaker: the seed that renders it and the portrayal it
-/// declares. The same seed with the same synthesizer renders the same voice.
+/// A recorded voice a speaker imitates: the recording, and what it says when
+/// that is known (a synthesizer that reads the transcript imitates delivery
+/// and room as well as timbre).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceReference {
+    recording: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transcript: Option<String>,
+}
+
+impl VoiceReference {
+    /// The voice of `recording`, whose words are `transcript` when given; a
+    /// blank transcript counts as none.
+    #[must_use]
+    pub fn new(recording: impl Into<PathBuf>, transcript: Option<String>) -> Self {
+        VoiceReference {
+            recording: recording.into(),
+            transcript: transcript.filter(|t| !t.trim().is_empty()),
+        }
+    }
+
+    /// The recording to imitate.
+    #[must_use]
+    pub fn recording(&self) -> &Path {
+        &self.recording
+    }
+
+    /// What the recording says, when known.
+    #[must_use]
+    pub fn transcript(&self) -> Option<&str> {
+        self.transcript.as_deref()
+    }
+}
+
+/// A synthetic speaker: the seed that renders it, the portrayal it declares
+/// and, optionally, the recorded voice it imitates. The same seed with the
+/// same synthesizer (and recording) renders the same voice.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpeakerProfile {
     seed: u64,
     portrayal: Portrayal,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    voice: Option<VoiceReference>,
 }
 
 impl SpeakerProfile {
     /// A speaker rendered from `seed`, declaring `portrayal`.
     #[must_use]
     pub fn new(seed: u64, portrayal: Portrayal) -> Self {
-        SpeakerProfile { seed, portrayal }
+        SpeakerProfile {
+            seed,
+            portrayal,
+            voice: None,
+        }
+    }
+
+    /// This speaker imitating the recorded `voice`.
+    #[must_use]
+    pub fn imitating(mut self, voice: VoiceReference) -> Self {
+        self.voice = Some(voice);
+        self
+    }
+
+    /// This speaker rendered from `seed` instead: the same portrayal and
+    /// recorded voice, another take.
+    #[must_use]
+    pub fn with_seed(&self, seed: u64) -> Self {
+        SpeakerProfile {
+            seed,
+            ..self.clone()
+        }
     }
 
     /// The seed the voice is rendered from.
@@ -93,6 +158,12 @@ impl SpeakerProfile {
     #[must_use]
     pub fn portrayal(&self) -> &Portrayal {
         &self.portrayal
+    }
+
+    /// The recorded voice it imitates, if any.
+    #[must_use]
+    pub fn voice(&self) -> Option<&VoiceReference> {
+        self.voice.as_ref()
     }
 }
 
@@ -144,6 +215,32 @@ mod tests {
         let back: SpeakerProfile =
             serde_json::from_str(&serde_json::to_string(&speaker).unwrap()).unwrap();
         assert_eq!(back, speaker);
+    }
+
+    #[test]
+    fn a_recorded_voice_survives_a_new_take_and_a_record_without_one_still_reads() {
+        let voice = VoiceReference::new("me.wav", Some("what I said".into()));
+        let speaker = SpeakerProfile::new(
+            3,
+            Portrayal::new("Synthetic speech in my own voice").unwrap(),
+        )
+        .imitating(voice.clone());
+        let take = speaker.with_seed(4);
+        assert_eq!(
+            (take.seed(), take.voice(), take.portrayal()),
+            (4, Some(&voice), speaker.portrayal())
+        );
+        let back: SpeakerProfile =
+            serde_json::from_str(&serde_json::to_string(&speaker).unwrap()).unwrap();
+        assert_eq!(back, speaker);
+        let old: SpeakerProfile =
+            serde_json::from_str(r#"{"seed": 7, "portrayal": "Synthetic"}"#).unwrap();
+        assert_eq!(old.voice(), None);
+        assert_eq!(
+            VoiceReference::new("a.wav", Some("  ".into())).transcript(),
+            None,
+            "a blank transcript is none"
+        );
     }
 
     #[test]

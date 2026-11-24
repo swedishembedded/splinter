@@ -15,7 +15,7 @@ recording of either man exists (`splinter_core::speech::Portrayal`).
 
 ## Status 2026-11-17: speech goes through brain's API only
 
-Recognition is `POST /v1/audio/transcriptions` and synthesis `POST /v1/audio/speech`; the word error rate is Splinter's own arithmetic (`splinter_model::speech::wer`). Retired, because brain's API has no route for them: the speech ingress and projector (`ingress-train`), the speech-native listener (`listen-turns`), the TTS policy trainer (`speech-rl`), `takes` and `bundle` (with `splinter_core::speech_bundle`). The milestones below that name them are history. `/v1/audio/speech` takes no seed or reference voice (brain gap): a speaker profile's seed no longer chooses the voice.
+Recognition is `POST /v1/audio/transcriptions` and synthesis `POST /v1/audio/speech`; the word error rate is Splinter's own arithmetic (`splinter_model::speech::wer`). Retired, because brain's API has no route for them: the speech ingress and projector (`ingress-train`), the speech-native listener (`listen-turns`), the TTS policy trainer (`speech-rl`), `takes` and `bundle` (with `splinter_core::speech_bundle`). The milestones below that name them are history. A speaker profile's seed reaches brain as `seed` (checked against the `X-Seed` it answers), and a profile may imitate a recorded voice (`VoiceReference`, voice-loop `--voice`, `--voice-text`, `--portrayal`), sent as `input_references` (2026-11-24; brain's `/audio/speech` took neither before).
 
 ## Rules for this effort
 

@@ -339,7 +339,7 @@ fn main() -> Result<()> {
         } => roundtrip(
             cli.device.brain()?.endpoints(),
             &models,
-            voice.unrecorded_speaker(),
+            voice.unrecorded_speaker()?,
             &sentences,
             report.as_deref(),
         ),

@@ -184,14 +184,19 @@ EOF
 
 cat >"$dir/run.sh" <<EOF
 #!/usr/bin/env bash
-# run.sh [--fork PARENT] RECIPE DEVICE [splinter arguments]: run (or continue) a recipe of the task repository in this workspace
+# run.sh [--fork PARENT] [--warm MODEL]... RECIPE DEVICE [splinter arguments]: run (or continue) a recipe of the task repository in this workspace
 # on DEVICE (brain's grammar: gpu1, gpu0,gpu1, cpu0-7). It starts a brain server for the run (training enabled, the
 # adapters it trains served hot), runs splinter against it, and stops the server when splinter ends. The run directory
 # is runs/NAME, its state root state/NAME, its brain's files serve/NAME, so recipes may run side by side on other cards.
 set -euo pipefail
 # --fork PARENT: a run of this workspace (runs/PARENT) whose stages the new run reuses where its recipe leaves them unchanged.
-parent=""
-if [ "\${1:-}" = "--fork" ]; then parent=\$2; shift 2; fi
+# --warm MODEL: ask the server for one token of MODEL before the recipe starts. A model is loaded by the first request
+# that names it, which on a busy disk takes longer than a client waits for a first byte: warm the big ones here.
+parent=""; warm=()
+while [ "\${1:-}" = "--fork" ] || [ "\${1:-}" = "--warm" ]; do
+  if [ "\$1" = "--fork" ]; then parent=\$2; else warm+=("\$2"); fi
+  shift 2
+done
 [ \$# -ge 2 ] || { echo "usage: run.sh [--fork PARENT] RECIPE DEVICE [splinter arguments]" >&2; exit 2; }
 . $dir/env.sh
 cd $dir/tasks
@@ -230,6 +235,12 @@ for _ in \$(seq 1 600); do
   sleep 1
 done
 [ -e "\$srv/ready" ] || { echo "brain was not ready in time (\$srv/brain.log)" >&2; exit 1; }
+for model in "\${warm[@]}"; do
+  echo "run.sh: warming \$model" >&2
+  curl -sf --max-time 1800 -H "Authorization: Bearer \$(cat "\$srv/key")" -H 'Content-Type: application/json' \\
+    -d "{\"model\":\"\$model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" \\
+    "http://127.0.0.1:\$port/v1/chat/completions" >/dev/null || { echo "could not warm \$model" >&2; exit 1; }
+done
 # A GPU run that silently fell back to another backend is a different (much slower) experiment: refuse it.
 case "\$device" in gpu*)
   if grep -q "falling back to the" "\$srv/brain.log"; then

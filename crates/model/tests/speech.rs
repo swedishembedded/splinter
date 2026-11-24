@@ -10,15 +10,17 @@
 //! Spec: recognition and synthesis are requests to a brain server. The
 //! recognizer posts the clip as a base64 WAV to `/audio/transcriptions` under
 //! the model it names; the synthesizer posts `{"model", "input",
-//! "response_format": "wav"}` to `/audio/speech`, sending nothing the route
-//! refuses, and hands back the WAV's samples at the server's rate. A model the
+//! "response_format": "wav", "seed"}` to `/audio/speech`, with the recorded
+//! voice a speaker imitates as `input_references`, and hands back the WAV's
+//! samples at the server's rate. A server that drew another seed than the
+//! one asked for is refused. A model the
 //! server does not serve is an error naming it, never an empty transcript or
 //! a silent clip. Over the scripted server a round trip loses nothing.
 
 // Helpers outside a #[test] fn unwrap too: a panic is the failure report.
 #![allow(clippy::unwrap_used)]
 
-use splinter_core::speech::{Portrayal, SpeakerProfile};
+use splinter_core::speech::{Portrayal, SpeakerProfile, VoiceReference};
 use splinter_model::endpoint::BrainEndpoints;
 use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::speech::scripted::clip_of;
@@ -37,7 +39,7 @@ fn served() -> (ScriptedEndpoint, BrainEndpoints) {
 }
 
 fn speaker() -> SpeakerProfile {
-    // seed: any voice; the served route takes none, so its value is irrelevant.
+    // seed: any take; the tests check that this one reaches the server.
     SpeakerProfile::new(7, Portrayal::synthetic_theatrical())
 }
 
@@ -70,9 +72,47 @@ fn the_synthesizer_asks_only_for_what_the_route_takes_and_returns_the_servers_au
         asked,
         vec![(
             "speech".to_string(),
-            serde_json::json!({"model": TTS, "input": "Resist.", "response_format": "wav"})
+            serde_json::json!({"model": TTS, "input": "Resist.", "response_format": "wav", "seed": 7})
         )]
     );
+}
+
+#[test]
+fn a_speaker_imitating_a_recorded_voice_sends_the_recording_and_its_transcript() {
+    let (server, endpoints) = served();
+    let dir = tempfile::tempdir().unwrap();
+    let recording = dir.path().join("me.wav");
+    let wav = clip_of("my own words").to_wav();
+    std::fs::write(&recording, &wav).unwrap();
+    let speaker = SpeakerProfile::new(
+        11,
+        Portrayal::new("Synthetic speech in my recorded voice").unwrap(),
+    )
+    .imitating(VoiceReference::new(&recording, Some("my own words".into())));
+    BrainSynthesizer::new(&endpoints, TTS)
+        .speak("Resist.", &speaker)
+        .unwrap();
+    let (_, body) = &server.speech_asked()[0];
+    assert_eq!(body["seed"], 11);
+    let parts = body["input_references"].as_array().unwrap();
+    assert_eq!(parts[0]["type"], "input_audio");
+    use base64::Engine as _;
+    let sent = base64::engine::general_purpose::STANDARD
+        .decode(parts[0]["input_audio"]["data"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(sent, wav, "the recording goes whole");
+    assert_eq!(
+        parts[1],
+        serde_json::json!({"type": "text", "text": "my own words"})
+    );
+
+    let missing = speaker
+        .clone()
+        .imitating(VoiceReference::new(dir.path().join("gone.wav"), None));
+    let err = BrainSynthesizer::new(&endpoints, TTS)
+        .speak("Resist.", &missing)
+        .unwrap_err();
+    assert!(err.to_string().contains("gone.wav"), "{err}");
 }
 
 #[test]
