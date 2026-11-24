@@ -11,6 +11,7 @@ SHELL := bash
 # Local checkouts, for `make deps/local` and `make deps/lock` only. A plain build uses
 # the remotes pinned in Cargo.lock.
 SVEN_DIR ?= ../sven
+VEMU ?= vemu
 BRAIN_DIR ?= ../brain
 
 # The binaries and model store `make test/e2e/...` runs against.
@@ -157,6 +158,14 @@ test/factory:
 ## test/factory/faults - the controller interrupted, taken over and resumed, a panicking or stalled operation, and each input changed alone recomputing exactly what depends on it (fake backends, no model, no GPU, minutes)
 test/factory/faults:
 	$(CARGO) test $(PROFILE) -p splinter-factory --test it -- factory_run:: foreach:: recompute:: reuse::
+
+## test/environments - lists the environment plugin targets that need tools beyond the build; runs nothing
+test/environments:
+	@bash scripts/make-help.sh test/environments
+
+## test/environments/firmware - the firmware-emulator plugin's specs: Cortex-M33 programs built by clang and run in vemu, admission and grading (VEMU, default `vemu` on PATH; clang; no GPU, minutes)
+test/environments/firmware:
+	VEMU="$(VEMU)" $(CARGO) test $(PROFILE) -p splinter-knowledge --test it -- factory_firmware --ignored
 
 ## test/e2e - lists the end-to-end targets, which need built brain and sven binaries; runs nothing
 test/e2e:

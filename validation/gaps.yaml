@@ -738,9 +738,9 @@ gaps:
     has no coverage in default or conformance tiers.'
   severity: medium
   confidence: high
-  status: confirmed
-  resolution: the firmware-emulator plugin's three specs need vemu and clang and run nowhere by default; a CPU tier with
-    those tools is the fix
+  status: fixed
+  resolution: make test/environments/firmware runs the three specs with VEMU and clang on the CPU; all pass against vemu
+    built from its repository (288 s)
 - id: G-EK-18
   source_id: null
   where: crates/knowledge/src/tasks/dedup.rs:226,74
@@ -1158,8 +1158,8 @@ gaps:
   confidence: high (enumeration, every disagreement of the one class)
   status: fixed
   resolution: 'data: a reply that feedback answered is no action (the module doc states it); the enumeration is the spec
-    (splinter-data/it/supervision_enumeration). A conversation rendered from recorded requests keeps its own rule and is not
-    covered by this enumeration'
+    (splinter-data/it/supervision_enumeration). A conversation rendered from recorded requests keeps its own rule and is
+    not covered by this enumeration'
 - id: G-NEW-08
   source_id: null
   where: crates/core/src/teaching.rs (fact, rule, procedure); crates/core/src/speech_lesson.rs (parse_directive)
@@ -1170,74 +1170,73 @@ gaps:
   severity: high
   confidence: high (minimal input; the specification fails before the fix at three sites)
   status: fixed
-  resolution: 'core: every offset is taken from ASCII lowercasing (the openers, copulas and delimiters are ASCII), as
-    parse_teaching already did; splinter-core/it/fuzz holds the minimal inputs and the property'
+  resolution: 'core: every offset is taken from ASCII lowercasing (the openers, copulas and delimiters are ASCII), as parse_teaching
+    already did; splinter-core/it/fuzz holds the minimal inputs and the property'
 - id: G-NEW-09
   source_id: null
   where: crates/knowledge/src/tabular.rs (read_xport)
   what: 'The SAS transport reader sliced the member header, the NAMESTR header and the rows at offsets it found in the file
-    without checking them: a file cut short or damaged in a header panicked instead of being refused. Found by the 16C
-    property suite.'
+    without checking them: a file cut short or damaged in a header panicked instead of being refused. Found by the 16C property
+    suite.'
   severity: medium
   confidence: high (every prefix of the fixture; the specification fails before the fix)
   status: fixed
   resolution: 'knowledge: every header field is read through one checked accessor and a truncated observation header is
-    refused; every prefix of the fixture is answered, and one cut before its rows is refused (a cut among the rows cannot be
-    told from fewer rows: the format records no row count)'
+    refused; every prefix of the fixture is answered, and one cut before its rows is refused (a cut among the rows cannot
+    be told from fewer rows: the format records no row count)'
 - id: G-NEW-10
   source_id: null
   where: crates/factory/src/run/eval.rs (identity)
   what: 'An evaluation stage''s identity held its plan''s file but not the tasks the plan selects nor the environment its
     arms run in, so a changed held-out task (its verifier, its instruction) or a changed evaluation environment reused the
-    evaluation computed before: the release then decided on trials the current verifier never graded. The arms and the
-    pinned tasks inside the stage have identities that include them, but a stage reused whole never reaches them. Found
-    by the recompute enumeration (plan 9C).'
+    evaluation computed before: the release then decided on trials the current verifier never graded. The arms and the pinned
+    tasks inside the stage have identities that include them, but a stage reused whole never reaches them. Found by the
+    recompute enumeration (plan 9C).'
   severity: critical
   confidence: high (enumeration; both cases recomputed nothing before the fix)
   status: fixed
-  resolution: 'factory: a development plan''s tasks (id and digest) and its environment (the sandbox it makes and the
-    environment''s digest, from the one function the rollout arms use) are part of the evaluation''s identity; a protected
-    plan''s stay the authority''s. splinter-factory/it/recompute holds the twelve changes'
+  resolution: 'factory: a development plan''s tasks (id and digest) and its environment (the sandbox it makes and the environment''s
+    digest, from the one function the rollout arms use) are part of the evaluation''s identity; a protected plan''s stay
+    the authority''s. splinter-factory/it/recompute holds the twelve changes'
 - id: G-NEW-11
   source_id: null
   where: crates/store/src/factory/products/mod.rs (materialise_view, recover)
   what: 'A view was built, and an old one moved aside, as hidden siblings of its final place; recovery removed them only
     beside the view of a publish whose intent it found. A view made again for a committed product (ensure_view: a fork,
     an edited file) records no intent, so a crash while it was built or swapped left the half-built or displaced directory
-    in the run for good. Never read as complete, but never removed. Found by the crash enumeration (plan 10B) at the
-    first view-building boundary of a repair.'
+    in the run for good. Never read as complete, but never removed. Found by the crash enumeration (plan 10B) at the first
+    view-building boundary of a repair.'
   severity: medium
   confidence: high (enumeration; recovery left the directory before the fix)
   status: fixed
   resolution: 'store: views are built and displaced under the store''s staging directory, which recovery empties, and the
-    per-view sibling sweep is gone. splinter-store/it/crash ends the writer at every durability boundary of a scenario
-    (a committed product, a publish with shared and new blobs and a program, a second publish, a repair over its view)
-    and holds what survives, what recovery removes and that the resumed scenario ends where an uninterrupted one does'
+    per-view sibling sweep is gone. splinter-store/it/crash ends the writer at every durability boundary of a scenario (a
+    committed product, a publish with shared and new blobs and a program, a second publish, a repair over its view) and
+    holds what survives, what recovery removes and that the resumed scenario ends where an uninterrupted one does'
 - id: G-NEW-12
   source_id: null
   where: crates/factory/src/task_ops.rs (grading, answer.collect)
-  what: 'answer.collect is given no judge and drops a kind''s judge, as documented; for a kind graded by a judge alone
-    (counterexample, multi-turn, combine) that left no verifier at all, and every attempt was kept with no verdict while
-    the stage reported it produced, as if the answers had been graded. Any other verifier it cannot make refuses the task
-    with the reason. Found by the task-kind matrix (plan 4A: a kind never graded by less than it declares).'
+  what: 'answer.collect is given no judge and drops a kind''s judge, as documented; for a kind graded by a judge alone (counterexample,
+    multi-turn, combine) that left no verifier at all, and every attempt was kept with no verdict while the stage reported
+    it produced, as if the answers had been graded. Any other verifier it cannot make refuses the task with the reason.
+    Found by the task-kind matrix (plan 4A: a kind never graded by less than it declares).'
   severity: medium
   confidence: high (the specification kept the attempt before the fix)
   status: fixed
-  resolution: 'factory: a task of a kind nothing given can grade is refused, naming the judge it needs.
-    splinter-factory/it/closed_book holds it. The legacy verify verb (pipelines/src/verify.rs) still grades such a kind
-    with no verifier when no judge is passed; its tally shows the attempts undecided, and the verb goes with the legacy
-    pipelines (G-AS-11)'
+  resolution: 'factory: a task of a kind nothing given can grade is refused, naming the judge it needs. splinter-factory/it/closed_book
+    holds it. The legacy verify verb (pipelines/src/verify.rs) still grades such a kind with no verifier when no judge is
+    passed; its tally shows the attempts undecided, and the verb goes with the legacy pipelines (G-AS-11)'
 - id: G-NEW-13
   source_id: null
   where: crates/eval/src/verifiers/formal.rs (StatedReferenceVerifier, the recall kind's code grader)
   what: 'The stated-reference verifier bounds an answer''s length so that "listing everything in the hope that it is among
     them" does not pass, but the bound (four times the reference plus 60 characters) admits a short list for a short fact:
-    "9600, 19200, 38400, 57600 or 115200 baud" passed as stating "115200 baud". Found by the task-kind matrix (plan 4A, an
-    adversarial answer per kind).'
+    "9600, 19200, 38400, 57600 or 115200 baud" passed as stating "115200 baud". Found by the task-kind matrix (plan 4A,
+    an adversarial answer per kind).'
   severity: high
   confidence: high (the matrix passed the hedge before the fix)
   status: fixed
-  resolution: 'eval: an answer that offers the reference as one of alternatives (next to "or", or a numeric reference
-    beside another number) is left to a judge, as an over-long one is; the verifier''s version is 2.
-    splinter-knowledge/it/task_kinds holds every plain kind to a correct, wrong, incomplete, empty, adversarial and
-    ungradeable answer, and checks the catalogue has no plain kind without a case'
+  resolution: 'eval: an answer that offers the reference as one of alternatives (next to "or", or a numeric reference beside
+    another number) is left to a judge, as an over-long one is; the verifier''s version is 2. splinter-knowledge/it/task_kinds
+    holds every plain kind to a correct, wrong, incomplete, empty, adversarial and ungradeable answer, and checks the catalogue
+    has no plain kind without a case'

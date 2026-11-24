@@ -30,6 +30,7 @@ mod factory_store;
 mod fuzz;
 mod generation_calls;
 mod history_tasks;
+mod plugin_matrix;
 mod redact;
 mod retrieve;
 mod sections;
