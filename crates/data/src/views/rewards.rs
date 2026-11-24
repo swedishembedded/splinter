@@ -540,11 +540,27 @@ pub enum GroupKind {
     /// The cliff, where only privileged information can say what to do.
     AllFail,
     /// Every attempt passed alike (or the only attempt did): nothing to
-    /// compare, nothing to correct.
+    /// compare, nothing to correct. A group whose rewards do not differ but
+    /// of which some attempt passed is this too, however the reward was
+    /// shaped: it is no cliff, and distilling it would teach from a pass.
     AllPass,
 }
 
 impl GroupKind {
+    /// The kind of a group whose rewards `signal` ([`signals`]) or not, and
+    /// of which the attempts `passed` say whether each passed: the one rule
+    /// every policy-gradient projection classifies its groups by.
+    #[must_use]
+    pub fn of(signal: bool, passed: impl IntoIterator<Item = bool>) -> Self {
+        if signal {
+            Self::Graded
+        } else if passed.into_iter().any(|passed| passed) {
+            Self::AllPass
+        } else {
+            Self::AllFail
+        }
+    }
+
     /// The kind as it is printed.
     #[must_use]
     pub fn name(self) -> &'static str {

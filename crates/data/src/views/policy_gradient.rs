@@ -471,13 +471,7 @@ impl View for PolicyGradient {
         for (key, trials) in &groups {
             let rewards: Vec<f64> = trials.values().map(|t| t.reward).collect();
             let signal = super::rewards::signals(&rewards);
-            let kind = if signal {
-                GroupKind::Graded
-            } else if trials.values().any(|t| t.passed) {
-                GroupKind::AllPass
-            } else {
-                GroupKind::AllFail
-            };
+            let kind = GroupKind::of(signal, trials.values().map(|t| t.passed));
             let distilled = match self.distill {
                 Distill::Off => false,
                 Distill::Cliff => kind == GroupKind::AllFail,

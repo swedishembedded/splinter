@@ -88,13 +88,8 @@ pub fn project(
     for ((case, policy), members) in groups {
         let rewards: Vec<f64> = members.iter().map(|a| a.reward).collect();
         let signal = crate::views::signals(&rewards);
-        let kind = if rewards.iter().all(|r| *r >= 1.0) {
-            GroupKind::AllPass
-        } else if !signal && rewards.iter().all(|r| *r <= 0.0) {
-            GroupKind::AllFail
-        } else {
-            GroupKind::Graded
-        };
+        // A grade passes when it is full marks.
+        let kind = GroupKind::of(signal, rewards.iter().map(|r| *r >= 1.0));
         projection.groups.push(GroupReport {
             task: case.to_string(),
             version: String::new(),
@@ -234,5 +229,17 @@ mod tests {
         assert!(projection.records.is_empty());
         assert_eq!(projection.excluded[&Exclusion::NoGroupSignal], 3);
         assert!(projection.groups.iter().all(|g| !g.signal));
+        // Graded means the rewards differ: a group that earned the same
+        // middling grade passed nowhere, so it is the cliff, not graded.
+        let kind = |case: &str| {
+            projection
+                .groups
+                .iter()
+                .find(|g| g.task == case)
+                .unwrap()
+                .kind
+        };
+        assert_eq!(kind("alike"), GroupKind::AllFail);
+        assert_eq!(kind("alone"), GroupKind::AllPass);
     }
 }
