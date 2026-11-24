@@ -89,7 +89,7 @@ capabilities:
   tier: cpu
 - id: DATA-PG-GROUPING
   crate: splinter-data
-  entry: PolicyGradient::project (splinter dataset build policy-gradient)
+  entry: PolicyGradient::project (factory dataset.project, objective policy-gradient; crates/factory/src/run/dataset/views.rs:view_of)
   source: crates/data/src/views/policy_gradient.rs:PolicyGradient::rollout,project
   contract: A group is the trials of one (task id, task version, policy); each trial counts once however many conversations;
     conversations of a trial must agree on reward else the projection errors.
@@ -230,7 +230,7 @@ capabilities:
   tier: cpu
 - id: DATA-SFT-STEP
   crate: splinter-data
-  entry: SftStep (splinter dataset build sft-step)
+  entry: 'SftStep (library only: pipelines::datasets::build with ViewName::SftStep; no CLI verb or factory stage selects it)'
   source: crates/data/src/views/sft_step.rs:project_entry; rendering.rs:records_of_actions; trajectory.rs:Conversation::up_to
   contract: Each non-copied, non-repeated, wanted action of a verified-pass experience becomes one chat record supervising
     only that assistant message; context (user, tool, system) never supervised.
@@ -248,6 +248,7 @@ capabilities:
   - tool-call arguments key order / whitespace stability
   - empty-assistant-text with tool calls
   - reasoning_content rendering into think block parity with brain template
+  - no production caller since `dataset build` was deleted (factory dataset.project projects an attempt's SFT record with native_record, not SftStep); only tests reach it
   state: ADVERSARIAL_PASS
   risk: critical
   tier: cpu
@@ -640,7 +641,7 @@ capabilities:
   tier: cpu
 - id: DATA-HOLDOUT-SPLIT
   crate: splinter-data
-  entry: holdout_split_by / split_by_rule / holdout_split_records; dataset build --holdout
+  entry: holdout_split_by / split_by_rule / holdout_split_records / split_dataset_file (reached by train::full, release::probe and timeline::train)
   source: crates/data/src/holdout.rs:held_out_flags,choose_held_out,draw_order
   contract: A tenth (>=1, grown to MIN_HELD_OUT_UNITS=8 units within 1/4) of units is held out whole by group, stratified
     by seeded hash order, reproducible per seed; fixed sides honoured; no record in two files.
@@ -654,6 +655,7 @@ capabilities:
   - unknown side string ignored via .ok()
   - fixed HeldOut + fixed Train in one group both honoured (group split)
   - min_units loop vs half cap with one giant group
+  - the factory dataset.project stage holds groups out with its own hash draw (crates/factory/src/run/dataset.rs:held_out), not this code; two sources of truth
   state: SPECIFIED
   risk: critical
   tier: cpu
@@ -2058,22 +2060,26 @@ capabilities:
   risk: critical
   tier: integration
 - id: STORE-004
-  crate: splinter-store
-  entry: 'StageLedger (stage_ledger.rs): resumable append-only ledger.jsonl'
-  source: crates/store/src/stage_ledger.rs:StageLedger::run
+  crate: splinter-minimind
+  entry: 'StageLedger (samples/minimind/src/ledger/mod.rs, lock.rs): resumable append-only ledger.jsonl'
+  source: samples/minimind/src/ledger/mod.rs:StageLedger::run; samples/minimind/src/ledger/lock.rs
   contract: A unit is done exactly when its commit line exists under the same content-addressed StageKey with outputs still
-    hashing to their digests; a begin without commit resumes; corrupt outputs are refused or invalidated; one process holds
-    the run directory by flock.
+    hashing to their digests; a begin without commit resumes under a new attempt; a torn last line is cut off; corrupt
+    outputs are refused or invalidated; one process holds the run directory by flock.
   tests:
-  - store/tests/it/stage_ledger.rs (~10 tests)
-  oracle: in-memory logical model of ledger (and DVC-style recompute)
+  - samples/minimind/tests/ledger.rs::a_committed_stage_is_reused_without_running
+  - ::an_interrupted_stage_resumes_under_a_new_attempt
+  - ::a_changed_input_recomputes_and_the_old_commit_stays_findable
+  - ::a_corrupt_output_is_refused_or_recomputed
+  - ::an_output_outside_the_run_directory_is_refused
+  - ::a_second_process_cannot_hold_the_same_run
+  - ::a_torn_last_line_is_an_interruption_not_a_corruption
+  oracle: none independent (the spec tests the ledger against its own protocol)
   missing:
-  - this is a SECOND resumable-stage mechanism parallel to factory ProductStore+RunState (used by crates/pipelines served
-    pipelines only); F-08
-  - torn commit line
+  - in-memory logical model of the ledger (and DVC-style recompute) as an independent oracle; the old golden claim rested on tests that moved or were deleted with crates/store
   - flock on NFS
-  state: GOLDEN_PASS
-  risk: medium
+  state: SPECIFIED
+  risk: low
   tier: cpu
 - id: STORE-005
   crate: splinter-store
@@ -2870,12 +2876,12 @@ capabilities:
   contract: Promote only when dev interval lower bound >0 over >=6 families (least n with 2^-n <= 0.025), retention one-sided
     lower bound > -0.05, and a fresh sealed slice verifies; unexamined decision recorded as not exam-verified.
   tests:
-  - eval/it/promotion_gate (8 tests)
-  - pipelines promotion::measurement tests
+  - eval/it/promotion_gate (9 tests)
   oracle: table-driven reference of the three rules (CUSTOM_ORACLE_REQUIRED); 2^-n arithmetic independent
   missing:
   - 'exact boundary: interval low == 0.0, lower == -0.05, families == 5/6'
   - no source mutants listed for promotion in validation.md
+  - decide/decide_unexamined have no production caller since pipelines promotion::measurement was deleted (factory run/eval.rs uses only verify)
   - NaN gain/interval
   - decide_unexamined with attacker-supplied Measured (no signature)
   state: SPECIFIED
@@ -2914,7 +2920,8 @@ capabilities:
   - eval/it/gate (5)
   - gate/tests.rs (6)
   - gate/serve_tests.rs
-  - pipelines/it/release*.rs
+  - crates/pipelines/tests/it/release_predictive.rs::a_failing_or_unmeasured_check_blocks_the_release_and_leaves_the_alias
+  - crates/pipelines/tests/absorb/generations.rs::a_candidate_that_loses_a_claim_the_base_holds_is_refused
   oracle: decision-table oracle (CUSTOM_ORACLE_REQUIRED)
   missing:
   - anchor net-lost-for-200 constant ANCHOR_NET_LOST_FOR_200=6 derivation test
@@ -2948,7 +2955,7 @@ capabilities:
     model; arms scored on different units are refused; policy failure blocks an otherwise passing candidate.
   tests:
   - predictive_gate.rs unit tests (6)
-  - pipelines/it/release_predictive, release_terms
+  - pipelines/it/release_predictive
   oracle: table-driven (CUSTOM_ORACLE_REQUIRED)
   missing:
   - restricted-release terms matrix
@@ -3030,10 +3037,10 @@ capabilities:
     | Never | Unmeasured; Frontier and Taught are kept.
   tests:
   - frontier.rs unit test (1)
-  - pipelines/it/curriculum::pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt
   oracle: decision table
   missing:
   - rate exactly 0 and 1 float comparisons
+  - no test through curriculum::frontier::select_frontier (see PIPE-020)
   - teacher verified but student rate>0
   state: SPECIFIED
   risk: medium
@@ -3148,6 +3155,7 @@ capabilities:
   missing:
   - strata proxy boundaries
   - canary with zero canaries (vacuous pass?)
+  - no caller of canary_check outside eval/src/canary tests since the pipelines release canary was deleted
   state: SPECIFIED
   risk: medium
   tier: cpu
@@ -3169,20 +3177,6 @@ capabilities:
   state: SPECIFIED
   risk: high
   tier: cpu
-- id: PIPE-001
-  crate: splinter-pipelines
-  entry: splinter_pipelines::powered::analysis::sign_p
-  source: crates/pipelines/src/powered/analysis.rs:sign_p
-  contract: Thin delegate to splinter_model::stats::one_sided_p so there is one sign-test implementation across powered
-    exam, release task level and arm comparison.
-  tests:
-  - powered::analysis::the_exact_sign_test_is_the_binomial_tail
-  oracle: scipy.stats.binomtest
-  missing:
-  - delegation mutant exists (powered-sign-test-two-sided)
-  state: ADVERSARIAL_PASS
-  risk: high
-  tier: cpu
 - id: PIPE-002
   crate: splinter-pipelines
   entry: splinter_pipelines::powered::analysis::Resampled / interval_of
@@ -3197,7 +3191,7 @@ capabilities:
   missing:
   - coverage simulation
   - families of size zero branch (count==0) untested against golden
-  - 'reuse sites: promotion.rs (10k), release/statistics.rs (task_level), arm_compare family interval: no per-site golden'
+  - 'reuse sites: arm_compare family interval has no per-site golden (promotion.rs and release/statistics.rs are deleted)'
   state: ADVERSARIAL_PASS
   risk: critical
   tier: cpu
@@ -3208,7 +3202,7 @@ capabilities:
   contract: 'Per arm summaries and per-pair comparison: task and family sign tests, clustered mean-difference and score
     intervals, length-matched sub-comparison (within 25% length), power block with ANOVA ICC and MDD=(1.645+0.8416)*sd/sqrt(families).'
   tests:
-  - powered::analysis unit tests (rest of ~17)
+  - powered::analysis unit tests (11)
   - pipelines/it/powered (5)
   oracle: scipy.stats / pingouin.intraclass_corr for ICC(1); statsmodels for MDD
   missing:
@@ -3217,6 +3211,8 @@ capabilities:
   - median_chars even/odd
   - p_tasks treats tasks inside a family as independent (pseudo-replication, only family p is primary) - test that reports
     never headline p_tasks
+  - sign tests call splinter_model::stats::one_sided_p directly (sign_p and its unit test are deleted; STAT-001 holds the
+    arithmetic); the powered-sign-test-two-sided mutant targets the p_tasks call site
   state: SPECIFIED
   risk: high
   tier: cpu
@@ -3316,51 +3312,23 @@ capabilities:
   state: SPECIFIED
   risk: high
   tier: integration
-- id: PIPE-010
-  crate: splinter-pipelines
-  entry: splinter_pipelines::promotion::measurement / measurement_of
-  source: crates/pipelines/src/promotion.rs
-  contract: 'Builds the promotion gate''s Measurement: gain, 2-sided 95% interval, one-sided 95% lower bound from 10_000
-    family resamples, family count; <2 families gives no interval.'
-  tests:
-  - promotion.rs unit tests (3)
-  oracle: golden via EVAL conformance generator for the bounds
-  missing:
-  - golden bounds for non-unanimous families
-  - ALPHA/2 and ALPHA quantile index at 10k resamples
-  state: SPECIFIED
-  risk: critical
-  tier: cpu
-- id: PIPE-011
-  crate: splinter-pipelines
-  entry: splinter_pipelines::release::statistics::task_level / drop_interval / items_to_see_two_points
-  source: crates/pipelines/src/release/statistics.rs
-  contract: 'Release task-level evidence: sign p over tasks, family bootstrap difference interval, anchor drop interval
-    (item bootstrap, 4000 resamples, level 0.95) and POWER_FACTOR 6.18 sample-size rule.'
-  tests:
-  - release/statistics.rs unit tests
-  - pipelines/it/release*.rs
-  oracle: scipy for 6.18 = (1.645+0.8416)^2; golden bounds
-  missing:
-  - POWER_FACTOR constant vs derived (1.6449+0.8416)^2=6.183
-  - interval None falls back to point difference (low==high==difference)
-  state: SPECIFIED
-  risk: high
-  tier: cpu
 - id: PIPE-012
   crate: splinter-pipelines
-  entry: splinter_pipelines::release::gating::run_gate and release::decision
-  source: crates/pipelines/src/release/gating.rs, decision.rs, agentic.rs, probe.rs, anchor.rs, canary.rs
-  contract: Runs the candidate and champion on every suite, decides the four checks over paired outcomes with the single
-    promotion gate, and carries the promotion's reasons into the improvement/retention checks.
+  entry: splinter_pipelines::release::{grade_arm, Asked, Graded} (arm grading shared by the absorb and consolidation gates)
+  source: crates/pipelines/src/release/gating.rs; used by crates/pipelines/src/absorb/gate.rs:decide_claims, crates/pipelines/src/absorb/consolidate/gate.rs:decide
+  contract: The candidate and the champion are each graded greedily on every suite, under the prompt each is deployed with
+    or the default one as Asked says; a suite that cannot be graded comes back as its reason (cancel excepted), never as
+    a pass or an abort, so the deciding gate records it as unmeasured.
   tests:
-  - pipelines/it/release (729 lines), release_variants, release_matrix, release_canary, release_terms
+  - crates/pipelines/tests/absorb/generations.rs::a_candidate_that_loses_a_claim_the_base_holds_is_refused
   oracle: scripted endpoint integration
   missing:
-  - serve check same-meaning decision golden
+  - the release gate that decided four checks over paired outcomes (run_gate, release::decision) is deleted; only the arm grading remains
+  - no test that names the unmeasured path (a model that cannot load fails every suite with one reason)
   - soft() failure swallowing path audit
+  - serve check same-meaning decision golden
   state: SPECIFIED
-  risk: critical
+  risk: high
   tier: integration
 - id: PIPE-013
   crate: splinter-pipelines
@@ -3379,16 +3347,19 @@ capabilities:
   tier: integration
 - id: PIPE-014
   crate: splinter-pipelines
-  entry: splinter_pipelines::exam_seal::seal / leaks / reserved / trained; sealed::record / admit_*
-  source: crates/pipelines/src/exam_seal.rs, sealed.rs
-  contract: Refuses any attempt or supervised action touching a reserved family or a recorded sealed tree id, builds list
-    what they trained on; a workspace record naming no family is refused; matching is by tree id so a one-file copy is not
-    recognised.
+  entry: splinter_pipelines::exam_seal::seal; sealed::record / admit_tree / admit_task / admit_set / admit_corpus
+  source: crates/pipelines/src/exam_seal.rs, sealed.rs, bench/split.rs:exam_only
+  contract: A projection that would train on a bench experience outside the benchmark's train split, or that the trial
+    register holds on the eval side, is refused naming the first such experience; a recorded sealed family or git tree
+    id is refused for tasks, task sets and corpora whatever the family is later called; matching is by tree id so a
+    one-file copy is not recognised.
   tests:
-  - pipelines/it/dataset_seal (8)
-  - sealed_everywhere
+  - crates/pipelines/tests/it/sealed_everywhere.rs::task_admission_refuses_a_task_of_a_sealed_tree_whatever_its_family_is_called
+  - crates/pipelines/tests/it/bench_policy_gradient.rs::a_held_out_trial_is_refused_never_trained_on
+  - crates/pipelines/tests/it/bench_ingest.rs::an_experience_of_a_task_registered_as_eval_is_refused_even_if_it_claims_train
   oracle: 'set-theoretic oracle: planted leaks over known family sets'
   missing:
+  - exam_seal::seal has no test of its own; it is reached through datasets::build (the leaks/reserved/trained checks and the dataset_seal tests were deleted)
   - near-copy of sealed tree evades (documented in limitations.md) - no quantification test
   - path normalisation (../, case, symlink) for reserved file names
   - no source mutants listed in validation.md for exam seal
@@ -3429,18 +3400,20 @@ capabilities:
   tier: cpu
 - id: PIPE-017
   crate: splinter-pipelines
-  entry: splinter_pipelines::solving::solve_tasks / solve_set (solve concurrency)
+  entry: splinter_pipelines::solving::solve_tasks (solve concurrency; called by rehearsal, curriculum teacher, improve arms)
   source: crates/pipelines/src/solving.rs:solve_tasks
   contract: A remote model is asked up to configured width at once, a served one as wide as its slots; the experience set
     has one member per attempt in task order regardless of completion order; each solve is stored answered or not.
   tests:
-  - pipelines/it/solve_concurrency (4)
-  - solve_resume
+  - crates/pipelines/tests/it/solve_concurrency.rs::a_remote_model_is_asked_up_to_the_configured_width_at_once
+  - crates/pipelines/tests/it/solve_concurrency.rs::a_local_model_is_asked_as_wide_as_the_brain_server_decodes_together
+  - crates/pipelines/tests/it/solve_concurrency.rs::a_model_is_handed_to_a_stage_with_the_width_it_is_asked_at
+  - crates/pipelines/tests/it/solve_concurrency.rs::every_solved_attempt_keeps_the_facts_the_experience_cannot
   oracle: barrier-based width observation (no clock) exists
   missing:
   - cancellation mid-flight
   - deadline fairness under shared slots
-  - resume dedup (solve_resume exists)
+  - resume (SolveRequest::resume) has no test; solve_resume and solve_set are deleted
   - not in mutants.tsv
   state: SPECIFIED
   risk: high
@@ -3478,33 +3451,37 @@ capabilities:
   tier: integration
 - id: PIPE-020
   crate: splinter-pipelines
-  entry: splinter_pipelines::curriculum::frontier (pass@k curriculum)
-  source: crates/pipelines/src/curriculum/frontier.rs, corrections.rs
-  contract: Solves each task k times, grades every attempt, keeps Frontier and Taught tasks and records every attempt.
-  tests:
-  - pipelines/it/curriculum (472 lines), capability_curriculum
+  entry: splinter_pipelines::curriculum::frontier::{select_frontier, tally, PassAtK}
+  source: crates/pipelines/src/curriculum/frontier.rs
+  contract: Tallies each task's graded attempts (an ungraded one is not counted) and a teacher's, keeps the tasks the
+    student fails at least sometimes that have a verified answer (Frontier or Taught) and records the measurement content-addressed
+    with every attempt. The solving and grading that fed it (frontier::measure) is deleted; the attempts are handed in.
+  tests: []
   oracle: EVAL-023 table
   missing:
+  - any test (pipelines/it/curriculum::pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt was deleted with frontier::measure)
+  - no caller of select_frontier outside the file (only PassAtK is used, by improve); candidate for ablation
   - ungraded attempt handling
-  - sampling choice honoured
-  state: SPECIFIED
-  risk: medium
+  state: UNMAPPED
+  risk: low
   tier: integration
 - id: PIPE-021
   crate: splinter-pipelines
-  entry: splinter_pipelines::datasets (dataset build, splits, block bounds)
-  source: crates/pipelines/src/datasets.rs, dataset_views.rs, dataset_ref.rs
-  contract: Builds training datasets with holdout by group, over-block splitting only when asked, record lengths measured
-    by the trainer, and records what it trained on.
+  entry: splinter_pipelines::datasets::{build, project_with, check, export} (library; the `dataset build` verb is deleted)
+  source: crates/pipelines/src/datasets.rs, datasets/{applicable,check,request}.rs, dataset_views.rs, dataset_ref.rs
+  contract: Projects experience sets through one view into a stored dataset with holdout by group, over-block splitting
+    only when asked, record lengths measured by the trainer, and records what it trained on; the exam seal and the sealed
+    families are checked before anything is stored. `dataset check` and `dataset export` are its only CLI verbs.
   tests:
-  - pipelines/it/dataset_split (8)
-  - dataset_curation
-  - dataset_strata
-  - bench_policy_gradient
+  - crates/pipelines/tests/it/dataset_split.rs (8)
+  - crates/pipelines/tests/it/dataset_curation.rs
+  - crates/pipelines/tests/it/dataset_strata.rs
+  - crates/pipelines/tests/it/bench_policy_gradient.rs
   oracle: brain check_dataset as oracle
   missing:
   - held-out split leakage property across families
   - split determinism across runs
+  - 'no CLI or factory stage reaches build/project_with: callers are rehearsal::rehearse_on, absorb/kit.rs and tests; the factory `dataset.project` stage is a parallel projection (see DATA-PG-GROUPING)'
   state: SPECIFIED
   risk: high
   tier: cpu
@@ -3910,13 +3887,14 @@ capabilities:
   tier: cpu
 - id: TASK-002
   crate: splinter-knowledge
-  entry: tasks::workspace::mutate (repository mutation tasks) and eval::verifiers::mutation
-  source: crates/knowledge/src/tasks/workspace/mutate.rs, withheld.rs
+  entry: tasks::workspace::mutate (repository mutation tasks), reached through the factory task.mutate stage, and eval::verifiers::mutation
+  source: crates/knowledge/src/tasks/workspace/mutate.rs, mutate/withheld.rs; crates/factory/src/run/task_mutate.rs
   contract: Mutates repository source, keeps a mutant only if the project's own suite still runs every test and fails some;
     failing tests withheld as hidden overlay.
   tests:
   - knowledge/tests/it/workspace_tasks (771 lines)
-  - eval/it/mutation_oracle (5)
+  - eval/it/mutation_oracle (6)
+  - crates/factory/tests/it/practice.rs::a_repositorys_own_tests_make_its_tasks_and_hold_out_whole_files_for_evaluation
   oracle: mutmut / cosmic-ray kill semantic on the same repo
   missing:
   - equivalent-mutant rate
@@ -4183,7 +4161,7 @@ capabilities:
   tier: integration
 - id: AGENT-SOLVE
   crate: agent
-  entry: splinter solve; factory attempt.collect (via splinter_agent::solve::solve)
+  entry: splinter_agent::solve::solve (called by pipelines::solving, release::probe, ask, rerank and factory task_ops)
   source: crates/agent/src/solve.rs:solve
   contract: A task is solved by a sven engine in exactly the environment the task records (closed-book with no tools, or
     a runtime with the single run_code tool), under Splinter's fixed system prompt, and a task offered a different environment
@@ -4374,7 +4352,7 @@ capabilities:
   missing:
   - composed trajectory validated by an independent ATIF validator
   - non-reproducing replay refused (end-to-end with real sven fork)
-  - provenance fields survive a dataset build round trip
+  - provenance fields survive a dataset projection round trip
   state: SPECIFIED
   risk: high
   tier: integration
@@ -4395,13 +4373,13 @@ capabilities:
   tier: integration
 - id: AGENT-WORK
   crate: agent
-  entry: work::Worker (coding agent in a confined directory); splinter solve for workspace tasks
+  entry: work::Worker (coding agent in a confined directory)
   source: crates/agent/src/work.rs:Worker::start, resume, suspend; work/guard.rs; work/watch.rs; work/profile.rs
   contract: A coding agent works in one directory with sven's file, search and shell tools but none that reach the network
     or another model, is stopped at its tool-call cap or when it repeats one call with the same answer, can be suspended
     and resumed, and reports every event to an observer.
   tests:
-  - crates/agent/tests/it/work.rs (11)
+  - crates/agent/tests/it/work.rs (10)
   - crates/agent/tests/it/knowledge.rs (2)
   - crates/agent/src/work.rs (1 inline)
   oracle: adversarial program for path escape (a_worker_cannot_write_outside_its_workspace); CUSTOM_ORACLE_REQUIRED for
@@ -4415,7 +4393,7 @@ capabilities:
   tier: integration
 - id: AGENT-WORKSPACE-SOLVE
   crate: agent
-  entry: work::solve_in_workspace (workspace tasks; splinter solve; tasks harbor episodes)
+  entry: work::solve_in_workspace (workspace tasks; via pipelines::workspace_solve from solving::solve_tasks, practice episodes and release::agentic)
   source: crates/agent/src/work.rs:solve_in_workspace
   contract: A whole episode on a task that changes a repository is run in a fresh materialisation of the task's snapshot
     and ends in the patch read back from git, with at most the allowed follow-ups when a visible check is red or the tree
@@ -4465,7 +4443,7 @@ capabilities:
   tier: cpu
 - id: AGENT-HARNESS-ATTEMPT
   crate: agent
-  entry: attempt.collect with harness; splinter solve --harness; solve_harness_in_workspace
+  entry: attempt.collect with harness; pipelines::solving harness attempts (solve_harness_attempt); solve_harness_in_workspace
   source: crates/agent/src/harness_work.rs:solve_harness_in_workspace; crates/agent/src/attempt_harness.rs:check
   contract: A sven harness document runs in place of the conversational loop on a workspace task, a document that does not
     compile is an engine error rather than a solution, and the patch the harness leaves is the solution.
@@ -4541,58 +4519,6 @@ capabilities:
   - resume after kill does not re-run committed arms (claimed in header)
   - a candidate drawn twice runs once
   - unwrap_or(0.0) on a missing difference statistic
-  state: SPECIFIED
-  risk: high
-  tier: integration
-- id: AGENT-RUNNER-CONTRACT
-  crate: agent
-  entry: runner::prepare/collect/run_episode (AgentRunner trait)
-  source: crates/agent/src/runner.rs:run_episode
-  contract: An episode is prepared as a fresh copy of the task snapshot, run by any AgentRunner, and collected as an EpisodeRecord
-    whose patch is read back from git against the baseline and whose native record is digested.
-  tests:
-  - crates/agent/tests/it/claude_code.rs (3; only through the Claude Code runner)
-  oracle: git
-  missing:
-  - 'NO production caller: grep finds run_episode/SvenRunner/ClaudeCodeRunner only inside crates/agent and its tests (dead
-    in the CLI/SDK paths)'
-  - runner/sven.rs has no test (normalize unverified)
-  state: SPECIFIED
-  risk: medium
-  tier: integration
-- id: AGENT-RUNNER-SVEN
-  crate: agent
-  entry: SvenRunner (AgentRunner for sven)
-  source: crates/agent/src/runner/sven.rs:SvenRunner, normalize
-  contract: A sven Worker runs in the episode's tree and its ATIF export is the native record, normalised to the shared
-    Step shape.
-  tests: []
-  oracle: ATIF validator (harbor.utils.trajectory_validator) and sven's own exporter
-  missing:
-  - any test; normalize on real ATIF documents (tool_calls without result, reasoning_content)
-  - wiring to a caller
-  state: UNMAPPED
-  risk: medium
-  tier: integration
-- id: AGENT-RUNNER-CLAUDE-CODE
-  crate: agent
-  entry: ClaudeCodeRunner (never started except under launch rules)
-  source: crates/agent/src/runner/claude_code.rs:ClaudeCodeRunner::run, check_endpoint, check_key, check_grants, child_env,
-    preflight
-  contract: Claude Code starts only as the pinned binary (sha256 checked per launch), pointed at a loopback IPv4 brain server
-    with a non-hosted-shaped key, in a Landlock confinement that allows TCP connect to that port only, with an allowlisted
-    environment and a preflight that proves the account home and another port are unreachable.
-  tests:
-  - 'crates/agent/tests/it/claude_code.rs (3: an_endpoint_other_than_a_loopback_origin_and_a_hosted_key_are_refused, the_confined_run_cannot_read_the_login_nor_reach_another_port,
-    a_binary_other_than_the_pinned_build_or_a_grant_over_the_login_is_refused)'
-  - crates/agent/src/runner/claude_code.rs (3 inline)
-  - scripts/gates/check-claude-code.sh (static gate)
-  oracle: adversarial program inside the confinement; strace/ss as independent network oracle
-  missing:
-  - /proc, /sys, /etc readable and /dev read-write inside the confinement (see findings F5)
-  - key prefix list covers only sk-ant-, sk-or-, sk-proj- (other hosted key shapes pass)
-  - stream-json normalize against recorded real Claude Code output
-  - TOCTOU between digest read and exec of the binary
   state: SPECIFIED
   risk: high
   tier: integration
@@ -5609,38 +5535,39 @@ capabilities:
   tier: integration
 - id: CLI-TASKS
   crate: splinter
-  entry: tasks generate|history|variants|canaries|combine|drills|pick|check-requests|harbor discover|harbor import|harbor
-    export|harbor episodes|list|show
+  entry: tasks history|variants|canaries|combine|drills|pick|check-requests|harbor discover|harbor import|harbor export|harbor
+    episodes|list|show
   source: crates/splinter/src/cli/tasks.rs, cli/harbor.rs; crates/splinter/src/tasks_session.rs
-  contract: 'Generate and inspect task sets, import Harbor tasks as workspace tasks (refusing tasks the host cannot honour:
+  contract: 'Inspect and derive task sets, import Harbor tasks as workspace tasks (refusing tasks the host cannot honour:
     Dockerfile RUN, prebuilt image, Windows, multi-step) and export them back, and run practice task folders as episodes
-    with a recorded outcome; factory_duplicate: yes (tasks generate duplicates factory `generate`/task_ops; tasks harbor
-    import duplicates recipe imports; tasks harbor episodes duplicates `play`/attempt.collect for practice).'
+    with a recorded outcome; factory_duplicate: partial (tasks harbor import duplicates recipe imports; tasks harbor episodes
+    duplicates `play`/attempt.collect for practice; `tasks generate` is deleted, the factory `generate` is the one generator).'
   tests:
   - crates/splinter/tests/it/harbor_episodes_cli.rs (3)
-  - crates/splinter/src/cli/tests.rs
-  - crates/splinter/tests/it/solve_session? (n/a)
-  - crates/splinter/src/tasks_output.rs inline
+  - crates/splinter/src/cli/tests/measure.rs::tasks_history_takes_a_repository_a_range_and_an_optional_test_command
+  - crates/splinter/src/cli/tests.rs::the_old_commands_are_gone (tasks generate refused)
   oracle: Harbor task format (harbor==0.20.0 TaskConfig loader) for import/export round-trip
   missing:
   - export then Harbor loads the exported dir (independent loader)
-  - tasks combine/drills/pick/canaries/check-requests CLI-level tests
+  - tasks variants/canaries/combine/drills/pick/check-requests CLI-level tests
   state: SPECIFIED
   risk: medium
   tier: cpu
-- id: CLI-SOLVE-VERIFY-CRITIQUE-JUDGE
+- id: CLI-VERIFY-CRITIQUE-JUDGE
   crate: splinter
-  entry: solve [--frontier --harness --resume --record-whole]; verify [RUNDIR|--judge]; critique; judge calibrate|measure
-  source: crates/splinter/src/solve_session.rs, session.rs:321-378
-  contract: 'Solve every task of a set each in its recorded environment, grade or regrade experiences, critique failures
-    and retry, and measure a judge; factory_duplicate: yes (attempt.collect + verify stages + factory `verify` of a run).'
+  entry: verify RUN; critique EXPERIENCE-SET [--critic --retry]; judge calibrate|measure
+  source: crates/splinter/src/factory_session.rs:verify; crates/splinter/src/session.rs (Critique and Judge arms); crates/splinter/src/cli/review.rs
+  contract: 'Check a factory run directory (every product against its blobs and its view), critique the failures of an
+    experience set and retry, and calibrate and measure a judge; factory_duplicate: partial (factory critique/repair ops;
+    `solve`, and `verify` over a task set, are deleted).'
   tests:
-  - crates/splinter/src/cli/tests/solve.rs
-  - crates/splinter/src/solve_session.rs inline
-  - crates/splinter/tests/it/json_output.rs
-  oracle: task's hidden checks as oracle
+  - crates/splinter/src/cli/tests.rs::the_old_commands_are_gone (solve and verify over a set refused)
+  - crates/splinter/src/cli/tests.rs (verify RUN, critique --retry and judge parsing)
+  - crates/splinter/tests/it/factory_cli.rs::a_run_directory_that_is_not_there_is_refused_and_nothing_is_created
+  oracle: CUSTOM_ORACLE_REQUIRED (run::verify is the check; judge measurement needs labelled controls)
   missing:
-  - resume of an interrupted solve does not re-solve (CLI level)
+  - critique and judge have no CLI-level test beyond argument parsing
+  - verify RUN on a corrupted real run (exit code and problems listed) at CLI level
   state: SPECIFIED
   risk: medium
   tier: integration
@@ -5662,22 +5589,27 @@ capabilities:
   state: SPECIFIED
   risk: high
   tier: cpu
-- id: CLI-DATASET-TRAIN-RELEASE
+- id: CLI-DATASET-RELEASE-EVAL
   crate: splinter
-  entry: dataset build|conversations|decision-fixtures|check|export; rehearse; train; release [list]; rollback; eval [matrix|--plan];
-    exam; select; exam-report labels-export|labels-import|memorisation; exam-set create|power|show; publish
-  source: crates/splinter/src/session.rs:460-646; cli/{dataset,train,eval,exam}.rs
-  contract: 'Build datasets from experience sets, train a candidate adapter (not released), run the release gate (candidate
-    released only if every check passes) and rollback aliases, evaluate/exam candidates, and publish sealed-material-free
-    bundles to a private HF dataset repo; factory_duplicate: yes (dataset, train, release, eval are factory stages; legacy
-    CLI pipeline retained).'
+  entry: dataset conversations|decision-fixtures|check|export; release list; rollback; eval [matrix|--freeze FILE|--suite FILE [--policy REF]|RUN --plan PLAN
+    --out DIR]; exam; select; exam-report labels-export|labels-import|memorisation; exam-set create|power|show; publish
+  source: crates/splinter/src/session.rs (Dataset, Release, Rollback, Eval, Exam, Select, ExamReport, ExamSet, Publish arms);
+    conversation_dataset.rs, eval_session.rs, exam_session.rs, hub_session.rs; cli/{dataset,eval,exam,hub}.rs; crates/pipelines/src/eval.rs
+  contract: 'Build conversation and decision-fixture datasets and check or export a stored one, list releases and roll
+    an alias back, show or freeze the anchor suite, grade one model on a file of anchor-format tasks (decides nothing),
+    re-evaluate a factory run''s candidates under another plan, exam candidates, and publish sealed-material-free bundles
+    to a private HF dataset repo; factory_duplicate: yes (dataset projection, training, release and evaluation are factory
+    stages; `dataset build`, `train`, `rehearse`, `release CANDIDATE` and the model form of `eval` are deleted).'
   tests:
   - crates/splinter/src/cli/tests/measure.rs
-  - crates/splinter/src/dataset_output.rs, train_output.rs, release_output.rs, exam_output.rs inline
-  - crates/splinter/tests/it/hub_session? (src/hub_session.rs)
-  oracle: 'CUSTOM_ORACLE_REQUIRED (release gate decisions: independent statistics)'
+  - crates/splinter/src/cli/tests.rs::the_old_commands_are_gone
+  - crates/splinter/src/release_output.rs (2 inline)
+  - crates/splinter/tests/it/json_output.rs::releases_rollback_and_the_anchor_suite_speak_json
+  - crates/splinter/tests/it/first_run.rs::the_shipped_anchor_suite_freezes_into_the_suite_the_page_quotes
+  - crates/pipelines/tests/it/suite_eval.rs::a_suite_file_is_graded_item_by_item_and_recorded
+  oracle: 'CUSTOM_ORACLE_REQUIRED (independent statistics for exam decisions)'
   missing:
-  - 'select, exam-report, publish, release gate: no CLI-level test'
+  - 'select, exam-report, publish, eval RUN --plan --out: no CLI-level test found'
   - publish refuses sealed/item-level material end-to-end
   state: SPECIFIED
   risk: high
@@ -5938,7 +5870,7 @@ cli_commands:
   factory_duplicate: no (factory)
 - command: generate
   subs: []
-  factory_duplicate: 'yes: overlaps tasks generate (two task generators)'
+  factory_duplicate: no (factory)
 - command: run
   subs: []
   factory_duplicate: no (factory)
@@ -6024,7 +5956,6 @@ cli_commands:
   factory_duplicate: 'no'
 - command: tasks
   subs:
-  - generate
   - history
   - variants
   - canaries
@@ -6038,13 +5969,10 @@ cli_commands:
   - harbor episodes
   - list
   - show
-  factory_duplicate: 'yes: generate vs factory generate/task_ops; harbor import vs recipe imports + worker import'
-- command: solve
-  subs: []
-  factory_duplicate: 'yes: attempt.collect stage'
+  factory_duplicate: 'partial: harbor import vs recipe imports + worker import'
 - command: verify
   subs: []
-  factory_duplicate: 'yes: factory verify stage; also overloaded (checks a factory run OR regrades an experience set)'
+  factory_duplicate: no (checks a factory run directory against its blobs and views)
 - command: critique
   subs: []
   factory_duplicate: partial (factory critique/repair ops)
@@ -6069,7 +5997,6 @@ cli_commands:
   factory_duplicate: 'partial: ingest-harbor vs worker import / recipe imports; compare vs factory eval decide'
 - command: dataset
   subs:
-  - build
   - conversations
   - decision-fixtures
   - check
@@ -6078,12 +6005,6 @@ cli_commands:
 - command: goal
   subs:
   - admit
-  factory_duplicate: 'no'
-- command: train
-  subs: []
-  factory_duplicate: 'yes: factory training stage'
-- command: rehearse
-  subs: []
   factory_duplicate: 'no'
 - command: release
   subs:
