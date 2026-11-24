@@ -364,20 +364,30 @@ pub(super) fn produce(
     // A record is as long as its longest continuation under the shared prompt: that is the row the
     // trainer must hold (a pair is trained as two rows, a judged completion as one).
     if let (Some(limit), Some(trainer)) = (dataset.max_block, factory.services.trainer) {
+        // One count for every row of every record: a request per record would take hours on a large rollout set.
+        let mut lines = Vec::new();
+        let mut rows_of_record = Vec::with_capacity(projection.records.len());
+        for record in &projection.records {
+            let rows = rows_of(record);
+            rows_of_record.push(rows.len());
+            for row in &rows {
+                lines.push(
+                    splinter_data::dataset_line(Objective::Sft, row)
+                        .map_err(|e| fail(e.to_string()))?,
+                );
+            }
+        }
+        let lengths = trainer
+            .measure(&dataset.target, &lines)
+            .map_err(|e| fail(e.to_string()))?;
+        let mut at = 0;
         let mut kept = Vec::with_capacity(projection.records.len());
-        for record in std::mem::take(&mut projection.records) {
-            let rows = rows_of(&record);
-            let lines: Vec<String> = rows
-                .iter()
-                .map(|row| splinter_data::dataset_line(Objective::Sft, row))
-                .collect::<Result<_, _>>()
-                .map_err(|e| fail(e.to_string()))?;
-            let tokens = trainer
-                .measure(&dataset.target, &lines)
-                .map_err(|e| fail(e.to_string()))?
-                .into_iter()
-                .max()
-                .unwrap_or(0);
+        for (record, rows) in std::mem::take(&mut projection.records)
+            .into_iter()
+            .zip(rows_of_record)
+        {
+            let tokens = lengths[at..at + rows].iter().copied().max().unwrap_or(0);
+            at += rows;
             if tokens <= limit {
                 kept.push(record);
                 continue;
