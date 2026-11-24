@@ -34,7 +34,13 @@ pub const FIRST_PAUSE: Duration = Duration::from_millis(500);
 /// answered. A text sven has already classified as transient counts.
 #[must_use]
 pub fn is_transient(error: &anyhow::Error) -> bool {
-    let text = format!("{error:#}").to_lowercase();
+    is_transient_text(&format!("{error:#}"))
+}
+
+/// [`is_transient`] for an error already written as text.
+#[must_use]
+pub fn is_transient_text(text: &str) -> bool {
+    let text = text.to_lowercase();
     [
         "transient",
         "connection closed before message completed",

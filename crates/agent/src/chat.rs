@@ -206,7 +206,35 @@ async fn collect(
     options: &ChatOptions,
 ) -> Result<Reply, ChatError> {
     // A bare reply is asked through the same bounded retry as every other
-    // model call: one dropped connection must not fail a measurement.
+    // model call: one dropped connection must not fail a measurement. A
+    // connection that drops while the reply streams is as transient as one
+    // that drops before it, and the reply is only used whole, so it is asked
+    // again from the start.
+    let mut pause = crate::retry::FIRST_PAUSE;
+    for attempt in 0..=crate::retry::RETRIES {
+        match collect_once(model, request.clone(), options).await {
+            Err(ChatError::Model(text))
+                if attempt < crate::retry::RETRIES && crate::retry::is_transient_text(&text) =>
+            {
+                eprintln!(
+                    "splinter: the model reply failed transiently ({text}); asking again in {pause:?} ({}/{})",
+                    attempt + 1,
+                    crate::retry::RETRIES
+                );
+                tokio::time::sleep(pause).await;
+                pause = pause.saturating_mul(2);
+            }
+            other => return other,
+        }
+    }
+    unreachable!("the last attempt returns")
+}
+
+async fn collect_once(
+    model: &Model,
+    request: CompletionRequest,
+    options: &ChatOptions,
+) -> Result<Reply, ChatError> {
     let mut stream = crate::retry::Retrying::wrap(Arc::clone(&model.provider))
         .complete(request)
         .await
@@ -275,6 +303,39 @@ mod tests {
                 Ok(ResponseEvent::TextDelta("ok".into())),
                 Ok(ResponseEvent::Done),
             ])))
+        }
+    }
+
+    /// Starts a reply and loses the connection in the middle of it the first
+    /// time, then says "ok".
+    struct DropsMidReply(AtomicU32);
+
+    #[async_trait::async_trait]
+    impl ModelProvider for DropsMidReply {
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn model_name(&self) -> &str {
+            "scripted"
+        }
+
+        async fn complete(&self, _: CompletionRequest) -> anyhow::Result<ResponseStream> {
+            let events: Vec<anyhow::Result<ResponseEvent>> =
+                if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                    vec![
+                        Ok(ResponseEvent::TextDelta("o".into())),
+                        Err(anyhow::anyhow!(
+                        "error decoding response body: connection closed before message completed"
+                    )),
+                    ]
+                } else {
+                    vec![
+                        Ok(ResponseEvent::TextDelta("ok".into())),
+                        Ok(ResponseEvent::Done),
+                    ]
+                };
+            Ok(Box::pin(futures::stream::iter(events)))
         }
     }
 
@@ -374,6 +435,21 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(said.text, "ok");
+        assert_eq!(provider.0.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_reply_cut_in_the_middle_by_a_dropped_connection_is_asked_again() {
+        let provider = Arc::new(DropsMidReply(AtomicU32::new(0)));
+        let model = Model::new(provider.clone(), "scripted");
+        let options = ChatOptions::new(Duration::from_secs(30));
+        let said = reply_bare(&model, &[Turn::user("hi")], &options)
+            .await
+            .unwrap();
+        assert_eq!(
+            said.text, "ok",
+            "the whole second reply, not a join of the two"
+        );
         assert_eq!(provider.0.load(Ordering::SeqCst), 2);
     }
 }
