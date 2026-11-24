@@ -115,6 +115,34 @@ fn a_repositorys_operator_runs_in_the_sandbox_on_its_request() {
     assert_eq!(index.rejected[0].reason, "asks to be rejected");
 }
 
+/// `dir` as a path relative to the process's working directory, as a
+/// user types `--out runs/x`.
+fn relative_to_cwd(dir: &Path) -> std::path::PathBuf {
+    let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
+    let dir = dir.canonicalize().unwrap();
+    let common = cwd.ancestors().find(|a| dir.starts_with(a)).unwrap();
+    let ups = cwd.strip_prefix(common).unwrap().components().count();
+    let mut relative: std::path::PathBuf = std::iter::repeat_n("..", ups).collect();
+    relative.push(dir.strip_prefix(common).unwrap());
+    relative
+}
+
+#[test]
+fn an_operator_is_given_absolute_paths_when_the_run_is_named_relatively() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = repo();
+    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let relative = relative_to_cwd(dir.path());
+    assert!(relative.is_relative());
+    run(&repo, &relative);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("upper/a.txt/a.txt")).unwrap(),
+        "ALPHA!"
+    );
+}
+
 #[test]
 fn an_operators_parameters_and_code_are_checked_and_pinned() {
     let repo = repo();

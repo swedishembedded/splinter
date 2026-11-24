@@ -330,6 +330,10 @@ impl<'a> Factory<'a> {
         lease_secs: u64,
     ) -> Result<Self, RunError> {
         std::fs::create_dir_all(run).map_err(io(run))?;
+        // Every path the run hands out (an operator's request, a sandbox's
+        // mounts) is read from another working directory, so the run is
+        // named by its absolute path from here on.
+        let run = &std::fs::canonicalize(run).map_err(io(run))?;
         let lock_path = run.join(LOCK_FILE);
         match std::fs::read_to_string(&lock_path) {
             Ok(text) => {
