@@ -7,7 +7,7 @@
 # carries that to tasks of another kind (transfer) and keeps what it could do
 # (retention). The next generation is a fork of this run with the champion named:
 #   splinter run recipes/generation.yaml --out runs/g1
-#   (edit `champion:` below to "champion:runs/g1", and the baselines to champion)
+#   (add `champion: "champion:runs/g1"` under `models:` below, and make the baselines champion)
 #   splinter fork runs/g1 --recipe recipes/generation.yaml --out runs/g2
 schema: splinter.recipe/v2
 name: generation

@@ -2,9 +2,11 @@
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 # Written by `splinter init`; yours to change.
 # How a candidate is compared with its baseline on the tasks it is given: the same agent,
-# attempts and seeds for both, decided by a paired sign test.
+# attempts and seeds for both, decided by a paired sign test. Every pair is one attempt of
+# one task: with alpha 0.05 it takes at least 5 pairs that all favour the candidate to
+# decide, so 8 attempts of even one task can promote, and 4 never can.
 schema: splinter.evalplan/v1
 environment: environments/default.yaml
-attempts: 4
+attempts: 8
 seed: 4
 decision: { alpha: 0.05 }
