@@ -178,8 +178,13 @@ impl<'a> JobController<'a> {
             let Some(next) = self.observe(&record, now_unix)? else {
                 continue;
             };
-            if let Ok(record) = self.workspace.update_job(&record, &next) {
-                updated.push(record);
+            // Another controller moving the record first is a lost race,
+            // left to it; any other failure to record what was observed is
+            // reported, never taken for one.
+            match self.workspace.update_job(&record, &next) {
+                Ok(record) => updated.push(record),
+                Err(splinter_store::experiences::StoreError::PointerConflict { .. }) => {}
+                Err(other) => return Err(other.into()),
             }
         }
         Ok(updated)
@@ -429,9 +434,14 @@ impl<'a> JobController<'a> {
                 lease: Some(self.lease_at(now_unix)),
                 ..record.clone()
             };
-            let _ = self.workspace.update_job(&record, &next);
+            let recorded = match self.workspace.update_job(&record, &next) {
+                Ok(_) | Err(splinter_store::experiences::StoreError::PointerConflict { .. }) => {
+                    String::new()
+                }
+                Err(e) => format!(" (and its failure was not recorded: {e})"),
+            };
             OrchestratorError::Refused(format!(
-                "job {} attempt {attempt}: {error}",
+                "job {} attempt {attempt}: {error}{recorded}",
                 record.spec.as_str()
             ))
         })?;
