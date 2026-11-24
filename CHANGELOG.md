@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (a policy-gradient reward that discourages looping)
 - `dataset.project` with `objective: policy-gradient` takes `reward: { penalties_percent: {...} }`. Each attempt's verdict now also carries `loop` (the agent's loop watchdog ended it) and `repeat_after_error` (the share of calls after a failed call that repeated it), read from its files, and the named metrics lessen its reward whether or not it passed.
-=======
+### Added (a factory run in the browser, with decisions written to a review file)
+- `splinter view RUN [--reviews FILE] [--port PORT]` serves a run on the loopback interface: its stages with their state and item counts, every product's files and items, any file shown with line numbers (JSON pretty-printed). With `--reviews` each approve, reject or note on a file or an item is appended to that file as one `splinter.review/v1` JSON line (target, decision, note, reviewer, time), so a decision in the browser is a change of the repository's own review file; nothing outside the run is served. The page is compiled into the binary: nothing to install.
+
 ### Added (an operator may pin some files of a directory)
 - An external operator may list the directories of the files its `code` names, and still reads nothing there it does not pin. An interpreter importing one module of a package lists the package's directory, so an operator had to pin the whole package and every change to any module of it recomputed the stage; it can now pin exactly the modules it runs. The process sandbox takes `listable` directories (Landlock's directory-listing right alone).
 

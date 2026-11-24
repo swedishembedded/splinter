@@ -92,6 +92,7 @@ Every command takes these.
 - [splinter resume](#splinter-resume) - Continue a factory run from what it recorded
 - [splinter cancel](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
 - [splinter inspect](#splinter-inspect) - Show a factory run's products and reports, or open its trials
+- [splinter view](#splinter-view) - Open a factory run in the browser
 - [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
 - [splinter report](#splinter-report) - Print a factory run's report
 - [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
@@ -240,6 +241,7 @@ Subcommands:
 - [`resume`](#splinter-resume) - Continue a factory run from what it recorded
 - [`cancel`](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
 - [`inspect`](#splinter-inspect) - Show a factory run's products and reports, or open its trials
+- [`view`](#splinter-view) - Open a factory run in the browser
 - [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
 - [`report`](#splinter-report) - Print a factory run's report
 - [`export`](#splinter-export) - Write a factory run's products as a portable bundle
@@ -443,6 +445,23 @@ Options:
 
 - `--stage <STAGE>`: Only the stages whose key starts with this (`rollouts`, `datasets/sft`)
 - `--viewer <VIEWER>`: Open the stage's trials in a viewer instead (`harbor`)
+
+### splinter view
+
+Open a factory run in the browser: every stage's product, item and file, and decisions written to a review file (--reviews)
+
+```text
+splinter view [OPTIONS] <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The run directory.
+
+Options:
+
+- `--reviews <FILE>`: The file decisions are appended to, one JSON line each (a repository's review file); without it the view only reads.
+- `--port <PORT>`: The loopback port to serve on; any free one when 0. Default: `0`.
 
 ### splinter fork
 

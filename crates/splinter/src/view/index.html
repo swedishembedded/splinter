@@ -1,0 +1,174 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright (c) 2026 Martin Schröder <info@swedishembedded.com> -->
+<!-- splinter view: one page over a factory run's stages, products and files; decisions go to the review file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splinter view</title>
+<style>
+:root {
+  --bg: #f4f5f7; --panel: #fff; --ink: #1b1f24; --muted: #5e6672; --line: #dde1e6; --accent: #2f5fd0;
+  --accent-soft: #e6edfb; --ok: #23824d; --ok-soft: #e2f2e8; --bad: #b4372c; --bad-soft: #f9e4e1;
+  --run: #9a6a00; --run-soft: #fbf0d6; --code: #f6f7f9;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #111418; --panel: #181c21; --ink: #e3e7ec; --muted: #9aa3ae; --line: #2a3038; --accent: #7aa2ff;
+  --accent-soft: #1d2a45; --ok: #69cf96; --ok-soft: #173023; --bad: #f08a7f; --bad-soft: #3a1f1c;
+  --run: #e3b552; --run-soft: #3a2f15; --code: #14171b; color-scheme: dark } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
+header { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 16px; margin: 0; }
+header .meta { color: var(--muted); font-size: 12.5px; }
+main { display: grid; grid-template-columns: 260px 300px minmax(0, 1fr); height: calc(100vh - 50px); }
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); height: auto; } }
+section { overflow: auto; border-right: 1px solid var(--line); min-width: 0; }
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 12px 14px 6px; }
+button.row { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 6px 14px; cursor: pointer; }
+button.row:hover { background: var(--code); }
+button.row[aria-current="true"] { background: var(--accent-soft); }
+.name { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.chip { font-size: 11px; border-radius: 9px; padding: 0 7px; white-space: nowrap; align-self: center; }
+.chip.completed { background: var(--ok-soft); color: var(--ok); }
+.chip.failed { background: var(--bad-soft); color: var(--bad); }
+.chip.other { background: var(--run-soft); color: var(--run); }
+.size { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.crumbs { padding: 10px 14px; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
+.crumbs a { color: var(--accent); cursor: pointer; }
+#viewer { padding: 14px 18px; }
+pre { margin: 0; background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 10px 0; overflow: auto; font: 12px/1.55 var(--mono); }
+pre span { display: block; padding: 0 12px; white-space: pre; }
+pre i { font-style: normal; color: var(--muted); display: inline-block; width: 5ch; user-select: none; }
+.decide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.decide button { font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 5px; padding: 3px 10px; cursor: pointer; }
+.decide button.approve { border-color: var(--ok); color: var(--ok); }
+.decide button.reject { border-color: var(--bad); color: var(--bad); }
+.decide input { font: inherit; font-size: 12.5px; flex: 1 1 160px; min-width: 0; border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; background: var(--panel); color: var(--ink); }
+.history { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+.history b.approved { color: var(--ok); } .history b.rejected { color: var(--bad); }
+.empty { color: var(--muted); padding: 14px; }
+.error { color: var(--bad); padding: 10px 14px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header><h1 id="title">Splinter view</h1><span class="meta" id="meta"></span></header>
+<main>
+  <section aria-label="Stages"><h2>Stages</h2><div id="stages"></div></section>
+  <section aria-label="Product"><div class="crumbs" id="crumbs"></div><div id="entries"></div></section>
+  <section aria-label="File" id="viewer"><div class="empty">Choose a stage, then a file or an item.</div></section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const api = async (route) => { const r = await fetch(route); const v = await r.json(); if (!r.ok) throw new Error(v.error || r.status); return v; };
+const state = { stage: null, path: "", decisions: [], reviews: null };
+const size = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? (n / 1024).toFixed(1) + " kB" : n + " B";
+
+async function loadRun() {
+  try {
+    const run = await api("/api/run");
+    $("#title").textContent = run.recipe ? `${run.recipe} · ${run.run}` : run.run;
+    $("#meta").textContent = run.reviews ? `decisions go to ${run.reviews}` : "read only (start with --reviews FILE to decide)";
+    state.reviews = run.reviews;
+    const box = $("#stages"); box.replaceChildren();
+    // A foreach stage's items (`_items/<stage>/<item>`) are counted on their stage; recipe inputs are not stages.
+    const items = {};
+    for (const s of run.stages) {
+      const m = s.key.match(/^_items\/([^/]+)\//);
+      if (m) { const c = items[m[1]] ||= { done: 0, all: 0 }; c.all += 1; if (s.state === "completed") c.done += 1; }
+    }
+    for (const s of run.stages.filter((s) => !s.key.startsWith("_"))) {
+      const b = el("button", "row"); b.type = "button"; b.setAttribute("aria-current", String(s.key === state.stage));
+      const label = items[s.key] ? `${s.state} · ${items[s.key].done}/${items[s.key].all} items` : s.state;
+      b.append(el("span", "name", s.key), el("span", "chip " + (["completed", "failed"].includes(s.state) ? s.state : "other"), label));
+      if (s.error) b.title = s.error;
+      b.addEventListener("click", () => { state.stage = s.key; open(s.key); loadRun(); });
+      box.append(b);
+    }
+  } catch (e) { $("#stages").replaceChildren(el("div", "error", `The run cannot be read: ${e.message}`)); }
+}
+
+async function loadDecisions() { try { state.decisions = (await api("/api/reviews")).decisions; } catch { state.decisions = []; } }
+
+async function open(path) {
+  state.path = path;
+  const crumbs = $("#crumbs"); crumbs.replaceChildren();
+  path.split("/").reduce((acc, part, i, all) => {
+    const next = acc ? acc + "/" + part : part;
+    const a = el("a", null, part); a.addEventListener("click", () => open(next));
+    crumbs.append(a); if (i < all.length - 1) crumbs.append(document.createTextNode(" / "));
+    return next;
+  }, "");
+  try {
+    const listing = await api("/api/list?path=" + encodeURIComponent(path));
+    const box = $("#entries"); box.replaceChildren();
+    if (listing.items) box.append(el("h2", null, `${listing.items.items.length} items${listing.items.rejected?.length ? `, ${listing.items.rejected.length} rejected` : ""}`));
+    for (const entry of listing.entries) {
+      const b = el("button", "row"); b.type = "button";
+      b.append(el("span", "name", entry.dir ? entry.name + "/" : entry.name), el("span", "size", entry.dir ? "" : size(entry.size)));
+      b.addEventListener("click", () => entry.dir ? open(`${path}/${entry.name}`) : show(`${path}/${entry.name}`));
+      box.append(b);
+    }
+    if (!listing.entries.length) box.append(el("div", "empty", "Empty."));
+    await showDirectory(path, listing);
+  } catch (e) { $("#entries").replaceChildren(el("div", "error", e.message)); }
+}
+
+async function showDirectory(path, listing) {
+  const v = $("#viewer"); v.replaceChildren(); await decideBar(v, path);
+  const preferred = ["report.md", "output.json", "grounded.json", "claims.json", "facts.json", "unit.md", "instruction.md", "manifest.json"];
+  const first = preferred.find((n) => listing.entries.some((e) => e.name === n));
+  if (first) await show(`${path}/${first}`, true); else v.append(el("div", "empty", "A directory: choose a file."));
+}
+
+async function show(path, keepBar) {
+  const v = $("#viewer");
+  if (!keepBar) { v.replaceChildren(); await decideBar(v, path); }
+  try {
+    const file = await api("/api/file?path=" + encodeURIComponent(path));
+    v.append(el("h2", null, `${path} · ${size(file.size)}${file.truncated ? " (first 2 MB)" : ""}`));
+    if (file.binary) { v.append(el("div", "empty", "A binary file.")); return; }
+    let text = file.text;
+    if (path.endsWith(".json")) { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch {} }
+    const pre = el("pre");
+    text.split("\n").forEach((line, i) => { const s = el("span"); s.append(el("i", null, String(i + 1)), document.createTextNode(line)); pre.append(s); });
+    v.append(pre);
+  } catch (e) { v.append(el("div", "error", e.message)); }
+}
+
+async function decideBar(parent, path) {
+  await loadDecisions();
+  const mine = state.decisions.filter((d) => d.target === path);
+  if (mine.length) {
+    const h = el("div", "history");
+    for (const d of mine) { const line = el("div"); line.append(el("b", d.decision, d.decision), document.createTextNode(` ${d.reviewer ? "by " + d.reviewer + " " : ""}${d.note ? "· " + d.note : ""} · ${new Date(d.at * 1000).toLocaleString()}`)); h.append(line); }
+    parent.append(h);
+  }
+  if (!state.reviews) return;
+  const bar = el("div", "decide");
+  const note = el("input"); note.id = "note"; note.placeholder = "Why (saved with the decision)";
+  const who = el("input"); who.id = "reviewer"; who.placeholder = "Your name"; who.style.flex = "0 1 140px";
+  try { who.value = localStorage.getItem("reviewer") || ""; } catch {}
+  for (const [decision, label, cls] of [["approved", "Approve", "approve"], ["rejected", "Reject", "reject"], ["note", "Note", ""]]) {
+    const b = el("button", cls, label); b.type = "button";
+    b.addEventListener("click", async () => {
+      try { localStorage.setItem("reviewer", who.value); } catch {}
+      const r = await fetch("/api/review", { method: "POST", body: JSON.stringify({ target: path, decision, note: note.value, reviewer: who.value }) });
+      const v = await r.json();
+      if (!r.ok) { bar.append(el("span", "error", v.error)); return; }
+      path.endsWith(".json") || path.endsWith(".md") ? show(path) : open(path);
+    });
+    bar.append(b);
+  }
+  bar.append(note, who);
+  parent.append(bar);
+}
+
+loadRun();
+</script>
+</body>
+</html>

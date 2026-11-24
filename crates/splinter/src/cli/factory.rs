@@ -66,6 +66,21 @@ pub struct InspectArgs {
     pub viewer: Option<String>,
 }
 
+/// `view`.
+#[derive(Debug, Args)]
+pub struct ViewArgs {
+    /// The run directory.
+    #[arg(value_name = "RUN")]
+    pub run: PathBuf,
+    /// The file decisions are appended to, one JSON line each (a repository's review file); without it
+    /// the view only reads.
+    #[arg(long, value_name = "FILE")]
+    pub reviews: Option<PathBuf>,
+    /// The loopback port to serve on; any free one when 0.
+    #[arg(long, value_name = "PORT", default_value_t = 0)]
+    pub port: u16,
+}
+
 /// `fork`.
 #[derive(Debug, Args)]
 pub struct ForkArgs {

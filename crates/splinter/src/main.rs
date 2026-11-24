@@ -60,6 +60,7 @@ mod state_output;
 mod tasks_output;
 mod tasks_session;
 mod train_output;
+mod view_session;
 
 use std::process::ExitCode;
 

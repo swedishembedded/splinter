@@ -84,6 +84,9 @@ pub enum Command {
     Cancel(RunDirArgs),
     /// Show a factory run's products and reports, or open its trials.
     Inspect(InspectArgs),
+    /// Open a factory run in the browser: every stage's product, item and file, and decisions written to
+    /// a review file (--reviews)
+    View(ViewArgs),
     /// Start a factory run on a changed recipe, reusing the products of an
     /// earlier run that the change leaves unchanged.
     Fork(ForkArgs),
@@ -550,7 +553,7 @@ pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerAr
 pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
     ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
-    RunDirArgs,
+    RunDirArgs, ViewArgs,
 };
 pub use global::Global;
 pub use goal::GoalCommand;

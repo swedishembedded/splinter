@@ -55,6 +55,7 @@ pub fn route(
         Command::Resume(args) => resume(config, json, &args.run),
         Command::Cancel(args) => cancel(&args.run),
         Command::Inspect(args) => inspect(config, &args),
+        Command::View(args) => crate::view_session::view(&args),
         Command::Fork(args) => fork(config, json, &args),
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),

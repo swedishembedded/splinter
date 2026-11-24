@@ -258,6 +258,7 @@ impl Session {
             | Command::Resume(_)
             | Command::Cancel(_)
             | Command::Inspect(_)
+            | Command::View(_)
             | Command::Fork(_)
             | Command::Report(_)
             | Command::Export(_)
