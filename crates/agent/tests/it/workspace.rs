@@ -782,3 +782,61 @@ async fn an_answer_file_outside_the_tree_is_refused() {
         assert!(refused.is_err(), "{path:?} is refused");
     }
 }
+
+fn writes_one(req: &CompletionRequest) -> Vec<ResponseEvent> {
+    match tool_results(req) {
+        0 => call(
+            "c0",
+            "write_file",
+            serde_json::json!({"path": "app.txt", "text": "one\n", "append": false}),
+        ),
+        _ => text("done"),
+    }
+}
+
+fn writes_two(req: &CompletionRequest) -> Vec<ResponseEvent> {
+    match tool_results(req) {
+        0 => call(
+            "c0",
+            "write_file",
+            serde_json::json!({"path": "app.txt", "text": "two\n", "append": false}),
+        ),
+        _ => text("done"),
+    }
+}
+
+/// Two trials of one task run at once each work in a fresh copy of its
+/// snapshot: each patch is that trial's own edit against the snapshot, and
+/// neither sees the other's.
+#[tokio::test]
+async fn trials_of_one_task_run_at_once_each_change_only_their_own_tree() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let protocol = protocol(0);
+    let (first, second) = tokio::join!(
+        solve(
+            &fixture,
+            &environment,
+            &[],
+            Scripted::new(writes_one),
+            &protocol
+        ),
+        solve(
+            &fixture,
+            &environment,
+            &[],
+            Scripted::new(writes_two),
+            &protocol
+        ),
+    );
+    let diff = |solved: WorkspaceSolution| String::from_utf8(solved.patch.diff).unwrap();
+    let (one, two) = (diff(first.unwrap()), diff(second.unwrap()));
+    assert!(
+        one.contains("-broken") && one.contains("+one") && !one.contains("two"),
+        "{one}"
+    );
+    assert!(
+        two.contains("-broken") && two.contains("+two") && !two.contains("one"),
+        "{two}"
+    );
+}

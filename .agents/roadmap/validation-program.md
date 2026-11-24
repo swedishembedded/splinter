@@ -204,9 +204,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   alone, and such a claim is now refused.
 - scripted agent transcripts (5A, in part): an audit mapped the twelve scenarios to existing specs (two covered,
   ten in part); several calls recorded once each and malformed arguments failing openly are now specified. Still
-  without a spec: a tool's own timeout, a partial trajectory kept after an agent timeout or crash, two concurrent
-  trials of one task in distinct trees, a long transcript through the agent, subagent trace identities, and
-  re-run tool calls having no duplicate effect.
+  without a spec after that: a run its deadline ends kept as a timeout with its partial trajectory, two concurrent
+  trials of one task each in their own tree, and an eighty-call run kept whole are now specified too. Still without
+  one: a tool's own timeout, an agent process that crashes (the worker's), subagent trace identities, and re-run
+  tool calls of a continued session having no duplicate effect.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.

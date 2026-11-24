@@ -540,3 +540,90 @@ async fn a_call_with_arguments_that_do_not_parse_fails_openly_and_changes_nothin
         .any(|e| matches!(e, SessionEvent::ToolCallFinished { is_error: true, .. }));
     assert!(failed, "the call is reported as failed");
 }
+
+/// A model that makes one call, then never answers in time.
+struct Stalling;
+
+#[async_trait::async_trait]
+impl ModelProvider for Stalling {
+    fn name(&self) -> &str {
+        "scripted"
+    }
+    fn model_name(&self) -> &str {
+        "stalling-1"
+    }
+    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let events = if has_tool_result(&req) {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            text("too late")
+        } else {
+            call(
+                "c1",
+                "write_file",
+                serde_json::json!({"path": "half.txt", "text": "half", "append": false}),
+            )
+        };
+        Ok(Box::pin(futures::stream::iter(
+            events.into_iter().map(Ok).collect::<Vec<_>>(),
+        )))
+    }
+}
+
+/// A run its deadline ends is a timeout, not a success or an error, and keeps
+/// what it did before: the call it made, with its result, is in the
+/// trajectory, and its effect is in the tree, for the grader to judge.
+#[tokio::test]
+async fn a_run_its_deadline_ends_is_a_timeout_that_keeps_its_partial_trajectory() {
+    let dir = tempfile::tempdir().unwrap();
+    let short = WorkOptions::new(SolveOptions::new(Duration::from_secs(2)));
+    let mut worker = Worker::start(dir.path(), Arc::new(Stalling), short).unwrap();
+    let report = worker.send("write half a file").await.unwrap();
+
+    assert_eq!(report.solution.conclusion, RunConclusion::Timeout);
+    assert_eq!(
+        calls_and_results(&report.solution.trajectory),
+        [("c1".into(), 1)]
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("half.txt")).unwrap(),
+        "half"
+    );
+    assert_ne!(report.solution.final_output.as_deref(), Some("too late"));
+}
+
+const LONG_RUN_CALLS: usize = 80;
+
+fn writes_many(req: &CompletionRequest) -> Vec<ResponseEvent> {
+    let done = tool_results(req);
+    if done < LONG_RUN_CALLS {
+        call(
+            &format!("c{done}"),
+            "write_file",
+            serde_json::json!({"path": format!("f{done}.txt"), "text": format!("{done}"), "append": false}),
+        )
+    } else {
+        text("wrote them all")
+    }
+}
+
+/// A long run keeps all of itself: every one of its many calls is in the
+/// trajectory once, in order, with its one result, and each took effect;
+/// nothing is dropped to keep the record short.
+#[tokio::test]
+async fn a_long_run_keeps_every_call_and_result_in_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut worker = Worker::start(dir.path(), Scripted::new(writes_many), options()).unwrap();
+    let report = worker.send("write many files").await.unwrap();
+
+    assert_eq!(report.solution.conclusion, RunConclusion::Success);
+    let expected: Vec<(String, usize)> =
+        (0..LONG_RUN_CALLS).map(|n| (format!("c{n}"), 1)).collect();
+    assert_eq!(calls_and_results(&report.solution.trajectory), expected);
+    assert_eq!(report.dropped_events, 0);
+    for n in 0..LONG_RUN_CALLS {
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(format!("f{n}.txt"))).unwrap(),
+            n.to_string()
+        );
+    }
+}
