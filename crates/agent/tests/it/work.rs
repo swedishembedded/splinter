@@ -433,3 +433,110 @@ async fn a_worker_asked_for_the_policy_trace_keeps_the_sampled_tokens_in_its_tra
     assert_eq!(metrics["logprobs"], serde_json::json!([-0.5, -0.25]));
     assert_eq!(metrics["prompt_token_ids"], serde_json::json!([1, 2, 3]));
 }
+
+/// The calls of a run and their results as the trajectory records them: each
+/// call's id with how many results name it.
+fn calls_and_results(trajectory: &atif::Trajectory) -> Vec<(String, usize)> {
+    let steps = &trajectory.steps;
+    steps
+        .iter()
+        .flat_map(|s| s.tool_calls.iter().flatten())
+        .map(|c| {
+            let results = steps
+                .iter()
+                .filter_map(|s| s.observation.as_ref())
+                .flat_map(|o| o.results.iter())
+                .filter(|r| r.source_call_id.as_deref() == Some(c.tool_call_id.as_str()))
+                .count();
+            (c.tool_call_id.clone(), results)
+        })
+        .collect()
+}
+
+/// Two calls in one turn and a third after them: the trajectory records
+/// every call once, each with exactly one result that names it, in the order
+/// they were made, and every call took effect.
+#[tokio::test]
+async fn several_calls_are_each_recorded_once_with_the_one_result_that_answers_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let model = Scripted::new(|req| match tool_results(req) {
+        0 => vec![
+            ResponseEvent::ToolCall {
+                index: 0,
+                id: "c1".into(),
+                name: "write_file".into(),
+                arguments: serde_json::json!({"path": "a.txt", "text": "a", "append": false})
+                    .to_string(),
+            },
+            ResponseEvent::ToolCall {
+                index: 1,
+                id: "c2".into(),
+                name: "write_file".into(),
+                arguments: serde_json::json!({"path": "b.txt", "text": "b", "append": false})
+                    .to_string(),
+            },
+            ResponseEvent::Done,
+        ],
+        2 => call(
+            "c3",
+            "write_file",
+            serde_json::json!({"path": "c.txt", "text": "c", "append": false}),
+        ),
+        _ => text("wrote all three"),
+    });
+    let mut worker = Worker::start(dir.path(), model, options()).unwrap();
+    let report = worker.send("write three files").await.unwrap();
+
+    assert_eq!(report.solution.conclusion, RunConclusion::Success);
+    assert_eq!(report.tool_calls, 3);
+    assert_eq!(
+        calls_and_results(&report.solution.trajectory),
+        [("c1".into(), 1), ("c2".into(), 1), ("c3".into(), 1)]
+    );
+    for (file, body) in [("a.txt", "a"), ("b.txt", "b"), ("c.txt", "c")] {
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(file)).unwrap(),
+            body
+        );
+    }
+}
+
+/// A call whose arguments are not JSON fails, and says so: its one result is
+/// an error the model is told of, no file is written, and no result is made
+/// up for it.
+#[tokio::test]
+async fn a_call_with_arguments_that_do_not_parse_fails_openly_and_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let model = Scripted::new(|req| {
+        if has_tool_result(req) {
+            text("that failed")
+        } else {
+            vec![
+                ResponseEvent::ToolCall {
+                    index: 0,
+                    id: "c1".into(),
+                    name: "write_file".into(),
+                    arguments: "{\"path\": \"a.txt\", \"text\": ".into(),
+                },
+                ResponseEvent::Done,
+            ]
+        }
+    });
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let mut observed = options();
+    observed.observer = Some(observed_into(&log));
+    let mut worker = Worker::start(dir.path(), model, observed).unwrap();
+    let report = worker.send("write a file").await.unwrap();
+
+    assert_eq!(
+        calls_and_results(&report.solution.trajectory),
+        [("c1".into(), 1)]
+    );
+    assert!(!dir.path().join("a.txt").exists(), "nothing was written");
+    let failed = log
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|e| matches!(e, SessionEvent::ToolCallFinished { is_error: true, .. }));
+    assert!(failed, "the call is reported as failed");
+}

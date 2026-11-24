@@ -202,6 +202,11 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - claims and evidence (3B, G-NEW-17 found): the existing specs cover verbatim quotes, the agent's words, missing
   terms, supersession and reinforcement; the planted-instruction case found that a fact could rest on tool output
   alone, and such a claim is now refused.
+- scripted agent transcripts (5A, in part): an audit mapped the twelve scenarios to existing specs (two covered,
+  ten in part); several calls recorded once each and malformed arguments failing openly are now specified. Still
+  without a spec: a tool's own timeout, a partial trajectory kept after an agent timeout or crash, two concurrent
+  trials of one task in distinct trees, a long transcript through the agent, subagent trace identities, and
+  re-run tool calls having no duplicate effect.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
@@ -215,5 +220,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   than one live path (G-NEW-14, a refactor of live callers); the preference, feedback, distill and retrieval
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
-  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds needing a run's runtime, sources or judge (4A), the rest of the scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
