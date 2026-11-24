@@ -305,6 +305,28 @@ fn a_panicking_item_fails_its_stage_and_never_hangs_the_controller() {
     );
 }
 
+/// The first failed item stops the fan-out from starting more: the items
+/// already running finish and are committed, and the stage fails naming it.
+#[test]
+fn the_first_failed_item_starts_no_further_item_and_the_stage_fails_with_it() {
+    let repo = Repo::new();
+    books(&repo);
+    let log = Arc::new(Log::default());
+    log.fail_once.lock().unwrap().push("b.txt".into());
+    let one_at_a_time = RECIPE.replace("concurrency: 2", "concurrency: 1");
+    let resolved = resolved(&repo, &one_at_a_time, &log);
+    let dir = tempfile::tempdir().unwrap();
+    let error = run(&resolved, dir.path()).unwrap_err().to_string();
+    assert!(error.contains("b.txt"), "{error}");
+    let calls = log.calls.lock().unwrap().clone();
+    assert_eq!(calls.get("a.txt"), Some(&1));
+    assert_eq!(calls.get("b.txt"), Some(&1));
+    assert!(
+        !calls.contains_key("c.txt") && !calls.contains_key("d.txt"),
+        "an item started after the failure: {calls:?}"
+    );
+}
+
 /// A stage that outlasts one lease keeps it: the controller renews it while
 /// it lives, so a second controller arriving mid-stage is refused rather than
 /// taking the lapsed lease and computing the same stage again.

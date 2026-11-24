@@ -431,9 +431,13 @@ gaps:
     in core); different failure/ordering semantics, tested separately.
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: 'two bounded fan-outs (factory''s scoped threads, core''s fan_out): one implementation is a Phase 16 cleanup;
-    the factory''s now handles a panicking item'
+  status: rejected
+  resolution: 'two contracts, not one implementation twice: splinter_core::concurrency::fan_out_blocking is a pure ordered
+    map (every item runs, results in item order, a panic propagates), used by verifiers and exams; the factory run_items
+    is a transactional scheduler over the product store (an item begun and reused or committed on the coordinating thread,
+    cancellation checked between starts, the first failure starts no further item, a panic is a failed item). Folding the
+    scheduler into the map would force store semantics into core; each contract is specified: core concurrency tests, and
+    foreach:: in the factory, whose stop on the first failure is now specified and pinned by mutant fan-out-runs-past-a-failure'
 - id: G-FS-08
   source_id: F-08
   where: crates/store/src/stage_ledger.rs vs crates/store/src/factory/{products,runstate} ; used by crates/pipelines/src/served/*
