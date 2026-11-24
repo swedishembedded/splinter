@@ -395,6 +395,10 @@ fn the_child_sees_only_the_environment_it_is_given() {
     let mut seen: Vec<&str> = stdout
         .lines()
         .filter_map(|l| l.split_once('=').map(|(k, _)| k))
+        // The sandbox's own tag of the run, where it finds the run's
+        // processes without a pid namespace: its bookkeeping, not the
+        // parent's environment.
+        .filter(|name| *name != splinter_sandbox::tagged::TOKEN_VAR)
         .collect();
     seen.sort_unstable();
     // Nothing of the test process's own environment, and nothing outside
