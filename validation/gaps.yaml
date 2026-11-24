@@ -1,0 +1,894 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The gap register: every suspected defect, stale document, duplicate or silent fallback the
+# inventory found. status: unverified -> confirmed | rejected (with reason) -> fixed (with commit).
+schema: splinter.validation-gaps/v1
+gaps:
+- id: G-DC-01
+  source_id: F01
+  where: crates/core/src/factory/trial.rs:599
+  what: '`(400..499).contains(&s)` is an exclusive range, so HTTP 499 (and any non-4xx/5xx/2xx such as 3xx) never counts
+    as a rejected request. A trial whose every request got 499 (client closed request) or 3xx is not classified ModelError(endpoint_rejected)
+    and falls through to rule 7-9, possibly graded as the agent''s failure.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-02
+  source_id: F02
+  where: crates/core/src/factory/trial.rs:687
+  what: 'metrics() returns an empty map as soon as ONE named metric is out of [0,1]; non-number metrics are skipped with
+    `continue`. Silent total loss of shaping metrics: downstream shaped reward then errors ''records no metric'' (loud)
+    or, with no shaping configured, produces a Grade with no metrics and no diagnostic that a metric was malformed.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-03
+  source_id: F03
+  where: crates/core/src/factory/trial.rs:371
+  what: 'reward_of accepts the sole entry of the rewards map whatever its name when the key ''reward'' is absent. A verifier
+    that emits only an auxiliary metric (e.g. {''functional_correctness'': 1.0}) is graded as if it were the task reward;
+    passed=true if it is 1.0.'
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-DC-04
+  source_id: F04
+  where: crates/data/src/views/policy_gradient.rs:357 vs crates/core/src/usage.rs:71 and policy_gradient.rs:525
+  what: 'The over-length penalty reads completion tokens from evidence /tokens/completion first, then /score/usage/completion_tokens,
+    then trajectory totals; TrialReport.completion_tokens/cost come from TokenUsage::of_trial which prefers /score/usage
+    over /tokens. Two precedence orders for the same quantity: when both are present and differ, the penalty applied to
+    the reward and the token count reported in the manifest disagree, and the report cannot be used to audit the reward.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-05
+  source_id: F05
+  where: crates/core/src/usage.rs:42-44,61
+  what: from_score_usage/from_trial_tokens default a missing completion, prompt or cached count to 0. A usage record with
+    only prompt_tokens is reported as 0 completion tokens (and cost = prompt) instead of unknown; TrialReport.completion_tokens
+    then shows 0 for a trial whose completion count was never measured.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-DC-06
+  source_id: F06
+  where: crates/data/src/views/rewards.rs:140
+  what: Overlong has pub fields and derives Deserialize; penalty() computes `self.max_tokens - self.buffer` unchecked, while
+    the invariant buffer<=max_tokens is enforced only by Overlong::new. A manifest/config deserialised with buffer > max_tokens
+    underflows u64 (panic in debug, huge soft limit in release => no penalty ever applied). Likewise cost() (usage.rs:87)
+    underflows if cached > prompt via Deserialize.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-07
+  source_id: F07
+  where: crates/data/src/views/sft_step.rs:314 and crates/data/src/views/transition.rs:263
+  what: admit_unverified() and exposed() are byte-identical definitions of 'exposed' (any Verdict Fail at Strength::Constraint).
+    Duplicate sources of truth for the exposure rule; and the rule conflates the exposure audit with ANY constraint-strength
+    failure (Strength::Constraint is documented as a general 'rule the work must not break', e.g. invented content). validation.md
+    maps 'exposure exclusion' without a mutant.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-DC-08
+  source_id: F08
+  where: crates/data/src/conversation_pg.rs:91 vs crates/data/src/views/policy_gradient.rs:497
+  what: 'Second, divergent GroupKind classifier: AllPass iff all rewards >=1.0; AllFail iff no signal and all <=0.0; everything
+    else (including a no-signal group of equal 0.5 rewards) is labelled Graded. A group with identical non-extreme rewards
+    is reported as Graded (signal=false) here but AllPass/AllFail in PolicyGradient; campaign counts groups by kind so the
+    two producers disagree.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-09
+  source_id: F09
+  where: crates/data/src/views/policy_gradient.rs:497
+  what: kind = AllPass if any trial in a no-signal group passed. With an over-length penalty or shaped rewards a group can
+    contain a pass and a fail with equal reward (no signal) and is labelled AllPass although a fail exists; AllFail/AllPass
+    drives self-distillation (Distill::Cliff).
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-10
+  source_id: F10
+  where: crates/data/src/views/policy_gradient.rs:316-326 and crates/data/src/views/attempts.rs:96-102
+  what: 'Group/trial identity derivation is implemented twice and differs: PolicyGradient requires /trial AND /task/id together
+    (XOR => NoRollout); attempts::verified accepts either independently; policy falls back from /model to provenance.policy
+    to provenance.solver; trial falls back to ''attempt-<n>''. The doc claims preference/feedback and policy-gradient name
+    the same groups; they diverge for partial evidence. Fallback to solver silently merges different models under one solver
+    label; ''attempt-N'' names collide across separate runs of one task/policy, merging unrelated trials into one trial
+    (reward mismatch error or silent merge).'
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-DC-11
+  source_id: F11
+  where: crates/data/src/views/policy_gradient.rs:286-340
+  what: rollout() picks the deciding verdict's evidence; when the deciding verdict is a Constraint-strength Fail (exposure/audit),
+    its evidence carries no /trial,/task,/metrics. A trial that passed executably but failed a constraint audit becomes
+    NoRollout (or, under shaped reward with a metrics requirement, a hard ViewError aborting the whole projection) instead
+    of a fail-reward member of its group; a sealed/exposed attempt thus vanishes from the baseline silently.
+  severity: high
+  confidence: medium
+  status: unverified
+- id: G-DC-12
+  source_id: F12
+  where: crates/data/src/views/rehearsal.rs:46
+  what: Rehearsal::record excludes only decisions that are Fail; undecided (no verdict, conflicting top verdicts, infrastructure
+    failure) is admitted. Answers from trials whose verdicts conflict, or whose run failed on infrastructure, are replayed
+    as 'the model's own good answers' (ungraded treated as acceptable). The view has no test in crates/data.
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-13
+  source_id: F13
+  where: crates/data/src/wire.rs:231
+  what: episode_lines silently drops records whose tool-call arguments are not JSON objects (`if renderable(&record)`),
+    with no counter or error. Training-data loss without accounting; every other view counts exclusions per reason.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-DC-14
+  source_id: F14
+  where: crates/data/src/lib.rs:384,456 (Projection::with_system_prompt, thinned_to) used from crates/pipelines/src/datasets.rs:412-415
+  what: with_system_prompt overwrites the first system message content on Rewarded/Chat records but does not clear or re-check
+    outcome.sampled prompt_token_ids; thinned_to/thinned_to_tokens/within_block drop arbitrary records of a policy-gradient
+    projection. Exact sampled ids were generated under the original system prompt; rewriting the text leaves ids that no
+    longer match the rendered context (brain refuses or trains on mismatched ratios). Thinning drops records (even all records
+    of a trial or its baseline_only record) without re-establishing group baselines.
+  severity: high
+  confidence: medium
+  status: unverified
+- id: G-DC-15
+  source_id: F15
+  where: crates/data/src/sampled.rs:100-131
+  what: 'trace_of validates counts and id range only: logprobs are not checked finite or <=0, prompt_token_ids may be empty,
+    completion ids are not checked to end with the end-of-turn marker (doc says ''the end-of-turn marker included''), f64->f32
+    truncation unchecked. Importance ratios rest on these numbers; a NaN/+inf/positive logprob or truncated generation would
+    be written as ''exact'' sampled tokens.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-16
+  source_id: F16
+  where: crates/data/src/holdout.rs:406 and :384-392
+  what: record_membership parses side with `.ok()` (unknown side string => free) and treats a record that is not valid JSON
+    as an ungrouped, examinable sample; held_out_flags lets an explicit side win over the group's fixed side. Typos in a
+    producer's side field or a corrupt line silently become free samples and may split a group across train/held-out; no
+    error or count.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-DC-17
+  source_id: F17
+  where: crates/data/src/overlap.rs:58-70
+  what: content_overlaps compares only records with >= min_features features; shorter records are never compared; the leakage
+    gate therefore fails open for short records and verify_no_overlap returns Ok. Short test records that duplicate training
+    records are not reported; no counter of 'too small to compare' exposed to the caller (test records_in_the_same_part_may_repeat...
+    asserts the behaviour but nothing surfaces it in the manifest).
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-18
+  source_id: F18
+  where: crates/data/src/dataset.rs:523-532
+  what: place_dataset renames the dataset into place and only then writes the manifest with std::fs::write (non-atomic);
+    manifest text goes through from_utf8_lossy. A crash between the two leaves a dataset file with no (or truncated) manifest;
+    DatasetStore keys by manifest digest so it is unaffected, but a standalone write_dataset path is left inconsistent.
+    Also no fsync.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-19
+  source_id: F19
+  where: crates/core/src/digest.rs:199
+  what: canonical_json goes through serde_json::to_value, which serialises NaN/inf f64 as null. Two distinct values (a NaN
+    reward and None) hash to the same content address; canonical form is also not RFC 8785 (key order by UTF-8 bytes, not
+    UTF-16; ryu float spelling) although docs call it canonical.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-DC-20
+  source_id: F20
+  where: crates/data/src/curation.rs:185-215
+  what: Pass curation distinct-calls keys on the call list only; passes with no tool calls (pure answers) all have the empty
+    call list and collapse to a single pass per task regardless of answer text; 'per action' uses tool-call count (parallel
+    calls count separately), not agent steps. Closed-book tasks lose all but one demonstration per task when --distinct-calls
+    is used; behaviour is consistent with the doc wording but surprising and untested.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-21
+  source_id: F21
+  where: crates/data/src/trajectory.rs:194
+  what: packed_record picks tools = max action.tools rather than the last action's tool set. Equivalent only while tool
+    sets are numbered by first appearance; with a set reused after a different later set, the record carries a set that
+    the last action was not offered. (rendering.rs rejects mixed sets for packed, mitigating.)
+  severity: low
+  confidence: low
+  status: unverified
+- id: G-DC-22
+  source_id: F22
+  where: crates/core/src/tool_calls.rs:84-107 and crates/data/src/trajectory.rs:413
+  what: 'Result-to-call pairing is implemented twice (outputs_by_call with positional/whole-step fallbacks; calls_asked
+    id-only). Duplicate logic: ''repeated action'' detection (data) and diagnosis/repository-history (core) can attribute
+    different outputs to the same call; core fallback silently assigns the whole step output to every call.'
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-23
+  source_id: F23
+  where: crates/core/src/factory/execution.rs:309
+  what: credential_like is a substring test on KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL of env var names. Misses AUTH, BEARER,
+    PASSWD, COOKIE, DSN names and any secret under an innocuous name; false positives (MONKEY). Only literal env values
+    are checked, never file contents or system_prompt files.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-DC-24
+  source_id: F24
+  where: docs/contributing/validation.md rows 'Verified-only admission, exposure exclusion' and 'Held-out splits'; scripts/conformance/mutants.tsv
+  what: Mutants column is empty for admission, exposure, held-out splits, and every data view other than rewards/PG/mask/curation;
+    no row exists for dedup/overlap, preference, feedback, serialisation (generic-messages-v2), digests, factory classifier
+    or the core crate at all (mutants.tsv has no splinter-core entries). The doc says it maps 'every algorithm Splinter
+    owns'; large parts of crates/data and all of crates/core are unmapped, and several rows are SPECIFIED only (tests against
+    own implementation, hand-built fixtures).
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-DC-25
+  source_id: F25
+  where: docs/contributing/validation.md row 'Held-out splits' vs crates/data/src/holdout.rs
+  what: The doc says 'a group (task, family) is held out whole'; the code takes whole groups but also grows the held-out
+    set to 8 units up to 1/4 of samples and refuses to hold out anything when every group exceeds half; records with fixed
+    sides override the group rule. Spec text is narrower than the implemented rule; none of the extra clauses is in the
+    doc.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-DC-26
+  source_id: F26
+  where: crates/data/src/views/policy_gradient.rs:300 (rollout reward check) and :430
+  what: Reward consistency across a trial's conversations compares with absolute f64::EPSILON (2.2e-16). Rewards of order
+    1 that differ by float noise from recomputation order (shaped sums) raise ViewError; conversely differences below 1e-16
+    are ignored. Low practical risk but not stated.
+  severity: low
+  confidence: low
+  status: unverified
+- id: G-DC-27
+  source_id: F27
+  where: crates/data/src/views/sft_step.rs:~196 (project_entry any_good path)
+  what: A failed or unverified experience with any Good step label is admitted for the default control; Good-labelled actions
+    train. docs/limitations and validation.md say sft admits only experiences decided pass (step labels aside); tests cover
+    it, but the exception means failed attempts feed supervised training, relying on step-label quality that has no oracle.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-DC-28
+  source_id: F28
+  where: crates/data/src/request_log.rs:44-76
+  what: read_request_log pairs responses to requests by seq; a request without seq or without a matching response yields
+    call None silently, a duplicate seq overwrites the earlier response, requests are kept in file order not seq order.
+    Dropped or misattributed model calls change which conversation is rendered; module has no unit tests.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-DC-29
+  source_id: F29
+  where: crates/data/src/views/policy_gradient.rs:355-380 completion_tokens fallback
+  what: Final fallback sums completion tokens over agent steps only if every step recorded one; otherwise None, and with
+    an Overlong shape the whole projection errors. Strict (good) but untested for the trajectory-sum branch; the middle
+    branch uses trajectory.final_metrics.total_completion_tokens which may include non-sampled/compacted turns.
+  severity: low
+  confidence: low
+  status: unverified
+- id: G-DC-30
+  source_id: F30
+  where: crates/data/src/lib.rs:Objective::line_format and views Reward/Contrastive
+  what: 'Objectives Reward and Contrastive are written in Splinter''s export format that no trainer reads. Dead-end outputs:
+    OutcomeView and Retrieval datasets have no downstream consumer in brain; candidates for ablation or documentation.'
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-FS-01
+  source_id: F-01
+  where: crates/factory/src/run/compute.rs:387,427,440
+  what: run_items keeps `done` (the Sender) alive in the scope closure; if an executor panics inside a scope.spawn worker
+    the result is never sent and `results.recv()` blocks forever (recv only errors when all senders drop, but the outer
+    `done` lives). A panicking operation (e.g. external/agent op) hangs the controller while holding the lease instead of
+    failing the stage. The `else { return Ok(()) }` arm after recv is effectively unreachable. Needs catch_unwind or dropping
+    the outer sender.
+  severity: high
+  confidence: medium-high
+  status: unverified
+- id: G-FS-02
+  source_id: F-02
+  where: crates/factory/src/run/mod.rs:272,324; crates/store/src/factory/runstate/mod.rs:251-300
+  what: LEASE_SECONDS=600 and acquire() is called once at Factory::open; grep finds no renewal anywhere in factory. begin_fenced
+    checks only owner+token, not expiry, so the first controller keeps writing until another controller acquires. A stage
+    longer than 10 min (training, big rollouts) lets a second `resume` acquire the lease (token+1); the first controller
+    then fails with StaleFence mid-stage and the work is duplicated. No heartbeat test.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-FS-03
+  source_id: F-03
+  where: crates/factory/src/run/release.rs:318-322
+  what: 'Retention gate defaults missing statistics: alpha=0.05, difference=0.0, losses/wins=0 -> one_sided_p(0,0) is not
+    < alpha so the gate becomes Retained. A retention evaluation whose result lacks statistics (failed/skipped/malformed
+    result.json) silently passes the retention gate and can promote a regressed candidate. Should be Inconclusive/refused
+    when statistics keys are absent.'
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-04
+  source_id: F-04
+  where: crates/factory/src/run/release.rs:337-345
+  what: 'purpose_of() `.and_then(params::<EvaluationParams>().ok()).map(..).unwrap_or_default()` maps a missing stage or
+    unparsable params to Purpose::Target (the #[default]), so a transfer/retention evaluation that cannot be resolved is
+    counted as a target evaluation instead of erroring (and can satisfy `required()`-purpose checks wrongly).'
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-05
+  source_id: F-05
+  where: crates/factory/src/external_op.rs:286-307 (readable includes self.repository), 160-170 (identity = file + `code`
+    paths + grant)
+  what: Only the operator file and the paths listed in `code` are digested into the stage identity, but the sandbox mounts
+    the WHOLE repository read-only (and grant.read paths) and `command[0]` programs that are not ./ are not pinned. An operator
+    that reads any repo file not listed in `code`, a granted read path, an interpreter, or a granted env var gets cached
+    results that do not invalidate when those change (silent stale product). Also grant.write paths allow non-hermetic side
+    effects. Needs adversarial test.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-06
+  source_id: F-06
+  where: crates/factory/src/run/mod.rs:498; crates/store/src/factory/products/transfer.rs:99-116
+  what: Reuse path (Factory::begin -> ensure_view) trusts the committed manifest and the view's manifest.json; it does not
+    re-hash blobs (comment says verify_product re-hashes). A corrupted blob/view file is reused silently until someone runs
+    `verify`; `if let Ok(..)` also swallows ensure_view errors (corruption, I/O) and falls through to recompute with no
+    log, hiding product-store damage.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-07
+  source_id: F-07
+  where: crates/factory/src/run/compute.rs:378-460 vs crates/core concurrency::fan_out (re-exported crates/orchestrator/src/concurrency.rs)
+  what: Two independent bounded-concurrency fan-out implementations (hand-rolled thread::scope+mpsc in factory, fan_out
+    in core); different failure/ordering semantics, tested separately.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-08
+  source_id: F-08
+  where: crates/store/src/stage_ledger.rs vs crates/store/src/factory/{products,runstate} ; used by crates/pipelines/src/served/*
+  what: 'Two resumable stage-caching systems coexist: StageLedger (ledger.jsonl + flock, content-addressed StageKey) used
+    by the older served pipelines, and the factory''s ProductStore+RunState (SQLite lease). Different identity definitions,
+    commit points and corruption policies; candidate for ablation if served pipelines are superseded.'
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-FS-09
+  source_id: F-09
+  where: crates/factory/src/run/release.rs:197-260 (Point/lineage) vs crates/store/src/lineage.rs and crates/orchestrator/src/{generation,release_manifest}.rs
+  what: 'Three notions of lineage/generation: factory release.json `lineage` Points + champion record, store experience->run->dataset->release
+    lineage, orchestrator generation marks / release manifests. No test ties them together; promotion in the factory does
+    not appear to write the store/orchestrator release store.'
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-10
+  source_id: F-10
+  where: crates/factory/tests/it/templates.rs:20; crates/factory/src/templates.rs:121-207
+  what: assert!(TEMPLATES.len() >= 3) is stale (5 templates) so removing two templates passes; none of the 5 templates'
+    own recipes is ever executed end to end, only resolved. The splinter CLI help (crates/splinter/src/cli.rs:41) advertises
+    `splinter init --template knowledge-learning` starting a working run, which no test proves.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-FS-11
+  source_id: F-11
+  where: crates/factory/src/ops.rs:1-30 (doc table) / no test of op registry cardinality
+  what: The 23-operation count is correct (11 .with(crate::..) + 12 Builtin) and matches the doc table, but nothing asserts
+    it; adding/removing an op changes no test. graph.rs:307 only iterates registry.names(). Recommend a descriptor golden.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-FS-12
+  source_id: F-12
+  where: crates/store/src/factory/mod.rs and crates/store/src/lib.rs doc ('independent of the experience database')
+  what: Doc claims factory durable state is independent of ExpDB; true for ProductStore/RunState, but factory knowledge/task/dataset-text
+    operations instantiate Workspace/ExpDB SourceStores in tempdirs (task_ops.rs:84, run/dataset_text.rs:137, run/dataset/views.rs:190,236).
+    ExpDB is required for those flows.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-13
+  source_id: F-13
+  where: crates/orchestrator/src/jobs.rs:~170 (reconcile_at `if let Ok(record) = self.workspace.update_job(...)`)
+  what: A failed update_job (I/O error, not just a lost CAS) is swallowed identically to 'another controller moved first',
+    so a persistence failure is indistinguishable from a benign race and the job is simply not updated this round.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-14
+  source_id: F-14
+  where: crates/factory/src/run/mod.rs:623-630 exited_here
+  what: Takeover of a held lease relies on /proc/<pid> absence for a same-host owner string host:pid; PID reuse yields a
+    false 'alive' (blocks resume) and non-Linux hosts never take over; a pid from a different PID namespace (container)
+    is wrongly judged dead (stealing a live lease). No test of these.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-15
+  source_id: F-15
+  where: crates/factory/src/connections.rs:108
+  what: '`token.strip_prefix("env:").unwrap_or_default()` maps a literal token to empty and then to LiteralToken error:
+    correct but obscure; the error name hides that a token missing `env:` is the cause. No value leak, just poor diagnostics.'
+  severity: medium
+  confidence: low
+  status: unverified
+- id: G-FS-16
+  source_id: F-16
+  where: crates/factory/src/run/directory.rs:30-45 fork
+  what: fork imports every product of the source run without first verifying them and without checking the target is empty;
+    a corrupted source product is copied and then reused (see F-06).
+  severity: medium
+  confidence: low-medium
+  status: unverified
+- id: G-FS-17
+  source_id: F-17
+  where: crates/factory/tests/it/golden.rs
+  what: Golden products are blessed from the implementation's own output (`bless()`), so the golden only guards regressions,
+    not correctness; no independent oracle recomputes dataset records or statistics.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-FS-18
+  source_id: F-18
+  where: crates/orchestrator/src/config.rs (629 lines, 2 unit tests)
+  what: Configuration parsing is the sole reader of the environment but has almost no dedicated tests; env precedence, malformed
+    values and defaults untested.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-01
+  source_id: null
+  where: crates/model/src/stats.rs:176, crates/eval/src/competence.rs:316, crates/pipelines/src/powered/analysis.rs:467,
+    crates/knowledge/src/harmonize.rs:127
+  what: Four copies of the same percentile rule (sorted[round(q*(len-1))]) and three separate bootstrap resamplers (stats::bootstrap_interval
+    item level, competence family level, powered::Resampled family level; plus survival crate cluster_bootstrap). Only competence
+    and Resampled share a golden; competence.rs does not reuse Resampled. A fix in one will not reach the others.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-EK-02
+  source_id: null
+  where: crates/eval/src/pilot.rs:53 vs crates/knowledge/src/factory/band.rs:72
+  what: Wilson score interval implemented twice (eval::pilot::Share::wilson and knowledge::BandMeasurement::result) with
+    the same z constant but different code and tests; band.rs doc comment still says z = 1.96 (line 53) while the code uses
+    1.959963984540054.
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-EK-03
+  source_id: null
+  where: crates/pipelines/src/improve/arms.rs:111 vs crates/model/src/stats.rs:87
+  what: Counting::Any (passes>0) is a hand-rolled pass@k at n=k duplicating stats::pass_at_k; it is not routed through the
+    proven estimator, and ungraded attempts silently turn it into any-of-fewer (acknowledged in validation.md 'Not yet certified',
+    but the map row for it claims the unbiased estimator).
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-EK-04
+  source_id: null
+  where: crates/eval/src/gate.rs, crates/pipelines/src/exam.rs:519, crates/pipelines/src/compare.rs:206, crates/pipelines/src/powered/analysis.rs:204
+  what: Sign test is reachable by four routes (model::stats::sign_test via ExactSignTest/Significance trait, direct stats::sign_test
+    in exam.rs, stats::one_sided_p via powered::sign_p and release/statistics, two_sided_p in arm_compare). All bottom out
+    in stats::binomial_upper_tail, so there is NO second numeric implementation of the sign test or Holm (confirmed by grep);
+    the risk is only inconsistent one- vs two-sided choice per route. Pass@k exists once in stats.rs plus the any-of variant
+    above; Holm exists once (analysis.rs re-exports).
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-05
+  source_id: null
+  where: crates/knowledge/src/tasks/dedup.rs:208, goal/facts.rs:126, claims/task.rs:161, claims/pairing.rs:45, retrieve/lexical.rs:20,
+    tasks/grounding.rs:64, redact.rs:148, eval/src/exposure.rs
+  what: At least eight separate word/token splitters with different definitions of a word (alphanumeric vs letters-only,
+    case folding, plural stripping); results of dedup, grounding, pairing and retrieval are therefore not comparable and
+    each needs its own golden.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-06
+  source_id: null
+  where: crates/pipelines/src/release/statistics.rs:54-55
+  what: task_level maps a missing interval (fewer than two families) to low = high = point difference, a zero-width interval
+    that looks like certainty. Same pattern in goal/report.rs:56-63 Metric::of (low=high=mean for n<2; only above_zero guards
+    n>=2).
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-EK-07
+  source_id: null
+  where: crates/knowledge/src/skills.rs:186
+  what: SkillGraph::order() returns an empty Vec (unwrap_or_default) for a cyclic graph instead of an error; any caller
+    that skips validate() silently gets an empty curriculum.
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-EK-08
+  source_id: null
+  where: crates/knowledge/src/skills.rs:301
+  what: exercises(code, skill) is true for every code when the skill names no symbols, so a symbol-less skill is 'exercised'
+    by anything (documented in the comment but weakens any check built on it).
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-09
+  source_id: null
+  where: crates/eval/src/power.rs:101
+  what: power() silently clamps effect to the discordance (plan.effect.min(d)); a plan asking for an impossible lead gets
+    the power of the maximum possible lead instead of an error. Verdict::of compensates for one caller only.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-10
+  source_id: null
+  where: crates/pipelines/src/powered/audit.rs:229-232
+  what: Agreement.agreement is a plain f64 and is 0.0 when there are no labelled pairs, contradicting the repo convention
+    that an absent measurement is never zero (other fields are Option).
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-11
+  source_id: null
+  where: crates/eval/src/intervention.rs:73,196
+  what: Intervention lower bound is mean - 1.645*se with a normal z at min_units=4 (default); the correct one-sided t quantile
+    at 3 df is 2.35, so net value is optimistic for small unit counts and the 'an arm that looks good because few units
+    were measured does not win' claim is not met. No test states the coverage.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-EK-12
+  source_id: null
+  where: scripts/conformance/mutants.tsv, docs/contributing/validation.md
+  what: 'No source mutants exist for: exact power, e-process/evidence gate, budget allocation, campaign gate decisions,
+    promotion gate rules and signature verification, release gate, exam seal, solve concurrency, Wilson interval, BM25/RRF,
+    skill graph, dedup. validation.md claims to map ''every algorithm Splinter owns'' but has no rows for Wilson, BM25/RRF
+    fusion, intervention rule, continual metrics (ACC/BWT/forgetting), e-process/TRUST budget, TF-IDF gap clustering, skill
+    graph, redaction.'
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-EK-13
+  source_id: null
+  where: crates/eval/tests/it/evidence_gate.rs:31, eval/src/campaign/dev_pool.rs:134, campaign/sampling.rs:356, eval/tests/it/golden.rs:69,
+    pipelines/src/arm_compare_tests.rs:66, powered/analysis.rs:636
+  what: Monte Carlo and Monte-Carlo-error tests draw their seed from SystemTime (printed). This is the repo's deliberate
+    convention, but a rare CI failure is unreproducible without capturing the printed seed; slack(alpha, sims) bounds are
+    not documented as a false-failure probability.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-EK-14
+  source_id: null
+  where: crates/pipelines/tests/methods/*.rs, world.rs:15-17
+  what: 'Learning-effectiveness smokes run one fixed configuration, 100 held-out prompts, gain >= min_gain, all #[ignore]
+    and requiring BRAIN_BIN; there is no repeated-seed variance, no negative control (shuffled labels) and no stored baseline,
+    so a +0.05 gain is within one binomial sd (~0.05) of 100 items.'
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-15
+  source_id: null
+  where: docs/contributing/validation.md ('Not yet certified' vs map row for pass@k of a samples arm); crates/knowledge/src/factory/band.rs:53
+  what: Map row says samples arm pass@k is the unbiased estimator at n=k while the 'Not yet certified' bullet says ungraded
+    attempts make it any-of-fewer; the code (improve/arms.rs:111) is any-of-graded. band.rs doc says z=1.96, code uses 1.95996.
+    Validation.md also references splinter-data tests that live outside this inventory.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-16
+  source_id: null
+  where: crates/knowledge/src/factory/band.rs:105-175
+  what: The base-pass-rate band gate decides on the point rate, not the Wilson interval it computes and prints; with min_attempts
+    small an environment can be admitted or rejected on noise. Interval is informational only.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-17
+  source_id: null
+  where: crates/knowledge/tests/it/factory_firmware.rs:66,94,119
+  what: 'All three firmware-emulator environment tests are #[ignore] (need vemu and clang); the firmware-emulator plugin
+    has no coverage in default or conformance tiers.'
+  severity: medium
+  confidence: high
+  status: unverified
+- id: G-EK-18
+  source_id: null
+  where: crates/knowledge/src/tasks/dedup.rs:226,74
+  what: Seen::new is public and unvalidated; shingle_words == 0 reaches words.windows(0) which panics. Only GenerationPolicy::validate
+    (tasks/mod.rs:186) prevents it; held.rs and fixtures.rs pass plan values straight through.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-EK-19
+  source_id: null
+  where: crates/core/src/rng.rs:35-42
+  what: SplitMix64::below/between use next_u64 % n (modulo bias, between() also overflows when low=0, high=u64::MAX). Negligible
+    for bootstrap sizes but unmeasured, and the generator has no reference-vector test (STAT-006 UNMAPPED) although every
+    conformance seed, bootstrap and dev-pool draw depends on it.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-20
+  source_id: null
+  where: crates/eval/src/campaign/sampling.rs:36 vs crates/eval/src/campaign/learning_signal.rs:59
+  what: 'Two thresholds for ''reward spread'' exist: SPREAD_EPSILON = 1e-9 (batch builder) and MIN_SPREAD = 1e-12 (learning
+    signal); a group can be informative to one and flat to the other.'
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-21
+  source_id: null
+  where: crates/pipelines/src/powered/analysis.rs:p_tasks, crates/pipelines/src/release/statistics.rs:36,45
+  what: p_tasks and TaskLevel.p_value apply the exact sign test to tasks that share a family (non-independent); family p
+    is the primary and the task-level p is reported 'beside', but nothing prevents a consumer headlining it; no test pins
+    that reports label it non-primary.
+  severity: low
+  confidence: medium
+  status: unverified
+- id: G-EK-22
+  source_id: null
+  where: crates/eval/src/competence.rs:240-246
+  what: Resamples in which no attempt verified produce no per-verified cost draw (draws.extend(None)), so cost-per-verified
+    intervals are conditional on verified>0 and the interval is then clamped to include the point estimate (lines 313-317);
+    neither effect is covered by the golden (only quality is).
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-23
+  source_id: null
+  where: crates/pipelines/src/powered/analysis.rs:467, model/src/stats.rs:176
+  what: Bounds are the nearest-rank order statistic round(q*(B-1)) with B=1000/2000/10000 resamples; the golden accepts
+    5 Monte Carlo SE so a different (e.g. linear-interpolated) convention would pass; promotion gate's 'low > 0' decisions
+    at the 0.025 quantile of 10_000 resamples carry Monte Carlo error unaccounted for in the decision.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-EK-24
+  source_id: null
+  where: crates/knowledge/src/retrieve/lexical.rs:90
+  what: BM25 uses the Lucene idf ln(1+(N-n+.5)/(n+.5)) and de-duplicates query terms; rank_bm25.BM25Okapi (the obvious reference)
+    uses a different idf with epsilon floor and counts repeated query terms, so a differential test against it would fail
+    by design; an exact formula oracle must be written.
+  severity: low
+  confidence: high
+  status: unverified
+- id: G-EK-25
+  source_id: null
+  where: crates/eval/src/promotion/mod.rs:272 decide_unexamined
+  what: decide_unexamined accepts caller-supplied Measured with no signature and only records exam_verified=false; any pipeline
+    that routes release through it relies on its callers being honest. Tests cover the label but not that the release path
+    can never turn a not-exam-verified promotion into an alias move without an explicit opt-in.
+  severity: high
+  confidence: medium
+  status: unverified
+- id: G-AS-01
+  source_id: F1
+  where: crates/factory/src/connections.rs:106-116 (parse accepts any env:NAME), :168-174 (bind), :124-143 (layered adds
+    repository-only names); workers/harbor/splinter_harbor_worker/runner.py:118 (os.environ.get(token_env)); gateway.py:153-165
+    (token injected into upstream request)
+  what: 'A task repository''s connections.yaml can make the controller send any environment variable to any URL The doc
+    says the repository file ''can hold no credential'', but the parser enforces only the env:NAME shape. A cloned repository
+    (untrusted task source) can define connection x with url http://attacker and token env:AWS_SECRET_ACCESS_KEY (or any
+    variable in the worker''s environment); a recipe model using x makes the gateway send Authorization: Bearer <value>
+    there. The worker''s credential_like() only polices literal values in agent environments, not token_env.'
+  severity: medium
+  confidence: high (read both ends; no allowlist found in Rust or Python)
+  status: unverified
+- id: G-AS-02
+  source_id: F2
+  where: crates/hub/src/lib.rs:138-160 (Hub::new accepts http:// for any host), http.rs:187-196 (owns() only compares endpoint
+    prefix)
+  what: Hub client sends the bearer token over plain http to any host --hub-endpoint http://example.com with --token-file
+    transmits the HF token in clear; is_loopback() exists only to disable proxies. Only loopback should be allowed over
+    http.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-03
+  source_id: F3
+  where: crates/orchestrator/src/config.rs:431 (var("HOME").unwrap_or_else(|| ".".into()))
+  what: 'HOME unset falls back to ''.'', creating state, config and model-store paths in the current directory Silent fallback:
+    ~/.splinter becomes ./.splinter and connections.yaml/operators.yaml are looked for under ./.config; a run can start
+    against an unintended state root. Should be an error (or use getpwuid as runner/claude_code.rs:real_home does).'
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-04
+  source_id: F4
+  where: crates/sandbox/src/tagged.rs:33-60 (tagged() matches SPLINTER_RUN=<token> in /proc/<pid>/environ), process.rs:569-572
+  what: Tagged orphan cleanup is defeated by a descendant that clears its environment Only used when no pid namespace is
+    available; any process the command starts with env -i / execve with an empty envp, or one that was already running,
+    loses the tag and survives the run. Also scans every /proc/*/environ (pid reuse window). Tests (process_runner.rs) run
+    where namespaces exist so the fallback may be unexercised.
+  severity: medium
+  confidence: medium (design reading; escape not executed)
+  status: unverified
+- id: G-AS-05
+  source_id: F5
+  where: 'crates/agent/src/runner/claude_code.rs:88-90 (SYSTEM_READ), :268-289 (confinement: private_proc false, read_write
+    includes /dev)'
+  what: Claude Code confinement leaves /proc, /sys, /etc readable and /dev read-write, with no private pid namespace Another
+    process of the same user (brain server key, other agents) has its environ readable through /proc/<pid>/environ; the
+    sandbox crate itself notes Landlock cannot withhold /proc per process and uses a pid namespace for that (namespace.rs).
+    The preflight only probes the account home and one other TCP port.
+  severity: high
+  confidence: medium-high
+  status: unverified
+- id: G-AS-06
+  source_id: F6
+  where: crates/sandbox/src/host.rs:215-224 (private_proc() = !host_proc && (require || namespace::available())); crates/orchestrator/src/environments.rs:275-291
+    builds ProcessSandbox without .require_private_proc(true); grep finds callers only in tests
+  what: 'private /proc is fail-open: require_private_proc is never set by production code On a host that forbids user namespaces
+    a confined solver command sees all host processes; this is recorded in SandboxSpec.host_proc_visible but nothing refuses
+    it.'
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-07
+  source_id: F7
+  where: scripts/tasks/families.py:12,114,390; samples/agent/loop/fixtures/eval-candidate.sh:16
+  what: Stale references to the removed `splinter practice` command No `practice` verb exists in crates/splinter/src/cli.rs
+    (it is `tasks harbor episodes`); cli-reference --check-invocations covers only DOCS_COMMAND_PAGES (Makefile:309) so
+    scripts/samples are unchecked.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-08
+  source_id: F8
+  where: scripts/gates/check-no-machine-paths.sh:15 (ROOTS covers /data /home /opt /mnt /root only)
+  what: No-machine-paths gate misses the paths that are actually hardcoded a home-relative project/shared tree (Makefile:30,
+    workspace-init.sh:30,47), ~/code, /scratch, /nobackup, /srv, ../edgeai/brain (Makefile:14) all pass the gate; the user's
+    2026-11-23 request (validation-program.md Carried-in requests) is not enforced.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-09
+  source_id: F9
+  where: crates/pipelines/src/experiment/mod.rs:180 (toml::from_str, no deny_unknown_fields found); schemas/factory has
+    10 schemas, none for connections.yaml, operators.yaml, recipe.yaml, experiment plan, improve file, harness yaml
+  what: Experiment plan and several config structs do not refuse unknown keys; no JSON Schema for any machine/repo config
+    A misspelt key in an experiment plan is silently ignored; the carried-in `splinter config` request has no schema to
+    validate against.
+  severity: medium
+  confidence: medium (grep-based; verify struct attributes)
+  status: unverified
+- id: G-AS-10
+  source_id: F10
+  where: crates/factory/src/run/harness_search.rs:209-215 (decide(&baseline, &trials, params.alpha, 0.0) per candidate;
+    best = max difference among 'improved')
+  what: harness.search selects a winner among N candidates with no multiple-comparison control Each candidate is tested
+    one-sided at the same alpha against the baseline and the max-difference one is returned; family-wise error grows with
+    candidates and the winner's difference is optimistically biased. unwrap_or(0.0) coerces a missing difference to 0.
+  severity: high
+  confidence: medium-high
+  status: unverified
+- id: G-AS-11
+  source_id: F11
+  where: crates/splinter/src/cli.rs:Command (tasks generate/solve/verify/dataset/train/release/eval vs factory generate/attempt.collect/verify/dataset/training/release/eval);
+    crates/agent/src/{work.rs:solve_in_workspace, harness_work.rs, workspace_episode.rs, runner.rs}; Harbor trial ingestion
+    exists three times (experiences ingest-harbor, worker import, recipe imports)
+  what: 'Duplicate pipelines: legacy CLI verbs duplicate factory stages; three workspace-episode paths; AgentRunner has
+    no production caller Every pipeline fix has to be made N times and the validation matrix multiplies. runner::{run_episode,SvenRunner,ClaudeCodeRunner}
+    are referenced only in crates/agent (tests) - SvenRunner has no test at all. The roadmap states ''the other CLI commands
+    stay by decision'' (git log 9549e5e8); candidates for ablation or an explicit deprecation list.'
+  severity: medium
+  confidence: high (reference counts by grep)
+  status: unverified
+- id: G-AS-12
+  source_id: F12
+  where: workers/harbor/splinter_harbor_worker/audit.py (84 lines); workers/harbor/tests/test_run.py:60 asserts leaks ==
+    [] only
+  what: Leak audit has no positive test The control that disqualifies trajectories that looked for hidden tests is never
+    shown to fire; regex evasion (base64, python -c, globbing) is untested.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-13
+  source_id: F13
+  where: crates/agent (solve.rs, work.rs, correction.rs), workers/harbor tests (validate only splinter.attempt.v1)
+  what: No independent ATIF validation of any captured trajectory harbor==0.20.0 ships harbor/utils/trajectory_validator.py
+    and harbor/models/trajectories, a ready independent oracle that no Splinter test calls; correction.rs composes trajectories
+    with custom provenance.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-14
+  source_id: F14
+  where: crates/sandbox/src/landlock.rs:227-240 (NotFound => Ok(())), :228-230 (CString error => Ok(()))
+  what: Landlock add_rule silently skips missing and NUL-containing paths A mistyped grant yields a confinement that is
+    stricter than asked (a breakage, caught quickly) but an omitted deny cannot arise; the risk is silent divergence between
+    the recorded SandboxSpec and the enforced ruleset, and on read_write for a not-yet-created directory the command silently
+    loses write access.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-AS-15
+  source_id: F15
+  where: crates/sandbox/src/seccomp.rs:108-186; landlock.rs:139-160
+  what: Landlock/seccomp network denial coverage is limited to AF_INET/AF_INET6 AF_UNIX (docker.sock, abstract sockets),
+    AF_NETLINK, AF_PACKET, AF_VSOCK and io_uring-based socket creation are not shown denied by any test; the 'network denied'
+    claim in SandboxSpec is an AF_INET claim.
+  severity: medium
+  confidence: low (not executed; needs adversarial test)
+  status: unverified
+- id: G-AS-16
+  source_id: F16
+  where: crates/hub/src/http.rs:306-308 (fetched.is_err() => remove_file(dest)); File::create truncates first
+  what: Hub fetch_to removes a pre-existing destination file when a download fails A re-download that fails destroys a previously
+    verified copy; write to a temp name and rename.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-AS-17
+  source_id: F17
+  where: crates/sandbox/tests/it/containment.rs::a_fork_bomb_is_stopped_at_the_process_budget...; .agents/roadmap/validation-program.md
+    'Open'
+  what: Sandbox fork-bomb test fails as root (RLIMIT_NPROC does not bind root) Known pre-existing; this session runs as
+    root so the process cap is not enforceable here and the claim 'process budget recorded' is unverified for root runs.
+    Needs a pids cgroup or a documented non-root requirement.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-18
+  source_id: F18
+  where: 'crates/agent/src/runner/claude_code.rs:84 (REAL_KEY_PREFIXES: sk-ant-, sk-or-, sk-proj-)'
+  what: Key-shape check refuses only three hosted-key prefixes Defence in depth only (the endpoint must be loopback), but
+    the stated rule 'a run can never use a hosted router' relies on the loopback check alone.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-AS-19
+  source_id: F19
+  where: workers/harbor/splinter_harbor_worker/spec.py:32 (KEY TOKEN SECRET PASSWORD CREDENTIAL) vs crates/sandbox/src/host.rs:70-80
+    (adds PASSWD AUTH COOKIE and provider prefixes)
+  what: Credential-name heuristic differs between components A literal under AUTH_*/COOKIE* passes the worker's refusal
+    but would be dropped by the sandbox; two lists, no single source of truth.
+  severity: high
+  confidence: high
+  status: unverified
+- id: G-AS-20
+  source_id: F20
+  where: crates/splinter/src/cli/hub.rs:24-26 ('the hf CLI keeps one at ~/.cache/huggingface/token; without it, calls are
+    anonymous')
+  what: hub CLI help documents a default token path that is not implemented Reads as if the file is picked up; hub_of (hub_session.rs:23-37)
+    reads only --token-file. A user with a private repo gets an anonymous 401/404 rather than a hint. Minor usability.
+  severity: medium
+  confidence: medium
+  status: unverified
+- id: G-NEW-01
+  source_id: null
+  where: crates/pipelines/src/exam_seal.rs:71-120 (remember_reserved), :22 (doc link to crate::practice)
+  what: Since `practice` was removed nothing in production records the reserved exam families (remember_reserved has test
+    callers only), so the legacy `dataset build` seal's reserved-family check is vacuous; its documentation links the removed
+    module. The live mechanism is the factory's examination_material (split eval, same content).
+  severity: high
+  confidence: 'high (read: every caller listed)'
+  status: unverified
+- id: G-NEW-02
+  source_id: null
+  where: crates/factory/src/stage_checks.rs:316 examined_tasks
+  what: 'examination_material refuses an eval-split task and the very task (same content digest) an eval plan examines;
+    a copy of an examined task with one byte changed has another digest and reaches the dataset (the plan''s changed-tree
+    regression, in the factory path). A family-level refusal is not a fix as such: the repository''s fixture and bench''s
+    collections hold train and eval tasks of one family by design (families group for clustered statistics), so it would
+    refuse every current recipe.'
+  severity: high
+  confidence: high (read)
+  status: unverified
