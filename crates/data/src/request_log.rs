@@ -32,47 +32,83 @@ pub struct LoggedRequest {
 
 /// Every request of a log, in the order they were sent.
 ///
+/// A response is paired to its request by `seq`, so a log that cannot be
+/// paired unambiguously is refused rather than read as fewer or other calls:
+/// a request or response with no `seq`, a `seq` used by two requests or by two
+/// responses, and a response to no request. A request the log holds no
+/// response to (the trial ended before the model answered), or one that
+/// cannot be read, is a request with no call.
+///
 /// # Errors
-/// A line that is not JSON (`line <n>: <error>`).
+/// A line that is not JSON, or a log that cannot be paired
+/// (`line <n>: <reason>`).
 pub fn read_request_log(bytes: &[u8]) -> Result<Vec<LoggedRequest>, String> {
     let mut requests: Vec<(u64, LoggedRequest)> = Vec::new();
-    let mut responses: BTreeMap<u64, Value> = BTreeMap::new();
+    // The line each seq was first seen on, to name the repeat.
+    let mut request_lines: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut responses: BTreeMap<u64, (usize, Value)> = BTreeMap::new();
     for (n, line) in bytes.split(|b| *b == b'\n').enumerate() {
+        let n = n + 1;
         if line.is_empty() {
             continue;
         }
-        let mut row: Value =
-            serde_json::from_slice(line).map_err(|e| format!("line {}: {e}", n + 1))?;
-        let seq = row.get("seq").and_then(Value::as_u64);
-        match (row.get("kind").and_then(Value::as_str), seq) {
-            (Some("request"), _) => {
-                let role = row.get("model").and_then(Value::as_str).map(str::to_string);
-                let mut request = row.get_mut("request").map(Value::take).unwrap_or_default();
-                let messages = take_array(&mut request, "messages");
-                let tools = take_array(&mut request, "tools");
-                let media = messages.iter().any(|m| message_parts(m).any(is_media));
-                let call = seq.map(|seq| ModelCall {
-                    seq,
-                    messages,
-                    tools,
-                    response: ModelResponse {
-                        text: String::new(),
-                        reasoning: None,
-                        tool_calls: Vec::new(),
-                    },
-                });
-                requests.push((seq.unwrap_or(0), LoggedRequest { role, media, call }));
+        let mut row: Value = serde_json::from_slice(line).map_err(|e| format!("line {n}: {e}"))?;
+        let kind = row.get("kind").and_then(Value::as_str).map(str::to_string);
+        let kind = match kind.as_deref() {
+            Some(kind @ ("request" | "response")) => kind,
+            _ => continue,
+        };
+        let seq = row
+            .get("seq")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| format!("line {n}: a {kind} has no seq to pair it by"))?;
+        if kind == "request" {
+            if let Some(first) = request_lines.insert(seq, n) {
+                return Err(format!(
+                    "line {n}: request seq {seq} repeats the request on line {first}"
+                ));
             }
-            (Some("response"), Some(seq)) => {
-                if let Some(response) = row.get_mut("response") {
-                    responses.insert(seq, response.take());
-                }
+            let role = row.get("model").and_then(Value::as_str).map(str::to_string);
+            let mut request = row.get_mut("request").map(Value::take).unwrap_or_default();
+            let messages = take_array(&mut request, "messages");
+            let tools = take_array(&mut request, "tools");
+            let media = messages.iter().any(|m| message_parts(m).any(is_media));
+            let call = ModelCall {
+                seq,
+                messages,
+                tools,
+                response: ModelResponse {
+                    text: String::new(),
+                    reasoning: None,
+                    tool_calls: Vec::new(),
+                },
+            };
+            requests.push((
+                seq,
+                LoggedRequest {
+                    role,
+                    media,
+                    call: Some(call),
+                },
+            ));
+        } else if let Some(response) = row.get_mut("response") {
+            if let Some((first, _)) = responses.insert(seq, (n, response.take())) {
+                return Err(format!(
+                    "line {n}: response seq {seq} repeats the response on line {first}"
+                ));
             }
-            _ => {}
         }
     }
+    if let Some((seq, (line, _))) = responses
+        .iter()
+        .find(|(seq, _)| !request_lines.contains_key(seq))
+    {
+        return Err(format!(
+            "line {line}: response seq {seq} answers no request"
+        ));
+    }
     for (seq, logged) in &mut requests {
-        let response = responses.get(seq).and_then(response_of);
+        let response = responses.get(seq).and_then(|(_, r)| response_of(r));
         logged.call = match (logged.call.take(), response) {
             (Some(call), Some(response)) => Some(ModelCall { response, ..call }),
             _ => None,
@@ -127,4 +163,70 @@ fn response_of(response: &Value) -> Option<ModelResponse> {
             .map(str::to_string),
         tool_calls,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(seq: u64, text: &str) -> String {
+        format!(
+            r#"{{"kind":"request","seq":{seq},"model":"m","request":{{"messages":[{{"role":"user","content":"{text}"}}],"tools":[]}}}}"#
+        )
+    }
+
+    fn response(seq: u64, text: &str) -> String {
+        format!(r#"{{"kind":"response","seq":{seq},"response":{{"text":"{text}"}}}}"#)
+    }
+
+    fn log(lines: &[String]) -> Vec<u8> {
+        lines.join("\n").into_bytes()
+    }
+
+    #[test]
+    fn a_response_is_paired_to_its_request_by_seq_whatever_the_line_order() {
+        let read = read_request_log(&log(&[
+            request(1, "first"),
+            request(2, "second"),
+            response(2, "b"),
+            response(1, "a"),
+        ]))
+        .unwrap();
+        let answers: Vec<&str> = read
+            .iter()
+            .map(|r| r.call.as_ref().unwrap().response.text.as_str())
+            .collect();
+        assert_eq!(answers, ["a", "b"], "in the order the requests were sent");
+    }
+
+    #[test]
+    fn a_request_nobody_answered_is_a_request_with_no_call() {
+        let read =
+            read_request_log(&log(&[request(1, "q"), request(2, "q"), response(1, "a")])).unwrap();
+        assert_eq!(read.len(), 2);
+        assert!(read[0].call.is_some() && read[1].call.is_none());
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_paired_is_refused_not_read_as_other_calls() {
+        let no_seq = r#"{"kind":"request","request":{"messages":[]}}"#.to_string();
+        for (lines, wanted) in [
+            (vec![no_seq], "line 1: a request has no seq"),
+            (
+                vec![request(1, "q"), request(1, "again")],
+                "line 2: request seq 1 repeats the request on line 1",
+            ),
+            (
+                vec![request(1, "q"), response(1, "a"), response(1, "b")],
+                "line 3: response seq 1 repeats the response on line 2",
+            ),
+            (
+                vec![request(1, "q"), response(2, "a")],
+                "line 2: response seq 2 answers no request",
+            ),
+        ] {
+            let error = read_request_log(&log(&lines)).unwrap_err();
+            assert!(error.contains(wanted), "{error}");
+        }
+    }
 }
