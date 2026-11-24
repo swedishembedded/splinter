@@ -180,6 +180,13 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   never-all rule); the map's stale test references (deleted promotion, dataset seal) and four stale mutants fixed.
 - an independent reference projector of policy-gradient groups (6B, part of G-FS-17).
 
+- formal (10C): the run-state protocol is a TLA+ specification TLC checks over two controllers
+  (`validation/tla/runstate`, `make test/conformance/tla`), its four properties each with a mutation TLC finds;
+  the pinned TLA+ tools install on x86_64 as on aarch64.
+- the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
+  improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
+  records stored releases carry stay readable. Every crate's documentation builds without a warning.
+
 ## Open
 
 - Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 107; 84 fixed, 18 rejected):
@@ -190,8 +197,6 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
   kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and
-  retrieval benchmarks (3A-3C), TLA+ models (10; waiting on approval to run a Java runtime) and crash injection
-  beyond the product store, deterministic learning environments and negative controls (12A-12E).
-- Waiting on a decision: `splinter_eval::promotion` (signed examiner verdicts) and `splinter_eval::canary` have no
-  production caller since the legacy release went; delete them, or wire them into the factory's promotion stage.
+  retrieval benchmarks (3A-3C), TLA+ models beyond the run-state protocol (10C: the product store's
+  concurrent writers, snapshots, retention and compaction) and crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

@@ -13,6 +13,7 @@ make test/conformance              # per-PR tier: every per-PR row below, and th
 make test/conformance/integration  # integration tier: every source mutant (minutes)
 make test/methods                  # integration tier: learning effectiveness on a toy model (needs BRAIN_BIN)
 make test/contract/brain           # integration tier: the records Splinter writes are the records brain's trainer reads (needs BRAIN_BIN)
+make test/conformance/tla          # formal tier: TLC on the TLA+ specifications and their mutations (needs TLAPLUS_DIR)
 ```
 
 ## Three kinds of correctness
@@ -44,7 +45,9 @@ none of it.
 A proving test is written `package/target/filter`: target `lib` (the crate's unit tests), `all` (every test binary
 of the package) or an integration test binary; filter a substring of the test names. `make test/conformance` and
 `make test/conformance/integration` read this table (the integration tier's one row, the learning methods, is
-`make test/methods`; the tier itself runs the source mutants). The per-PR tier is also part of `make test`.
+`make test/methods`; the tier itself runs the source mutants). The per-PR tier is also part of `make test`. The formal tier is
+`make test/conformance/tla` (TLC on every specification under `validation/tla`, and each of its mutations found;
+it needs the TLA+ tools of `make deps/tlaplus`).
 
 | Algorithm | Kind | Spec | Proving tests | Tier | Mutants killed |
 |---|---|---|---|---|---|
@@ -100,6 +103,7 @@ of the package) or an integration test binary; filter a substring of the test na
 | Environment plugins against their tools | algorithmic | program-output (Python 3, Lua 5.1), every feature level over many seeds: the plugin's verifier, run in its host, solves exactly what the interpreter prints when run directly (trailing spaces and blank lines ignored, as the instruction says), never a changed, missing or reordered line or nothing, and gives no reward when the oracle cannot run; db-workflow: the state an independent rewrite of the shop's rules in SQLite reaches is solved, the same state with any other row changed, or the untouched database, is not; firmware-emulator: `make test/environments/firmware` (vemu, clang) | `splinter-knowledge/it/plugin_matrix::` | per-PR | |
 | Configuration from the environment | algorithmic | the machine configuration file is `$SPLINTER_CONFIG`, else under `$XDG_CONFIG_HOME`, else under the home directory; the model store follows `$XDG_DATA_HOME` else the home directory; the worker is `$SPLINTER_HARBOR_WORKER` else the first executable on `PATH`; only the allowlisted variables are captured for commands and docker; an empty variable is an unset one | `splinter-orchestrator/lib/config::env_spec` | per-PR | |
 | Untrusted input | property | every reader of what Splinter does not control answers a damaged input (truncated, a byte changed, a span lost or repeated, a field removed, retyped or added) with a value or an error, never a panic, from a seed it accepts: recipes, environments, evaluation plans, the machine configuration, grants, connections, task collections and `task.toml`; trajectories through every view, request logs, record lines; task definitions, checkpoint manifests, digests, rewards, what a person says or a model replies (any Unicode); product manifests on disk; SAS transport files, codebook pages, stance replies; hub names. What is accepted keeps its invariant: a mask supervises only its view's turns, a validated task is the task its content addresses, a checkpoint path never leaves the checkpoint, a damaged product manifest never verifies, a hub path stays in its directory; shrunk failures are saved under `proptest-regressions/` | `splinter-conformance/lib/fuzz::` `splinter-factory/it/fuzz::` `splinter-data/it/fuzz::` `splinter-core/it/fuzz::` `splinter-store/it/fuzz::` `splinter-knowledge/it/fuzz::` `splinter-hub/names/` | per-PR | `unicode-lowercase-offsets`, `xport-field-unchecked` |
+| Run-state protocol (TLA+) | formal | the factory's run state, the lease a fencing token and stages moved by compare-and-set on their version, model-checked by TLC over two controllers with a lease that expires, is taken over and is renewed (20165 distinct states): a completed stage has its product and never changes; no transition rests on a version another write overtook; no controller whose fence another grant superseded writes (`validation/tla/runstate/RunState.tla`) | `make test/conformance/tla` | formal | `fence-unchecked`, `version-unchecked`, `completed-rewritten`, `completed-without-product` (`validation/tla/runstate/mutations.toml`) |
 | Learning methods | learning | each method moves a held-out score on a toy model | `make test/methods` | integration | |
 | Brain data contract | algorithmic | the datasets the sft-step, sft-final, preference, feedback and policy-gradient views write are accepted by a served brain's own dataset check, which reads them as its trainer does; the supervised tokens of each record equal the assistant's actions counted from their characters (never a system prompt, a user turn or a tool observation), a policy-gradient record trains exactly its sampled ids, and a hand-broken record (log-probability count, id mismatch) is refused with its rule; brain's tokenization and numerics are not claimed | `make test/contract/brain` | integration | |
 

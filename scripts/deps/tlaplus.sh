@@ -8,9 +8,10 @@
 # procure our services by sending an email to info@swedishembedded.com.
 
 # Installs the pinned TLA+ model checker into DEST: the TLA+ tools jar
-# (tla2tools.jar, MIT licence) and a Temurin 21 aarch64 JRE (GPLv2 with the
-# Classpath Exception; a runtime download, never committed). Both archives are
-# checked against the SHA-256 recorded here before use. DEST/bin/tlc runs TLC
+# (tla2tools.jar, MIT licence) and a Temurin 21 JRE for this machine, aarch64
+# or x86_64 (GPLv2 with the Classpath Exception; a runtime download, never
+# committed). Both archives are checked against the SHA-256 recorded here, as
+# Adoptium publishes it beside each archive, before use. DEST/bin/tlc runs TLC
 # with that JRE, whatever java the host has.
 #
 # Usage: scripts/deps/tlaplus.sh DEST
@@ -18,11 +19,18 @@ set -euo pipefail
 
 tools_url=https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
 tools_sha256=936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
-jre_url="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12.1_1.tar.gz"
-jre_sha256=14be1f35ebdbd1f6e8d57eb911a3ffb74d6d9aa255abc5daf2b1302002cf2cf2
+jre_release=https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1
+case "$(uname -m)" in
+    aarch64)
+        jre_url="$jre_release/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12.1_1.tar.gz"
+        jre_sha256=14be1f35ebdbd1f6e8d57eb911a3ffb74d6d9aa255abc5daf2b1302002cf2cf2 ;;
+    x86_64)
+        jre_url="$jre_release/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        jre_sha256=2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500 ;;
+    *) echo "tlaplus: no JRE is pinned for $(uname -m)" >&2; exit 1 ;;
+esac
 
 dest=${1:?usage: tlaplus.sh DEST}
-[ "$(uname -m)" = aarch64 ] || { echo "tlaplus: the pinned JRE is aarch64 only" >&2; exit 1; }
 mkdir -p "$dest/dl" "$dest/jre" "$dest/bin"
 
 fetch() { # url sha256 file

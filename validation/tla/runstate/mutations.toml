@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# One-line defects of the run-state protocol, each of which TLC must find as a
+# violation of the named property: the specification's properties have teeth.
+
+module = "RunState"
+config = "RunState.cfg"
+
+[[mutation]]
+id = "fence-unchecked"
+find = "Fenced(c) == lease.owner = c /\\ lease.token = fence[c] /\\ fence[c] > 0"
+replace = "Fenced(c) == fence[c] > 0"
+violates = "NoStaleWrite"
+
+[[mutation]]
+id = "version-unchecked"
+find = "    /\\ stage.version = seen[c]\n"
+replace = ""
+violates = "NoLostUpdate"
+
+[[mutation]]
+id = "completed-rewritten"
+find = "    /\\ stage.state # \"completed\"\n"
+replace = ""
+violates = "CompletedNeverChanges"
+
+[[mutation]]
+id = "completed-without-product"
+find = "product |-> IF s = \"completed\" THEN c ELSE NoOne"
+replace = "product |-> NoOne"
+violates = "CompletedHasProduct"
