@@ -253,7 +253,9 @@ impl Hub {
 
     /// Streams the body of a `GET` of `url` into `dest`, refusing more than
     /// `limit` bytes; returns the SHA-256 (hex) and the size of what was
-    /// written. A failed download leaves no file at `dest`.
+    /// written. The download goes to a sibling of `dest` renamed onto it once
+    /// complete, so a failed one leaves `dest` as it was (an earlier,
+    /// verified copy is never lost to a failed refresh).
     pub(crate) fn fetch_to(
         &self,
         what: &str,
@@ -261,6 +263,11 @@ impl Hub {
         dest: &Path,
         limit: u64,
     ) -> Result<(String, u64), HubError> {
+        let name = dest
+            .file_name()
+            .map_or_else(|| "download".into(), |n| n.to_string_lossy().into_owned());
+        let partial = dest.with_file_name(format!(".{name}.partial-{}", std::process::id()));
+        let partial = &partial;
         let fetched =
             self.block(|client| async move {
                 let request = Request::get(what, url.to_owned());
@@ -283,7 +290,7 @@ impl Hub {
                     path: dest.to_path_buf(),
                     source,
                 };
-                let mut file = std::fs::File::create(dest).map_err(io)?;
+                let mut file = std::fs::File::create(partial).map_err(io)?;
                 let mut hash = Sha256::new();
                 let mut size = 0u64;
                 while let Some(chunk) = response.chunk().await.map_err(|e| HubError::Transport {
@@ -301,10 +308,11 @@ impl Hub {
                     file.write_all(&chunk).map_err(io)?;
                 }
                 file.sync_all().map_err(io)?;
+                std::fs::rename(partial, dest).map_err(io)?;
                 Ok((hex(&hash.finalize()), size))
             });
         if fetched.is_err() {
-            let _ = std::fs::remove_file(dest);
+            let _ = std::fs::remove_file(partial);
         }
         fetched
     }
@@ -313,4 +321,58 @@ impl Hub {
 /// Lower-case hex of `bytes`.
 pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod download_spec {
+    use std::io::{Read as _, Write as _};
+
+    use crate::Hub;
+
+    /// A one-request server that promises `promised` bytes and sends `body`.
+    fn serving(promised: usize, body: &'static [u8]) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {promised}\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(body);
+        });
+        format!("http://{address}")
+    }
+
+    /// A download that breaks off leaves the file it would have replaced as
+    /// it was, and no partial file beside it; one that completes replaces it.
+    #[test]
+    fn a_failed_download_never_destroys_the_copy_it_would_replace() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("records.jsonl");
+        std::fs::write(&dest, "verified earlier\n").unwrap();
+
+        let broken = Hub::new(&serving(100, b"abc"), None).unwrap();
+        let url = format!("{}/file", broken.endpoint());
+        assert!(broken.fetch_to("records", &url, &dest, 1_000).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&dest).unwrap(),
+            "verified earlier\n"
+        );
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "no partial file left"
+        );
+
+        let whole = Hub::new(&serving(6, b"fresh\n"), None).unwrap();
+        let url = format!("{}/file", whole.endpoint());
+        let (_, size) = whole.fetch_to("records", &url, &dest, 1_000).unwrap();
+        assert_eq!(
+            (size, std::fs::read_to_string(&dest).unwrap()),
+            (6, "fresh\n".to_owned())
+        );
+    }
 }

@@ -133,7 +133,8 @@ impl Hub {
     /// emulator's `http://127.0.0.1:PORT`), sending `token` when given.
     ///
     /// # Errors
-    /// The endpoint is not an `http` or `https` URL without a path, or the
+    /// The endpoint is not an `http` or `https` URL without a path, a token
+    /// would be sent over plain http to another machine, or the
     /// token holds characters a header cannot carry.
     pub fn new(endpoint: &str, token: Option<String>) -> Result<Self, HubError> {
         let endpoint = endpoint.trim_end_matches('/');
@@ -155,10 +156,19 @@ impl Hub {
                 ));
             }
         }
-        Ok(Self {
+        let hub = Self {
             endpoint: endpoint.to_owned(),
             token,
-        })
+        };
+        // A token travels in a header: in clear over http, so only to this
+        // machine (a local emulator).
+        if hub.token.is_some() && endpoint.starts_with("http://") && !hub.is_loopback() {
+            return Err(HubError::Invalid(format!(
+                "hub endpoint {endpoint:?} is plain http to another machine: a token is sent only over https \
+                 (or http to this machine)"
+            )));
+        }
+        Ok(hub)
     }
 
     /// The endpoint calls go to.
@@ -181,5 +191,30 @@ impl Hub {
                 |(host, _)| host,
             );
         matches!(host, "127.0.0.1" | "localhost" | "[::1]")
+    }
+}
+
+#[cfg(test)]
+mod endpoint_spec {
+    use super::*;
+
+    /// A token travels in a header, so over plain http only to this machine
+    /// (a local emulator); to any other host it needs https, and a client
+    /// that would send it in clear is refused before any request.
+    #[test]
+    fn a_token_is_sent_over_plain_http_only_to_this_machine() {
+        let token = || Some("hf_secret".to_owned());
+        assert!(Hub::new("https://huggingface.co", token()).is_ok());
+        assert!(Hub::new("http://127.0.0.1:8080", token()).is_ok());
+        assert!(Hub::new("http://localhost:8080", token()).is_ok());
+        assert!(Hub::new("http://[::1]:8080", token()).is_ok());
+        let refused = Hub::new("http://hub.example.com", token()).unwrap_err();
+        assert!(refused.to_string().contains("https"), "{refused}");
+        assert!(!refused.to_string().contains("hf_secret"), "{refused}");
+        // Anonymous reads may use any endpoint.
+        assert!(Hub::new("http://hub.example.com", None).is_ok());
+        // A host that merely starts like a loopback name is not one.
+        assert!(Hub::new("http://127.0.0.1.example.com", token()).is_err());
+        assert!(Hub::new("http://localhost.example.com:80", token()).is_err());
     }
 }

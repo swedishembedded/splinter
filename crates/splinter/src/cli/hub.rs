@@ -22,8 +22,9 @@ pub struct HubArgs {
     /// test).
     #[arg(long = "hub-endpoint", value_name = "URL", default_value = DEFAULT_ENDPOINT)]
     pub endpoint: String,
-    /// A file holding the access token (the `hf` CLI keeps one at
-    /// `~/.cache/huggingface/token`); without it, calls are anonymous.
+    /// A file holding the access token (name the `hf` CLI's own,
+    /// `~/.cache/huggingface/token`, to use it); without it, calls are
+    /// anonymous.
     #[arg(long = "token-file", value_name = "FILE")]
     pub token_file: Option<PathBuf>,
 }
