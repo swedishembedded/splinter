@@ -1146,3 +1146,17 @@ gaps:
     or a weights digest), so Splinter can match a base as it matches an adapter. Accepting the provider id in Splinter without
     it would let another checkpoint pass for the one asked for, and is not done. The toy itself is the qwen3 sample''s action;
     a duplicate in brain''s core was tried and taken back'
+- id: G-NEW-07
+  source_id: null
+  where: crates/data/src/trajectory.rs (try_conversation, is_action)
+  what: 'A workspace trajectory whose last agent step is a reply the user then answered with feedback (the visible checks
+    refuting a premature "done") supervised that reply as the final answer, though the sft-step view documents such a reply
+    as premature and context. Found by the exhaustive supervision-mask enumeration (plan 6D): 16,380 of 1,113,876 projections,
+    all of this one class; every other projection agreed with the independent model. Also reached the policy-gradient view,
+    which shares the rendering.'
+  severity: high
+  confidence: high (enumeration, every disagreement of the one class)
+  status: fixed
+  resolution: 'data: a reply that feedback answered is no action (the module doc states it); the enumeration is the spec
+    (splinter-data/it/supervision_enumeration). A conversation rendered from recorded requests keeps its own rule and is not
+    covered by this enumeration'

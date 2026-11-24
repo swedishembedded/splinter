@@ -36,8 +36,9 @@
 //!   conserves its source: as many tool calls and tool results out as the steps
 //!   it projects hold in.
 //! * An agent step with tool calls is an action; so is the last agent step
-//!   when it answers without one (the final answer). An agent step with
-//!   neither text nor calls adds nothing and is skipped.
+//!   when it answers without one (the final answer), unless feedback answered
+//!   it: a reply the visible checks then refuted was premature, and is context.
+//!   An agent step with neither text nor calls adds nothing and is skipped.
 //! * A dialogue - a trajectory with a second user step and no tool call -
 //!   is the exception: [`dialogue`] renders it whole, the later user steps
 //!   (the other speaker's own words) as user turns and every reply
@@ -335,7 +336,13 @@ fn try_conversation(
                     serialise_run_step(step, &text, calls, &mut messages, &mut actions, &scrub)?;
                     continue;
                 }
-                let is_action = !calls.is_empty() || Some(position) == last_agent;
+                // A reply is an action only when it ends the trajectory: one
+                // the user answered with feedback was premature, and stays
+                // context.
+                let answered = trajectory.steps[position..]
+                    .iter()
+                    .any(|s| s.source == StepOrigin::User);
+                let is_action = !calls.is_empty() || (Some(position) == last_agent && !answered);
                 let ids: Vec<String> = calls.iter().filter_map(|c| c.id.clone()).collect();
                 let mut assistant = message("assistant", &scrub.text(&text), false);
                 assistant.reasoning_content = reasoning_of(step, &scrub)?;

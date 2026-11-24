@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles; the independent projector, exhaustive masks, task-kind and plugin matrices not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D); the independent projector, task-kind and plugin matrices not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement; recompute enumeration, storage fault injection and formal models not built |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
@@ -150,6 +150,8 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - portability: HOME unset wrote state into the working directory; the integration tier never reached its
   mutants; the methods smokes and the package build failed on a machine unlike their author's.
 - templates: the generations template could never promote (four paired attempts cannot reach the level).
+- masks (6D, by enumeration of 1,113,876 projections): a premature reply that feedback answered was supervised as
+  the final answer.
 
 ## Open
 
@@ -158,8 +160,7 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
   a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
   Harbor's ATIF validator (G-AS-13).
-- Not built: the independent Python projector of every view (6B), exhaustive supervision-mask enumeration (6D),
-  the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
+- Not built: the independent Python projector of every view (6B), the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
   benchmarks (3A-3C), recompute enumeration (9C), storage fault injection and formal models (10), deterministic
   learning environments and negative controls (12A-12E), property tests and fuzzing (16C).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
