@@ -1299,9 +1299,13 @@ gaps:
     sample, which may not drive sven itself.)'
   severity: medium
   confidence: high (callers listed by grep)
-  status: confirmed
-  resolution: 'open, a decision: which reader is canonical. Reading in Rust everywhere drops the factory import''s dependency
-    on the Python worker; reading through the worker everywhere makes experiences ingest-harbor need the worker installed.'
+  status: rejected
+  resolution: 'kept by decision (2026-11-24): both readers stay. The factory imports a Harbor job through the Python worker,
+    which matches each trial to its task by the Harbor library''s own content hash and reports it with the same report builder
+    and leak audit as a trial the worker ran; experiences ingest-harbor reads trial directories in Rust for the experience
+    store. A port either way would move the duplication rather than remove it (the worker keeps its builder for its own
+    runs). Both grade through the one classifier, splinter_core::factory::trial::grade, so a verdict cannot differ; a change
+    to the trial format has to be made in both'
 - id: G-NEW-15
   source_id: null
   where: crates/store/src/factory/products/mod.rs:publish (prepare, then write_atomic of products/<stage>.json)

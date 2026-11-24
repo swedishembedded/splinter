@@ -217,8 +217,7 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 107; 84 fixed, 18 rejected):
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
-  header on plain conversations (G-NEW-03, brain's); workspace episodes and Harbor ingestion still run through more
-  than one live path (G-NEW-14, a refactor of live callers); the preference, feedback, distill and retrieval
+  header on plain conversations (G-NEW-03, brain's); the preference, feedback, distill and retrieval
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
   kinds needing a run's runtime, sources or judge (4A), the rest of the scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
