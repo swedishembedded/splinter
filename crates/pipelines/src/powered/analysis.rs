@@ -24,6 +24,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::rng::Seed;
+use splinter_model::stats::one_sided_p;
 
 /// One answer an arm gave to a task and how it was graded.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -196,15 +197,6 @@ const LEVEL: f64 = 0.95;
 const Z_ALPHA: f64 = 1.644_853_626_951_472_7;
 const Z_POWER: f64 = 0.841_621_233_572_914_4;
 
-/// `P(Binomial(n, 1/2) >= k)`: the one-sided exact sign test over the `n`
-/// tasks only one arm got right, `k` of them the first's. The arithmetic is
-/// the model backend's ([`splinter_model::stats::one_sided_p`]), the same the
-/// release gate's sign test computes.
-#[must_use]
-pub fn sign_p(first_only: usize, second_only: usize) -> f64 {
-    splinter_model::stats::one_sided_p(first_only, second_only)
-}
-
 /// The arms' summaries, in the order of `arms`.
 #[must_use]
 pub fn summarise(records: &[TaskRecord], arms: &[String]) -> Vec<ArmSummary> {
@@ -314,15 +306,15 @@ pub fn compare(
         first_only,
         second_only,
         both_wrong: count(false, false),
-        p_tasks: sign_p(first_only, second_only),
-        p_families: sign_p(family_wins, family_losses),
+        p_tasks: one_sided_p(first_only, second_only),
+        p_families: one_sided_p(family_wins, family_losses),
         difference: clustered_interval(&by_family, interval_seed),
         score_difference: clustered_interval(&score_by_family, interval_seed),
         length_matched: (!matched.is_empty()).then(|| LengthMatched {
             tasks: matched.len(),
             first_only: m_first,
             second_only: m_second,
-            p_value: sign_p(m_first, m_second),
+            p_value: one_sided_p(m_first, m_second),
         }),
         holm_p: None,
         power: Power {
@@ -496,12 +488,22 @@ mod tests {
         }
     }
 
+    /// The primary test is the exact one-sided sign test over the tasks only
+    /// one arm got right, `P(Binomial(4, 1/2) >= 3)`, and the family test the
+    /// same over families; the tasks both got right or wrong carry nothing.
     #[test]
-    fn the_exact_sign_test_is_the_binomial_tail() {
-        assert!((sign_p(5, 0) - 0.03125).abs() < 1e-12);
-        assert!((sign_p(3, 1) - 0.3125).abs() < 1e-12);
-        assert_eq!(sign_p(0, 0), 1.0);
-        assert!(sign_p(0, 4) > 0.99);
+    fn the_task_and_family_tests_are_the_one_sided_binomial_tail() {
+        let mut records = vec![
+            record("w1", 0, true, false),
+            record("w2", 0, true, false),
+            record("w3", 0, true, false),
+            record("l1", 0, false, true),
+        ];
+        records.extend((0..5).map(|n| record("tie", n, n % 2 == 0, n % 2 == 0)));
+        let c = compare(&records, "a", "b", SEED);
+        assert_eq!((c.first_only, c.second_only), (3, 1));
+        assert!((c.p_tasks - 0.3125).abs() < 1e-12, "{}", c.p_tasks);
+        assert!((c.p_families - 0.3125).abs() < 1e-12, "{}", c.p_families);
     }
 
     /// Twelve wins in one family and nothing elsewhere: the task-level test

@@ -602,9 +602,13 @@ gaps:
     above; Holm exists once (analysis.rs re-exports).
   severity: low
   confidence: high
-  status: confirmed
-  resolution: 'four routes to the sign test, all ending in stats::binomial tails (one implementation of the arithmetic):
-    naming one entry point is a Phase 16 cleanup'
+  status: fixed
+  resolution: 'one entry point, splinter_model::stats: sign_test (pairs, the gate through ExactSignTest), one_sided_p and
+    two_sided_p (counts), all on binomial_upper_tail; the pipelines alias powered::analysis::sign_p is deleted and its callers
+    call one_sided_p. Each route states its side: the gate, compare and the powered exam test one-sided that the candidate
+    is better, arm_compare two-sided (no direction); the legacy release statistics route went with G-AS-11. The powered
+    exam pins its task and family p-values to the exact one-sided tail (powered::analysis::the_task_and_family_tests_are_the_one_sided_binomial_tail),
+    which kills mutant powered-sign-test-two-sided'
 - id: G-EK-05
   source_id: null
   where: crates/knowledge/src/tasks/dedup.rs:208, goal/facts.rs:126, claims/task.rs:161, claims/pairing.rs:45, retrieve/lexical.rs:20,
