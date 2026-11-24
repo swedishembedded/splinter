@@ -8,7 +8,7 @@
 # evaluation suites, you can procure our services by sending an email to
 # info@swedishembedded.com.
 """The error rates of the anchor check decided on the answers lost net of
-those gained (`AnchorBound::NetLost(k)`).
+those gained (a net-lost bound of k answers).
 
 Model: on a suite of n items a candidate's answers flip independently, a
 share f of the n items from right to wrong (lost) and a share f from wrong to

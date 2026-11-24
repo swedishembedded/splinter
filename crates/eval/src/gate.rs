@@ -74,20 +74,18 @@ use splinter_core::rng::Seed;
 
 mod agentic;
 mod improvement;
-mod plan;
 
 use crate::canary::Canaries;
 
-pub use improvement::{improvement, Verified};
-pub use plan::GatePlan;
+pub use improvement::Verified;
 
 pub use agentic::{
     AgenticConfig, AgenticProbe, Withheld, DEFAULT_FOLLOW_UPS, DEFAULT_MAX_REPEATED_RESULTS,
     DEFAULT_MAX_TOOL_CALLS, DEFAULT_PROBE_ATTEMPTS,
 };
 
-use crate::paired::{by_cluster, compare, Comparison, PairedOutcome};
-use crate::significance::{SignTest, Significance};
+use crate::paired::Comparison;
+use crate::significance::SignTest;
 
 /// What a suite was, as a report states it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -110,12 +108,6 @@ pub const DEFAULT_RETENTION_BOUND: f64 = 0.05;
 /// How far, as a fraction of the suite, the candidate's accuracy on the
 /// anchor suite may fall below the champion's.
 pub const DEFAULT_ANCHOR_BOUND: f64 = 0.02;
-/// The net number of anchor answers a candidate may lose when the anchor
-/// check is decided on counts, for a suite of 200 questions (3%): a
-/// drift-free candidate whose answers flip independently at 2% or 3% each way
-/// is refused by chance 1.1% or 3.0% of the time, where 4 would refuse it
-/// 5.5% or 9.5% of the time.
-pub const ANCHOR_NET_LOST_FOR_200: u32 = 6;
 /// How many held-out tasks the served candidate re-answers.
 pub const DEFAULT_SERVE_SAMPLE: usize = 8;
 /// How long `brain serve` may take to load the candidate and report ready.
@@ -164,29 +156,6 @@ impl Default for GateConfig {
             target_effect: None,
         }
     }
-}
-
-impl GateConfig {
-    /// The bound the anchor check is decided on.
-    #[must_use]
-    pub fn anchor_bound(&self) -> AnchorBound {
-        self.anchor_net_lost
-            .map_or(AnchorBound::Rate(self.anchor_bound), AnchorBound::NetLost)
-    }
-}
-
-/// How the anchor check decides.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AnchorBound {
-    /// Refuse when the candidate's accuracy falls more than this fraction of
-    /// the paired items below the champion's.
-    Rate(f64),
-    /// Refuse when the answers the champion alone gave, minus the answers the
-    /// candidate alone gave, exceed this count. Counted from the paired items;
-    /// on a suite of fixed size it is a rate bound that does not move with
-    /// the number of items the run paired.
-    NetLost(u32),
 }
 
 /// One check: whether it passed, what it measured, and why it failed.
@@ -311,24 +280,6 @@ pub struct PartResult {
     /// The tasks' own evidence; see [`TaskLevel`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_level: Option<TaskLevel>,
-}
-
-/// One part of the improvement suite, whose paired `outcomes` are compared
-/// on their own by the rule the decision uses; `None` when no task of it was
-/// graded for both models.
-#[must_use]
-pub fn part_result(
-    suite: SuiteSummary,
-    outcomes: &[PairedOutcome],
-    significance: &dyn Significance,
-) -> Option<PartResult> {
-    let comparison = compare(outcomes);
-    (comparison.paired > 0).then(|| PartResult {
-        suite,
-        sign_test: significance.sign_test(&by_cluster(outcomes)),
-        task_level: None,
-        comparison,
-    })
 }
 
 /// One earlier release's suite in the retention check.
@@ -593,114 +544,6 @@ impl GateReport {
     }
 }
 
-/// The retention check over each earlier release's suite and outcomes.
-#[must_use]
-pub fn retention(
-    suites: Vec<(ReleaseId, SuiteSummary, Vec<PairedOutcome>)>,
-    bound: f64,
-) -> Check<Retention> {
-    let mut failures = Vec::new();
-    let mut retained = Vec::new();
-    for (release, suite, outcomes) in suites {
-        let comparison = compare(&outcomes);
-        let drop = comparison.drop();
-        let passed = match drop {
-            None => {
-                failures.push(format!(
-                    "release {release}'s suite was not measured: no task graded for both models"
-                ));
-                false
-            }
-            Some(drop) if drop > bound => {
-                failures.push(format!(
-                    "release {release}'s suite dropped {drop:.4} > bound {bound}"
-                ));
-                false
-            }
-            Some(_) => true,
-        };
-        let lost = outcomes
-            .iter()
-            .filter(|o| o.paired() == Some((false, true)))
-            .map(|o| o.item.clone())
-            .collect();
-        retained.push(RetainedSuite {
-            release,
-            suite,
-            comparison,
-            drop,
-            passed,
-            lost,
-            agentic: None,
-        });
-    }
-    let failure = (!failures.is_empty()).then(|| failures.join("; "));
-    Check::decided(
-        Retention {
-            bound,
-            suites: retained,
-        },
-        failure,
-    )
-}
-
-/// The anchor check of suite `version`/`digest` over `outcomes`.
-#[must_use]
-pub fn anchor(
-    version: u32,
-    digest: Digest,
-    suite: SuiteSummary,
-    outcomes: &[PairedOutcome],
-    bound: AnchorBound,
-) -> Check<Anchor> {
-    let comparison = compare(outcomes);
-    let Some(drop) = comparison.drop() else {
-        return Check::unmeasured(format!(
-            "no task of anchor suite version {version} was graded for both models"
-        ));
-    };
-    let (rate, max_net_lost, failure) = match bound {
-        AnchorBound::Rate(rate) => (
-            rate,
-            None,
-            (drop > rate).then(|| {
-                format!("the anchor suite (version {version}) dropped {drop:.4} > bound {rate}")
-            }),
-        ),
-        AnchorBound::NetLost(max) => {
-            let net = i64::try_from(comparison.baseline_wins).unwrap_or(i64::MAX)
-                - i64::try_from(comparison.candidate_wins).unwrap_or(i64::MAX);
-            (
-                DEFAULT_ANCHOR_BOUND,
-                Some(max),
-                (net > i64::from(max)).then(|| {
-                    format!(
-                        "the anchor suite (version {version}) net lost {net} > {max} answers \
-                         ({} lost, {} gained)",
-                        comparison.baseline_wins, comparison.candidate_wins
-                    )
-                }),
-            )
-        }
-    };
-    Check::decided(
-        Anchor {
-            version,
-            digest,
-            suite,
-            comparison,
-            drop: Some(drop),
-            bound: rate,
-            max_net_lost,
-            drop_interval: None,
-            items_to_see_two_points: None,
-            workspace_tasks: None,
-            agentic: None,
-        },
-        failure,
-    )
-}
-
 /// The share of the re-answered tasks, in percent, that must come back
 /// alike for the serve check to pass (for a task an agent works on, graded
 /// the same: [`Agreement::Verdicts`]). Two processes decoding one model sum
@@ -738,9 +581,6 @@ pub fn serve(measured: Serve) -> Check<Serve> {
     };
     Check::decided(measured, failure)
 }
-
-#[cfg(test)]
-mod tests;
 
 #[cfg(test)]
 mod serve_tests;

@@ -3,79 +3,40 @@
 
 # Evaluation reference
 
-What the release gate checks, the anchor suite that `eval` freezes and shows, and the file format of the
-anchor suite. How to run an evaluation is in the [evaluation guide](../guides/evaluation.md).
+Where a release is decided and what is checked there, the anchor suite that `eval` freezes and shows,
+and the file format of the anchor suite. How to run an evaluation is in the [evaluation guide](../guides/evaluation.md).
 
-## The release gate
+## Where a release is decided
 
+A candidate becomes a release in one of two places, each with its own rule:
 
-The gate decides a candidate against the release its alias
-(`--alias`, default `default`) points at - the champion, or the base before
-any release - and refuses a candidate that was not trained from it. Both
-are graded closed-book by each task's own verifiers (the judged kinds by
-`--judge REF`, a calibrated judge) on the same suites, and the candidate is released only if all four checks pass; each
-is printed with its numbers, and a check that could not be measured fails.
-Improvement and retention carry the one promotion decision
-(`splinter_eval::promotion`): on the examiner's signed verdicts when the
-caller holds them (exam-verified), else on the gate's own suites, where no
-sealed slice applies (a release whose exam the learner made
-itself). That decision is recorded as `promotion` in the report and in the
-release manifest's gate (`rule`: `examined`, or `not_exam_verified` with
-`why`; `exam_verified`; typed `reasons`), and the gate prints it:
+- **A factory run's `promotion` stage** decides on the run's evaluations, each of a stated
+  purpose: the target and transfer suites must be improved and the retention suite must not
+  regress, and a candidate whose lineage shows its target climbing while transfer stays flat trips
+  the divergence alarm. The rules are in [the learning factory](../guides/learning-factory.md#what-each-stage-guarantees).
+  An evaluation of a protected plan counts an examiner's verdict only when its Ed25519 signature
+  verifies under the examiner's public key and it is about this candidate at the plan's level.
+- **Absorption** (`absorb`, `consolidate`) decides on counts, with no significance test: a claim
+  is answered when every one of its stopping paraphrases passes, the candidate must answer a claim
+  the champion did not and keep every claim the champion answered, and, when an anchor suite is
+  frozen, may not get fewer of its items right. The rules are in
+  [Learn from your own agent sessions](../guides/agent-sessions.md#absorb-from-sessions-to-a-release).
+
+Both hold the candidate to the serve check before it is released:
 
 | Check | Passes when |
 |---|---|
-| improvement | on the new datasets' held-out tasks - the records training held out, and the variants of the tasks it trained on - the promotion rule's dev gain: the paired change in the share of tasks right, over the tasks both models were graded on, has its two-sided 95% interval above 0, the interval resampling whole families of source text, over at least six families (`too_few_families` below: unanimous families resample to an interval of no width); and the candidate solved at least as many of the assigned tasks as the champion (a task it was not graded on counts as unsolved). The sign test that counts a family once is reported beside it and decides nothing |
-| retention | the promotion rule's retention: over every earlier release's held-out tasks and the anchor suite together, the lower bound of the one-sided 95% interval of the paired change, resampling families, is above -0.05. Each earlier release's drop is reported with the tasks the champion answered and the candidate lost (`lost`) |
-| anchor | beside the promotion rule, a tighter floor on the anchor suite in force: the candidate's accuracy is at most 0.02 below the champion's; both arms are asked it under the default prompt, so it measures what the weights kept and not the persona prompt; the report gives the drop's bootstrap interval over the paired items beside it |
-| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `--brain-bin`), with the base checkpoint the candidate was trained on as its `--checkpoint`, in a runtime directory of its own, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers up to 8 held-out tasks through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
+| serve | `brain serve --adapter <candidate>` (the `brain` on `PATH`, or `--brain-bin`), with the base checkpoint the candidate was trained on as its `--checkpoint`, in a runtime directory of its own, starts - brain binds the adapter only to the base whose digest training recorded on it - reports the candidate's adapter digest, and re-answers a sample of the held-out items through its OpenAI-compatible endpoint, both sides decoding greedily and without a reasoning block, with the same answers as in-process on at least three quarters of them (the same verdict, and either the same text over its first nine tenths, runs of whitespace aside, or - worded otherwise, as a sampling server or another summation order will - the same meaning: embedded by Qwen3-Embedding, an answer must be nearer its own in-process answer than to the in-process answer of any other task, so the comparison cannot call everything alike); each task answered differently is reported with both answers |
 
-### The improvement check
+A release made before these rules carries the report of the earlier graded-answer gate
+(improvement, retention, anchor and serve checks, and its promotion record); such releases still
+load, and `release list` and their reports show those numbers as recorded.
 
-The improvement check measures whether the candidate learned the facts it
-was trained on, on questions it was not trained on: the held-out records (a
-tenth of the new data drawn by seed and stratum, grown to eight families of source text where
-the data has them, within a quarter of it, so that an interval over families
-can show a gain) are few, and questions about other facts cannot
-improve for a campaign that teaches facts. So the suite is completed with the stored
-variants of the tasks the candidate's trained-on records were projected
-from (`tasks variants` writes them for any task
-set). A variant of a task that was held out measures nothing the
-candidate learned and is not used. A variant whose wording the candidate
-trained on - the same question, a near duplicate, or its words inside a
-longer training prompt - is left out like any leaked held-out task. The
-gate prints how many variants were measured and how many were left out,
-by reason; the manifest records them. The decision rests on the two together by the promotion
-rule's family-resampled interval; the report also gives the family-level sign test and, for the
-whole suite and for each part, the difference in the share right with its interval and the exact
-sign test over the tasks, to read it by.
-The decision rests on the two together,
-but the report keeps them apart: generalisation (the held-out records, text
-the candidate was not trained on) and recall under paraphrase (the variants
-of trained tasks) each print their own comparison and sign test, and the
-report states the system prompt each arm was asked each suite under
-(`prompts`). Retention, anchor and serve are measured as before.
-
-### Training warnings
+## Training warnings
 
 The warnings a training run reports about its curve (a large generalisation gap at the step
 carried, a monitoring loss that rose after it or was still falling at the end of the budget) are
 carried by the exam of that candidate (`training_warnings`) and printed with its verdict.
-
-### Repository candidates
-
-A candidate trained on a repository's tasks is gated on a different suite than a
-candidate trained on documents: the champion and the candidate attempt, as
-agents in copies of the tree, the tasks of the exam that candidate's run set
-apart before any attempt (every earlier release is held to the exam of the run
-that made it), and the paired outcomes are resampled by family in the same promotion
-rule. Attempts that read the hidden tests, and attempts the harness could not
-carry out, are set aside and counted for each arm in the report; neither is
-in a denominator. The serve check asks the served candidate the same tasks
-through the same worker and requires its verdicts to agree with the
-in-process ones on at least three quarters of a sample. The anchor suite is
-the frozen one; it holds coding-agent tasks only if some were frozen, and the
-report says how many it holds rather than scoring an absence.
 
 ## Suites
 

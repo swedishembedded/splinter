@@ -21,9 +21,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::gate::{self, Check, Improvement, SuiteSummary};
-use crate::paired::{by_cluster, PairedOutcome};
-use crate::pilot::{pilot_reasons, Share};
+use crate::pilot::Share;
 use crate::significance::{SignTest, Significance};
 
 /// The power an exam is asked to have: four chances in five.
@@ -265,7 +263,7 @@ pub struct PowerAssessment {
     /// candidate, trained once.
     #[serde(default = "gate_training_runs")]
     pub training_runs: usize,
-    /// Why the result is a pilot, when it is ([`pilot_reasons`]); empty
+    /// Why the result is a pilot, when it is ([`crate::pilot::pilot_reasons`]); empty
     /// when it is not one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pilot: Vec<String>,
@@ -276,62 +274,6 @@ const GATE_TRAINING_RUNS: usize = 1;
 
 fn gate_training_runs() -> usize {
     GATE_TRAINING_RUNS
-}
-
-/// [`gate::improvement`] held to `rule`: at its level, and, when a target
-/// lead is named, with a miss on an exam too small
-/// to see it called inconclusive and not a failure. A rejection is a pass
-/// whatever the power: the p-value is valid at its level however few units
-/// there are.
-#[must_use]
-pub fn judged_improvement(
-    suite: SuiteSummary,
-    variants: Option<SuiteSummary>,
-    outcomes: &[PairedOutcome],
-    rule: Rule,
-    significance: &dyn Significance,
-) -> Check<Improvement> {
-    let level = rule.alpha;
-    let mut check = gate::improvement(suite, variants, outcomes, level, significance);
-    let Some(measured) = check.measured.as_mut() else {
-        return check;
-    };
-    let units = by_cluster(outcomes).len();
-    let verdict = Verdict::of(
-        &measured.sign_test,
-        units,
-        level,
-        rule.target_effect,
-        significance,
-    );
-    if let Verdict::Inconclusive {
-        power,
-        minimum_detectable_effect,
-    } = verdict
-    {
-        check.inconclusive = true;
-        check.reason = Some(format!(
-            "inconclusive: {units} independent unit(s) give {:.0}% power to see a lead of {:.2} \
-             at level {level:.4}, and the test did not reject (smallest lead it could see: {})",
-            power * 100.0,
-            rule.target_effect.unwrap_or_default(),
-            minimum_detectable_effect
-                .map_or_else(|| "none with these units".into(), |e| format!("{e:.2}")),
-        ));
-    }
-    measured.power = Some(PowerAssessment {
-        units,
-        nominal_alpha: rule.alpha,
-        target_effect: rule.target_effect,
-        verdict,
-        win_share: Share::wilson(
-            measured.sign_test.candidate_wins,
-            measured.sign_test.discordant,
-        ),
-        training_runs: GATE_TRAINING_RUNS,
-        pilot: pilot_reasons(units, GATE_TRAINING_RUNS),
-    });
-    check
 }
 
 #[cfg(test)]

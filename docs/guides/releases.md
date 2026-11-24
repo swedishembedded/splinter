@@ -16,7 +16,7 @@ it); a later recipe trains from it by naming `champion:RUN`
 [Knowledge absorption](../reference/cli.md#splinter-absorb) (`absorb`, `consolidate`) releases through the release
 store of the state root: its gate writes a release manifest and moves an alias, and `release list`
 and `rollback` work on that store. The checks themselves are in the
-[evaluation reference](../reference/evaluation.md#the-release-gate) and the reasoning in
+[evaluation reference](../reference/evaluation.md#where-a-release-is-decided) and the reasoning in
 [release policy](../concepts/release-policy.md).
 
 ```bash

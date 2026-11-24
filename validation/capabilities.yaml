@@ -2720,13 +2720,12 @@ capabilities:
   tier: cpu
 - id: EVAL-005
   crate: splinter-eval
-  entry: splinter_eval::power::spent_alpha / Verdict::of / judged_improvement
-  source: crates/eval/src/power.rs:spent_alpha,Verdict::of,judged_improvement
+  entry: splinter_eval::power::spent_alpha / Verdict::of
+  source: crates/eval/src/power.rs:spent_alpha,Verdict::of
   contract: alpha_g = alpha/(g(g+1)) with generation 0 treated as 1; verdict Significant | NotSignificant | Inconclusive{power,mde}
     so an underpowered miss is not read as failure.
   tests:
   - power/tests.rs
-  - eval/it/gate.rs
   oracle: analytic series sum alpha*G/(G+1)
   missing:
   - 'property: sum_{g<=G} spent_alpha == alpha*G/(G+1)'
@@ -2743,7 +2742,6 @@ capabilities:
     with none); by_cluster reduces each family to one win/loss/tie unit by net wins.
   tests:
   - paired.rs unit tests (3)
-  - eval/it/gate::many_wins_inside_one_family_of_sources_are_one_unit_of_evidence
   oracle: pandas groupby sum + sign
   missing:
   - unit reduction golden against independent generator
@@ -2894,23 +2892,20 @@ capabilities:
   tier: cpu
 - id: EVAL-016
   crate: splinter-eval
-  entry: splinter_eval::gate (release gate checks, GateConfig, improvement/retention/anchor/serve)
-  source: crates/eval/src/gate.rs, gate/agentic.rs, gate/improvement.rs, gate/plan.rs
-  contract: Four-check release gate (improvement via promotion rule over family clusters, retention, anchor floor, serve)
-    where unmeasured is never a pass and every check records the numbers it decided on.
+  entry: splinter_eval::gate (the serve check, GateConfig, and GateReport with its check records)
+  source: crates/eval/src/gate.rs, gate/agentic.rs, gate/improvement.rs
+  contract: The serve check passes only when the served candidate re-answers at least three quarters of a sample as it
+    did in-process (same verdict, and the same text or the same meaning), and is never passed unmeasured; the absorb and
+    consolidation gates hold a candidate to it. The earlier four-check gate's report (improvement, retention, anchor,
+    serve, promotion) stays readable so stored releases load; nothing computes those three checks any more.
   tests:
-  - eval/it/gate (5)
-  - gate/tests.rs (6)
   - gate/serve_tests.rs
-  - crates/pipelines/tests/it/release_predictive.rs::a_failing_or_unmeasured_check_blocks_the_release_and_leaves_the_alias
   - crates/pipelines/tests/absorb/generations.rs::a_candidate_that_loses_a_claim_the_base_holds_is_refused
   oracle: decision-table oracle (CUSTOM_ORACLE_REQUIRED)
   missing:
-  - anchor net-lost-for-200 constant ANCHOR_NET_LOST_FOR_200=6 derivation test
-  - ties in AnchorBound
-  - serve agreement same-text-or-meaning decision
+  - serve agreement same-text-or-meaning decision against an independent embedding comparison
   state: SPECIFIED
-  risk: critical
+  risk: high
   tier: cpu
 - id: EVAL-017
   crate: splinter-eval
