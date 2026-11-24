@@ -32,6 +32,8 @@ pub mod eval;
 pub mod fork;
 pub mod harness_search;
 pub mod import;
+mod lease;
+pub use lease::controller_owner;
 mod models;
 mod pass;
 pub mod play;
@@ -267,6 +269,9 @@ pub struct Factory<'a> {
     /// resolved, or, for a collection a stage produced, when the pin runs.
     pub(crate) collections: BTreeMap<String, crate::collection::LoadedCollection>,
     cancel: Box<dyn Fn() -> bool + 'a>,
+    /// Renews the lease while this controller lives; stopped before the
+    /// lease is released.
+    heartbeat: Option<lease::Heartbeat>,
 }
 
 /// How long a controller's lease lasts without renewal, in seconds.
@@ -284,6 +289,21 @@ impl<'a> Factory<'a> {
         run: &Path,
         services: Services<'a>,
         owner: &str,
+    ) -> Result<Self, RunError> {
+        Self::open_leased(resolved, run, services, owner, LEASE_SECONDS)
+    }
+
+    /// [`Self::open`] with a lease of `lease_secs` seconds, renewed every
+    /// third of it while the controller lives.
+    ///
+    /// # Errors
+    /// As [`Self::open`].
+    pub fn open_leased(
+        resolved: &'a Resolved,
+        run: &Path,
+        services: Services<'a>,
+        owner: &str,
+        lease_secs: u64,
     ) -> Result<Self, RunError> {
         std::fs::create_dir_all(run).map_err(io(run))?;
         let lock_path = run.join(LOCK_FILE);
@@ -321,12 +341,15 @@ impl<'a> Factory<'a> {
             }
         }
         let state = RunState::open(run)?;
-        let fence = match state.acquire(owner, LEASE_SECONDS, unix_now()) {
-            Err(RunStateError::LeaseHeld { owner: holder, .. }) if exited_here(owner, &holder) => {
-                state.take_over(owner, &holder, LEASE_SECONDS, unix_now())?
+        let fence = match state.acquire(owner, lease_secs, unix_now()) {
+            Err(RunStateError::LeaseHeld { owner: holder, .. })
+                if lease::holder_gone(owner, &holder) =>
+            {
+                state.take_over(owner, &holder, lease_secs, unix_now())?
             }
             other => other?,
         };
+        let heartbeat = Some(lease::Heartbeat::start(run, fence.clone(), lease_secs)?);
         let products = ProductStore::new(run, Box::new(SystemClock));
         products.recover()?;
         Ok(Self {
@@ -339,6 +362,7 @@ impl<'a> Factory<'a> {
             done: BTreeMap::new(),
             collections: resolved.collections.clone(),
             cancel: Box::new(|| false),
+            heartbeat,
         }
         .with_cancel_file())
     }
@@ -495,7 +519,14 @@ impl<'a> Factory<'a> {
         let record = self
             .state
             .upsert_pending(&self.fence, &id, key, operation, unix_now())?;
-        if let Ok(manifest) = self.products.ensure_view(&id, &self.run.join(key)) {
+        // Not committed: computed afresh. Committed: reused as committed,
+        // or refused (a rotted blob is never handed on, nor recomputed over).
+        let committed = match self.products.ensure_view(&id, &self.run.join(key)) {
+            Ok(manifest) => Some(manifest),
+            Err(ProductError::UnknownProduct(_)) => None,
+            Err(e) => return Err(e.into()),
+        };
+        if let Some(manifest) = committed {
             if record.state != StageState::Completed {
                 let running = self.to_running(&id, record.version, record.state)?;
                 self.state.transition(
@@ -613,20 +644,9 @@ impl Drop for Factory<'_> {
     /// The lease is given up when the controller ends, so the next one
     /// (a resume) need not wait for it to lapse.
     fn drop(&mut self) {
+        drop(self.heartbeat.take());
         let _ = self.state.release(&self.fence, unix_now());
     }
-}
-
-/// Whether the lease holder `holder` is a process of this host (owners are
-/// `<host>:<pid>`) that no longer runs: a crashed controller, whose lease
-/// another controller of the same host may take over at once.
-fn exited_here(owner: &str, holder: &str) -> bool {
-    let (Some((host, _)), Some((holder_host, pid))) =
-        (owner.rsplit_once(':'), holder.rsplit_once(':'))
-    else {
-        return false;
-    };
-    host == holder_host && pid.parse::<u32>().is_ok() && !Path::new("/proc").join(pid).exists()
 }
 
 /// Write `value` as pretty JSON to `path`.

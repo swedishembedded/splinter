@@ -40,6 +40,10 @@ struct Log {
     most_at_once: AtomicUsize,
     /// Items that fail (once each) instead of producing.
     fail_once: Mutex<Vec<String>>,
+    /// Items whose execution panics.
+    panics: Mutex<Vec<String>>,
+    /// How long each item takes, when not the default.
+    slow: Mutex<Option<std::time::Duration>>,
 }
 
 impl Log {
@@ -109,8 +113,17 @@ impl Execute for Upper {
         *log.calls.lock().unwrap().entry(name.clone()).or_default() += 1;
         let now = log.running.fetch_add(1, Ordering::SeqCst) + 1;
         log.most_at_once.fetch_max(now, Ordering::SeqCst);
-        std::thread::sleep(std::time::Duration::from_millis(30));
+        let pause = log
+            .slow
+            .lock()
+            .unwrap()
+            .unwrap_or(std::time::Duration::from_millis(30));
+        std::thread::sleep(pause);
         log.running.fetch_sub(1, Ordering::SeqCst);
+        assert!(
+            !log.panics.lock().unwrap().contains(&name),
+            "{name}: the operation hit a bug"
+        );
         let mut failing = log.fail_once.lock().unwrap();
         if let Some(at) = failing.iter().position(|f| *f == name) {
             failing.remove(at);
@@ -263,6 +276,71 @@ fn a_crashed_fan_out_resumes_without_repeating_a_finished_item() {
             ("d.txt".into(), 1),
         ])
     );
+}
+
+/// An operation that panics fails its stage with the panic named, never
+/// leaving the controller waiting on a result that will not come.
+#[test]
+fn a_panicking_item_fails_its_stage_and_never_hangs_the_controller() {
+    let repo = Repo::new();
+    books(&repo);
+    let log = Arc::new(Log::default());
+    log.panics.lock().unwrap().push("b.txt".into());
+    let resolved = resolved(&repo, RECIPE, &log);
+    let dir = tempfile::tempdir().unwrap();
+    let (sent, ran) = std::sync::mpsc::channel();
+    let path = dir.path().to_path_buf();
+    std::thread::spawn(move || {
+        let _ = sent.send(run(&resolved, &path).map_err(|e| e.to_string()));
+    });
+    let error = ran
+        .recv_timeout(std::time::Duration::from_secs(120))
+        .expect("the controller hung on a panicked item")
+        .unwrap_err();
+    assert!(
+        error.contains("b.txt") && error.contains("panicked"),
+        "{error}"
+    );
+}
+
+/// A stage that outlasts one lease keeps it: the controller renews it while
+/// it lives, so a second controller arriving mid-stage is refused rather than
+/// taking the lapsed lease and computing the same stage again.
+#[test]
+fn a_stage_longer_than_the_lease_keeps_it_for_its_controller() {
+    let repo = Repo::new();
+    repo.write("books/a.txt", "alpha");
+    let log = Arc::new(Log::default());
+    *log.slow.lock().unwrap() = Some(std::time::Duration::from_secs(5));
+    let resolved = resolved(&repo, RECIPE, &log);
+    let dir = tempfile::tempdir().unwrap();
+    let backend = FakeBackend::with(Trial::Pass);
+    let services = || Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            let mut factory =
+                Factory::open_leased(&resolved, dir.path(), services(), "first:1", 2)?;
+            factory.run().map(|_| ())
+        });
+        std::thread::sleep(std::time::Duration::from_millis(3500));
+        let second = Factory::open_leased(&resolved, dir.path(), services(), "second:1", 2);
+        assert!(
+            matches!(&second, Err(e) if e.to_string().contains("lease")),
+            "a live controller's lease was taken: {:?}",
+            second.as_ref().err()
+        );
+        drop(second);
+        first
+            .join()
+            .unwrap()
+            .expect("the first controller finishes its stage");
+    });
+    assert_eq!(log.calls().get("a.txt"), Some(&1));
 }
 
 #[test]

@@ -243,3 +243,51 @@ fn an_executable_file_stays_executable_in_every_view() {
         .unwrap();
     assert_eq!(mode(&imported.join("tests/test.sh")), 0o555);
 }
+
+/// A product is reused only as committed: a view whose file was replaced is
+/// made the product's again from its blobs, and a product whose blob changed
+/// (rotted, or edited in place through a view's link to it) is refused, never
+/// handed to the next stage.
+#[test]
+fn a_reused_product_is_its_committed_bytes_or_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let view = dir.path().join("datasets/sft");
+    let id = stage("sft");
+    let manifest = store
+        .publish(
+            &id,
+            "datasets/sft",
+            stage_output(&store, &[("train.jsonl", "kept\n")]),
+            &view,
+        )
+        .unwrap();
+
+    // An editor's save replaces the file (a new inode): the blob is intact
+    // and the view is made the product's again.
+    fs::remove_file(view.join("train.jsonl")).unwrap();
+    fs::write(view.join("train.jsonl"), "edited by hand\n").unwrap();
+    store.ensure_view(&id, &view).unwrap();
+    assert_eq!(
+        fs::read_to_string(view.join("train.jsonl")).unwrap(),
+        "kept\n"
+    );
+    store.verify_product(&id, &view).unwrap();
+
+    // A view's file is a link to its blob: an edit in place (which only an
+    // owner overriding the read-only mode can make) reaches the blob, and the
+    // product is refused rather than handed on.
+    let blob = dir
+        .path()
+        .join("blobs/sha256")
+        .join(manifest.files[0].digest.hex());
+    let mut perms = fs::metadata(&blob).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    fs::set_permissions(&blob, perms).unwrap();
+    fs::write(view.join("train.jsonl"), "rotted\n").unwrap();
+    assert!(matches!(
+        store.ensure_view(&id, &view),
+        Err(ProductError::BlobCorrupt { .. })
+    ));
+}

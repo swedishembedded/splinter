@@ -227,3 +227,35 @@ fn a_released_lease_is_taken_at_once_and_a_dead_holders_is_taken_over() {
         Err(RunStateError::StaleFence { .. })
     ));
 }
+
+/// A holder renews its lease through its fence: the expiry moves and the
+/// token stays, even once the lease has lapsed while no one took it; a
+/// holder whose lease another controller took cannot renew it back.
+#[test]
+fn a_lease_is_renewed_through_its_fence_and_never_after_another_took_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = RunState::open(dir.path()).unwrap();
+    let second = RunState::open(dir.path()).unwrap();
+
+    let fence = first.acquire("alpha", 10, 100).unwrap();
+    first.renew(&fence, 10, 108).unwrap();
+    assert!(matches!(
+        second.acquire("beta", 10, 115),
+        Err(RunStateError::LeaseHeld {
+            expires_at: 118,
+            ..
+        })
+    ));
+    // Lapsed, but no one took it: the holder keeps it, with its token.
+    first.renew(&fence, 10, 130).unwrap();
+    first
+        .upsert_pending(&fence, &digest("s"), "s", "train", 131)
+        .unwrap();
+
+    let taken = second.acquire("beta", 10, 200).unwrap();
+    assert!(matches!(
+        first.renew(&fence, 10, 201),
+        Err(RunStateError::StaleFence { .. })
+    ));
+    second.renew(&taken, 10, 205).unwrap();
+}

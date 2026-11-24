@@ -287,6 +287,23 @@ impl RunState {
         })
     }
 
+    /// Extends `fence`'s lease to `ttl_secs` seconds from `now`, keeping its
+    /// token: the heartbeat of a controller whose stage outlasts one lease.
+    /// A lease that lapsed while no one took it is still the holder's; one
+    /// another controller took is not given back.
+    ///
+    /// # Errors
+    /// The fence is stale (someone else holds the lease).
+    pub fn renew(&self, fence: &Fence, ttl_secs: u64, now: u64) -> Result<(), RunStateError> {
+        let tx = self.begin_fenced(fence)?;
+        tx.execute(
+            "UPDATE lease SET expires_at = ?1 WHERE id = 1",
+            params![now.saturating_add(ttl_secs)],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Gives up `fence`'s lease at `now`: any controller may acquire it
     /// after, with a higher token.
     ///

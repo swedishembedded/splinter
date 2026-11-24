@@ -152,9 +152,10 @@ pub fn is_run(path: &Path) -> bool {
     run::is_run(path)
 }
 
-/// The controller's name on its lease: this host and process.
+/// The controller's name on its lease: this host and process
+/// ([`run::controller_owner`]).
 fn owner(config: &Config) -> String {
-    format!("{}:{}", config.jobs.owner, std::process::id())
+    run::controller_owner(&config.jobs.owner)
 }
 
 /// What `validate` and `plan` show.

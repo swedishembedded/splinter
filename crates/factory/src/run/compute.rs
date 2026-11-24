@@ -425,9 +425,21 @@ fn run_items(
                         let done = done.clone();
                         let key = item.key.clone();
                         scope.spawn(move || {
-                            let result = std::fs::create_dir_all(&out)
-                                .map_err(|e| e.to_string())
-                                .and_then(|()| executor.execute(&call));
+                            // A panicking operation is a failed item: its
+                            // result is sent like any other, or the loop
+                            // below would wait for it for ever.
+                            let result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    std::fs::create_dir_all(&out)
+                                        .map_err(|e| e.to_string())
+                                        .and_then(|()| executor.execute(&call))
+                                }))
+                                .unwrap_or_else(|panic| {
+                                    Err(format!(
+                                        "the operation panicked: {}",
+                                        panic_message(&*panic)
+                                    ))
+                                });
                             let _ = done.send((key, result));
                         });
                         running.insert(item.key.clone(), (item, version, staging));
@@ -526,4 +538,13 @@ fn reduce(
     };
     let committed = factory.commit(&stage.key, &stage.operation, &identity, &produce)?;
     Ok((identity, committed))
+}
+
+/// What a panic said, when it said it with a string.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "without a message".into())
 }

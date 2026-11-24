@@ -881,7 +881,11 @@ optional index across runs (each trial an experience with the factory's grade as
 its verdict; indexing again files nothing new); the run's products stay its record.
 
 `splinter cancel RUN` stops a run at its next stage or batch boundary;
-`splinter resume RUN` continues it. `splinter export RUN --out run.tar.zst` writes
+`splinter resume RUN` continues it. One controller holds a run at a time, on a
+lease it renews while it lives, however long a stage takes; a resume takes the
+lease of a controller that crashed at once when it can prove it gone (the same
+host and pid namespace, its process no longer running), and otherwise when the
+lease lapses (ten minutes). `splinter export RUN --out run.tar.zst` writes
 a bundle that `splinter verify` checks on another machine.
 
 ## Guided sessions

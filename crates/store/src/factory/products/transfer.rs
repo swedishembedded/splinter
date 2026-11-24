@@ -89,29 +89,34 @@ impl ProductStore {
         Ok(manifest)
     }
 
-    /// Makes the view at `view` show the committed product of `stage_id`:
-    /// left alone when it already does, materialised from the blobs
-    /// otherwise (a view another product of the same stage key last took,
-    /// as a fork of a run that holds both leaves it).
+    /// Makes the view at `view` show the committed product of `stage_id`,
+    /// byte for byte, as a product is reused: every blob is re-hashed (a
+    /// rotted one is refused), and a view that does not hold exactly the
+    /// committed files (another product of the same stage key took it, as a
+    /// fork of a run that holds both leaves it, or a file of it was edited)
+    /// is materialised from the blobs again.
     ///
     /// # Errors
-    /// No such product, or the view cannot be written.
+    /// No such product, a blob that no longer hashes to its address, or the
+    /// view cannot be written.
     pub fn ensure_view(
         &self,
         stage_id: &Digest,
         view: &Path,
     ) -> Result<ProductManifest, ProductError> {
         let manifest = self.manifest(stage_id)?;
-        // The view names the product it shows in its own manifest; reading
-        // it is enough here (`verify_product` re-hashes every file).
-        let shown = fs::read(view.join(super::VIEW_MANIFEST))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<ProductManifest>(&bytes).ok());
-        if shown.as_ref() == Some(&manifest) {
-            return Ok(manifest);
+        match self.verify_product(stage_id, view) {
+            Ok(()) => return Ok(manifest),
+            Err(rotted @ (ProductError::BlobCorrupt { .. } | ProductError::UnknownBlob(_))) => {
+                return Err(rotted)
+            }
+            Err(_) => {}
         }
         self.relative_view(view)?;
         self.materialise_view(view, &manifest)?;
+        // What was written is checked like what was found: every blob and
+        // every file of the view.
+        self.verify_product(stage_id, view)?;
         Ok(manifest)
     }
 }
