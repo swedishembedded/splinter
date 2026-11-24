@@ -384,6 +384,9 @@ fn rewards(result: &Value) -> Option<&serde_json::Map<String, Value>> {
 /// The reward, and why it is unusable (`None` when usable or absent).
 fn usable_reward(result: &Value) -> (Option<f64>, Option<String>) {
     let rewards = rewards(result);
+    if let Err(problem) = metrics(result) {
+        return (None, Some(problem));
+    }
     match reward_of(rewards) {
         Err(problem) => (None, Some(problem)),
         Ok(None) if rewards.is_some_and(|r| !r.is_empty()) => {
@@ -700,22 +703,23 @@ pub fn classify(
     }
 }
 
-/// The graded aspects beside the reward: every other numeric key of the
-/// rewards object; empty when one of them is not a valid reward.
-fn metrics(result: &Value) -> BTreeMap<String, f64> {
+/// The graded aspects beside the reward: every other key of the rewards
+/// object, each a valid measurement.
+///
+/// # Errors
+/// A metric is not a number in `[0, 1]`; the trial's measurements are then
+/// unusable, which must stay visible and never read as "no metrics".
+fn metrics(result: &Value) -> Result<BTreeMap<String, f64>, String> {
     let mut out = BTreeMap::new();
     for (name, value) in rewards(result).into_iter().flatten() {
-        if name == "reward" || !value.is_number() {
+        if name == "reward" {
             continue;
         }
-        match parse_reward(value) {
-            Ok(reward) => {
-                out.insert(name.clone(), reward);
-            }
-            Err(_) => return BTreeMap::new(),
-        }
+        let measured =
+            parse_reward(value).map_err(|problem| format!("metric {name}: {problem}"))?;
+        out.insert(name.clone(), measured);
     }
-    out
+    Ok(out)
 }
 
 /// Classify and score one trial under `policy`.
@@ -755,7 +759,7 @@ pub fn grade(evidence: &TrialEvidence, policy: &GradingPolicy) -> Grade {
         Some(false)
     };
     let metrics = if score.is_some() {
-        metrics(&evidence.result)
+        metrics(&evidence.result).unwrap_or_default()
     } else {
         BTreeMap::new()
     };

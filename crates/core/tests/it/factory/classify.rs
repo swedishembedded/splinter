@@ -234,3 +234,29 @@ fn an_endpoint_rejecting_every_request_with_any_4xx_status_is_an_endpoint_reject
         );
     }
 }
+
+#[test]
+fn a_verifier_metric_that_is_no_valid_measurement_makes_the_trial_unusable_not_metricless() {
+    let cases = cases();
+    let partial = cases
+        .iter()
+        .find(|c| c["name"] == "partial_credit")
+        .expect("the case");
+    for (metric, value) in [
+        ("invariants_hold", serde_json::json!(1.5)),
+        ("invariants_hold", serde_json::json!(-0.1)),
+        ("invariants_hold", serde_json::json!("high")),
+    ] {
+        let (mut evidence, policy) = evidence(partial);
+        evidence.result["verifier_result"]["rewards"][metric] = value.clone();
+        let graded = grade(&evidence, &policy);
+        assert_eq!(
+            (graded.status, graded.counted, graded.score),
+            (TrialStatus::VerifierError, false, None),
+            "{metric}={value}"
+        );
+        let cause = graded.cause.expect("a cause");
+        assert_eq!(cause.code, "malformed_reward", "{metric}={value}");
+        assert!(cause.message.contains(metric), "{}", cause.message);
+    }
+}
