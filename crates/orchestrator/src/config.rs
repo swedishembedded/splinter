@@ -426,13 +426,21 @@ impl Config {
     /// machine alone even inside an allocation.
     #[must_use]
     pub fn from_env() -> Self {
-        let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
         // `HOME`, else the account's home directory. With neither, every
         // path under it stays relative, which the runtime refuses rather
         // than writing state into whatever directory it was started in.
         let home = std::env::home_dir()
             .filter(|home| home.is_absolute())
             .unwrap_or_default();
+        Self::from_vars(|name| std::env::var(name).ok(), &home)
+    }
+
+    /// [`Config::from_env`] with the environment read through `lookup` and
+    /// the home directory given: the precedence of every variable, with an
+    /// empty value taken as unset, apart from this process's environment.
+    #[must_use]
+    pub fn from_vars(lookup: impl Fn(&str) -> Option<String>, home: &Path) -> Self {
+        let var = |name: &str| lookup(name).filter(|v| !v.is_empty());
         // Where `brain pull` puts a checkpoint when nothing names a store.
         let model_store = var("XDG_DATA_HOME").map_or_else(
             || home.join(".local/share/brain/models"),
@@ -450,7 +458,7 @@ impl Config {
                 }),
         };
         Self {
-            state_root: StateRoot::under_home(&home),
+            state_root: StateRoot::under_home(home),
             factory,
             jobs: JobSettings::default(),
             policy_base: model_store.join(DEFAULT_POLICY_MODEL),
@@ -629,5 +637,141 @@ mod tests {
         assert_eq!(jobs.slurm.squeue, None);
         assert_eq!(jobs.slurm.scancel, None);
         assert!(jobs.slurm.args.is_empty());
+    }
+}
+
+/// Spec: the configuration a process starts with is read from its
+/// environment by fixed precedence, and an empty variable is an unset one.
+#[cfg(test)]
+mod env_spec {
+    use super::*;
+
+    fn vars<'a>(set: &'a [(&'a str, String)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |name| set.iter().find(|(n, _)| *n == name).map(|(_, v)| v.clone())
+    }
+
+    /// A directory of the test's own, under which every path it names lies.
+    fn scratch(test: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("splinter-config-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn text(path: &Path) -> String {
+        path.to_str().unwrap().to_string()
+    }
+
+    fn program(dir: &Path, name: &str, executable: bool) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(dir).unwrap();
+        let file = dir.join(name);
+        std::fs::write(&file, "#!/bin/sh\n").unwrap();
+        let mode = if executable { 0o755 } else { 0o644 };
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+        file
+    }
+
+    #[test]
+    fn the_configuration_file_is_named_then_under_xdg_then_under_home() {
+        let root = scratch("file");
+        let home = root.join("home");
+        let named = root.join("s.yaml");
+        let xdg = root.join("xdg");
+        let config = |set: &[(&str, String)]| Config::from_vars(vars(set), &home).factory.config;
+        assert_eq!(
+            config(&[
+                ("SPLINTER_CONFIG", text(&named)),
+                ("XDG_CONFIG_HOME", text(&xdg))
+            ]),
+            named
+        );
+        assert_eq!(
+            config(&[("XDG_CONFIG_HOME", text(&xdg))]),
+            xdg.join("splinter/config.yaml")
+        );
+        assert_eq!(
+            config(&[
+                ("SPLINTER_CONFIG", String::new()),
+                ("XDG_CONFIG_HOME", String::new())
+            ]),
+            home.join(".config/splinter/config.yaml"),
+            "an empty variable is an unset one"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_model_store_and_the_policy_base_follow_xdg_data_home_else_home() {
+        let root = scratch("store");
+        let home = root.join("home");
+        let data = root.join("data");
+        let under_xdg = Config::from_vars(vars(&[("XDG_DATA_HOME", text(&data))]), &home);
+        assert_eq!(under_xdg.model_store, data.join("brain/models"));
+        assert_eq!(
+            under_xdg.policy_base,
+            data.join("brain/models").join(DEFAULT_POLICY_MODEL)
+        );
+        let under_home = Config::from_vars(vars(&[]), &home);
+        assert_eq!(
+            under_home.model_store,
+            home.join(".local/share/brain/models")
+        );
+        assert_eq!(under_home.state_root, StateRoot::under_home(&home));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_worker_is_named_else_the_first_executable_one_on_path() {
+        let dir = scratch("worker");
+        let (first, second) = (dir.join("a"), dir.join("b"));
+        program(&first, "splinter-harbor-worker", false);
+        let found = program(&second, "splinter-harbor-worker", true);
+        let path = std::env::join_paths([&first, &second]).unwrap();
+        let path = path.to_str().unwrap().to_string();
+        let named = dir.join("w");
+        let worker =
+            |set: &[(&str, String)]| Config::from_vars(vars(set), &dir).factory.harbor_worker;
+        assert_eq!(
+            worker(&[("PATH", path.clone())]),
+            Some(found),
+            "a file that is not executable is passed over"
+        );
+        assert_eq!(
+            worker(&[("SPLINTER_HARBOR_WORKER", text(&named)), ("PATH", path)]),
+            Some(named)
+        );
+        assert_eq!(worker(&[]), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_the_allowlisted_variables_are_captured_and_empty_ones_are_not() {
+        let root = scratch("capture");
+        let set = [
+            ("PATH", text(&root.join("bin"))),
+            ("HOME", String::new()),
+            ("DOCKER_HOST", "unix:d.sock".to_string()),
+            ("SECRET_TOKEN", "x".to_string()),
+        ];
+        let config = Config::from_vars(vars(&set), &root);
+        assert_eq!(config.command_env.get("PATH"), Some(&set[0].1));
+        assert!(!config.command_env.contains_key("HOME"), "empty is unset");
+        assert!(!config.command_env.contains_key("SECRET_TOKEN"));
+        assert!(config
+            .command_env
+            .keys()
+            .all(|k| DEFAULT_ENV_ALLOWLIST.contains(&k.as_str())));
+        assert_eq!(
+            config
+                .workspace
+                .docker_env
+                .get("DOCKER_HOST")
+                .map(String::as_str),
+            Some("unix:d.sock")
+        );
+        assert!(!config.workspace.docker_env.contains_key("SECRET_TOKEN"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

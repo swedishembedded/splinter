@@ -551,9 +551,11 @@ gaps:
     values and defaults untested.
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: orchestrator config.rs is the one reader of the environment with few specs; the state-root refusal and SPLINTER_CONFIG
-    are now specified, the precedence of the rest is not
+  status: fixed
+  resolution: 'Config::from_env reads the process environment through Config::from_vars (a lookup and the home directory),
+    whose precedence is specified (config::env_spec): the configuration file, the model store and policy base, the worker
+    on PATH (a file that is not executable passed over), the allowlisted capture for commands and docker, and an empty variable
+    as unset; the batch allocation variables were already specified in cluster.rs, malformed values included'
 - id: G-EK-01
   source_id: null
   where: crates/model/src/stats.rs:176, crates/eval/src/competence.rs:316, crates/pipelines/src/powered/analysis.rs:467,
