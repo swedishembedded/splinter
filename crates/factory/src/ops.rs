@@ -185,6 +185,12 @@ pub struct ExtendDatasetParams {
     /// the free text a call carries beside what it does (a stated intent).
     #[serde(default)]
     pub ignore_call_arguments: Vec<String>,
+    /// Prefixes taken off a record's task id (its `metadata.task`, or its `metadata.group` when it has no task)
+    /// to make the key two datasets compare tasks by: records written from a benchmark and records projected from a
+    /// run name one task in different ways (`swedishembedded/vim-001-x`, `train/001-x`). A prefix is taken off
+    /// repeatedly, in the order given, until none applies.
+    #[serde(default)]
+    pub task_prefixes: Vec<String>,
     /// The share, in percent, of the tasks new to the base that are held out
     /// (as whole tasks). A task the base already has stays on its side.
     #[serde(default = "ten")]

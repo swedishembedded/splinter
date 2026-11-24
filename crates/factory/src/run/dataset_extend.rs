@@ -79,17 +79,20 @@ const TOOLS_MISMATCH: &str = "tools_mismatch";
 
 /// A record line, read: its task, the context it was made under and the
 /// calls it makes.
-fn line_of(record: &ChatRecord, ignore: &[String]) -> Result<Line, String> {
+fn line_of(record: &ChatRecord, ignore: &[String], prefixes: &[String]) -> Result<Line, String> {
     let supervised = record.supervised().len();
     if supervised == 0 {
         return Err("supervises no message (`train: true`)".into());
     }
     Ok(Line {
         text: record.line().to_owned(),
-        task: record
-            .task()
-            .ok_or("names no task (`metadata.task`)")?
-            .to_owned(),
+        task: task_key(
+            record
+                .task()
+                .or_else(|| record.group())
+                .ok_or("names no task (`metadata.task` or `metadata.group`)")?,
+            prefixes,
+        ),
         prompt: record
             .system_prompt()
             .ok_or("does not open with a system message")?
@@ -100,12 +103,25 @@ fn line_of(record: &ChatRecord, ignore: &[String]) -> Result<Line, String> {
     })
 }
 
-fn read_lines(path: &Path, ignore: &[String]) -> Result<Vec<Line>, String> {
+/// The key records are compared by: `task` with the prefixes taken off.
+fn task_key(task: &str, prefixes: &[String]) -> String {
+    let mut key = task;
+    while let Some(rest) = prefixes
+        .iter()
+        .find_map(|p| key.strip_prefix(p.as_str()).filter(|_| !p.is_empty()))
+    {
+        key = rest;
+    }
+    key.to_owned()
+}
+
+fn read_lines(path: &Path, ignore: &[String], prefixes: &[String]) -> Result<Vec<Line>, String> {
     read_records::<ChatRecord>(path)
         .map_err(|e| e.to_string())?
         .into_iter()
         .map(|(number, record)| {
-            line_of(&record, ignore).map_err(|e| format!("{} line {number}: {e}", path.display()))
+            line_of(&record, ignore, prefixes)
+                .map_err(|e| format!("{} line {number}: {e}", path.display()))
         })
         .collect()
 }
@@ -269,6 +285,7 @@ pub(crate) fn identity(
         json!({
             "target": extend.target, "per_task": extend.params.per_task,
             "ignore_call_arguments": extend.params.ignore_call_arguments,
+            "task_prefixes": extend.params.task_prefixes,
             "holdout_percent": extend.params.holdout_percent,
             "holdout_seed": extend.params.holdout_seed,
         }),
@@ -283,11 +300,12 @@ fn lines_of(
     stage: &PlannedStage,
     key: &str,
     ignore: &[String],
+    prefixes: &[String],
 ) -> Result<(DatasetProduct, Vec<Line>, Vec<Line>), RunError> {
     let view = factory.view(key);
     let product = dataset_of(&view)?;
     let read = |file: &splinter_core::factory::execution::FileRef| {
-        read_lines(&view.join(&file.path), ignore).map_err(|e| stage_error(&stage.key, e))
+        read_lines(&view.join(&file.path), ignore, prefixes).map_err(|e| stage_error(&stage.key, e))
     };
     let train = read(&product.train)?;
     let validation = read(&product.validation)?;
@@ -307,9 +325,11 @@ pub(crate) fn produce(
         ));
     }
     let ignore = &extend.params.ignore_call_arguments;
-    let (base, base_train, base_validation) = lines_of(factory, stage, &extend.base, ignore)?;
+    let prefixes = &extend.params.task_prefixes;
+    let (base, base_train, base_validation) =
+        lines_of(factory, stage, &extend.base, ignore, prefixes)?;
     let (candidates, cand_train, cand_validation) =
-        lines_of(factory, stage, &extend.candidates, ignore)?;
+        lines_of(factory, stage, &extend.candidates, ignore, prefixes)?;
     if base.thinking != candidates.thinking {
         return Err(stage_error(
             &stage.key,
@@ -469,6 +489,7 @@ pub(crate) fn produce(
             "parents": { "base": parents[0], "candidates": parents[1] },
             "per_task": extend.params.per_task,
             "ignore_call_arguments": extend.params.ignore_call_arguments,
+            "task_prefixes": extend.params.task_prefixes,
             "holdout": { "seed": extend.params.holdout_seed, "percent": extend.params.holdout_percent },
             "base_records": base_total, "candidate_records": supplied,
             "admitted": { "train": added_train.len(), "validation": added_validation.len() },
@@ -521,7 +542,7 @@ mod tests {
     fn lines(records: &[String], ignore: &[String]) -> Vec<Line> {
         records
             .iter()
-            .map(|r| line_of(&ChatRecord::parse(r).unwrap(), ignore).unwrap())
+            .map(|r| line_of(&ChatRecord::parse(r).unwrap(), ignore, &[]).unwrap())
             .collect()
     }
 
@@ -530,6 +551,7 @@ mod tests {
             target: "student".into(),
             per_task,
             ignore_call_arguments: vec!["intent".into()],
+            task_prefixes: Vec::new(),
             holdout_percent: 10,
             // seed: the held-out draw of a new task is a function of this seed and the task.
             holdout_seed: 7,
@@ -547,8 +569,14 @@ mod tests {
     }
 
     fn weigh(admission: &mut Admission, record: &str) -> Fate {
-        admission
-            .weigh(&line_of(&ChatRecord::parse(record).unwrap(), &["intent".to_string()]).unwrap())
+        admission.weigh(
+            &line_of(
+                &ChatRecord::parse(record).unwrap(),
+                &["intent".to_string()],
+                &[],
+            )
+            .unwrap(),
+        )
     }
 
     #[test]
@@ -567,6 +595,32 @@ mod tests {
             Fate::Left(DUPLICATE_SOLUTION),
             "an admitted candidate counts as seen"
         );
+    }
+
+    #[test]
+    fn tasks_named_in_two_styles_are_one_task_once_their_prefixes_are_taken_off() {
+        let prefixes: Vec<String> = ["bench:", "swedishembedded/vim-", "train/"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(task_key("swedishembedded/vim-001-x", &prefixes), "001-x");
+        assert_eq!(task_key("train/001-x", &prefixes), "001-x");
+        assert_eq!(
+            task_key("bench:swedishembedded/vim-001-x", &prefixes),
+            "001-x"
+        );
+        assert_eq!(task_key("001-x", &prefixes), "001-x");
+        assert_eq!(
+            task_key("train/001-x", &[]),
+            "train/001-x",
+            "no prefixes, no change"
+        );
+        // A record with only a group (a projected one) is keyed by it.
+        let projected = ChatRecord::parse(
+            &record("train/001-x", "P", &["z"])
+                .replace(r#""task":"train/001-x""#, r#""group":"train/001-x""#),
+        )
+        .unwrap();
+        assert_eq!(line_of(&projected, &[], &prefixes).unwrap().task, "001-x");
     }
 
     #[test]
@@ -635,7 +689,7 @@ mod tests {
             ];
             let mut chosen: Vec<Line> = order
                 .iter()
-                .map(|&i| line_of(&ChatRecord::parse(&pool[i]).unwrap(), &ignore).unwrap())
+                .map(|&i| line_of(&ChatRecord::parse(&pool[i]).unwrap(), &ignore, &[]).unwrap())
                 .collect();
             weighing_order(&mut chosen);
             let mut admission = base();

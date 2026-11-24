@@ -221,10 +221,11 @@ a dataset that holds every record of the base, byte for byte and in order, follo
   - id: grown
     uses: dataset.extend
     inputs: { base: $stages.sft.dataset, candidates: $stages.more.dataset }
-    with: { target: student, per_task: 4, ignore_call_arguments: [intent], holdout_seed: 17925836769974212992 }
+    with: { target: student, per_task: 4, ignore_call_arguments: [intent],
+            task_prefixes: ["bench:", "swedishembedded/vim-", "train/"], holdout_seed: 17925836769974212992 }
 ```
 
-A candidate is admitted when it was made under the base's system prompt and tool schema, the sequence of its tool
+Records name their task in different ways (`swedishembedded/vim-001-x` in published records, `train/001-x` in records projected from a run): `task_prefixes` lists prefixes taken off a record's `metadata.task` (or its `metadata.group`) so both are one task. A candidate is admitted when it was made under the base's system prompt and tool schema, the sequence of its tool
 calls (name and arguments, whitespace normalised, `ignore_call_arguments` left out) is not one its task already has,
 and the task has fewer than `per_task` records. Otherwise it is left out and listed in `excluded.jsonl` as
 `prompt_mismatch`, `tools_mismatch`, `duplicate_solution` or `over_task_cap`. The candidates are weighed in the order
