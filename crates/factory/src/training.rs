@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use splinter_core::digest::Digest;
 use splinter_model::endpoint::BrainEndpoints;
-use splinter_model::policy_gradient::PolicyGradientTune;
+use splinter_model::policy_gradient::{Behaviour, PolicyGradientOptions, PolicyGradientTune};
 use splinter_model::served_train::{
     check_dataset, fine_tune_served, train_feedback_served, train_policy_gradient_served,
     train_preference_served, CheckSpec, DEFAULT_DPO_BETA,
@@ -154,6 +154,11 @@ pub struct LoraParams {
     /// For pairs, SimPO only: the target margin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gamma: Option<f32>,
+    /// For rollouts: where the importance ratio's behaviour log-probabilities come from
+    /// (`recorded`, the default, or `start`: the policy the run starts from, exact only when the
+    /// rollouts were sampled from it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behaviour: Option<String>,
     /// Steps between evaluations of the validation records, which then
     /// pick the step the adapter is exported at; 0 evaluates nothing and
     /// exports the last step.
@@ -352,7 +357,15 @@ impl BrainTrainer {
                 max_block: params.max_block,
                 thinking: request.thinking,
                 pack_answers: true,
-                options: Default::default(),
+                options: PolicyGradientOptions {
+                    behaviour: params
+                        .behaviour
+                        .as_deref()
+                        .map(str::parse::<Behaviour>)
+                        .transpose()
+                        .map_err(TrainError)?,
+                    ..Default::default()
+                },
             },
         )
         .map_err(error)?;

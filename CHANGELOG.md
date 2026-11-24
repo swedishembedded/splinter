@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (a policy-gradient run names where its behaviour log-probabilities come from)
+- `model.train` params take `behaviour: recorded|start` for rollout datasets. Rollouts collected through an agent carry no sampler log-probabilities, so brain refused the job; `start` takes them under the policy the run starts from, which is exact when the attempts came from that policy (the base model or the champion served as the start).
+
 ### Fixed (a preference dataset may be bounded by `max_block`)
 - `dataset.project` refused `max_block` for preference, feedback and policy-gradient objectives, so one 40 000-token pair sized every row of a preference job to 81 888 tokens (93 GiB) and brain refused it. The bound now applies to the longer continuation of a pair (or the completion of a judged record) under its prompt, and a record past it is excluded with the reason.
 
