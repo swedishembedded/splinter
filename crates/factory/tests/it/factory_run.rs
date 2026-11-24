@@ -399,15 +399,27 @@ fn a_finished_controller_gives_up_its_lease_and_a_dead_ones_is_taken_over() {
         models: None,
         variables: None,
     };
-    drop(Factory::open(&resolved, dir.path(), services, "host:1").unwrap());
+    // Owners are `host:pid@pidns:start`: this host and pid namespace, as a
+    // controller of this process names itself.
+    let me = splinter_factory::run::controller_owner("host");
+    let namespace = me
+        .split_once('@')
+        .and_then(|(_, rest)| rest.rsplit_once(':'))
+        .map(|(namespace, _)| namespace.to_owned())
+        .unwrap();
+    drop(Factory::open(&resolved, dir.path(), services, &me).unwrap());
     // Released on drop: another controller takes it at once. This one is
     // never dropped, as a killed process leaves its lease, and its pid names
     // no process.
-    std::mem::forget(Factory::open(&resolved, dir.path(), services, "host:4294967").unwrap());
-    // A controller of another host waits for the lease to lapse...
-    assert!(Factory::open(&resolved, dir.path(), services, "elsewhere:1").is_err());
-    // ...one of the same host sees its process is gone and takes over.
-    assert!(Factory::open(&resolved, dir.path(), services, "host:2").is_ok());
+    let dead = format!("host:4294967@{namespace}:1");
+    std::mem::forget(Factory::open(&resolved, dir.path(), services, &dead).unwrap());
+    // A controller of another host waits for the lease to lapse, and so does
+    // one of another pid namespace, where the pid means another process...
+    assert!(Factory::open(&resolved, dir.path(), services, "elsewhere:1@pid:[7]:1").is_err());
+    assert!(Factory::open(&resolved, dir.path(), services, "host:3@pid:[1]:1").is_err());
+    // ...one of the same host and namespace sees its process is gone and
+    // takes over.
+    assert!(Factory::open(&resolved, dir.path(), services, &me).is_ok());
 }
 
 #[test]
