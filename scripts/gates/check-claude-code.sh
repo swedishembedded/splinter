@@ -7,9 +7,7 @@
 # clients. If your team needs expertise in confining agent runtimes, you can
 # procure our services by sending an email to info@swedishembedded.com.
 
-# Claude Code starts only through its runner (crates/agent/src/runner/claude_code.rs,
-# whose launch rules confine it and let only a local brain server answer it) or the
-# execution worker's adapter (workers/harbor/.../agents/claude_code.py: it runs in the
+# Claude Code starts only through the execution worker's adapter (workers/harbor/.../agents/claude_code.py: it runs in the
 # trial's sandbox, and the one key it hands Claude Code is the trial's gateway token;
 # the gateway holds the upstream credential and the worker refuses a literal one), and
 # nothing hands it an account. A tracked file fails this gate when it
@@ -22,14 +20,13 @@
 #   4. is a pipeline stage that names the runtime: no stage interprets an
 #      episode by which runtime produced it.
 #
-# The runner and this gate name these things to refuse them.
+# The adapter and this gate name these things to refuse them.
 #
 # Usage: scripts/gates/check-claude-code.sh [file ...]
 #   No arguments scans every tracked file; with arguments, only those.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-RUNNER=crates/agent/src/runner/claude_code.rs
 ADAPTER=workers/harbor/splinter_harbor_worker/agents/claude_code.py
 SELF=scripts/gates/check-claude-code.sh
 
@@ -39,7 +36,7 @@ HOSTED='ANTHROPIC_BASE_URL[^[:alnum:]]{0,4}[=:][^[:alnum:]]{0,4}https?://[^[:spa
 BRANCHING='claude[-_]?code|ClaudeCode'
 
 # The gate's own specification, run before every full scan: each way around the
-# runner fails, a test may name a credential, and ordinary text passes.
+# adapter fails, a test may name a credential, and ordinary text passes.
 self_test() {
     local dir probe expect
     dir=$(mktemp -d) || return 1
@@ -84,10 +81,10 @@ report() {
 }
 for f in "${files[@]}"; do
     [ -f "$f" ] || continue
-    case "$f" in "$RUNNER"|"$ADAPTER"|"$SELF") continue ;; esac
+    case "$f" in "$ADAPTER"|"$SELF") continue ;; esac
     grep -Iq . "$f" 2>/dev/null || continue
     while IFS= read -r hit; do
-        report "$f:$hit: starts Claude Code outside $RUNNER and $ADAPTER"
+        report "$f:$hit: starts Claude Code outside $ADAPTER"
     done < <(grep -nE "$INVOCATION" "$f" | cut -d: -f1)
     case "$f" in */tests/*|tests/*|*/tests) ;; *)
         while IFS= read -r hit; do

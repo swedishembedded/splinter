@@ -54,11 +54,6 @@
 //! * [`policy_endpoint`] - an OpenAI-compatible endpoint answered by a
 //!   program, keeping every request it was sent: a scripted policy behind
 //!   real sven, or a recording proxy in front of a served model.
-//! * [`runner`] - one contract (prepare, run, cancel, collect) for every agent
-//!   runtime that works on a repository task, and an episode record of one
-//!   shape whichever runtime produced it: sven's worker, and Claude Code,
-//!   started only under the launch rules of [`runner::claude_code`] and
-//!   answered only by a local brain server.
 //! * [`timed`] - a model provider that counts its requests and how long each
 //!   waited for its first stream item, so a run that took long can be told
 //!   from one that did a lot.
@@ -93,7 +88,6 @@ pub mod repair;
 pub mod replay;
 pub mod retry;
 pub mod run_code;
-pub mod runner;
 pub mod schema_call;
 pub mod skill_planner;
 pub mod solve;

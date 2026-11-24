@@ -14,7 +14,6 @@ mod advice_tasks;
 mod blocking;
 mod chat;
 mod claims;
-mod claude_code;
 mod converse;
 mod converse_tasks;
 mod guided_generation;
