@@ -136,6 +136,26 @@ impl Key {
         &self.name
     }
 
+    /// The key a collection sets this file aside under while it decides
+    /// whether anything still needs it: the trash, named by its kind and
+    /// name, so [`Key::restored`] gives the key back.
+    ///
+    /// # Errors
+    /// The name is not one a key may have.
+    pub fn set_aside(&self) -> Result<Self> {
+        Self::new(Kind::Trash, &format!("{}.{}", self.kind.dir(), self.name))
+    }
+
+    /// The key a set-aside file came from, if its name says.
+    #[must_use]
+    pub fn restored(&self) -> Option<Self> {
+        let (dir, name) = self.name.split_once('.')?;
+        let kind = [Kind::Segment, Kind::BlobPack, Kind::Index, Kind::Manifest]
+            .into_iter()
+            .find(|k| k.dir() == dir)?;
+        Self::new(kind, name).ok()
+    }
+
     /// Where the object lies under a database root, with `/` separators:
     /// the kind's directory, a two-character fan-out directory where the
     /// kind has one, then the name.

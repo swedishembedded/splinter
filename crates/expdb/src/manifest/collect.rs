@@ -67,19 +67,6 @@ impl Database {
         ))
     }
 
-    fn trash_key(key: &Key) -> Result<Key> {
-        Key::new(Kind::Trash, &format!("{}.{}", key.kind().dir(), key.name()))
-    }
-
-    /// The key a set-aside file came from, if the name says.
-    fn restore_key(trash: &Key) -> Option<Key> {
-        let (dir, name) = trash.name().split_once('.')?;
-        let kind = [Kind::Segment, Kind::BlobPack, Kind::Index, Kind::Manifest]
-            .into_iter()
-            .find(|k| k.dir() == dir)?;
-        Key::new(kind, name).ok()
-    }
-
     /// Removes unreachable segments, blob packs, index files and manifests
     /// older than [`Config::orphan_grace`](crate::Config::orphan_grace).
     /// Reachable means live under some ref or pin.
@@ -91,7 +78,7 @@ impl Database {
             .backend()
             .list(Kind::Trash)?
             .iter()
-            .filter_map(Self::restore_key)
+            .filter_map(Key::restored)
             .collect();
         for (kind, wanted) in [
             (Kind::Segment, &objects),
@@ -103,7 +90,7 @@ impl Database {
                 if wanted.contains(key.name()) {
                     report.kept += 1;
                 } else if self.past_grace(&key)? {
-                    if self.backend().rename(&key, &Self::trash_key(&key)?)? {
+                    if self.backend().rename(&key, &key.set_aside()?)? {
                         aside.push(key);
                     }
                 } else {
@@ -121,7 +108,7 @@ impl Database {
             } else {
                 &objects
             };
-            let trash = Self::trash_key(&key)?;
+            let trash = key.set_aside()?;
             if wanted.contains(key.name()) {
                 if !self.backend().exists(&key)? {
                     self.backend().rename(&trash, &key)?;

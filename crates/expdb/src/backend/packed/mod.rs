@@ -399,9 +399,18 @@ impl PackedBackend {
             Some(location) => location,
             None => {
                 self.refresh(&mut state)?;
-                state.index.get(key).ok_or_else(|| Error::NotFound {
-                    what: format!("{} `{}`", key.kind().dir(), key.name()),
-                })?
+                // A file a collection has set aside is read where it lies, as
+                // the loose layout reads it (`PosixBackend::open`).
+                let aside = if key.kind().is_addressed() {
+                    state.index.get(&key.set_aside()?)
+                } else {
+                    None
+                };
+                aside
+                    .or_else(|| state.index.get(key))
+                    .ok_or_else(|| Error::NotFound {
+                        what: format!("{} `{}`", key.kind().dir(), key.name()),
+                    })?
             }
         };
         let file = match state.readers.get(&location.pack) {
@@ -569,8 +578,12 @@ impl StorageBackend for PackedBackend {
             return self.files.len(key);
         }
         // As of now, so a removal by another writer shows, as it does for a
-        // loose file.
-        let location = self.current(key)?.ok_or_else(|| Error::NotFound {
+        // loose file; a file a collection has set aside is where it lies.
+        let mut location = self.current(key)?;
+        if location.is_none() && key.kind().is_addressed() {
+            location = self.current(&key.set_aside()?)?;
+        }
+        let location = location.ok_or_else(|| Error::NotFound {
             what: format!("{} `{}`", key.kind().dir(), key.name()),
         })?;
         Ok(location.len)

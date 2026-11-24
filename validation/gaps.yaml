@@ -1316,3 +1316,18 @@ gaps:
     that comes second returns the committed product when its files are the same and is refused when they differ; specified
     by products::tests (both interleavings), the crash enumeration crashes at the new commit boundaries, and validation/tla/productcommit
     model-checks the protocol, its commit-overwrites mutation being the old commit
+- id: G-NEW-16
+  source_id: null
+  where: crates/expdb/src/manifest/collect.rs (gc) beside manifest/snapshot.rs (pin); backend/posix.rs open, backend/packed/mod.rs
+    locate and len
+  what: 'A collection that read what was needed before a reader wrote its pin could set one of the snapshot files aside
+    after the reader had verified them: until the collection looked again and put the file back, a read through the verified
+    pin failed with NotFound on a file it was promised (found by model checking: a snapshot changed under its reader for
+    a while; the file was never deleted).'
+  severity: medium
+  confidence: high (reproduced on both layouts by snapshots::a_pinned_snapshot_reads_while...)
+  status: fixed
+  resolution: a read of an addressed file that is not where it should be looks in the trash under the key the collection
+    set it aside as (Key::set_aside, shared with the collection), then at the key again; exists stays strict, so the collection
+    still decides on what is in place; validation/tla/collection model-checks the protocol, its reads-skip-the-trash mutation
+    being the old read

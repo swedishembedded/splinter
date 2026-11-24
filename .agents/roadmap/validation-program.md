@@ -186,6 +186,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - product commit (G-NEW-15, found by modelling the store): a publisher that prepared before another committed the
   same stage replaced the committed product with an atomic rename; the commit now never replaces one, specified in
   Rust for both interleavings and model-checked (`validation/tla/productcommit`).
+- collection beside a pin (G-NEW-16, found by modelling): a file set aside by a collection that began before a pin
+  was unreadable through the verified pin until it was put back; reads now find a set-aside file in the trash,
+  reproduced on both layouts and model-checked (`validation/tla/collection`).
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
@@ -201,5 +204,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
   kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and
   retrieval benchmarks (3A-3C), TLA+ models beyond the run-state protocol and the product commit (10C:
-  snapshots under a reader, retention against collection, compaction) and crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  compaction) and crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

@@ -98,15 +98,28 @@ impl PosixBackend {
         Ok(())
     }
 
+    /// Opens the object to read it. A file a collection has set aside while
+    /// it decides is read from where it lies: a reader whose pin verified is
+    /// never refused a file it was promised, and the collection puts that file
+    /// back. Looking at the key again after the trash covers a file put back
+    /// between the two looks.
     fn open(&self, key: &Key) -> Result<(File, PathBuf)> {
-        let path = self.path(key);
-        match File::open(&path) {
-            Ok(file) => Ok((file, path)),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Err(Error::NotFound {
-                what: format!("{} `{}`", key.kind().dir(), key.name()),
-            }),
-            Err(e) => Err(Error::Io { path, source: e }),
+        let aside = if key.kind().is_addressed() {
+            Some(key.set_aside()?)
+        } else {
+            None
+        };
+        for at in [Some(key), aside.as_ref(), Some(key)].into_iter().flatten() {
+            let path = self.path(at);
+            match File::open(&path) {
+                Ok(file) => return Ok((file, path)),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(Error::Io { path, source: e }),
+            }
         }
+        Err(Error::NotFound {
+            what: format!("{} `{}`", key.kind().dir(), key.name()),
+        })
     }
 }
 

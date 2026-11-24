@@ -267,3 +267,49 @@ fn a_writer_that_is_done_hands_its_history_to_the_catalog_and_leaves_no_ref() {
     assert!(db.history_depth().unwrap() <= 3);
     assert_eq!(db.snapshot().unwrap().entities("n").unwrap().len(), 5);
 }
+
+/// A pinned snapshot reads whole while a collection that read what was needed
+/// before the pin was written has set one of its files aside: the file is in
+/// the trash, never gone (the collection's second read sees the pin and puts
+/// it back), and a read finds it there. Without that, a reader whose pin had
+/// verified could fail on a file it was promised.
+fn a_pinned_snapshot_reads_while_a_collection_has_one_of_its_files_aside(db: &Database) {
+    let old = segment(db, 1, 6);
+    db.publish("job", vec![old.clone()], vec![]).unwrap();
+    let pinned = db.snapshot().unwrap();
+    db.publish("job", vec![segment(db, 2, 6)], vec![old.clone()])
+        .unwrap();
+    pinned.pin("reader").unwrap();
+    // What a collection does to a file it found unneeded before the pin.
+    let key = old.key().unwrap();
+    assert!(db
+        .backend()
+        .rename(&key, &key.set_aside().unwrap())
+        .unwrap());
+
+    let reread = db.snapshot_at(pinned.id()).unwrap();
+    assert_eq!(reread.records().unwrap().len(), 6);
+    // The next collection puts it back, since the pin needs it.
+    db.gc().unwrap();
+    assert!(db.backend().exists(&key).unwrap());
+    assert_eq!(
+        db.snapshot_at(pinned.id())
+            .unwrap()
+            .records()
+            .unwrap()
+            .len(),
+        6
+    );
+}
+
+#[test]
+fn a_pinned_snapshot_reads_while_a_collection_has_one_of_its_files_aside_packed() {
+    let scratch = Scratch::new();
+    a_pinned_snapshot_reads_while_a_collection_has_one_of_its_files_aside(&scratch.open());
+}
+
+#[test]
+fn a_pinned_snapshot_reads_while_a_collection_has_one_of_its_files_aside_loose() {
+    let scratch = Scratch::new();
+    a_pinned_snapshot_reads_while_a_collection_has_one_of_its_files_aside(&scratch.open_loose());
+}

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# One-line defects of collection beside a pin, each of which TLC must find as a
+# violation of the named property. The first is the read as it was before the
+# backends looked in the trash.
+
+module = "Collection"
+config = "Collection.cfg"
+
+[[mutation]]
+id = "reads-skip-the-trash"
+find = "ReadsTrash == TRUE"
+replace = "ReadsTrash == FALSE"
+violates = "PinnedReadable"
+
+[[mutation]]
+id = "no-second-look"
+find = "/\\ gc' = \"settling\" /\\ after' = Needed /\\ pending' = Files"
+replace = "/\\ gc' = \"settling\" /\\ after' = before /\\ pending' = Files"
+violates = "PinnedNeverDeleted"
+
+[[mutation]]
+id = "pin-never-verified"
+find = "/\\ pin' = (IF \\A f \\in Files : loc[f] = \"present\" THEN \"verified\" ELSE \"withdrawn\")"
+replace = "/\\ pin' = \"verified\""
+violates = "PinnedNeverDeleted"
