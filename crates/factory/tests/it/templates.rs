@@ -17,7 +17,19 @@ use crate::repo::connections;
 
 #[test]
 fn every_template_is_a_task_repository_whose_recipes_validate() {
-    assert!(TEMPLATES.len() >= 3);
+    // Adding or removing a template updates this list, and so its run test.
+    let names: std::collections::BTreeSet<_> = TEMPLATES.iter().map(|t| t.name).collect();
+    assert_eq!(
+        names,
+        [
+            "agent-sft",
+            "generations",
+            "harness-search",
+            "knowledge-learning",
+            "repository-practice"
+        ]
+        .into()
+    );
     for template in TEMPLATES {
         let dir = tempfile::tempdir().unwrap();
         let written = init(template.name, dir.path()).unwrap();

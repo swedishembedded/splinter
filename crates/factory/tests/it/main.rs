@@ -35,5 +35,6 @@ mod registry;
 mod repo;
 mod resolve;
 mod reuse;
+mod template_runs;
 mod templates;
 mod text_dataset;
