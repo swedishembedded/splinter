@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D); the independent projector, task-kind and plugin matrices not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step and sft-final (6B) and the metamorphic relations (6F); the reference projector of the other views, task-kind and plugin matrices not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
@@ -116,7 +116,7 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
       comparison refuses a wrong shape, a wrong type, a precision past its tolerance, NaN (`self_test.rs`).
 - [x] Statistics: sign test (one- and two-sided), Holm, pass@k against scipy, statsmodels and the HumanEval
       estimator (`statistics/paired-tests`, 540 cases); Student's t against scipy (`statistics/student-t`).
-- [ ] One external differential per remaining category: datasets, graphs (NetworkX), retrieval, rewards.
+- [ ] One external differential per remaining category: rewards (datasets: the reference projector; graphs: NetworkX; retrieval: rank-bm25).
 
 ## Carried-in requests
 
@@ -166,7 +166,7 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
   a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
   Harbor's ATIF validator (G-AS-13).
-- Not built: the independent Python projector of every view (6B), the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
+- Not built: the reference projector of the views beyond sft-step and sft-final (6B), the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
   benchmarks (3A-3C), TLA+ models and crash injection beyond the product store (10), deterministic
   learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

@@ -5,6 +5,13 @@
 # `check` and, digest by digest, by every test that reads one (crates/conformance).
 schema: splinter.validation-fixtures/v1
 fixtures:
+  data/sft-projection:
+    path: "validation/fixtures/data/sft-projection.json"
+    sha256: "a714903b5391a3dc4eb42690acb66565ba122695bb2f82b5edb82c9920b374b7"
+    oracle: "validation/oracles/data/sft_projection.py"
+    oracle_sha256: "d0371609a89eecf8754a6980e7bcd805a106e6cf34cb41bead40ed9a558aa9ec"
+    references: ["reference-projector"]
+    test: "splinter-data/it/external_projection"
   graphs/skill-order:
     path: "validation/fixtures/graphs/skill-order.json"
     sha256: "1dee3d27a1284399d4a3ce9018d318caa45ce134b5cb62a7c6dfc6c6d8b4e3f2"

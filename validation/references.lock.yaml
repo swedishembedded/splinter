@@ -49,6 +49,13 @@ references:
     functions: [numpy.prod, numpy.arange]
     confidence: high
     conventions: "1 - prod(1 - k / arange(n - c + 1, n + 1)); 1.0 when n - c < k"
+  reference-projector:
+    package: null
+    repository: this repository (validation/oracles/data/sft_projection.py)
+    release: "written from the sft-step and sft-final documentation (crates/data/src/views, crates/data/src/trajectory.rs)"
+    functions: [sft_step, sft_final]
+    confidence: custom
+    conventions: "CUSTOM_ORACLE_REQUIRED: no external framework renders an agent trajectory as Splinter's records do; a second implementation in plain loops, from the documented rules, is the independent oracle"
   networkx:
     package: networkx
     repository: https://github.com/networkx/networkx
