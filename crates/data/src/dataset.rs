@@ -290,6 +290,12 @@ struct ChatLine<'a> {
     teacher_context: Option<TeacherContextLine<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tokenizer_digest: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    policy_version: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sampler: Option<&'a crate::calls::Sampler>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    truncated: bool,
     metadata: &'a RecordMetadata,
 }
 
@@ -606,6 +612,9 @@ fn line(
             group: outcome.as_ref().map(|o| o.group.as_str()),
             rollout: outcome.as_ref().and_then(|o| o.rollout.as_deref()),
             baseline_only: outcome.as_ref().is_some_and(|o| o.baseline_only),
+            policy_version: outcome.as_ref().and_then(|o| o.policy_version),
+            sampler: outcome.as_ref().and_then(|o| o.sampler.as_ref()),
+            truncated: outcome.as_ref().is_some_and(|o| o.truncated),
             teacher_context: teacher_line(index, messages, teacher_context)?,
             metadata: &record.metadata,
         })?,
@@ -670,6 +679,9 @@ fn line(
                 group: None,
                 rollout: None,
                 baseline_only: false,
+                policy_version: None,
+                sampler: None,
+                truncated: false,
                 teacher_context: None,
                 metadata: &record.metadata,
             })?

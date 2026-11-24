@@ -72,6 +72,7 @@
 
 pub mod audio_folder;
 mod block_split;
+pub mod calls;
 pub mod conversation_pg;
 mod corpus;
 pub mod curation;

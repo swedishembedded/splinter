@@ -230,7 +230,7 @@ fn build_from(
 
 /// Names every call `s<step>-<id>` and the result that answers it likewise,
 /// as a trajectory's calls are named: ids repeat across a model's responses.
-fn scope_calls(
+pub(crate) fn scope_calls(
     chain: &mut [WireMessage],
     step_of: &HashMap<usize, (usize, u64)>,
 ) -> Result<(), Unprojectable> {
@@ -298,7 +298,7 @@ fn same_turn(history: &WireMessage, answer: &WireMessage) -> bool {
 /// The request's messages as chat messages, none supervised, call ids as the
 /// request names them. The first user turn and the system turn are as sent;
 /// the rest is scrubbed like a trajectory's text.
-fn wire_messages(
+pub(crate) fn wire_messages(
     messages: &[Value],
     scrub: &Scrub,
     step: u64,
@@ -452,7 +452,7 @@ fn wire_call(call: &Value, scrub: &Scrub, step: u64) -> Result<WireToolCall, Unp
 
 /// What the model answered as the assistant turn it is; `None` for an answer
 /// with no text and no call.
-fn answer_of(
+pub(crate) fn answer_of(
     response: &ModelResponse,
     scrub: &Scrub,
     step: u64,

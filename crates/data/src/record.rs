@@ -53,6 +53,19 @@ pub struct RolloutOutcome {
     /// trainer is to tokenise the text and use its start-of-run proxy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sampled: Option<SampledTurns>,
+    /// The oldest policy version among the requests behind the record
+    /// (brain's `policy_version`), when the run recorded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_version: Option<u64>,
+    /// The sampling controls the record's tokens were drawn under (brain's
+    /// `sampler`), when the run recorded them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampler: Option<crate::calls::Sampler>,
+    /// The rollout stopped at a length limit: brain trains none of it and
+    /// leaves it out of its group's advantages. Every record of a rollout
+    /// carries the same value.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 /// The longest `group` or `rollout` key brain accepts, in bytes.
@@ -79,6 +92,9 @@ impl RolloutOutcome {
             }),
             baseline_only: false,
             sampled: None,
+            policy_version: None,
+            sampler: None,
+            truncated: false,
         }
     }
 

@@ -20,6 +20,7 @@ mod fuzz;
 mod human_context;
 mod judgement_views;
 mod metamorphic;
+mod online_calls;
 mod pass_curation;
 mod policy_gradient;
 mod projection_refusal;

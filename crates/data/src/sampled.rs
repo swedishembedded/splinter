@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 
 /// The `logprob_kind` sven records for the policy's own full-distribution
 /// figures: the only kind a policy gradient may weigh by.
-const POLICY_KIND: &str = "policy";
+pub(crate) const POLICY_KIND: &str = "policy";
 
 /// One supervised assistant message's sampled tokens, as brain's training
 /// record reads them.
@@ -40,6 +40,14 @@ pub struct SampledTurn {
     pub token_ids: Vec<u32>,
     /// The policy's log-probability of each generated id, one per id.
     pub behavior_logprobs: Vec<f32>,
+    /// The sampler's `K` most probable ids at each generated position, one
+    /// list per id, when the run asked for them (brain's `behavior_top_ids`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behavior_top_ids: Option<Vec<Vec<u32>>>,
+    /// Their whole-row log-probabilities at the sampling temperature, beside
+    /// `behavior_top_ids` (brain's `behavior_top_logprobs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behavior_top_logprobs: Option<Vec<Vec<f32>>>,
 }
 
 /// The sampled tokens of a record: its tokenizer and, for each supervised
@@ -86,6 +94,23 @@ pub enum ProxyReason {
     /// requests the model was sent, so its context is not the one the ids
     /// were sampled after.
     ContextReconstructed,
+    /// The log-probabilities are at another temperature than the sampling
+    /// temperature, or name none.
+    TemperatureMismatch,
+    /// The request names no policy version (or one that is not a whole
+    /// number): its staleness cannot be bounded.
+    NoPolicyVersion,
+    /// The sampler's top-K is malformed: one list without the other, a row
+    /// count other than the generated ids', rows of different `K`, an id
+    /// twice in a row, or a log-probability that is not one.
+    TopMismatch,
+    /// The requests the trajectory recorded and the request log's calls are
+    /// not one per call, so no call can be paired with its context.
+    Unpaired,
+    /// The request as logged cannot be read as chat messages.
+    UnreadableRequest,
+    /// The answer says nothing and calls nothing.
+    EmptyAnswer,
 }
 
 /// How many rewarded actions carry the tokens the policy sampled, and why the
@@ -165,6 +190,8 @@ pub(crate) fn trace_of(
             // The trainer reads f32; the policy's own figures are f32 in sven.
             #[allow(clippy::cast_possible_truncation)]
             behavior_logprobs: logprobs.iter().map(|l| *l as f32).collect(),
+            behavior_top_ids: None,
+            behavior_top_logprobs: None,
         },
     ))
 }
