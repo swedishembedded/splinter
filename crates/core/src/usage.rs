@@ -20,10 +20,12 @@ use serde_json::Value;
 /// The tokens an attempt's requests processed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenUsage {
-    /// Tokens the policy generated.
-    pub completion: u64,
-    /// Prompt tokens sent, cached ones included.
-    pub prompt: u64,
+    /// Tokens the policy generated; `None` when the record states none (an
+    /// unmeasured count is never zero).
+    pub completion: Option<u64>,
+    /// Prompt tokens sent, cached ones included; `None` when the record
+    /// states none.
+    pub prompt: Option<u64>,
     /// Of the prompt tokens, those the server read from its prefix cache;
     /// zero when the record states none.
     pub cached: u64,
@@ -33,20 +35,23 @@ impl TokenUsage {
     /// The usage a score record's `usage` object states (`completion_tokens`,
     /// `prompt_tokens`, `cached_tokens`); `None` when it states neither
     /// completion nor prompt tokens, or more cached prompt tokens than prompt
-    /// tokens (a record that contradicts itself is not a measurement).
+    /// tokens (a record that contradicts itself is not a measurement). A
+    /// count it does not state stays unmeasured.
     #[must_use]
     pub fn from_score_usage(usage: &Value) -> Option<Self> {
         let count = |field: &str| usage.get(field).and_then(Value::as_u64);
-        let (completion, prompt) = match (count("completion_tokens"), count("prompt_tokens")) {
-            (None, None) => return None,
-            (completion, prompt) => (completion.unwrap_or(0), prompt.unwrap_or(0)),
-        };
+        let (completion, prompt) = (count("completion_tokens"), count("prompt_tokens"));
+        if completion.is_none() && prompt.is_none() {
+            return None;
+        }
         let cached = count("cached_tokens").unwrap_or(0);
-        (cached <= prompt).then_some(Self {
-            completion,
-            prompt,
-            cached,
-        })
+        prompt
+            .is_none_or(|prompt| cached <= prompt)
+            .then_some(Self {
+                completion,
+                prompt,
+                cached,
+            })
     }
 
     /// The usage a trial manifest's `tokens` object states (`prompt`,
@@ -58,8 +63,8 @@ impl TokenUsage {
         match (count("completion"), count("prompt")) {
             (None, None) => None,
             (completion, prompt) => Some(Self {
-                completion: completion.unwrap_or(0),
-                prompt: prompt.unwrap_or(0),
+                completion,
+                prompt,
                 cached: 0,
             }),
         }
@@ -75,17 +80,20 @@ impl TokenUsage {
             .or_else(|| evidence.get("tokens").and_then(Self::from_trial_tokens))
     }
 
-    /// Prompt and completion tokens together, cached or not.
+    /// Prompt and completion tokens together, cached or not; `None` unless
+    /// both were measured.
     #[must_use]
-    pub fn processed(&self) -> u64 {
-        self.prompt + self.completion
+    pub fn processed(&self) -> Option<u64> {
+        self.prompt?.checked_add(self.completion?)
     }
 
     /// What the attempt cost: its completion tokens plus its uncached prompt
-    /// tokens.
+    /// tokens; `None` unless both were measured (and the cached share is no
+    /// more than the prompt, which a deserialised value need not honour).
     #[must_use]
-    pub fn cost(&self) -> u64 {
-        self.completion + (self.prompt - self.cached)
+    pub fn cost(&self) -> Option<u64> {
+        self.completion?
+            .checked_add(self.prompt?.checked_sub(self.cached)?)
     }
 }
 
@@ -100,22 +108,44 @@ mod tests {
             "completion_tokens": 22803, "prompt_tokens": 634722, "cached_tokens": 602128,
         }))
         .expect("a usage");
-        assert_eq!(usage.cost(), 22803 + 634722 - 602128);
-        assert_eq!(usage.processed(), 22803 + 634722);
+        assert_eq!(usage.cost(), Some(22803 + 634722 - 602128));
+        assert_eq!(usage.processed(), Some(22803 + 634722));
     }
 
     #[test]
-    fn a_record_without_counts_or_contradicting_itself_is_no_usage() {
+    fn a_record_contradicting_itself_or_without_counts_is_no_usage() {
         assert_eq!(TokenUsage::from_score_usage(&json!({"turns": 3})), None);
         assert_eq!(
             TokenUsage::from_score_usage(&json!({"prompt_tokens": 5, "cached_tokens": 6})),
             None
         );
-        let uncached = TokenUsage::from_score_usage(&json!({"completion_tokens": 7}))
-            .expect("completion alone is a usage");
-        assert_eq!(uncached.cost(), 7);
         // A manifest's counts state no cache, so all of the prompt is a cost.
         let manifest = json!({"tokens": {"prompt": 10, "completion": 5}});
-        assert_eq!(TokenUsage::of_trial(&manifest).map(|u| u.cost()), Some(15));
+        assert_eq!(
+            TokenUsage::of_trial(&manifest).and_then(|u| u.cost()),
+            Some(15)
+        );
+    }
+
+    #[test]
+    fn a_count_the_record_does_not_state_is_unmeasured_never_zero() {
+        let completion_only = TokenUsage::from_score_usage(&json!({"completion_tokens": 7}))
+            .expect("a count is a usage");
+        assert_eq!(completion_only.completion, Some(7));
+        assert_eq!(completion_only.cost(), None, "no prompt count, no cost");
+        let prompt_only =
+            TokenUsage::from_score_usage(&json!({"prompt_tokens": 9})).expect("a count is a usage");
+        assert_eq!(prompt_only.completion, None, "not zero completion tokens");
+        assert_eq!(prompt_only.cost(), None);
+        let manifest = TokenUsage::from_trial_tokens(&json!({"prompt": 4})).expect("a usage");
+        assert_eq!(manifest.completion, None);
+    }
+
+    #[test]
+    fn a_usage_deserialised_with_more_cached_than_prompt_has_no_cost() {
+        let usage: TokenUsage =
+            serde_json::from_value(json!({"completion": 1, "prompt": 2, "cached": 5}))
+                .expect("fields are plain numbers");
+        assert_eq!(usage.cost(), None);
     }
 }

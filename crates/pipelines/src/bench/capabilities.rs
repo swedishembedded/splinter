@@ -479,8 +479,8 @@ fn policy_signal(trials: &[SignalTrial], facts: &PracticeFacts) -> PolicySignal 
         let family = facts.lineage(digest).unwrap_or(task);
         let attempt = |t: &SignalTrial, reward: f64| SignalAttempt {
             reward,
-            cost: t.usage.map(|u| u.cost()),
-            completion: t.usage.map(|u| u.completion),
+            cost: t.usage.and_then(|u| u.cost()),
+            completion: t.usage.and_then(|u| u.completion),
         };
         let strict: Vec<SignalAttempt> = attempts
             .iter()

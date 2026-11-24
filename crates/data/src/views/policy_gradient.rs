@@ -521,8 +521,8 @@ impl View for PolicyGradient {
                     written: !matches!(treatment, Treatment::Nothing),
                     baseline_only: false,
                     conversations: seen.conversations,
-                    cost: seen.usage.map(|u| u.cost()),
-                    completion_tokens: seen.usage.map(|u| u.completion),
+                    cost: seen.usage.and_then(|u| u.cost()),
+                    completion_tokens: seen.usage.and_then(|u| u.completion),
                 });
                 treatment_of.insert((key, trial), treatment);
             }
