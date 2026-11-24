@@ -46,6 +46,9 @@ pub struct RewardShape {
     weights: Vec<(String, f64)>,
     partial: Option<PartialCredit>,
     overlong: Option<Overlong>,
+    /// Metrics of how the attempt behaved (each in `[0, 1]`) and the reward each costs it at 1, whatever
+    /// the attempt's outcome; an attempt that recorded none is not penalised.
+    penalties: Vec<(String, f64)>,
 }
 
 /// The `shaped-partial` reward: a failed attempt earns
@@ -165,6 +168,29 @@ impl Overlong {
 }
 
 impl RewardShape {
+    /// The same shape, an attempt's reward lessened by `weight * metric` for each of `penalties`
+    /// (name, weight): behaviour such as looping is discouraged whether or not the attempt passed.
+    ///
+    /// # Errors
+    /// A weight that is not a positive finite number, or a name given twice.
+    pub fn penalising(self, penalties: Vec<(String, f64)>) -> Result<Self, ViewError> {
+        for (at, (name, weight)) in penalties.iter().enumerate() {
+            if !weight.is_finite() || *weight <= 0.0 {
+                return Err(parameter(
+                    "reward penalty",
+                    format!("the weight of {name} is {weight}, not a positive number"),
+                ));
+            }
+            if penalties[..at].iter().any(|(other, _)| other == name) {
+                return Err(parameter(
+                    "reward penalty",
+                    format!("{name} is penalised twice"),
+                ));
+            }
+        }
+        Ok(Self { penalties, ..self })
+    }
+
     /// The reward a pass earns and a failure does not.
     #[must_use]
     pub fn unshaped() -> Self {
@@ -221,6 +247,7 @@ impl RewardShape {
             weights,
             partial: None,
             overlong: None,
+            penalties: Vec::new(),
         })
     }
 
@@ -317,7 +344,16 @@ impl RewardShape {
                 )
             })?),
         };
-        Ok(self.verdict_reward(passed, metrics, task_digest, trial)? + penalty)
+        let behaviour: f64 = self
+            .penalties
+            .iter()
+            .filter_map(|(name, weight)| {
+                let measured = metrics?.get(name)?.as_f64()?;
+                (measured.is_finite() && (0.0..=1.0).contains(&measured))
+                    .then_some(weight * measured)
+            })
+            .sum();
+        Ok(self.verdict_reward(passed, metrics, task_digest, trial)? + penalty - behaviour)
     }
 
     /// [`RewardShape::reward`] before the over-length penalty.
@@ -568,6 +604,27 @@ impl GroupKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn behaviour_costs_reward_whatever_the_outcome_and_an_unmeasured_attempt_pays_nothing() {
+        let shape = RewardShape::unshaped()
+            .penalising(vec![
+                ("loop".into(), 0.5),
+                ("repeat_after_error".into(), 0.25),
+            ])
+            .unwrap();
+        let metrics = serde_json::json!({"loop": 1.0, "repeat_after_error": 0.4});
+        let reward = |passed, m: Option<&Value>| shape.reward(passed, m, None, None, "t").unwrap();
+        assert!((reward(false, Some(&metrics)) - (-0.6)).abs() < 1e-9);
+        assert!((reward(true, Some(&metrics)) - 0.4).abs() < 1e-9);
+        assert_eq!(reward(true, None), 1.0, "no metric recorded: not penalised");
+        assert!(RewardShape::unshaped()
+            .penalising(vec![("loop".into(), 0.0)])
+            .is_err());
+        assert!(RewardShape::unshaped()
+            .penalising(vec![("loop".into(), 1.0), ("loop".into(), 1.0)])
+            .is_err());
+    }
 
     fn credit(c: f64) -> PartialCredit {
         PartialCredit {

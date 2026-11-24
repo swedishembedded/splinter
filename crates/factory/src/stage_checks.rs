@@ -130,6 +130,23 @@ pub(crate) fn projection_problems(
     if params.preference.is_some() && params.objective != "preference" {
         out.push("gives preference options to another objective".to_owned());
     }
+    if let Some(reward) = &params.reward {
+        if params.objective != "policy-gradient" {
+            out.push("gives reward options to another objective than policy-gradient".to_owned());
+        }
+        for (name, percent) in &reward.penalties_percent {
+            if name != "loop" && name != "repeat_after_error" {
+                out.push(format!(
+                    "penalises {name}, which is not a behaviour metric (loop, repeat_after_error)"
+                ));
+            }
+            if *percent == 0 || *percent > 300 {
+                out.push(format!(
+                    "the penalty of {name} is {percent} percent, not in 1..=300"
+                ));
+            }
+        }
+    }
     if params.objective != "sft" {
         // The views pair and weigh attempts as they were made: a
         // hinted or continued one would teach what the hint showed.

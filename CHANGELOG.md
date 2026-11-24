@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (a policy-gradient reward that discourages looping)
+- `dataset.project` with `objective: policy-gradient` takes `reward: { penalties_percent: {...} }`. Each attempt's verdict now also carries `loop` (the agent's loop watchdog ended it) and `repeat_after_error` (the share of calls after a failed call that repeated it), read from its files, and the named metrics lessen its reward whether or not it passed.
+
 ### Added (reruns of the tasks an evaluation arm failed)
 - An evaluation plan takes `rerun_failed: N`: after one attempt of every task, a task an arm did not pass is attempted up to N more times on its own, and a task that passed is not attempted again. A task is solved when any attempt passed; the paired test runs over tasks, so both arms get the same chances at a fraction of the cost of N+1 attempts of every task.
 

@@ -60,7 +60,9 @@ use splinter_store::factory::products::Staging;
 use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
-use crate::ops::{AttemptParams, Hint, PreferenceOptions, ProjectParams, ValidationSplit};
+use crate::ops::{
+    AttemptParams, Hint, PreferenceOptions, ProjectParams, RewardOptions, ValidationSplit,
+};
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 
@@ -119,6 +121,7 @@ struct Dataset {
     admission: String,
     projection: String,
     preference: Option<PreferenceOptions>,
+    reward: Option<RewardOptions>,
     target: ModelRef,
     max_block: Option<u64>,
     thinking: bool,
@@ -154,6 +157,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         admission: params.admission,
         projection: params.projection,
         preference: params.preference,
+        reward: params.reward,
         target,
         max_block: params.max_block,
         thinking: params.thinking,
@@ -207,6 +211,9 @@ pub(crate) fn identity(
         "policy_role": "first-request", "thinking": dataset.thinking,
     });
     let mut parameters = parameters;
+    if let Some(options) = &dataset.reward {
+        parameters["reward"] = json!(options);
+    }
     if let Some(options) = &dataset.preference {
         parameters["preference"] = json!(options);
     }

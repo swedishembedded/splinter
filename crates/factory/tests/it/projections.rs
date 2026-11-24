@@ -238,6 +238,14 @@ fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
         "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: policy-gradient, preference: { pairs_per_task: 2 }, target: student, seed: 13 }\n"
     )
     .contains("gives preference options to another objective"));
+    assert!(refused(
+        "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: sft, reward: { penalties_percent: { loop: 50 } }, target: student, seed: 13 }\n"
+    )
+    .contains("reward options to another objective"));
+    assert!(refused(
+        "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: policy-gradient, reward: { penalties_percent: { dawdling: 50 } }, target: student, seed: 13 }\n"
+    )
+    .contains("not a behaviour metric"));
 }
 
 /// A pair is trained as two rows, so `max_block` bounds the longer of its continuations under the prompt:
@@ -245,7 +253,7 @@ fn a_dataset_is_projected_for_one_objective_and_trained_by_its_trainer() {
 #[test]
 fn a_preference_dataset_leaves_out_the_pairs_longer_than_the_block() {
     let run = |max_block: u64| {
-        let repo = Repo::new();
+        let repo = repo();
         // seed: a dataset states its seed; the fake backend's outcomes are scripted, so none draws.
         let bounded = RECIPE.replace(
             "objective: preference, target: student,",

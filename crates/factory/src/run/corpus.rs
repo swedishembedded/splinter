@@ -60,6 +60,18 @@ pub fn outcome(trial: &TrialResult) -> Outcome {
 /// The trial's grade as a verdict on `experience`.
 #[must_use]
 pub fn verdict_of(experience: &ExperienceId, trial: &TrialResult) -> Annotation {
+    verdict_with(experience, trial, &BTreeMap::new())
+}
+
+/// [`verdict_of`] with `behaviour` (metrics of how the attempt acted, read from its files) beside the grade's own.
+#[must_use]
+pub fn verdict_with(
+    experience: &ExperienceId,
+    trial: &TrialResult,
+    behaviour: &BTreeMap<String, f64>,
+) -> Annotation {
+    let mut metrics = trial.grade.metrics.clone();
+    metrics.extend(behaviour.iter().map(|(k, v)| (k.clone(), *v)));
     Annotation {
         experience: experience.clone(),
         producer: Producer {
@@ -75,7 +87,7 @@ pub fn verdict_of(experience: &ExperienceId, trial: &TrialResult) -> Annotation 
                 "grade": trial.grade, "slot": trial.slot, "guided": trial.guided,
                 "trial": trial.slot.to_string(),
                 "task": { "id": trial.task, "digest": trial.task_digest },
-                "model": trial.model, "metrics": trial.grade.metrics,
+                "model": trial.model, "metrics": metrics,
             }),
         },
     }
@@ -228,7 +240,14 @@ pub fn corpus_of(sources: &[Source]) -> Result<TrialCorpus, String> {
                 continue;
             }
             corpus
-                .insert(experience, vec![verdict_of(&id, trial)])
+                .insert(
+                    experience,
+                    vec![verdict_with(
+                        &id,
+                        trial,
+                        &super::behaviour::metrics(view, trial),
+                    )],
+                )
                 .map_err(|e| e.to_string())?;
             trials.insert(id, (source.clone(), trial.clone()));
         }

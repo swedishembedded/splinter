@@ -599,7 +599,11 @@ compiles its collection evaluates on the same compiled tasks:
   read `answers`: the experiences `answer.collect` made in process, each with
   its verdicts and the sources its evidence is in. An SFT dataset of answers
   (and no attempts) supervises each passed answer's final reply under its
-  question. A policy-gradient record is an action of a graded attempt carrying
+  question. `reward: { penalties_percent: { loop: 50, repeat_after_error: 25 } }` lessens a
+  policy-gradient attempt's reward by that percent of a pass's at the metric's value 1, whatever the outcome:
+  `loop` is 1 when the agent's loop watchdog ended the attempt, `repeat_after_error` the share of the calls
+  after a failed call that repeated it (both read from the attempt's files).
+  A policy-gradient record is an action of a graded attempt carrying
   the attempt's reward and its group; a group whose attempts all earned the
   same is left out. Hinted, continued and harnessed attempts are refused: they
   would teach what the target is never shown. `model.train` trains each

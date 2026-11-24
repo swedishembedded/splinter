@@ -222,8 +222,3 @@ why = "Measurement reads a trajectory (atif) and knows nothing of an agent runti
 from = "splinter-data"
 to = "sven-sdk"
 why = "Training data is projected from a trajectory (atif) and knows nothing of an agent runtime."
-
-[[allow.large_file]]
-path = "crates/factory/src/ops.rs"
-lines = 811
-why = "the one table of the factory's built-in operations: every operation's descriptor (now with its revision, raised when what it decides changes) and its typed parameters; splitting the contracts across files would scatter the table the module documents"

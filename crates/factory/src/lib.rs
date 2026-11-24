@@ -51,6 +51,7 @@ pub mod hint;
 pub mod knowledge_ops;
 pub mod machine_config;
 pub mod ops;
+mod ops_dataset;
 pub mod plan;
 pub mod recipe;
 pub mod registry;

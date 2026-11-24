@@ -21,6 +21,7 @@
 //! continue on changed inputs; a fresh run (or a fork) is how a change is
 //! made.
 
+pub mod behaviour;
 mod compute;
 pub mod corpus;
 pub mod dataset;

@@ -92,10 +92,21 @@ fn view_of<'s>(
             Ok((Box::new(view), Objective::Preference))
         }
         "feedback" => Ok((Box::new(Feedback::new(strength)), Objective::Feedback)),
-        "policy-gradient" => Ok((
-            Box::new(PolicyGradient::new(strength)),
-            Objective::PolicyGradient,
-        )),
+        "policy-gradient" => {
+            let penalties = dataset
+                .reward
+                .iter()
+                .flat_map(|r| &r.penalties_percent)
+                .map(|(name, percent)| (name.clone(), f64::from(*percent) / 100.0))
+                .collect();
+            let shape = splinter_data::RewardShape::unshaped()
+                .penalising(penalties)
+                .map_err(|e| e.to_string())?;
+            Ok((
+                Box::new(PolicyGradient::new(strength).rewards(shape)),
+                Objective::PolicyGradient,
+            ))
+        }
         // Every attempt, with what only a teacher is shown beside it: the
         // task's reference solution, and the checks that failed.
         "distill" => Ok((
