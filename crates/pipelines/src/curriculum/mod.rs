@@ -9,15 +9,9 @@
 //! The curriculum: solver and training budget spent where learning
 //! happens.
 //!
-//! * [`frontier`] - before a task's attempts become training data, the
-//!   policy's pass@k on it is measured: k solves, each graded by the task's
-//!   own verifiers and stored as an experience. A task is worth training
-//!   on when the student fails it at least sometimes and a verified answer
-//!   exists: a passing attempt, or a teacher's. A task always solved
-//!   carries no signal, and one never solved that no teacher answered
-//!   verifiably has nothing to learn from; both are dropped. Every
-//!   measurement is recorded, per task: attempts, passes, rate, the
-//!   teacher's solves, and the release measured.
+//! * [`frontier`] - the parameters of a pass@k measurement (k attempts per
+//!   task, how the policy samples them) and the tally of a set's graded
+//!   attempts per task.
 //! * [`teacher`] - a task the student never solves closed-book is solved
 //!   once more by a teacher, open-book, with the task's grounding material
 //!   shown; a verified teacher's answer is how the policy learns what it
@@ -35,12 +29,6 @@
 //! What a task exercises is [`splinter_knowledge::concepts`]' rule: the
 //! concepts it declares, else the (source, section) pairs its evidence
 //! falls in, else its kind.
-//!
-//! The curriculum keeps its records under `<root>/curriculum/`:
-//!
-//! ```text
-//! measurements/<hex>.json   one pass@k measurement, content-addressed, written once
-//! ```
 
 pub mod capability;
 pub mod corrections;

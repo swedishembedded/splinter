@@ -43,9 +43,7 @@
 //! * [`campaign`] - the pure decisions of a continuous learning run:
 //!   per-task pass rates, dynamic sampling, the learning signal, the
 //!   dev-validation and evidence gates, and power-first planning.
-//! * [`frontier`] - pass@k: a task's pass rate over k attempts and whether
-//!   a teacher's answer to it was verified, and whether that makes it worth
-//!   training on.
+//! * [`frontier`] - a task's attempts counted: made, graded and passed.
 //! * [`verifiers`] - verifiers by strength (executable, formal, consistency,
 //!   judged), each grading an experience from its output and the task's
 //!   privileged material alone, and the composite that annotates every

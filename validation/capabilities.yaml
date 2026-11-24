@@ -3031,20 +3031,18 @@ capabilities:
   tier: cpu
 - id: EVAL-023
   crate: splinter-eval
-  entry: splinter_eval::frontier (FrontierClass, per-task pass rate)
+  entry: splinter_eval::frontier::PassCount
   source: crates/eval/src/frontier.rs
-  contract: Per-task pass rate over graded attempts only (None when none graded) placing a task Always | Frontier | Taught
-    | Never | Unmeasured; Frontier and Taught are kept.
+  contract: One task's attempts counted - made, graded (a verdict) and passed; an attempt without a verdict is counted but
+    not graded.
   tests:
-  - frontier.rs unit test (1)
-  oracle: decision table
-  missing:
-  - rate exactly 0 and 1 float comparisons
-  - no test through curriculum::frontier::select_frontier (see PIPE-020)
-  - teacher verified but student rate>0
+  - frontier::tests::an_attempt_without_a_verdict_is_counted_but_not_graded
+  oracle: hand-computed counts
+  missing: []
   state: SPECIFIED
-  risk: medium
+  risk: low
   tier: cpu
+
 - id: EVAL-024
   crate: splinter-eval
   entry: splinter_eval::memorisation::judge
@@ -3451,20 +3449,19 @@ capabilities:
   tier: integration
 - id: PIPE-020
   crate: splinter-pipelines
-  entry: splinter_pipelines::curriculum::frontier::{select_frontier, tally, PassAtK}
+  entry: splinter_pipelines::curriculum::frontier::{PassAtK, tally}
   source: crates/pipelines/src/curriculum/frontier.rs
-  contract: Tallies each task's graded attempts (an ungraded one is not counted) and a teacher's, keeps the tasks the
-    student fails at least sometimes that have a verified answer (Frontier or Taught) and records the measurement content-addressed
-    with every attempt. The solving and grading that fed it (frontier::measure) is deleted; the attempts are handed in.
-  tests: []
-  oracle: EVAL-023 table
+  contract: PassAtK validates k (at least two) and the sampling's temperature and says how the solve stage samples; tally
+    counts each task's graded attempts in a set, which the teach stage reads to find the tasks a student never solved.
+  tests:
+  - pipelines/it/improve (PassAtK through the improve arms)
+  oracle: none
   missing:
-  - any test (pipelines/it/curriculum::pass_at_k_keeps_the_frontier_and_the_taught_and_records_every_attempt was deleted with frontier::measure)
-  - no caller of select_frontier outside the file (only PassAtK is used, by improve); candidate for ablation
-  - ungraded attempt handling
-  state: UNMAPPED
+  - a direct spec of PassAtK::validate and of tally
+  state: SPECIFIED
   risk: low
   tier: integration
+
 - id: PIPE-021
   crate: splinter-pipelines
   entry: splinter_pipelines::datasets::{build, project_with, check, export} (library; the `dataset build` verb is deleted)
