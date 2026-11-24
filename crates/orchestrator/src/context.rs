@@ -129,6 +129,13 @@ impl Runtime {
     /// A runtime over `config`, with `allow_remote` as the command line's
     /// network opt-in, stamping records with the wall clock.
     pub fn new(config: Config, allow_remote: bool) -> Result<Self, OrchestratorError> {
+        if !config.state_root.path().is_absolute() {
+            return Err(OrchestratorError::Refused(format!(
+                "the state root {} is not an absolute path: there is no home directory (set HOME) \
+                 or name the state root (--state)",
+                config.state_root.path().display()
+            )));
+        }
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(RUNTIME_WORKERS)
             .enable_all()

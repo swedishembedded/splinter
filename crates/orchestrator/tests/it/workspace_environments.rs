@@ -266,3 +266,20 @@ fn variables_the_configuration_sets_for_project_commands_are_part_of_the_record_
         "resolving is from the configuration; the solve compares the records"
     );
 }
+
+/// A run never writes its state into whatever directory it was started in:
+/// a state root that is not absolute (no home directory to put it under) is
+/// refused.
+#[test]
+fn a_state_root_that_is_not_absolute_is_refused() {
+    let mut config = Config::from_env();
+    config.state_root = StateRoot::new(".splinter");
+    let refused = Runtime::new(config, false)
+        .err()
+        .expect("refused")
+        .to_string();
+    assert!(
+        refused.contains("not an absolute path") && refused.contains("HOME"),
+        "{refused}"
+    );
+}

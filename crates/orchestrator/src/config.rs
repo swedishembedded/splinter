@@ -411,7 +411,9 @@ impl Config {
     /// names anything: every setting at its default, and the facts of this
     /// machine and user it needs:
     ///
-    /// * `$HOME`, under which the state root (`~/.splinter`) lives;
+    /// * the home directory (`$HOME`, else the account's), under which the
+    ///   state root (`~/.splinter`) lives; with none, the paths under it are
+    ///   left relative and [`crate::context::Runtime::new`] refuses them;
     /// * brain's model store, as brain resolves it, with the policy's base
     ///   [`DEFAULT_POLICY_MODEL`] in it;
     /// * the first `brain` executable on `PATH`, the binary a release must
@@ -428,7 +430,12 @@ impl Config {
     #[must_use]
     pub fn from_env() -> Self {
         let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
-        let home = PathBuf::from(var("HOME").unwrap_or_else(|| ".".into()));
+        // `HOME`, else the account's home directory. With neither, every
+        // path under it stays relative, which the runtime refuses rather
+        // than writing state into whatever directory it was started in.
+        let home = std::env::home_dir()
+            .filter(|home| home.is_absolute())
+            .unwrap_or_default();
         // Where `brain pull` puts a checkpoint when nothing names a store.
         let model_store = var("XDG_DATA_HOME").map_or_else(
             || home.join(".local/share/brain/models"),
