@@ -35,12 +35,13 @@ import sys
 
 
 def products(run):
-    # A fork keeps its parent's products: of several arms of one name, the newest is the run's own.
+    # Every attempts product of the run (an evaluation's arm or an `attempt.collect` stage). A fork keeps its
+    # parent's products: of several of one name, the newest is the run's own.
     newest = {}
     for path in sorted(glob.glob(os.path.join(run, 'products', '*.json'))):
         product = json.load(open(path))
         name = product.get('name', '')
-        if '_arms' in name and any(f['path'] == 'attempts.jsonl' for f in product['files']):
+        if any(f['path'] == 'attempts.jsonl' for f in product['files']):
             if name not in newest or product.get('created_at', '') > newest[name].get('created_at', ''):
                 newest[name] = product
     for name, product in sorted(newest.items()):
