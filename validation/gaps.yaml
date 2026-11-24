@@ -278,9 +278,14 @@ gaps:
     own implementation, hand-built fixtures).
   severity: medium
   confidence: high
-  status: confirmed
-  resolution: the data views now have spec tests for every fixed defect, but source mutants exist only for rewards, groups,
-    masks and curation
+  status: fixed
+  resolution: source mutants now cover admission (admission-admits-failures), exposure (exposure-forbidden-string-is-a-probe),
+    held-out splits (held-out-takes-every-group), the preference and feedback views (preference-pairs-across-tasks, feedback-every-completion-desirable),
+    dedup (dedup-exact-only), serialisation (wire-message-train-dropped), digests (canonical-json-unsorted-keys), the trial
+    classifier (grade-partial-credit-passes, grade-timeout-always-counted) and the core crate (quantile-rounds-half-up and
+    the core ones above), all killed; the map has rows for near-copy detection, the preference and feedback views, canonical
+    digests and quantiles, trial grading and message serialisation, and the rows that named deleted dataset build flags
+    name the library options
 - id: G-DC-25
   source_id: F25
   where: docs/contributing/validation.md row 'Held-out splits' vs crates/data/src/holdout.rs

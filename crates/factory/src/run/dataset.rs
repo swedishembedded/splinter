@@ -734,3 +734,22 @@ impl Report<'_> {
 pub fn dataset_of(view: &Path) -> Result<DatasetProduct, RunError> {
     super::read_json(&view.join(DATASET_FILE))
 }
+
+#[cfg(test)]
+mod held_out_spec {
+    use super::*;
+
+    fn groups(n: usize) -> BTreeSet<String> {
+        (0..n).map(|i| format!("g{i}")).collect()
+    }
+
+    /// `percent` of the groups, rounded up, are held out, but never every
+    /// one: a split with no training group trains on nothing.
+    #[test]
+    fn the_share_is_rounded_up_and_never_takes_every_group() {
+        assert_eq!(held_out(&groups(10), 25, 1).len(), 3);
+        assert_eq!(held_out(&groups(2), 99, 1).len(), 1);
+        assert!(held_out(&groups(1), 50, 1).is_empty());
+        assert_eq!(held_out(&groups(10), 25, 1), held_out(&groups(10), 25, 1));
+    }
+}
