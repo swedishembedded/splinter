@@ -31,8 +31,10 @@ AGENTS = ("sven", "claude-code", "codex", "oracle", "nop")
 # `auto`: the strongest the machine has that honours the specification (sandbox/choice.py).
 PROVIDERS = ("auto", "docker", "userns", "confined", "proot")
 PROTOCOLS = ("openai", "anthropic")
-# A literal under a name like these is a secret written into a specification that is stored and shown.
-_CREDENTIAL_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+# A literal under a name like these is a secret written into a specification that is stored and shown. The controller's
+# one rule (splinter_core::factory::execution::credential_like); tests/test_spec_contract.py holds these to it.
+CREDENTIAL_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH", "COOKIE")
+CREDENTIAL_PREFIXES = ("AWS_", "GOOGLE_", "AZURE_", "GITHUB_", "GH_", "HF_")
 _DIGEST = re.compile(r"^(blake3|sha256):[0-9a-f]{64}$")
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -40,7 +42,7 @@ _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 def credential_like(name: str) -> bool:
     """Whether a variable name reads as a credential (the controller's own rule)."""
     upper = name.upper()
-    return any(word in upper for word in _CREDENTIAL_WORDS)
+    return any(word in upper for word in CREDENTIAL_MARKERS) or upper.startswith(CREDENTIAL_PREFIXES)
 
 
 def _plain_relative(path: str) -> bool:

@@ -64,25 +64,13 @@ const SYSTEM_ROOTS: [&str; 9] = [
     "/usr", "/lib", "/lib32", "/lib64", "/bin", "/sbin", "/etc", "/opt", "/proc",
 ];
 
-/// Whether a variable of this name carries a credential: an API key, token,
-/// secret, password, authentication socket or the like. Such a variable is
-/// never passed to a command, whatever the allowlist says, so a
+/// Whether a variable of this name carries a credential (the one rule,
+/// [`splinter_core::factory::execution::credential_like`]). Such a variable
+/// is never passed to a command, whatever the allowlist says, so a
 /// misconfigured allowlist cannot hand the solver the supervisor's keys.
 #[must_use]
 pub fn is_secret_name(name: &str) -> bool {
-    const MARKERS: [&str; 8] = [
-        "KEY",
-        "TOKEN",
-        "SECRET",
-        "PASSWORD",
-        "PASSWD",
-        "CREDENTIAL",
-        "AUTH",
-        "COOKIE",
-    ];
-    const PREFIXES: [&str; 6] = ["AWS_", "GOOGLE_", "AZURE_", "GITHUB_", "GH_", "HF_"];
-    let upper = name.to_ascii_uppercase();
-    MARKERS.iter().any(|m| upper.contains(m)) || PREFIXES.iter().any(|p| upper.starts_with(p))
+    splinter_core::factory::execution::credential_like(name)
 }
 
 /// Variables of the environment that name a toolchain's home directory.

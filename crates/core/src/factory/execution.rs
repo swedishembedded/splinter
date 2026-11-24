@@ -304,13 +304,32 @@ pub enum SpecError {
     Invalid(String),
 }
 
-/// Whether a variable name reads as a credential.
+/// Words a credential's variable name holds: an API key, token, secret,
+/// password, authentication socket or cookie.
+pub const CREDENTIAL_MARKERS: [&str; 8] = [
+    "KEY",
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "PASSWD",
+    "CREDENTIAL",
+    "AUTH",
+    "COOKIE",
+];
+
+/// Prefixes of the variables providers keep credentials in.
+pub const CREDENTIAL_PREFIXES: [&str; 6] = ["AWS_", "GOOGLE_", "AZURE_", "GITHUB_", "GH_", "HF_"];
+
+/// Whether a variable name reads as a credential: the one rule the
+/// controller (a literal under such a name is refused in a specification),
+/// the sandbox (such a variable never reaches a command) and the execution
+/// worker (`spec.py`, held to these lists by its own test) apply. A name is
+/// a heuristic, not a proof: a secret under an innocuous name passes.
 #[must_use]
 pub fn credential_like(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
-    ["KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL"]
-        .iter()
-        .any(|w| upper.contains(w))
+    CREDENTIAL_MARKERS.iter().any(|m| upper.contains(m))
+        || CREDENTIAL_PREFIXES.iter().any(|p| upper.starts_with(p))
 }
 
 impl ExecutionSpec {
