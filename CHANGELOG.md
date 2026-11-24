@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (a fork point after a reply that called no tool)
+- A fork correction whose located step was a reply that called no tool failed the whole stage ("there is no turn to continue after it"). It now continues from the latest earlier step a model turn can follow.
+
 ### Added (the policy-gradient objective's settings in a recipe)
 - `model.train` params take `policy_gradient: { algorithm, clip_eps, clip_eps_high, kl_beta, loss_agg, max_step_kl, temperature }` for a rollout dataset; what a recipe leaves out is brain's default, which the run's training record states. A misspelt setting is refused.
 

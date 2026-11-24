@@ -115,8 +115,20 @@ pub(crate) fn continuations(
             serde_json::from_slice(&std::fs::read(&trace).map_err(io(&trace))?)
                 .map_err(|e| stage_error(key, format!("{}: {e}", trace.display())))?;
         let point = fork_point(briefs, &task.id).map_err(|e| stage_error(key, e))?;
-        let kept = splinter_agent::fork_at::kept_prefix(&trajectory, point.keep_through)
-            .map_err(|e| stage_error(key, format!("task {}: {e}", task.id)))?;
+        // A fork point a model turn cannot follow (a reply that called no tool) falls back to the latest
+        // earlier step it can: the continuation then sees a little less of the attempt, never none of it.
+        let kept = (0..=point.keep_through)
+            .rev()
+            .find_map(|step| splinter_agent::fork_at::kept_prefix(&trajectory, step).ok())
+            .ok_or_else(|| {
+                stage_error(
+                    key,
+                    format!(
+                        "task {}: no step of the attempt at or before step {} can be continued",
+                        task.id, point.keep_through
+                    ),
+                )
+            })?;
         let relative = format!("{FORKS}/{}.json", brief_item(&task.id));
         let path = files.join(&relative);
         if let Some(parent) = path.parent() {
