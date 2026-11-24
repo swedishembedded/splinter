@@ -521,10 +521,13 @@ pub(crate) fn place_dataset(
         }
     };
     std::fs::rename(&pending, path).map_err(io(path))?;
+    // The manifest is placed whole or not at all, so a crash between the two
+    // renames leaves a dataset with no manifest (which names its digest and
+    // is how every reader finds it), never one with half a manifest.
     let manifest_file = manifest_path(path);
-    // Canonical JSON is UTF-8 by construction, so nothing is substituted.
-    let manifest_text = String::from_utf8_lossy(&manifest);
-    std::fs::write(&manifest_file, manifest_text.as_bytes()).map_err(io(&manifest_file))?;
+    let manifest_pending = manifest_file.with_extension("pending");
+    std::fs::write(&manifest_pending, &manifest).map_err(io(&manifest_pending))?;
+    std::fs::rename(&manifest_pending, &manifest_file).map_err(io(&manifest_file))?;
     Ok((digest, Digest::of(&manifest)))
 }
 
