@@ -91,6 +91,62 @@ pub struct OperatorFile {
     /// The longest one run may take, in seconds.
     #[serde(default = "hour")]
     pub timeout_seconds: u64,
+    /// What one run may use beyond the sandbox's defaults.
+    #[serde(default)]
+    pub resources: Resources,
+}
+
+/// The resources one run of an operator may use, where the sandbox's
+/// defaults are too few (a compiler, a simulator). Each bound is the
+/// sandbox's default when not given.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Resources {
+    /// The address space of each of its processes, in MiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_mib: Option<u64>,
+    /// The largest file one of its processes may write, in MiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_size_mib: Option<u64>,
+    /// The processes and threads it may run at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processes: Option<u64>,
+}
+
+/// The largest bound an operator may declare: 1 TiB, a million processes.
+const MAX_MIB: u64 = 1024 * 1024;
+const MAX_PROCESSES: u64 = 1_000_000;
+
+impl Resources {
+    fn check(&self) -> Result<(), String> {
+        for (name, value, max) in [
+            ("memory_mib", self.memory_mib, MAX_MIB),
+            ("file_size_mib", self.file_size_mib, MAX_MIB),
+            ("processes", self.processes, MAX_PROCESSES),
+        ] {
+            if let Some(value) = value {
+                if value == 0 || value > max {
+                    return Err(format!("resources.{name} is {value}, not 1 to {max}"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// `limits` with every declared bound in place of the default.
+    fn apply(&self, mut limits: Limits) -> Limits {
+        const MIB: u64 = 1024 * 1024;
+        if let Some(mib) = self.memory_mib {
+            limits.memory_bytes = mib * MIB;
+        }
+        if let Some(mib) = self.file_size_mib {
+            limits.file_size_bytes = mib * MIB;
+        }
+        if let Some(processes) = self.processes {
+            limits.max_processes = Some(processes);
+        }
+        limits
+    }
 }
 
 /// An operator of a repository, ready to run.
@@ -126,6 +182,9 @@ impl External {
         if file.command.is_empty() {
             return Err(format!("{relative}: names no command"));
         }
+        file.resources
+            .check()
+            .map_err(|e| format!("{relative}: {e}"))?;
         let validator = jsonschema::validator_for(&file.parameters)
             .map_err(|e| format!("{relative}: parameters are not a JSON Schema: {e}"))?;
         let mut pinned = vec![(
@@ -325,11 +384,11 @@ impl Execute for External {
             .filter_map(|name| Some((name.clone(), (call.variables?)(name)?)))
             .collect();
 
-        let limits = Limits {
+        let limits = self.file.resources.apply(Limits {
             wall_time_ms: self.file.timeout_seconds.saturating_mul(1000),
             cpu_seconds: self.file.timeout_seconds,
             ..Limits::default()
-        };
+        });
         let sandbox = ProcessSandbox::new(work.path().join("calls"), BTreeMap::new(), &[], limits)
             .granted_env(variables)
             .read_write(self.grant.write.clone())

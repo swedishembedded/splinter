@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added (a policy-gradient reward that discourages looping)
 - `dataset.project` with `objective: policy-gradient` takes `reward: { penalties_percent: {...} }`. Each attempt's verdict now also carries `loop` (the agent's loop watchdog ended it) and `repeat_after_error` (the share of calls after a failed call that repeated it), read from its files, and the named metrics lessen its reward whether or not it passed.
 
+### Added (an operator declares the resources one run needs)
+- An operator file takes `resources: { memory_mib, file_size_mib, processes }`: each bound replaces the process sandbox's default for that operator's runs (1 GiB of address space and 16 MiB per file written by default), so an operator that builds firmware or runs a simulator can run at all. The bounds are part of the pinned operator file; a bound of 0 or past 1 TiB (a million processes) is refused when the recipe resolves.
+
+### Fixed (a run named by a relative path hands its operators absolute paths)
+- `splinter run recipe.yaml --out runs/x` gave an external operator the paths of its inputs and output relative to the controller's working directory, and the operator runs in its own, so every external stage failed. The run directory is made absolute when the run is opened.
+
 ### Added (reruns of the tasks an evaluation arm failed)
 - An evaluation plan takes `rerun_failed: N`: after one attempt of every task, a task an arm did not pass is attempted up to N more times on its own, and a task that passed is not attempted again. A task is solved when any attempt passed; the paired test runs over tasks, so both arms get the same chances at a fraction of the cost of N+1 attempts of every task.
 

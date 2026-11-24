@@ -505,7 +505,11 @@ it reads its inputs, the request, its own operator file and its `code` (what
 its stage's identity pins, nothing else of the repository: a cached product
 never depends on a file whose change would not have invalidated it), writes
 only `out`, and
-reaches the network only with `network: true`, within `timeout_seconds`. It
+reaches the network only with `network: true`, within `timeout_seconds`. A run
+gets the process sandbox's resources (1 GiB of address space per process, files
+of at most 16 MiB, 1024 processes); an operator that needs more says so,
+`resources: { memory_mib: 4096, file_size_mib: 1024, processes: 4096 }`, and each
+bound it gives replaces that default. It
 exits 0 having written its product, 3 to reject its input (the reason on its
 last line of output), anything else when it failed. Its parameters are checked
 against `parameters` before anything runs, and `code` is pinned: a changed

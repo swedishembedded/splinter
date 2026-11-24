@@ -520,3 +520,67 @@ fn an_operator_reads_only_what_its_identity_pins() {
     assert!(refused.contains("text.upper"), "{refused}");
     assert!(!dir.path().join("upper/a.txt/peek.txt").exists());
 }
+
+/// Writes a file of 32 MiB beside its output: more than a run may write by default.
+const LARGE: &str = r#"#!/bin/sh
+exec python3 - "$2" <<'PY'
+import json, os, sys
+request = json.load(open(sys.argv[1]))
+source = request["inputs"]["text"][0]
+with open(os.path.join(request["out"], os.path.basename(source)), "wb") as out:
+    out.write(b"x" * (32 * 1024 * 1024))
+PY
+"#;
+
+fn try_run(repo: &Repo, dir: &Path) -> Result<(), String> {
+    let resolved = resolve(&repo.root, RECIPE, connections()).map_err(|e| e.0.join("\n"))?;
+    let backend = FakeBackend::with(Outcome::Pass);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+    };
+    Factory::open(&resolved, dir, services, "test")
+        .and_then(|mut f| f.run())
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[test]
+fn an_operator_declares_the_resources_one_run_needs() {
+    if splinter_sandbox::landlock::abi_version().is_none() {
+        return;
+    }
+    let repo = repo();
+    repo.write("notes/c.txt", "gamma");
+    program(&repo, LARGE);
+    let dir = tempfile::tempdir().unwrap();
+    assert!(
+        try_run(&repo, dir.path()).is_err(),
+        "32 MiB is past the default file size"
+    );
+
+    let declared = OPERATOR.replace(
+        "code: [bin/upper.sh]",
+        "code: [bin/upper.sh]\nresources: { memory_mib: 2048, file_size_mib: 64, processes: 64 }",
+    );
+    repo.write("operators/upper.yaml", &declared);
+    let dir = tempfile::tempdir().unwrap();
+    try_run(&repo, dir.path()).unwrap();
+    let written = std::fs::metadata(dir.path().join("upper/a.txt/a.txt")).unwrap();
+    assert_eq!(written.len(), 32 * 1024 * 1024);
+
+    repo.write(
+        "operators/upper.yaml",
+        &OPERATOR.replace(
+            "code: [bin/upper.sh]",
+            "code: [bin/upper.sh]\nresources: { memory_mib: 0 }",
+        ),
+    );
+    let refused = resolve(&repo.root, RECIPE, connections())
+        .unwrap_err()
+        .0
+        .join("\n");
+    assert!(refused.contains("memory_mib"), "{refused}");
+}
