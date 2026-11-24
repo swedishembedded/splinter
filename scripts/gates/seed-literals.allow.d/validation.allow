@@ -1,0 +1,2 @@
+# path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
+validation/oracles/statistics/paired_tests.py	main:seed	frozen: the frozen fixture statistics/paired-tests is drawn from this seed and pinned by its digest in validation/fixtures.yaml; a differential run draws from --seed

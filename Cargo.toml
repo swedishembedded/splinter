@@ -58,6 +58,7 @@ brain = { git = "https://github.com/swedishembedded/brain", default-features = f
 # `splinter-model` links it and re-exports it as `timeline::survival`.
 brain-survival = { git = "https://github.com/swedishembedded/brain" }
 
+splinter-conformance = { path = "crates/conformance" }
 splinter-core = { path = "crates/core" }
 splinter-eval = { path = "crates/eval" }
 splinter-store = { path = "crates/store" }

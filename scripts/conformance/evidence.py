@@ -37,6 +37,37 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 MAP = os.path.join(ROOT, "docs", "contributing", "validation.md")
 TEST = re.compile(r"`(splinter-[a-z-]+)/([a-z_]+)/([^`]*)`")
 RAN = re.compile(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed")
+# The frozen external fixtures (scripts/conformance/external.py writes it, its one writer, in a fixed format).
+FIXTURES = os.path.join(ROOT, "validation", "fixtures.yaml")
+ENTRY = re.compile(r"^  (\S+):$")
+FIELD = re.compile(r"^    (path|sha256|oracle|oracle_sha256|references|test): (.+)$")
+
+
+def fixtures():
+    """The fixture manifest, by consuming test (`package/target/filter`): what each test was checked against."""
+    if not os.path.exists(FIXTURES):
+        return {}
+    by_test, name = {}, None
+    entries = {}
+    with open(FIXTURES, encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#") or line in ("fixtures:",) or line.startswith("schema: "):
+                continue
+            entry, field = ENTRY.match(line), FIELD.match(line)
+            if entry:
+                name = entry.group(1)
+                entries[name] = {"fixture": name}
+            elif field and name:
+                entries[name][field.group(1)] = json.loads(field.group(2))
+            else:
+                raise SystemExit(f"evidence: {FIXTURES}: not the format external.py writes: {line!r}")
+    for entry in entries.values():
+        by_test.setdefault(entry["test"], []).append({
+            "fixture": entry["fixture"], "fixture_sha256": entry["sha256"],
+            "oracle": entry["oracle"], "oracle_sha256": entry["oracle_sha256"], "references": entry["references"],
+        })
+    return by_test
 
 
 def rows(tier):
@@ -134,6 +165,7 @@ def main():
         print(f"evidence: the map has no row of tier {args.tier}", file=sys.stderr)
         return 1
     executables = build(args.cargo, {t[0] for _, _, tests in selected for t in tests})
+    references = fixtures()
     cache = {}
     lines, all_ok = [], True
     for algorithm, kind, tests in selected:
@@ -141,6 +173,7 @@ def main():
         for test in tests:
             if test not in cache:
                 cache[test] = run_test(executables, *test)
+                cache[test]["fixtures"] = references.get("/".join(test), [])
             results.append(cache[test])
         ok = all(r["ok"] for r in results)
         all_ok &= ok
@@ -150,6 +183,9 @@ def main():
             "backend": "cpu",
             "precision": "f64",
             "tier": args.tier,
+            # The strongest oracle a test of the row was held to: a pinned external reference's frozen fixture,
+            # else the row's own specification (exact derivations, in-test mutants).
+            "oracle": "external" if any(r["fixtures"] for r in results) else "specification",
             "ok": ok,
             "tests": results,
             "commit": commit,

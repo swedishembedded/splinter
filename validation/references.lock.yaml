@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The pinned independent references of the validation program (.agents/roadmap/validation-program.md).
+# `packages` is the complete oracle environment: every distribution at an exact version and wheel digest,
+# installed with --require-hashes --no-deps into target/validation/venv by
+# `scripts/conformance/external.py env`, never a dependency of the Rust build. `references` names what each
+# oracle relies on: the package, the functions, and the confidence of the reference (high: a mature,
+# stable public API; medium: documented but with conventions to state; low: experimental).
+schema: splinter.validation-references/v1
+python: "3.14"
+platform: manylinux x86_64
+packages:
+  - { name: formulaic, version: "1.2.2", sha256: 0f84ff49e3fc9dc0e68ab08a0a9427874021aa6c558e66b44dc634a35739b09b, license: "MIT" }
+  - { name: interface-meta, version: "2.0.1", sha256: f38016bef9a4429b6d0792d809be7b65e9781820c674bf7f463999086b6e6323, license: "MIT" }
+  - { name: narwhals, version: "2.29.0", sha256: 1c69b3dc30240f6e848c5a673cafc86affa44184ecce721e25b7194663ad10dc, license: "MIT" }
+  - { name: networkx, version: "3.7", sha256: e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0, license: "BSD-3-Clause" }
+  - { name: numpy, version: "2.5.5", sha256: c48960d420e90cf305cb1fde0d4e6082cc90512cda87a9acf0b6e04e91cf4abe, license: "BSD-3-Clause AND 0BSD AND MIT AND Zlib" }
+  - { name: packaging, version: "26.4", sha256: 81383611a09c1bc0b08b76e0fd5829d7c6824c65b27a6aee339da133f4233ea2, license: "Apache-2.0 OR BSD-2-Clause" }
+  - { name: pandas, version: "3.1.1", sha256: 326459d8a9be11b5f48c7fc1d63e38ba7cfeaebe5d41bd19e4c5f4f11dc9ac91, license: "BSD-3-Clause" }
+  - { name: patsy, version: "1.0.3", sha256: d3dbebe8fd5f46e29912d030b63c6268647b59bf788a99e2af28a30234cf357c, license: "BSD-2-Clause" }
+  - { name: python-dateutil, version: "4.0.0", sha256: a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c, license: "BSD-3-Clause" }
+  - { name: pyyaml, version: "6.0.4", sha256: c604dc2613c417130479cdd6e55c2faa691b6365aa82b3dafddfcecc2eaf1ac7, license: "MIT" }
+  - { name: rank-bm25, version: "0.2.2", sha256: 7bd4a95571adadfc271746fa146a4bcfd89c0cf731e49c3d1ad863290adbe8ae, license: "Apache-2.0" }
+  - { name: scipy, version: "1.18.1", sha256: ac0333bdf38309aa3dcbe7e3fa7ea29e7a2c37c6ea306a757b700ded8e4596ad, license: "BSD-3-Clause" }
+  - { name: statsmodels, version: "0.15.0", sha256: edd803f4606061af8c7a83e2326ea294cbfa802a908dfbda4a88347301fb6820, license: "BSD-3-Clause" }
+  - { name: typing-extensions, version: "4.16.0", sha256: 481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8, license: "PSF-2.0" }
+  - { name: tzdata, version: "2026.6", sha256: 0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec, license: "Apache-2.0" }
+  - { name: wrapt, version: "2.6.0.dev1", sha256: aa4aff07fb41e16a075fce07c53a5cf6827d8861684a607cc952174de7f12bf2, license: "BSD-2-Clause" }
+references:
+  scipy:
+    package: scipy
+    repository: https://github.com/scipy/scipy
+    release: "1.18.1 (the wheel pinned in packages)"
+    functions: [scipy.stats.binomtest, scipy.special.comb, scipy.stats.t.ppf, scipy.stats.norm.ppf]
+    confidence: high
+    conventions: "binomtest two-sided is 'minlike', which equals the doubled tail only at p = 1/2"
+  statsmodels:
+    package: statsmodels
+    repository: https://github.com/statsmodels/statsmodels
+    release: "0.15.0 (the wheel pinned in packages)"
+    functions: [statsmodels.stats.multitest.multipletests, statsmodels.stats.proportion.proportion_confint]
+    confidence: high
+    conventions: "multipletests(method='holm') returns adjusted p-values in input order"
+  humaneval-pass-at-k:
+    package: numpy
+    repository: https://github.com/openai/human-eval
+    release: "arXiv:2107.03374 section 2.1, equation 1 (the numerically stable form of its estimate_pass_at_k)"
+    functions: [numpy.prod, numpy.arange]
+    confidence: high
+    conventions: "1 - prod(1 - k / arange(n - c + 1, n + 1)); 1.0 when n - c < k"
+  networkx:
+    package: networkx
+    repository: https://github.com/networkx/networkx
+    release: "3.7 (the wheel pinned in packages)"
+    functions: [networkx.is_directed_acyclic_graph, networkx.topological_generations,
+      networkx.strongly_connected_components, networkx.descendants]
+    confidence: high
+  rank-bm25:
+    package: rank-bm25
+    repository: https://github.com/dorianbrown/rank_bm25
+    release: "0.2.2 (the wheel pinned in packages)"
+    functions: [rank_bm25.BM25Okapi]
+    confidence: medium
+    conventions: "its idf has an epsilon floor and counts repeated query terms; Splinter's BM25 is Lucene's, so only rankings under stated equal conventions compare"

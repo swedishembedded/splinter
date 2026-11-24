@@ -8,6 +8,7 @@
 //! others run beside it.
 
 mod adapter_manifest_is_brains;
+mod external_statistics;
 mod statistics_conformance;
 mod timeline_dataset_is_trainable;
 mod timeline_scoring;

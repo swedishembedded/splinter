@@ -5064,6 +5064,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-conformance"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "splinter-core"
 version = "0.2.0"
 dependencies = [
@@ -5273,6 +5284,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "splinter-conformance",
  "splinter-core",
  "splinter-data",
  "splinter-eval",

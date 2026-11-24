@@ -44,6 +44,7 @@ order = [
 [crates]
 splinter-core = "foundation"
 splinter-expdb = "foundation"
+splinter-conformance = "foundation"
 splinter-store = "storage"
 splinter-sandbox = "storage"
 splinter-hub = "storage"
