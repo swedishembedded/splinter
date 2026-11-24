@@ -117,11 +117,17 @@ impl Report for GateReport {
             .as_ref()
             .and_then(|m| m.task_level)
         {
+            let interval = match (t.low, t.high) {
+                (Some(low), Some(high)) => {
+                    format!("[{low:+.3}, {high:+.3}] with families resampled")
+                }
+                _ => "(one family: no interval)".into(),
+            };
             let _ = writeln!(
                 out,
-                "               by task (not what decides): candidate ahead by {:+.3} [{:+.3}, {:+.3}] \
-                 with families resampled, exact sign test over tasks p = {:.4}",
-                t.difference, t.low, t.high, t.p_value
+                "               by task (not what decides): candidate ahead by {:+.3} {interval}, \
+                 exact sign test over tasks p = {:.4}",
+                t.difference, t.p_value
             );
         }
         if let Some(m) = &self.improvement.measured {

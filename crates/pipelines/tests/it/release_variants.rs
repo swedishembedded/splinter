@@ -109,7 +109,9 @@ fn variants_of_the_trained_facts_join_the_exam_and_are_reported_apart() {
     // losses, over the held-out records and the variants together.
     let by_task = improvement.task_level.unwrap();
     assert!(by_task.p_value < 0.001, "{by_task:?}");
-    assert!(by_task.low <= by_task.difference && by_task.difference <= by_task.high);
+    assert!(
+        by_task.low.unwrap() <= by_task.difference && by_task.difference <= by_task.high.unwrap()
+    );
     assert!(improvement
         .generalisation
         .as_ref()

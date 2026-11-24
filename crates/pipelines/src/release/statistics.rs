@@ -51,8 +51,8 @@ pub(super) fn task_level(outcomes: &[PairedOutcome], seed: Seed) -> Option<TaskL
     Some(TaskLevel {
         p_value: sign_p(wins, losses),
         difference,
-        low: interval.map_or(difference, |i| i.low),
-        high: interval.map_or(difference, |i| i.high),
+        low: interval.map(|i| i.low),
+        high: interval.map(|i| i.high),
     })
 }
 
@@ -139,6 +139,20 @@ mod tests {
     // seed: two arbitrary seeds; only that the same one repeats and another differs matters.
     const FIRST: Seed = Seed::new(11);
     const OTHER: Seed = Seed::new(12);
+
+    /// One family has no spread between families to resample: its interval
+    /// is absent, never a zero-width one that reads as certainty.
+    #[test]
+    fn a_single_family_has_no_interval() {
+        let one: Vec<PairedOutcome> = mixed()
+            .into_iter()
+            .filter(|o| o.cluster.as_deref() == Some("family-3"))
+            .collect();
+        let level = task_level(&one, FIRST).unwrap();
+        assert_eq!((level.low, level.high), (None, None), "{level:?}");
+        let many = task_level(&mixed(), FIRST).unwrap();
+        assert!(many.low.unwrap() <= many.difference && many.difference <= many.high.unwrap());
+    }
 
     #[test]
     fn the_intervals_are_a_function_of_the_outcomes_and_the_seed() {

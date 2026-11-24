@@ -292,10 +292,11 @@ pub struct TaskLevel {
     pub p_value: f64,
     /// The candidate's share right minus the champion's.
     pub difference: f64,
-    /// The lower end of the family-clustered bootstrap interval.
-    pub low: f64,
-    /// Its upper end.
-    pub high: f64,
+    /// The lower end of the family-clustered bootstrap interval; `None`
+    /// with fewer than two families, which have no spread to resample.
+    pub low: Option<f64>,
+    /// Its upper end; `None` likewise.
+    pub high: Option<f64>,
 }
 
 /// One part of the improvement suite compared on its own.
