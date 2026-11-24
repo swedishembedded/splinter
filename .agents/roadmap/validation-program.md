@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step and sft-final (6B) and the metamorphic relations (6F); the reference projector of the other views, task-kind and plugin matrices not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step and sft-final (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A); the reference projector of the other views, the plugin matrix (4B) and the runtime, evidence and judged kinds' matrices not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
@@ -159,7 +159,8 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - crash safety (10B, the product store ended at each durability boundary): a view repaired after a crash mid-build
   left its half-built directory in the run for good.
 - task kinds (4A, a kind never graded by less than it declares): a kind only a judge grades was answered where no
-  judge is given, its attempts kept ungraded as if graded.
+  judge is given, its attempts kept ungraded as if graded; a recall answer hedging among five candidates passed as
+  stating the one fact.
 
 ## Open
 
@@ -168,7 +169,7 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   exact content only (G-NEW-02); brain supervises the assistant header on plain conversations (G-NEW-03, brain's);
   a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
   Harbor's ATIF validator (G-AS-13).
-- Not built: the reference projector of the views beyond sft-step and sft-final (6B), the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
+- Not built: the reference projector of the views beyond sft-step and sft-final (6B), the plugin matrix (4B) and the task-kind matrix of the kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), knowledge ingestion and retrieval
   benchmarks (3A-3C), TLA+ models and crash injection beyond the product store (10), deterministic
   learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

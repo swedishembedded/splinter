@@ -123,7 +123,9 @@ const STATED_SLACK: usize = 60;
 /// [`short_answer`](super::short_answer)). Otherwise it is
 /// neither right nor wrong by code: the reference may be the point of a long
 /// explanation or one item of a list, which only a judge can tell apart, so
-/// the verifier abstains and leaves the answer to one. An answer that does
+/// the verifier abstains and leaves the answer to one. So it does when the
+/// answer offers the reference as one of alternatives (`9600 or 115200`).
+/// An answer that does
 /// not state the reference fails whatever its length, and so does none;
 /// the verifier abstains on a task without exactly one reference.
 #[derive(Clone, Debug)]
@@ -152,6 +154,8 @@ enum Stating {
     Absent,
     /// The reference occurs in an answer longer than the bound.
     TooLong,
+    /// The reference occurs as one of alternatives the answer offers.
+    Hedged,
 }
 
 /// The plain digit a sub- or superscript digit stands for.
@@ -272,9 +276,31 @@ fn states(answer: &str, reference: &str) -> Stating {
     let bound = STATED_FACTOR * reference.chars().count() + STATED_SLACK;
     match (found, answer.chars().count() > bound) {
         (false, _) => Stating::Absent,
+        (true, false) if hedged(&answer, &reference) => Stating::Hedged,
         (true, false) => Stating::Stated,
         (true, true) => Stating::TooLong,
     }
+}
+
+/// Whether `answer` offers `reference` as one of alternatives: next to the
+/// word `or`, or, for a reference that starts with a number, beside another
+/// number (a list whose separators normalisation removed). The length bound
+/// alone lets a short list of candidates for a short fact through.
+fn hedged(answer: &str, reference: &str) -> bool {
+    let words: Vec<&str> = answer.split_whitespace().collect();
+    let wanted: Vec<&str> = reference.split_whitespace().collect();
+    let numeric = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit() || c == '.');
+    let leads_with_number = wanted.first().is_some_and(|w| numeric(w));
+    (0..words.len().saturating_sub(wanted.len() - 1))
+        .filter(|&at| words[at..at + wanted.len()] == wanted[..])
+        .any(|at| {
+            let before = at.checked_sub(1).map(|i| words[i]);
+            let after = words.get(at + wanted.len()).copied();
+            before == Some("or")
+                || after == Some("or")
+                || (leads_with_number && before.is_some_and(numeric))
+                || (leads_with_number && wanted.len() == 1 && after.is_some_and(numeric))
+        })
 }
 
 impl Verifier for StatedReferenceVerifier {
@@ -320,6 +346,10 @@ impl Verifier for StatedReferenceVerifier {
         Ok(match stating {
             Some(Stating::TooLong) => Finding::abstain(
                 "the answer states the reference but is longer than a statement of it: a judge decides",
+                evidence,
+            ),
+            Some(Stating::Hedged) => Finding::abstain(
+                "the answer offers the reference among alternatives: a judge decides",
                 evidence,
             ),
             other => Finding::decided(other == Some(Stating::Stated), evidence),

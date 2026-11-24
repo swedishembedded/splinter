@@ -38,6 +38,7 @@ mod session_intake;
 mod stance;
 mod survey;
 mod tabular;
+mod task_kinds;
 mod workspace_harbor;
 mod workspace_report_cap;
 mod workspace_requests;

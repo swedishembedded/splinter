@@ -44,9 +44,9 @@ pub const FORMAL_VERSION: &str = "1";
 /// The producer of the stated-reference verifier's verdicts.
 pub const STATED_PRODUCER: &str = "splinter-lab/reference-stated:lenient";
 
-/// The stated-reference verifier's version: bumped with its normalisation
-/// or its bound on the answer's length.
-pub const STATED_VERSION: &str = "1";
+/// The stated-reference verifier's version: bumped with its normalisation,
+/// its bound on the answer's length or what it takes for a hedge.
+pub const STATED_VERSION: &str = "2";
 
 /// Who the speech verdicts name as their producer.
 pub const SPEECH_PRODUCER: &str = "splinter-lab/speech";

@@ -1227,3 +1227,17 @@ gaps:
     splinter-factory/it/closed_book holds it. The legacy verify verb (pipelines/src/verify.rs) still grades such a kind
     with no verifier when no judge is passed; its tally shows the attempts undecided, and the verb goes with the legacy
     pipelines (G-AS-11)'
+- id: G-NEW-13
+  source_id: null
+  where: crates/eval/src/verifiers/formal.rs (StatedReferenceVerifier, the recall kind's code grader)
+  what: 'The stated-reference verifier bounds an answer''s length so that "listing everything in the hope that it is among
+    them" does not pass, but the bound (four times the reference plus 60 characters) admits a short list for a short fact:
+    "9600, 19200, 38400, 57600 or 115200 baud" passed as stating "115200 baud". Found by the task-kind matrix (plan 4A, an
+    adversarial answer per kind).'
+  severity: high
+  confidence: high (the matrix passed the hedge before the fix)
+  status: fixed
+  resolution: 'eval: an answer that offers the reference as one of alternatives (next to "or", or a numeric reference
+    beside another number) is left to a judge, as an over-long one is; the verifier''s version is 2.
+    splinter-knowledge/it/task_kinds holds every plain kind to a correct, wrong, incomplete, empty, adversarial and
+    ungradeable answer, and checks the catalogue has no plain kind without a case'
