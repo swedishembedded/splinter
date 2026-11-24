@@ -35,11 +35,16 @@ import sys
 
 
 def products(run):
+    # A fork keeps its parent's products: of several arms of one name, the newest is the run's own.
+    newest = {}
     for path in sorted(glob.glob(os.path.join(run, 'products', '*.json'))):
         product = json.load(open(path))
         name = product.get('name', '')
         if '_arms' in name and any(f['path'] == 'attempts.jsonl' for f in product['files']):
-            yield name.replace('/_arms', ''), product
+            if name not in newest or product.get('created_at', '') > newest[name].get('created_at', ''):
+                newest[name] = product
+    for name, product in sorted(newest.items()):
+        yield name.replace('/_arms', ''), product
 
 
 def blob(run, product, path):
@@ -101,10 +106,12 @@ def arm_metrics(run, name, product):
     # any of the first k attempts (a slot that never counted is not a pass).
     tasks = {key[0] for key in slots}
     attempts = max(key[1] for key in slots) + 1 if slots else 0
+    sets = [sorted(t for t in tasks if any(last.get((t, a)) and last[(t, a)]['grade']['passed'] for a in range(k)))
+            for k in range(1, attempts + 1)]
     within = [sum(1 for t in tasks if any(last.get((t, a)) and last[(t, a)]['grade']['passed'] for a in range(k)))
               for k in range(1, attempts + 1)]
     return {
-        'tasks': len(tasks), 'solved_within_k': within,
+        'tasks': len(tasks), 'solved_within_k': within, 'solved_sets': sets,
         'by_kind': {k: {'passed': v[0], 'slots': v[1]} for k, v in sorted(kinds.items())},
         'arm': name, 'slots': len(slots), 'counted': len(last), 'passed': passed,
         'never_counted': len(slots) - len(last),
