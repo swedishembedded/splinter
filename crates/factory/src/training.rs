@@ -312,7 +312,7 @@ impl BrainTrainer {
                 grad_accum: params.grad_accum,
                 learning_rate: params.learning_rate,
                 seed: request.seed,
-                continue_from: None,
+                continue_from: request.start,
                 cancel: None,
             },
         )
@@ -344,7 +344,7 @@ impl BrainTrainer {
                 alpha: params.alpha.unwrap_or(2.0 * params.rank as f32),
                 weight_decay: params.weight_decay,
                 grad_accum: params.grad_accum,
-                continue_from: None,
+                continue_from: request.start,
                 cancel: None,
                 base: Self::precision(params)?,
                 learning_rate: params.learning_rate,
