@@ -122,6 +122,10 @@ def test_sven_runs_headless_against_a_stub_model_and_its_trace_is_read(tmp_path,
     trial = out / report["native_dir"]
     assert (trial / "agent" / "trajectory.json").is_file(), (trial / "agent" / "stderr.txt").read_text()
     assert report["trace"] == report["native_dir"] + "/agent/trajectory.json"
+    # The captured trace is ATIF by Harbor's own validator, not only by Splinter's reading of it.
+    from harbor.utils.trajectory_validator import TrajectoryValidator
+    atif = TrajectoryValidator()
+    assert atif.validate(trial / "agent" / "trajectory.json"), atif.get_errors()
     assert report["evidence"]["turns"] >= 1
     assert all(p.headers.get("authorization") == f"Bearer {SECRET}" for p in stub_model.posts())
 
