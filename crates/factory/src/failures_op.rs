@@ -10,7 +10,7 @@
 //! collection a teacher can work over.
 //!
 //! A task is a failure when some given stage attempted it and none solved
-//! it. Each failure is an item named by its task ([`brief_item`]) holding
+//! it (with `include_solved`, when an attempt of it failed). Each failure is an item named by its task ([`brief_item`]) holding
 //! the task's `instruction.md` and `attempt.md`, the last failed attempt's
 //! conversation condensed to what a reader needs: every turn's words under
 //! its step id (what a fork point names), each tool call and what it
@@ -55,6 +55,10 @@ pub struct FailuresParams {
     /// The longest condensed attempt, in bytes.
     #[serde(default = "transcript_bytes")]
     pub transcript_bytes: usize,
+    /// Also the tasks another attempt solved: a task with a failed attempt is a failure, so a policy
+    /// that solves a task one time in two is continued from its other failures as well.
+    #[serde(default)]
+    pub include_solved: bool,
 }
 
 /// The `attempts.failures` operation.
@@ -126,7 +130,10 @@ impl Execute for Failures {
             }
         }
         let mut items = Vec::new();
-        for (task, (trial, view)) in failed.iter().filter(|(t, _)| !solved.contains(*t)) {
+        for (task, (trial, view)) in failed
+            .iter()
+            .filter(|(t, _)| p.include_solved || !solved.contains(*t))
+        {
             if collection.task(task).is_none() {
                 return Err(format!(
                     "task {task} was attempted but is not among the tasks"

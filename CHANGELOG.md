@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (failures of a task the policy sometimes solves)
+- `attempts.failures` takes `include_solved: true`: a task with a failed attempt is a failure even when another attempt solved it. A fork correction continues such a task's failed attempt when its brief has a fork point, so the recovery data covers the policy's partial failures and not only the tasks it never solved.
+
 ### Added (a policy-gradient reward that discourages looping)
 - `dataset.project` with `objective: policy-gradient` takes `reward: { penalties_percent: {...} }`. Each attempt's verdict now also carries `loop` (the agent's loop watchdog ended it) and `repeat_after_error` (the share of calls after a failed call that repeated it), read from its files, and the named metrics lessen its reward whether or not it passed.
 

@@ -423,3 +423,47 @@ fn a_fork_correction_is_refused_where_it_cannot_continue() {
     ));
     assert!(pointless.contains("fork points"), "{pointless}");
 }
+
+/// A task one attempt solved and another failed is a failure only when the stage asks for it: the policy
+/// that solves a task one time in two is continued from its other failure as well.
+#[test]
+fn a_task_solved_by_another_attempt_is_a_failure_when_the_stage_includes_solved() {
+    let forks = |include_solved: bool| {
+        let repo = repo();
+        repo.write(
+            "prompts/locate.md",
+            "Name the last step before the attempt went wrong.",
+        );
+        repo.write(
+            "schemas/fork.json",
+            r#"{"type": "object", "properties": {"keep_through": {"type": "integer"},
+                "guidance": {"type": "string"}}, "required": ["keep_through"]}"#,
+        );
+        let recipe = FORKED.replace("attempts: 1, seed: 11", "attempts: 2, seed: 11").replace(
+            "    uses: attempts.failures\n",
+            &format!("    uses: attempts.failures\n    with: {{ include_solved: {include_solved} }}\n"),
+        );
+        let backend = FakeBackend::with(Outcome::Fail);
+        backend.script("train/001-first", &[Outcome::Fail, Outcome::Pass]);
+        let dir = tempfile::tempdir().unwrap();
+        let trainer = FakeTrainer::default();
+        let services = Services {
+            backend: &backend,
+            trainer: Some(&trainer),
+            models: Some(&Locators),
+            variables: None,
+        };
+        let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+        Factory::open(&resolved, dir.path(), services, "test")
+            .unwrap()
+            .run()
+            .unwrap();
+        backend
+            .executed()
+            .into_iter()
+            .filter(|s| s.slot.pass == "fork")
+            .count()
+    };
+    assert_eq!(forks(false), 0, "the task was solved once");
+    assert_eq!(forks(true), 1, "its failed attempt is continued");
+}

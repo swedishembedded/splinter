@@ -33,6 +33,10 @@ pub struct TaskSelector {
     /// attempts a fork correction continues.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continuing: Option<String>,
+    /// The stage whose fork points also admit a task this stage solved in another attempt: its failed
+    /// attempt is continued when a fork point was written for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub briefed_by: Option<String>,
     /// Only these task ids.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
@@ -109,6 +113,7 @@ pub(crate) fn pass(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Rollou
         environment: params.environment,
         tasks: TaskSelector {
             continuing: stage.source("continue_from").map(str::to_owned),
+            briefed_by: stage.source("briefs").map(str::to_owned),
             solved_by: stage
                 .sources("solved_by")
                 .into_iter()
@@ -184,11 +189,23 @@ pub(crate) fn select<'t>(
             .filter(|t| t.verified_success())
             .map(|t| t.task.as_str())
             .collect();
+        let briefs = match &selector.briefed_by {
+            Some(stage) => {
+                factory.product(stage)?;
+                Some(factory.view(stage))
+            }
+            None => None,
+        };
         let failed: BTreeSet<&str> = trials
             .iter()
             .filter(|t| !t.verified_success() && t.trace.is_some())
             .map(|t| t.task.as_str())
-            .filter(|t| !solved.contains(t))
+            .filter(|t| {
+                !solved.contains(t)
+                    || briefs
+                        .as_ref()
+                        .is_some_and(|b| super::fork::fork_point(b, t).is_ok())
+            })
             .collect();
         selected.retain(|t| failed.contains(t.id.as_str()));
     }

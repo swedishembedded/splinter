@@ -808,6 +808,10 @@ instruction decides what kind of correction it is: passages from reference
 material (knowledge-backed), a numbered plan of checkable subgoals
 (decomposition), or what went wrong.
 
+`attempts.failures` with `include_solved: true` also collects a task that another attempt solved but one failed:
+a policy that solves a task one time in two is then continued from its failed attempts too (a fork correction takes
+such a task when its brief gave a fork point).
+
 A fork correction continues each failed attempt instead of starting the task
 afresh. A teacher stage over `attempts.failures` names, per task, the last step
 to keep (`keep_through`, a step id of `attempt.md`) and a sentence of
