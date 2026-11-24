@@ -213,7 +213,7 @@ fn replay_of(
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .collect();
-        let trained_on: Vec<&str> = match holdout_split_records(&records) {
+        let trained_on: Vec<&str> = match holdout_split_records(&records)? {
             Some((train, _)) => train.into_iter().copied().collect(),
             None => records,
         };

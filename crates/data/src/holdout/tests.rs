@@ -38,7 +38,7 @@ fn records_from_source_text_alone_follow_the_family_the_examined_records_decide(
     for n in 0..40u32 {
         records.push(voice(&format!("alone-{n}"), 200 + n));
     }
-    let (train, held) = holdout_split_records(&records).unwrap();
+    let (train, held) = holdout_split_records(&records).unwrap().unwrap();
     let examined_held: Vec<&&String> = held.iter().filter(|r| r.contains("experiences")).collect();
     // The split of the examined records is what it would be without the
     // writer's text: the newest families, to the units a paired test
@@ -62,7 +62,7 @@ fn records_from_source_text_alone_follow_the_family_the_examined_records_decide(
     // A set of the writer's text alone has nothing to examine: every
     // record is then a unit, as before.
     let alone: Vec<String> = (0..30u32).map(|n| voice(&format!("g{n}"), n)).collect();
-    let (train, held) = holdout_split_records(&alone).unwrap();
+    let (train, held) = holdout_split_records(&alone).unwrap().unwrap();
     assert_eq!((train.len(), held.len()), (23, 7));
 
     // Split into files, the held-out file holds what a score is measured
@@ -214,7 +214,7 @@ fn dataset_records_are_grouped_by_their_metadata() {
     records.insert(2, line(Some("held"), 100));
     records.insert(5, line(None, 102));
     records.push(line(Some("held"), 101));
-    let (train, held) = holdout_split_records(&records).unwrap();
+    let (train, held) = holdout_split_records(&records).unwrap().unwrap();
     // The group "held" whole, wherever its records sit, and the newest
     // groups after it up to a quarter of the records.
     assert_eq!(held.len(), 4, "{held:?}");
@@ -432,7 +432,7 @@ fn a_record_that_fixes_its_side_stays_on_it() {
     // marked to be trained on.
     let mut records: Vec<String> = (0..6).map(|n| record(n, Some("held_out"))).collect();
     records.extend((6..14).map(|n| record(n, Some("train"))));
-    let (train, held) = holdout_split_records(&records).unwrap();
+    let (train, held) = holdout_split_records(&records).unwrap().unwrap();
     assert_eq!(held.len(), 6, "{held:?}");
     assert!(held.iter().all(|r| r.contains("held_out")));
     assert_eq!(train.len(), 8);
@@ -443,14 +443,14 @@ fn a_record_that_fixes_its_side_stays_on_it() {
     // (units are wanted up to a quarter of the twenty).
     let mut mixed: Vec<String> = (0..20).map(|n| record(n, None)).collect();
     mixed.extend((20..30).map(|n| record(n, Some("train"))));
-    let (train, held) = holdout_split_records(&mixed).unwrap();
+    let (train, held) = holdout_split_records(&mixed).unwrap().unwrap();
     assert_eq!(held.len(), 5, "a quarter of the twenty that fix nothing");
     assert!(held.iter().all(|r| !r.contains("\"train\"")));
     assert_eq!(train.len(), 25);
 
     // With nothing marked held out, nothing is.
     let only_train: Vec<String> = (0..4).map(|n| record(n, Some("train"))).collect();
-    let (train, held) = holdout_split_records(&only_train).unwrap();
+    let (train, held) = holdout_split_records(&only_train).unwrap().unwrap();
     assert_eq!((train.len(), held.len()), (4, 0));
 }
 
@@ -541,7 +541,7 @@ fn a_seeded_split_holds_out_every_stratum_at_its_share_of_the_set() {
     // one is printed when it does not.
     for seed in [20_261_118_u64, 7, u64::MAX] {
         let records = ingest_ordered(Some(seed));
-        let (train, held) = holdout_split_records(&records).unwrap();
+        let (train, held) = holdout_split_records(&records).unwrap().unwrap();
         assert_eq!(held.len(), 42, "seed {seed}: a tenth of 420");
         let held_by = domains(&held);
         for (domain, total) in [
@@ -560,8 +560,10 @@ fn a_seeded_split_holds_out_every_stratum_at_its_share_of_the_set() {
         // The monitoring set carved from what is trained on mirrors the mix
         // too.
         let train: Vec<String> = train.into_iter().cloned().collect();
+        let rows = memberships(&train).unwrap();
         let (_, monitor) =
-            split_by_rule(&train, record_membership, &SplitRule::monitor(0.1)).unwrap();
+            split_by_rule(&rows, |(_, m)| m.clone(), &SplitRule::monitor(0.1)).unwrap();
+        let monitor: Vec<&String> = monitor.into_iter().map(|(record, _)| *record).collect();
         let monitored = domains(&monitor);
         assert_eq!(monitored.len(), 4, "seed {seed}: {monitored:?}");
     }
@@ -573,6 +575,7 @@ fn a_seeded_split_holds_out_every_stratum_at_its_share_of_the_set() {
 fn a_seeded_split_is_reproducible_and_the_seed_chooses_it() {
     let held = |records: &[String]| -> std::collections::BTreeSet<String> {
         holdout_split_records(records)
+            .unwrap()
             .unwrap()
             .1
             .into_iter()
@@ -591,8 +594,43 @@ fn a_seeded_split_is_reproducible_and_the_seed_chooses_it() {
 #[test]
 fn records_without_a_draw_keep_the_newest_end() {
     let records = ingest_ordered(None);
-    let (_, held) = holdout_split_records(&records).unwrap();
+    let (_, held) = holdout_split_records(&records).unwrap().unwrap();
     assert_eq!(held.len(), 42);
     let newest: Vec<&String> = records[records.len() - 42..].iter().collect();
     assert_eq!(held, newest);
+}
+
+/// A record the split cannot read is refused, never quietly placed: a side
+/// that is not `train` or `held_out` (a typo would make it a free sample the
+/// rule may hold out or train on) and a line that is not a JSON object (it
+/// would be an ungrouped, examinable sample) both name their line.
+#[test]
+fn a_record_the_split_cannot_read_is_refused_not_placed_as_a_free_sample() {
+    let record = |n: u32, split: &str| {
+        format!(
+            r#"{{"messages":[],"metadata":{{"task":"blake3:{n:064x}","group":"g{n}"{split}}}}}"#
+        )
+    };
+    let dir = std::env::temp_dir().join(format!("holdout-unreadable-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let dataset = dir.join("dataset.jsonl");
+    let refusal = |lines: Vec<String>| {
+        std::fs::write(&dataset, lines.join("\n")).unwrap();
+        split_dataset_file(&dataset, &dir)
+    };
+    let valid: Vec<String> = (0..30).map(|n| record(n, "")).collect();
+    refusal(valid.clone()).unwrap();
+
+    let mut typo = valid.clone();
+    typo[3] = record(3, r#","split":"heldout""#);
+    let mut not_json = valid;
+    not_json[4] = "this is not a record".into();
+    for (lines, line) in [(typo, 4), (not_json, 5)] {
+        let refused = refusal(lines).unwrap_err();
+        assert!(
+            matches!(refused, ViewError::MalformedRecord { line: l, .. } if l == line),
+            "{refused}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

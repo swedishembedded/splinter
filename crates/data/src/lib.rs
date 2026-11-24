@@ -702,6 +702,17 @@ pub enum ViewError {
         /// Records in it.
         records: usize,
     },
+    /// A dataset line the split cannot read: it is not a JSON object, or the
+    /// side it fixes (`metadata.split`) is neither `train` nor `held_out`.
+    /// Placing it as a free sample would let a typo decide what is trained on
+    /// and what is scored.
+    #[error("record at line {line} cannot be split: {reason}")]
+    MalformedRecord {
+        /// The record's position among the non-blank lines, counted from 1.
+        line: usize,
+        /// What is wrong with it.
+        reason: String,
+    },
     /// No whole group can be held out: the records come from too few
     /// independent source texts, and dividing one would train on a print of
     /// what is scored.

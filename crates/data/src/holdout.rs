@@ -386,36 +386,85 @@ fn draw_order<'a>(
 /// it names in `metadata.group`, whether it was projected from a task
 /// or an experience (`metadata.task`, `metadata.experiences`), which is
 /// what makes it examinable, the side it fixes in `metadata.split`, and the
-/// seed and stratum it is drawn by in `metadata.split_draw`. A record that is
-/// not JSON is its own group and examinable.
-fn record_membership<S: AsRef<str>>(record: &S) -> Membership {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(record.as_ref()) else {
-        return Membership {
-            examinable: true,
-            ..Membership::default()
-        };
-    };
+/// seed and stratum it is drawn by in `metadata.split_draw`.
+///
+/// # Errors
+/// The record is not a JSON object, or the side it fixes is neither `train`
+/// nor `held_out`: either would make it a free sample the rule may place
+/// either way, which no producer meant.
+fn record_membership(record: &str) -> Result<Membership, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(record).map_err(|error| format!("it is not JSON: {error}"))?;
+    if !value.is_object() {
+        return Err("it is not a JSON object".to_string());
+    }
     let metadata = &value["metadata"];
     let draw = &metadata["split_draw"];
-    Membership {
+    let side = match &metadata["split"] {
+        serde_json::Value::Null => None,
+        fixed => Some(serde_json::from_value(fixed.clone()).map_err(|_| {
+            format!("metadata.split is {fixed}, which is neither \"train\" nor \"held_out\"")
+        })?),
+    };
+    Ok(Membership {
         group: metadata["group"].as_str().map(str::to_string),
         examinable: metadata["task"].is_string()
             || metadata["experiences"]
                 .as_array()
                 .is_some_and(|experiences| !experiences.is_empty()),
-        side: serde_json::from_value(metadata["split"].clone()).ok(),
+        side,
         stratum: draw["stratum"].as_str().map(str::to_string),
         seed: draw["seed"].as_u64(),
-    }
+    })
 }
+
+/// Each of `records` (the non-blank lines of a dataset) with how it stands to
+/// the split.
+///
+/// # Errors
+/// A record cannot be read ([`ViewError::MalformedRecord`]), named by its
+/// position among `records`, counted from 1.
+fn memberships<S: AsRef<str>>(records: &[S]) -> Result<Vec<(&S, Membership)>, ViewError> {
+    records
+        .iter()
+        .enumerate()
+        .map(|(n, record)| {
+            record_membership(record.as_ref())
+                .map(|membership| (record, membership))
+                .map_err(|reason| ViewError::MalformedRecord {
+                    line: n + 1,
+                    reason,
+                })
+        })
+        .collect()
+}
+
+/// The records to train on and the records held out, in that order.
+pub type RecordSplit<'a, S> = (Vec<&'a S>, Vec<&'a S>);
 
 /// Dataset `records` (one JSON object per line) split as
 /// [`holdout_split_by`] splits them, by the group each names in its
 /// `metadata.group` and whether it came from a task or an experience. The
 /// one rule training and the release gate share, so the gate scores what
-/// training held out.
-pub fn holdout_split_records<S: AsRef<str>>(records: &[S]) -> Option<(Vec<&S>, Vec<&S>)> {
-    holdout_split_by(records, record_membership)
+/// training held out. `None` when there are too few records to hold one out.
+///
+/// # Errors
+/// A record cannot be read ([`ViewError::MalformedRecord`]).
+pub fn holdout_split_records<S: AsRef<str>>(
+    records: &[S],
+) -> Result<Option<RecordSplit<'_, S>>, ViewError> {
+    let rows = memberships(records)?;
+    Ok(
+        holdout_split_by(&rows, |(_, membership)| membership.clone())
+            .map(|(train, held_out)| (rows_of(train), rows_of(held_out))),
+    )
+}
+
+/// A dataset line with how it stands to the split.
+type Row<'a> = &'a (&'a &'a str, Membership);
+
+fn rows_of<'a, S>(rows: Vec<&(&'a S, Membership)>) -> Vec<&'a S> {
+    rows.into_iter().map(|(record, _)| *record).collect()
 }
 
 /// The parts of a split dataset file: every record is in exactly one.
@@ -524,18 +573,17 @@ fn split_file(
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect();
-    let (train, held_out) = split_by_rule(&records, record_membership, rule).ok_or_else(|| {
-        ViewError::TooFewRecords {
+    let rows = memberships(&records)?;
+    let (train, held_out) = split_by_rule(&rows, |(_, membership)| membership.clone(), rule)
+        .ok_or_else(|| ViewError::TooFewRecords {
             path: dataset.to_path_buf(),
             records: records.len(),
-        }
-    })?;
-    let memberships: Vec<Membership> = records.iter().map(record_membership).collect();
-    if held_out.is_empty() && memberships.iter().any(|m| m.side.is_none()) {
-        let groups: std::collections::HashSet<String> = memberships
+        })?;
+    if held_out.is_empty() && rows.iter().any(|(_, m)| m.side.is_none()) {
+        let groups: std::collections::HashSet<String> = rows
             .iter()
             .enumerate()
-            .map(|(n, m)| m.group.clone().unwrap_or_else(|| format!("\0record-{n}")))
+            .map(|(n, (_, m))| m.group.clone().unwrap_or_else(|| format!("\0record-{n}")))
             .collect();
         return Err(ViewError::NoGroupToHoldOut {
             records: records.len(),
@@ -546,9 +594,9 @@ fn split_file(
     // asked as, comparable whatever the writer's text beside them; when
     // none is, every record is (see [`holdout_split_by`]). The writer's text
     // of the taken-out families is scored apart, in its own file.
-    let (examinable, text): (Vec<&&str>, Vec<&&str>) = held_out
+    let (examinable, text): (Vec<Row>, Vec<Row>) = held_out
         .iter()
-        .partition(|record| record_membership(record).examinable);
+        .partition(|(_, membership)| membership.examinable);
     let (scored, text) = if examinable.is_empty() {
         (held_out, Vec::new())
     } else {
@@ -556,14 +604,14 @@ fn split_file(
     };
     // The rule never divides a group; the gate checks the files about to be
     // written rather than trusting the rule that made them.
-    let units = |lines: &[&&str], side: &str| -> Vec<Unit> {
-        lines
-            .iter()
+    let units = |rows: &[Row], side: &str| -> Vec<Unit> {
+        rows.iter()
             .enumerate()
-            .map(|(n, line)| Unit {
+            .map(|(n, (_, membership))| Unit {
                 id: format!("{side}-{n}"),
-                group: record_membership(line)
+                group: membership
                     .group
+                    .clone()
                     .unwrap_or_else(|| format!("{side}-{n}")),
                 stratum: String::new(),
             })
@@ -573,9 +621,13 @@ fn split_file(
         (Part::Train, &units(&train, "kept")),
         (Part::Test, &units(&scored, "out")),
     ])?;
-    let write = |name: &str, lines: &[&&str]| -> Result<PathBuf, ViewError> {
+    let write = |name: &str, lines: &[Row]| -> Result<PathBuf, ViewError> {
         let path = dir.join(name);
-        let mut body = lines.iter().map(|l| **l).collect::<Vec<_>>().join("\n");
+        let mut body = lines
+            .iter()
+            .map(|(l, _)| **l)
+            .collect::<Vec<_>>()
+            .join("\n");
         body.push('\n');
         std::fs::write(&path, body).map_err(io(&path))?;
         Ok(path)

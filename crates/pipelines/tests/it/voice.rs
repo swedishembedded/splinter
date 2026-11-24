@@ -275,7 +275,7 @@ fn the_writers_text_is_held_out_with_the_family_of_the_letter_it_prints() {
             .lines()
             .map(String::from),
     );
-    let (train, held) = holdout_split_records(&records).unwrap();
+    let (train, held) = holdout_split_records(&records).unwrap().unwrap();
     let group_of = |line: &String| -> String {
         serde_json::from_str::<serde_json::Value>(line).unwrap()["metadata"]["group"]
             .as_str()

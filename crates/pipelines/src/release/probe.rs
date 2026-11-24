@@ -205,7 +205,7 @@ pub(crate) fn split_records(
                 .map(str::to_string),
         );
     }
-    Ok(match holdout_split_records(&records) {
+    Ok(match holdout_split_records(&records)? {
         Some((train, held_out)) => (
             train.into_iter().cloned().collect(),
             held_out.into_iter().cloned().collect(),
