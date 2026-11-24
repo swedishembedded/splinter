@@ -206,7 +206,7 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   ten in part); several calls recorded once each and malformed arguments failing openly are now specified. Still
   without a spec after that: a run its deadline ends kept as a timeout with its partial trajectory, two concurrent
   trials of one task each in their own tree, and an eighty-call run kept whole are now specified too. Still without
-  one: a tool's own timeout, an agent process that crashes (the worker's), subagent trace identities, and re-run
+  one (a tool's own timeout is now specified: the command is stopped and the model told): an agent process that crashes (the worker's), subagent trace identities, and re-run
   tool calls of a continued session having no duplicate effect.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
