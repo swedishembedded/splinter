@@ -16,6 +16,11 @@ pub struct Global {
     /// Which hardware models run on.
     #[command(flatten)]
     pub device: splinter_sdk::device::DeviceFlags,
+    /// The machine configuration file: connections and operator grants
+    /// (default: `$SPLINTER_CONFIG`, else `$XDG_CONFIG_HOME/splinter/config.yaml`,
+    /// else `~/.config/splinter/config.yaml`). See `splinter config`.
+    #[arg(long, global = true, value_name = "FILE")]
+    pub config: Option<PathBuf>,
     /// The state root (default: ~/.splinter).
     #[arg(long, global = true, value_name = "DIR")]
     pub state: Option<PathBuf>,

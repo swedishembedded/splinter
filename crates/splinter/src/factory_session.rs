@@ -123,7 +123,7 @@ impl Report for Initialised {
             .collect();
         format!(
             "{}: wrote {} files of the {} template; its models are reached through the \
-             connections of connections.yaml there or ~/.config/splinter/connections.yaml. \
+             connections of connections.yaml there or the machine's `splinter config`. \
              From there:\n{}",
             self.dir.display(),
             self.files.len(),
@@ -262,7 +262,9 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
         });
     let (backend, brain) = services(config)?;
     if needs_trainer && brain.is_none() {
-        return Err(refused("the recipe trains or evaluates; give brain with --brain-endpoint (and --brain-artifact-store, --brain-adapter-dir)"));
+        return Err(refused(
+            "the recipe trains or evaluates; give brain with --brain-endpoint (and --brain-artifact-store, --brain-adapter-dir)",
+        ));
     }
     let services = Services {
         backend: &backend,

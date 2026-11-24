@@ -231,6 +231,10 @@ pub enum Command {
     /// verdicts as one tagged, immutable revision of a private Hugging Face
     /// dataset repository; sealed and item-level material is refused.
     Publish(PublishArgs),
+    /// Read and change this machine's settings (connections and operator
+    /// grants), one validated file.
+    #[command(subcommand)]
+    Config(ConfigCommand),
     /// Print the command reference as Markdown, generated from this grammar;
     /// with --check FILE, fail when a committed copy of it is stale; with
     /// --check-invocations FILE..., fail on a command a manual shows that
@@ -616,6 +620,7 @@ pub struct RunStatusArgs {
 mod absorb;
 mod baseline;
 mod bench;
+pub mod config;
 mod consolidate;
 mod control;
 mod corrections;
@@ -642,6 +647,7 @@ mod train;
 pub use absorb::{AbsorbArgs, ClaimsCommand, SessionCommand};
 pub use baseline::BaselineArgs;
 pub use bench::BenchSplit;
+pub use config::ConfigCommand;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;

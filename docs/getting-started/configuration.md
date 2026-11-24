@@ -8,8 +8,41 @@ store (the one `brain pull` fills), the `brain` on `PATH` it serves models
 from, the GPUs, and the
 strongest chat model in the store that fits a card, which then helps the
 policy learn (see [Roles](#roles)). Every choice is a flag, valid on every
-command; nothing is read from environment variables. The flags are listed
+command; nothing is read from environment variables except `SPLINTER_CONFIG` and `SPLINTER_HARBOR_WORKER`. The flags are listed
 under [global options](../reference/cli.md#global-options).
+
+## Machine settings
+
+What is particular to this machine and not to a run lives in one file,
+`$XDG_CONFIG_HOME/splinter/config.yaml` (else `~/.config/splinter/config.yaml`;
+`--config FILE` or `SPLINTER_CONFIG` names another). It has two sections:
+`connections:` (how each model is reached: protocol, URL, and the environment
+variable that holds the credential as `env:NAME`, never the credential) and
+`operators:` (what a task repository's operators may read, write, reach and be
+passed from the environment). `splinter config` reads and changes it, and
+validates every write against the file's schema, so a refused write leaves the
+file as it was:
+
+```sh
+splinter config show
+splinter config set connections.brain '{protocol: openai, url: "http://127.0.0.1:8990/v1"}'
+splinter config set connections.hosted.token env:SVEN_KEY
+splinter config get connections.hosted.token
+splinter config set 'operators[exam.sealed]' '{read: [/srv/bench/sealed], network: true}'
+splinter config get 'operators[exam.sealed].network'
+splinter config reset connections.hosted.token
+splinter config reset --all
+splinter config schema
+splinter config path
+```
+
+A key is a dotted path; a name that holds dots goes in brackets
+(`operators[exam.sealed].network`). A value is YAML. Earlier versions kept
+`connections.yaml` and `operators.yaml` in the same directory; they are no
+longer read, and a directory that has them but no `config.yaml` is refused
+until `splinter config import` merges them into it (and removes them). A task
+repository's own `connections.yaml` is unchanged: shared defaults that the
+machine's connections override by name.
 
 ## State
 

@@ -50,18 +50,23 @@ cd my-repo && splinter validate recipes/agent-sft.yaml
   `splinter-harbor-worker` (Harbor's job API, pinned) into `workers/harbor/.venv`;
   put its `bin/` on `PATH` or set `SPLINTER_HARBOR_WORKER` to the program.
 - **Connections**: how each model is reached. The task repository's
-  `connections.yaml` gives them for every machine; this machine's
-  `~/.config/splinter/connections.yaml` (or `$XDG_CONFIG_HOME/splinter/...`)
+  `connections.yaml` gives them for every machine; the `connections:` section
+  of this machine's configuration file
+  ([`splinter config`](../getting-started/configuration.md#machine-settings))
   overrides any of them by name. A credential is named by the variable that
   holds it, never written in either file; the worker reads the variable when it
   routes the agent's requests. A model whose connection neither file defines is
-  refused, naming the files read.
+  refused, naming the files read. A connection that only the repository's file
+  gives a credential is refused too: a credential is the machine's to give.
 
 ```yaml
 connections:
   brain: { protocol: openai, url: "http://127.0.0.1:8990/v1" }
   hosted: { protocol: openai, url: "https://example.invalid/v1", token: "env:SVEN_KEY" }
 ```
+
+On the machine, the same connections are set with
+`splinter config set connections.hosted '{protocol: openai, url: "https://example.invalid/v1", token: "env:SVEN_KEY"}'`.
 
 - **brain**, for a recipe that trains or evaluates: `--brain-endpoint URL` with
   `--brain-artifact-store DIR` and `--brain-adapter-dir DIR` (or
@@ -509,15 +514,15 @@ repository keeps: its top directory is readable), is the machine's, like its
 toolchain, and is not pinned.
 
 An operator file is the same on every machine; what a machine lets an operator
-have beyond its inputs and its code is the machine's to say, in
-`~/.config/splinter/operators.yaml`. An operator that declares `network: true`
+have beyond its inputs and its code is the machine's to say, in the
+`operators:` section of its configuration file
+([`splinter config`](../getting-started/configuration.md#machine-settings)). An operator that declares `network: true`
 or needs variables (`env: [NAME]`) is refused before anything runs unless its
 grant says so; a grant may also let it read paths outside the repository, and
 write the paths where it keeps state between runs:
 
 ```yaml
-schema: splinter.operator-grants/v1
-grants:
+operators:
   exam.sealed:
     read: [/srv/bench/sealed, /srv/models]
     write: [/srv/bench/private]

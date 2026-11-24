@@ -27,6 +27,7 @@ mod build_info;
 mod cli;
 mod compare_output;
 mod compare_session;
+mod config_session;
 mod consolidate_output;
 mod continual_output;
 mod conversation_dataset;
@@ -73,6 +74,9 @@ use session::Session;
 /// The global flags that say where things are on this machine and which
 /// models play which part: each replaces the default `Config::from_env` found.
 fn apply_machine_flags(config: &mut Config, global: &cli::Global) {
+    if let Some(file) = &global.config {
+        config.factory.config.clone_from(file);
+    }
     if let Some(state) = &global.state {
         config.state_root = StateRoot::new(state);
     }
@@ -221,6 +225,9 @@ fn main() -> ExitCode {
     }
     let mut config = Config::from_env();
     apply_machine_flags(&mut config, &cli.global);
+    if let Some(Command::Config(command)) = &cli.command {
+        return config_session::run(&config.factory.config, cli.global.json, command).into();
+    }
     config.policy_context_tokens = cli.global.policy_context_tokens;
     if let Some(width) = cli.global.remote_concurrency {
         config.remote_concurrency = width as usize;

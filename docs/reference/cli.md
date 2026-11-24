@@ -30,6 +30,7 @@ Every command takes these.
 - `--slurm-single-node-step-arg <ARG>...`: An argument a step on a single node passes to `srun` besides `--slurm-step-arg` (on an HPE Slingshot fabric, `--network=single_node_vni`, without which a single-node step has no fabric access); repeat for more.
 - `--cluster-insecure-plaintext`: Serve plaintext HTTP between the allocation's nodes instead of TLS: only on a cluster network you trust, since the servers' key then crosses it readable. By default the servers serve TLS under a certificate authority made for them, whose key is discarded at once.
 - `--cluster-stage-models <DIR|auto|off>`: Where brain stages the model store's entries on each node's own disk for the fleet's servers and a distributed job's brain ranks (the first process of a node copies an entry, verified; the others read the copy instead of the shared filesystem): `auto` (default) under the node-local scratch the site announces to every step (SLURM_TMPDIR, SNIC_TMP or LOCAL_SCRATCH), checked writable on every node, else not at all; an absolute directory there; `off` never. The directory must be bound into the container a step enters.
+- `--config <FILE>`: The machine configuration file: connections and operator grants (default: `$SPLINTER_CONFIG`, else `$XDG_CONFIG_HOME/splinter/config.yaml`, else `~/.config/splinter/config.yaml`). See `splinter config`.
 - `--state <DIR>`: The state root (default: ~/.splinter)
 - `--job-owner <NAME>`: The controller name recorded with each job this process submits and the claim it takes on one (default: this machine's host name)
 - `--detach-on-interrupt`: On Ctrl-C (or SIGTERM), exit at once and leave the brain training jobs of the command running, instead of cancelling them through brain's API (`DELETE /v1/jobs/{id}`) first; running the same command again continues each job from its last saved state. A second Ctrl-C always exits at once.
@@ -209,6 +210,14 @@ Every command takes these.
   - [splinter state restore](#splinter-state-restore) - Unpack an archive (and the archives an incremental one was made after) into an empty state root, verifying everything first
 - [splinter lineage](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
 - [splinter publish](#splinter-publish) - Publish experience sets, datasets, candidates and signed aggregate verdicts as one tagged, immutable revision of a private Hugging Face dataset repository
+- [splinter config](#splinter-config) - Read and change this machine's settings (connections and operator grants), one validated file
+  - [splinter config show](#splinter-config-show) - Print the file's path and its effective content
+  - [splinter config get](#splinter-config-get) - Print one value
+  - [splinter config set](#splinter-config-set) - Set one value, given as YAML (`set connections.hosted.token env:SVEN_KEY`, `set connections.brain '{protocol
+  - [splinter config reset](#splinter-config-reset) - Remove one value, or with --all return the file to the empty default
+  - [splinter config schema](#splinter-config-schema) - Print the JSON Schema of the file
+  - [splinter config path](#splinter-config-path) - Print the file's path
+  - [splinter config import](#splinter-config-import) - Move the settings of the older `connections.yaml` and `operators.yaml` beside the file into it, then remove them
 
 ## splinter
 
@@ -275,6 +284,7 @@ Subcommands:
 - [`state`](#splinter-state) - Show, maintain, verify, repair, archive and restore the state
 - [`lineage`](#splinter-lineage) - Trace any artifact up to where it came from (down to source bytes) and down to everything that came from it
 - [`publish`](#splinter-publish) - Publish experience sets, datasets, candidates and signed aggregate verdicts as one tagged, immutable revision of a private Hugging Face dataset repository
+- [`config`](#splinter-config) - Read and change this machine's settings (connections and operator grants), one validated file
 
 ### splinter corrections
 
@@ -1518,7 +1528,7 @@ Arguments:
 Options:
 
 - `--hub-endpoint <URL>`: The Hub to talk to (a local emulator's `http://127.0.0.1:PORT` in a test) Default: `https://huggingface.co`.
-- `--token-file <FILE>`: A file holding the access token (the `hf` CLI keeps one at `~/.cache/huggingface/token`); without it, calls are anonymous.
+- `--token-file <FILE>`: A file holding the access token (name the `hf` CLI's own, `~/.cache/huggingface/token`, to use it); without it, calls are anonymous.
 
 #### splinter experiences compare
 
@@ -2340,4 +2350,95 @@ Options:
 - `--verdict <FILE>...`: A signed aggregate verdict of the examiner (repeatable)
 - `--examiner-key <FILE>`: The examiner's public key the verdicts verify under.
 - `--hub-endpoint <URL>`: The Hub to talk to (a local emulator's `http://127.0.0.1:PORT` in a test) Default: `https://huggingface.co`.
-- `--token-file <FILE>`: A file holding the access token (the `hf` CLI keeps one at `~/.cache/huggingface/token`); without it, calls are anonymous.
+- `--token-file <FILE>`: A file holding the access token (name the `hf` CLI's own, `~/.cache/huggingface/token`, to use it); without it, calls are anonymous.
+
+### splinter config
+
+Read and change this machine's settings (connections and operator grants), one validated file
+
+```text
+splinter config [OPTIONS] <COMMAND>
+```
+
+Subcommands:
+
+- [`show`](#splinter-config-show) - Print the file's path and its effective content
+- [`get`](#splinter-config-get) - Print one value
+- [`set`](#splinter-config-set) - Set one value, given as YAML (`set connections.hosted.token env:SVEN_KEY`, `set connections.brain '{protocol
+- [`reset`](#splinter-config-reset) - Remove one value, or with --all return the file to the empty default
+- [`schema`](#splinter-config-schema) - Print the JSON Schema of the file
+- [`path`](#splinter-config-path) - Print the file's path
+- [`import`](#splinter-config-import) - Move the settings of the older `connections.yaml` and `operators.yaml` beside the file into it, then remove them
+
+#### splinter config show
+
+Print the file's path and its effective content; a missing file shows the empty default
+
+```text
+splinter config show [OPTIONS]
+```
+
+#### splinter config get
+
+Print one value. KEY is a dotted path, with [name] for a name that holds dots: `connections.hosted.url`, `operators[exam.sealed].network`
+
+```text
+splinter config get [OPTIONS] <KEY>
+```
+
+Arguments:
+
+- `<KEY>` (required): The key to read.
+
+#### splinter config set
+
+Set one value, given as YAML (`set connections.hosted.token env:SVEN_KEY`, `set connections.brain '{protocol: openai, url: "http://127.0.0.1:8990/v1"}'`). The whole file is validated against the schema first: a refused write changes nothing
+
+```text
+splinter config set [OPTIONS] <KEY> <VALUE>
+```
+
+Arguments:
+
+- `<KEY>` (required): The key to write.
+- `<VALUE>` (required): The value, as YAML.
+
+#### splinter config reset
+
+Remove one value, or with --all return the file to the empty default
+
+```text
+splinter config reset [OPTIONS] [KEY]
+```
+
+Arguments:
+
+- `<KEY>`: The key to remove.
+
+Options:
+
+- `--all`: Return the whole file to the empty default.
+
+#### splinter config schema
+
+Print the JSON Schema of the file
+
+```text
+splinter config schema [OPTIONS]
+```
+
+#### splinter config path
+
+Print the file's path
+
+```text
+splinter config path [OPTIONS]
+```
+
+#### splinter config import
+
+Move the settings of the older `connections.yaml` and `operators.yaml` beside the file into it, then remove them
+
+```text
+splinter config import [OPTIONS]
+```

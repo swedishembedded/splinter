@@ -241,7 +241,7 @@ impl Session {
         };
         match command {
             Command::Improve(args) => {
-                return crate::improve_session::improve_command(ctx, json, args)
+                return crate::improve_session::improve_command(ctx, json, args);
             }
             Command::Corrections(args) => {
                 return crate::corrections_session::corrections_command(ctx, json, *args);
@@ -250,7 +250,7 @@ impl Session {
             Command::Env(command) => crate::env_output::run(ctx, json, command)?,
             Command::Ask(args) => return crate::ask_session::ask_command(ctx, json, &args),
             Command::Baseline(args) => {
-                return baseline_report::run(&self.build, &args, json).map_err(Error::Refused)
+                return baseline_report::run(&self.build, &args, json).map_err(Error::Refused);
             }
             Command::Status(_) => emit(json, &status(ctx)?),
             Command::Index(args) => {
@@ -309,10 +309,10 @@ impl Session {
             Command::Source(SourceCommand::List) => emit(json, &sources::list(ctx)?),
             Command::Source(SourceCommand::Show { id }) => emit(json, &sources::show(ctx, &id)?),
             Command::Absorb(args) => {
-                return absorb_session::absorb(ctx, self.splinter.trainer(), json, *args)
+                return absorb_session::absorb(ctx, self.splinter.trainer(), json, *args);
             }
             Command::Consolidate(args) => {
-                return absorb_session::consolidate(ctx, self.splinter.trainer(), json, *args)
+                return absorb_session::consolidate(ctx, self.splinter.trainer(), json, *args);
             }
             Command::Session(command) => return absorb_session::session(ctx, json, command),
             Command::Claims(command) => return absorb_session::claims(ctx, json, command),
@@ -682,6 +682,8 @@ impl Session {
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),
             Command::Jobs(args) => return crate::jobs_session::jobs(&self.splinter, json, args),
+            // Runs in `main` before a session is built: it needs none.
+            Command::Config(_) => unreachable!("`splinter config` runs before a session"),
             Command::CliReference(args) => return Ok(crate::cli::reference::run(&args)),
             Command::Publish(args) => crate::hub_session::publish_bundle(ctx, json, args)?,
             Command::Lineage(args) => {
