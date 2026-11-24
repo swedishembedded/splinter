@@ -13,6 +13,8 @@
 //! * [`connections`], [`environment`], [`collection`], [`eval_plan`] - the
 //!   files a recipe refers to: how models are reached, where agents run,
 //!   which tasks, and how candidates are judged.
+//! * [`machine_config`] - the one file of this machine's settings:
+//!   connections and operator grants, edited by `splinter config`.
 //! * [`resolve`] - a recipe with every file it names read, checked and
 //!   pinned in a lock.
 //! * [`graph`] - a `splinter.recipe/v2` recipe compiled into a typed graph
@@ -47,6 +49,7 @@ pub mod graph;
 pub mod harness_op;
 pub mod hint;
 pub mod knowledge_ops;
+pub mod machine_config;
 pub mod ops;
 pub mod plan;
 pub mod recipe;

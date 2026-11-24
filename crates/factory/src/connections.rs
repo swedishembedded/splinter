@@ -6,8 +6,9 @@
 // running agents against many model providers, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! How this installation reaches model providers: the machine-level
-//! `connections.yaml`.
+//! How this installation reaches model providers: the `connections:` section
+//! of the machine's `config.yaml` ([`crate::machine_config`]), layered over a
+//! task repository's `connections.yaml`.
 //!
 //! ```yaml
 //! connections:
@@ -29,13 +30,15 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use splinter_core::factory::execution::{ModelBinding, Protocol, FORWARDED_HEADERS};
 
+use crate::machine_config::MachineConfig;
 use crate::recipe::ModelRef;
 
-/// The schema-less shape of one connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// One connection: how a model provider is reached.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Connection {
     /// The wire protocol.
@@ -45,6 +48,7 @@ pub struct Connection {
     pub url: Option<String>,
     /// `env:NAME`: the variable holding the credential.
     #[serde(default)]
+    #[schemars(regex(pattern = r"^env:[A-Za-z0-9_]+$"))]
     pub token: Option<String>,
     /// Headers of the agent's this endpoint does not take, which the
     /// worker's gateway drops (an endpoint that refuses `anthropic-beta`).
@@ -94,11 +98,13 @@ pub enum ConnectionError {
         connection: String,
         /// The variable it would send.
         variable: String,
-        /// The machine's connections file.
+        /// The machine's configuration file.
         machine: String,
     },
     /// A model names a connection that does not exist.
-    #[error("model {model} names connection {connection}, which no connections file defines ({looked_in})")]
+    #[error(
+        "model {model} names connection {connection}, which no connections file defines ({looked_in})"
+    )]
     Unknown {
         /// The model reference.
         model: String,
@@ -117,7 +123,18 @@ impl Connections {
     pub fn parse(text: &str) -> Result<Self, ConnectionError> {
         let parsed: Self =
             serde_yaml::from_str(text).map_err(|e| ConnectionError::Parse(e.to_string()))?;
-        for (name, connection) in &parsed.connections {
+        Self::validate(&parsed.connections)?;
+        Ok(parsed)
+    }
+
+    /// Check `connections` by the rules of a connections file: every
+    /// dropped header is one the gateway forwards, and every token is
+    /// `env:NAME`, never the credential itself.
+    ///
+    /// # Errors
+    /// The first connection that breaks a rule.
+    pub fn validate(connections: &BTreeMap<String, Connection>) -> Result<(), ConnectionError> {
+        for (name, connection) in connections {
             if let Some(header) = connection
                 .drop_headers
                 .iter()
@@ -139,43 +156,54 @@ impl Connections {
                 }
             }
         }
-        Ok(parsed)
+        Ok(())
     }
 
     /// The connections for a run of the task repository at `repository` on
     /// this machine: the repository's [`REPOSITORY_FILE`], each connection
-    /// overridden by the one of the same name in `machine` (this machine's
-    /// file, `~/.config/splinter/connections.yaml`). Either may be missing.
+    /// overridden by the one of the same name in the `connections:` section
+    /// of `machine` (this machine's `config.yaml`). Either may be missing.
     ///
     /// # Errors
-    /// A file exists but cannot be read, or is refused by [`Self::parse`].
+    /// A file exists but cannot be read, or is refused; the machine's file is
+    /// absent while the older `connections.yaml` or `operators.yaml` beside
+    /// it exist.
     pub fn layered(repository: &Path, machine: &Path) -> Result<Self, ConnectionError> {
+        let in_file = |path: &Path, e: &dyn std::fmt::Display| {
+            ConnectionError::Parse(format!("{}: {e}", path.display()))
+        };
+        let repository_file = repository.join(REPOSITORY_FILE);
         let mut layered = Self::default();
-        for (path, by_machine) in [
-            (repository.join(REPOSITORY_FILE), false),
-            (machine.to_path_buf(), true),
-        ] {
-            match std::fs::read_to_string(&path) {
-                Ok(text) => {
-                    let found = Self::parse(&text)
-                        .map_err(|e| ConnectionError::Parse(format!("{}: {e}", path.display())))?;
-                    for (name, connection) in &found.connections {
-                        if by_machine {
-                            layered.unvouched.remove(name);
-                        } else if connection.token.is_some() {
-                            layered
-                                .unvouched
-                                .insert(name.clone(), machine.display().to_string());
-                        }
-                    }
-                    layered.connections.extend(found.connections);
-                    layered.looked_in.push(format!("read {}", path.display()));
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    layered.looked_in.push(format!("no {}", path.display()));
-                }
-                Err(e) => return Err(ConnectionError::Parse(format!("{}: {e}", path.display()))),
+        let mut layers = Vec::new();
+        match std::fs::read_to_string(&repository_file) {
+            Ok(text) => {
+                let found = Self::parse(&text).map_err(|e| in_file(&repository_file, &e))?;
+                layers.push((repository_file, Some(found.connections), false));
             }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                layers.push((repository_file, None, false));
+            }
+            Err(e) => return Err(in_file(&repository_file, &e)),
+        }
+        let config =
+            MachineConfig::read(machine).map_err(|e| ConnectionError::Parse(e.to_string()))?;
+        layers.push((machine.to_path_buf(), config.map(|c| c.connections), true));
+        for (path, found, by_machine) in layers {
+            let Some(found) = found else {
+                layered.looked_in.push(format!("no {}", path.display()));
+                continue;
+            };
+            for (name, connection) in &found {
+                if by_machine {
+                    layered.unvouched.remove(name);
+                } else if connection.token.is_some() {
+                    layered
+                        .unvouched
+                        .insert(name.clone(), machine.display().to_string());
+                }
+            }
+            layered.connections.extend(found);
+            layered.looked_in.push(format!("read {}", path.display()));
         }
         Ok(layered)
     }

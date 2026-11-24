@@ -20,6 +20,7 @@ use splinter_factory::backend::HarborWorker;
 use splinter_factory::connections::Connections;
 use splinter_factory::execute::Models;
 use splinter_factory::grants::Grants;
+use splinter_factory::machine_config::MachineConfig;
 use splinter_factory::resolve::{resolve_in, Resolved};
 use splinter_factory::training::BrainTrainer;
 use splinter_model::selection::{ModelSelection, RemoteModel};
@@ -27,8 +28,8 @@ use splinter_orchestrator::config::credential;
 use splinter_orchestrator::config::Config;
 
 pub use splinter_factory::{
-    backend, collection, connections, environment, eval_plan, execute, graph, ops, plan, recipe,
-    registry, resolve as resolution, run, templates, training, tree,
+    backend, collection, connections, environment, eval_plan, execute, graph, machine_config, ops,
+    plan, recipe, registry, resolve as resolution, run, templates, training, tree,
 };
 
 /// The models a run's computed stages call in process: each binding's
@@ -96,26 +97,26 @@ pub enum SetupError {
 
 /// The connections a run of the task repository at `repository` uses: the
 /// repository's `connections.yaml`, each connection overridden by this
-/// machine's file of the same name ([`Connections::layered`]).
+/// machine's configuration of the same name ([`Connections::layered`]).
 ///
 /// # Errors
 /// A file exists and is invalid.
 pub fn connections_of(config: &Config, repository: &Path) -> Result<Connections, SetupError> {
-    Ok(Connections::layered(
-        repository,
-        &config.factory.connections,
-    )?)
+    Ok(Connections::layered(repository, &config.factory.config)?)
 }
 
 /// What this machine grants the task repository's operators.
 ///
 /// # Errors
-/// The grants file exists and is invalid.
+/// The machine configuration is invalid, or absent beside the older
+/// `operators.yaml` it replaces.
 pub fn grants_of(config: &Config) -> Result<Grants, SetupError> {
-    Grants::load(&config.factory.operators).map_err(|message| SetupError::Read {
-        path: config.factory.operators.display().to_string(),
-        message,
-    })
+    MachineConfig::load(&config.factory.config)
+        .map(|machine| Grants::from_config(&machine))
+        .map_err(|e| SetupError::Read {
+            path: config.factory.config.display().to_string(),
+            message: e.to_string(),
+        })
 }
 
 /// A variable of this process's environment, for an operator its machine

@@ -226,7 +226,7 @@ rm -f "\$srv/ready"
 # the key in the environment variable the connection names (a per-run override of the repository's default).
 mkdir -p "\$srv/xdg/splinter"
 printf 'connections:\\n  brain: { protocol: openai, url: "http://127.0.0.1:%s/v1", token: "env:SPLINTER_BRAIN_KEY" }\\n' \\
-  "\$port" >"\$srv/xdg/splinter/connections.yaml"
+  "\$port" >"\$srv/xdg/splinter/config.yaml"
 export XDG_CONFIG_HOME="\$srv/xdg" SPLINTER_BRAIN_KEY=\$(cat "\$srv/key")
 $dir/bin/brain serve --openai \$port --device "\$device" "\${backend[@]}" --seed "\$seed" --max-batch 128 --training \\
   --artifact-store "\$srv/artifacts" --serve-adapters "\$srv/adapters" --adapter-targets all \\

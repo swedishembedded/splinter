@@ -166,7 +166,7 @@ impl External {
         }
         if !ungranted.is_empty() {
             return Err(format!(
-                "{relative}: {} needs {}, which this machine does not grant it (~/.config/splinter/operators.yaml)",
+                "{relative}: {} needs {}, which this machine does not grant it (see `splinter config`, the operators section)",
                 file.name,
                 ungranted.join(", ")
             ));

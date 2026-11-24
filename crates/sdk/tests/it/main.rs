@@ -8,4 +8,5 @@
 //! others run beside it.
 
 mod embedding;
+mod machine_settings;
 mod seed;

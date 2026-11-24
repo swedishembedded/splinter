@@ -6,8 +6,8 @@
 // team needs expertise in sandboxed, reproducible pipelines, you can procure
 // our services by sending an email to info@swedishembedded.com.
 
-//! What this machine grants a task repository's operators
-//! (`~/.config/splinter/operators.yaml`, `splinter.operator-grants/v1`).
+//! What this machine grants a task repository's operators: the `operators:`
+//! section of the machine's `config.yaml` ([`crate::machine_config`]).
 //!
 //! A repository's operator file is the same on every machine: it says what
 //! the operator needs (the network, environment variables by name). What a
@@ -19,39 +19,47 @@
 //! not granted is refused before anything runs.
 //!
 //! ```yaml
-//! schema: splinter.operator-grants/v1
-//! grants:
+//! operators:
 //!   exam.sealed:
 //!     read: [/srv/bench/sealed, /srv/models]
 //!     write: [/srv/bench/private]
 //!     network: true
 //!     env: [BENCH_BRAIN_URL, BENCH_BRAIN_KEY]
 //! ```
+//!
+//! The older `operators.yaml` (`splinter.operator-grants/v1`, the same
+//! grants under `grants:`) is read only by `splinter config import`.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// The schema of a grants file.
+use crate::machine_config::MachineConfig;
+
+/// The schema of the older, separate grants file.
 pub const GRANTS_SCHEMA: &str = "splinter.operator-grants/v1";
 
 /// What one operator is granted.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Grant {
     /// Absolute paths it may read (never write).
     #[serde(default)]
+    #[schemars(inner(regex(pattern = r"^/")))]
     pub read: Vec<PathBuf>,
     /// Absolute paths it may write (and read): state it keeps between runs,
     /// as an examiner's record of the exams it gave.
     #[serde(default)]
+    #[schemars(inner(regex(pattern = r"^/")))]
     pub write: Vec<PathBuf>,
     /// Whether it may reach the network.
     #[serde(default)]
     pub network: bool,
     /// Variables of the controller's environment passed to it, by name.
     #[serde(default)]
+    #[schemars(inner(regex(pattern = r"^[A-Z0-9_]+$")))]
     pub env: Vec<String>,
 }
 
@@ -88,7 +96,19 @@ impl Grants {
         if file.schema != GRANTS_SCHEMA {
             return Err(format!("not a {GRANTS_SCHEMA} file"));
         }
-        for (name, grant) in &file.grants {
+        Self::validate(&file.grants)?;
+        Ok(Self {
+            grants: file.grants,
+        })
+    }
+
+    /// Check `grants` by the rules of a grants file: paths are absolute and
+    /// variable names are variable names.
+    ///
+    /// # Errors
+    /// The first grant that breaks a rule.
+    pub fn validate(grants: &BTreeMap<String, Grant>) -> Result<(), String> {
+        for (name, grant) in grants {
             if let Some(path) = grant
                 .read
                 .iter()
@@ -101,21 +121,21 @@ impl Grants {
                 return Err(format!("{name}: {var:?} is not a variable name"));
             }
         }
-        Ok(Self {
-            grants: file.grants,
-        })
+        Ok(())
     }
 
-    /// The grants of the file at `path`; none when there is no file.
-    ///
-    /// # Errors
-    /// The file exists and cannot be read or is refused by [`Self::parse`].
-    pub fn load(path: &Path) -> Result<Self, String> {
-        match std::fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text).map_err(|e| format!("{}: {e}", path.display())),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(e) => Err(format!("{}: {e}", path.display())),
+    /// The grants of a machine configuration's `operators:` section.
+    #[must_use]
+    pub fn from_config(config: &MachineConfig) -> Self {
+        Self {
+            grants: config.operators.clone(),
         }
+    }
+
+    /// Every grant by operator name.
+    #[must_use]
+    pub fn entries(&self) -> &BTreeMap<String, Grant> {
+        &self.grants
     }
 
     /// The grant of the operator `name`: nothing when none is written.

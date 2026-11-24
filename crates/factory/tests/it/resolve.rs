@@ -272,7 +272,7 @@ fn an_environment_states_requirements_and_the_worker_picks_the_sandbox() {
 fn a_task_repository_ships_its_connections_and_this_machine_overrides_them() {
     use splinter_factory::connections::Connections;
     let dir = tempfile::tempdir().unwrap();
-    let (repository, machine) = (dir.path().join("repo"), dir.path().join("connections.yaml"));
+    let (repository, machine) = (dir.path().join("repo"), dir.path().join("config.yaml"));
     std::fs::create_dir_all(&repository).unwrap();
     // Neither file: an unknown connection says where it was looked for.
     let none = Connections::layered(&repository, &machine).unwrap();

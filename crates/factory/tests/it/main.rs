@@ -25,6 +25,7 @@ mod hinted;
 mod import;
 mod interventions;
 mod knowledge;
+mod machine_config;
 mod native;
 mod operator_security;
 mod practice;

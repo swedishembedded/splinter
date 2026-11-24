@@ -390,14 +390,11 @@ pub const DOCKER_CLIENT_ENV: &[&str] = &[
 /// What the learning factory needs from the machine it runs on.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FactorySettings {
-    /// The connections file: how models are reached
-    /// (`$XDG_CONFIG_HOME/splinter/connections.yaml`, else
-    /// `~/.config/splinter/connections.yaml`).
-    pub connections: PathBuf,
-    /// What this machine grants the task repository's operators
-    /// (`$XDG_CONFIG_HOME/splinter/operators.yaml`, else
-    /// `~/.config/splinter/operators.yaml`).
-    pub operators: PathBuf,
+    /// The machine's one configuration file: how models are reached and
+    /// what the task repository's operators are granted (`$SPLINTER_CONFIG`,
+    /// else `$XDG_CONFIG_HOME/splinter/config.yaml`, else
+    /// `~/.config/splinter/config.yaml`).
+    pub config: PathBuf,
     /// The execution worker (`$SPLINTER_HARBOR_WORKER`, else the first
     /// `splinter-harbor-worker` on `PATH`).
     pub harbor_worker: Option<PathBuf>,
@@ -444,8 +441,8 @@ impl Config {
         let config_home =
             var("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from);
         let factory = FactorySettings {
-            connections: config_home.join("splinter/connections.yaml"),
-            operators: config_home.join("splinter/operators.yaml"),
+            config: var("SPLINTER_CONFIG")
+                .map_or_else(|| config_home.join("splinter/config.yaml"), PathBuf::from),
             harbor_worker: var("SPLINTER_HARBOR_WORKER")
                 .map(PathBuf::from)
                 .or_else(|| {
