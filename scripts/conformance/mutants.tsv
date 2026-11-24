@@ -43,3 +43,8 @@ intervention-normal-quantile	statistics	crates/eval/src/intervention.rs	        
 student-t-tail-halved	statistics	crates/eval/src/student.rs	    let tail = 0.5 * incomplete_beta(df / 2.0, 0.5, df / (df + t * t));	    let tail = 0.45 * incomplete_beta(df / 2.0, 0.5, df / (df + t * t));	splinter-eval	it	external_student
 wilson-wrong-quantile	statistics	crates/eval/src/pilot.rs	const Z_95: f64 = 1.959_963_984_540_054;	const Z_95: f64 = 1.96;	splinter-eval	it	external_wilson
 skill-order-cycle-empty	knowledge	crates/knowledge/src/skills.rs	        self.order_of().map_err(GraphError::Cycle)	        Ok(self.order_of().unwrap_or_default())	splinter-knowledge	it	external_skill_order
+signature-unchecked	release	crates/eval/src/promotion/verdict.rs	    if key.verifies(&bytes, value) {	    if true {	splinter-eval	it	promotion_gate
+seal-ignores-reserved	seal	crates/pipelines/src/exam_seal.rs	    if exam.is_empty() {\n        return Ok(found);	    if true {\n        return Ok(found);	splinter-pipelines	it	dataset_seal
+power-level-doubled	statistics	crates/eval/src/power.rs	        test.sign_test(&pairs).p_value <= alpha\n	        test.sign_test(&pairs).p_value <= alpha * 2.0\n	splinter-eval	lib	power::
+socket-filter-lets-unix-through	sandbox	crates/sandbox/src/seccomp.rs	            /* 10 */ jump(BPF_JEQ_K, AF_UNIX, to(DENY, 10), 0),	            /* 10 */ jump(BPF_JEQ_K, u32::MAX, to(DENY, 10), 0),	splinter-sandbox	it	containment::no_socket
+repository-credential-bound	security	crates/factory/src/connections.rs	        if let Some(machine) = self.unvouched.get(&model.connection) {	        if let Some(machine) = None::<&String> {	splinter-factory	it	resolve::
