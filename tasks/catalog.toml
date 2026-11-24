@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 #
-# The repository task families: small original projects that `splinter
-# practice` learns from their own tests. Measured fields are written by
+# The repository task families: small original projects the learning
+# factory's `task.mutate` makes tasks of by their own tests. Measured fields are written by
 # `python3 scripts/tasks/families.py catalog --write`; do not edit them.
 
 [[family]]

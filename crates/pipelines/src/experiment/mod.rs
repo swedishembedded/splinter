@@ -51,6 +51,7 @@ pub struct FamilyRef {
 
 /// One generation of a plan.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Generation {
     /// The families this generation trains on.
     pub train: Vec<String>,
@@ -141,6 +142,7 @@ pub enum PlanError {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PlanFile {
     plan: PlanHead,
     generation: Vec<Generation>,
@@ -148,15 +150,19 @@ struct PlanFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PlanHead {
     name: String,
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SealedFile {
     families: Vec<String>,
 }
 
+/// The catalog is shared: scripts/tasks/families.py owns most of its fields,
+/// and a plan reads only the ones below, so other keys are another tool's.
 #[derive(Deserialize)]
 struct CatalogFile {
     #[serde(default)]
@@ -343,3 +349,27 @@ impl ExperimentPlan {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod strictness {
+    use super::*;
+
+    const CATALOG: &str =
+        "[[family]]\nid = \"a\"\nlanguage = \"python\"\ndomain = \"training\"\ntree = \"t1\"\n\
+        [[family]]\nid = \"b\"\nlanguage = \"python\"\ndomain = \"exam\"\ntree = \"t2\"\n";
+
+    /// A key the plan does not know is refused by name, never ignored: a
+    /// misspelt `retention` would otherwise hold a generation to no earlier
+    /// family. (The catalog is shared with the family tools and keeps their
+    /// keys.)
+    #[test]
+    fn a_key_the_files_do_not_know_is_refused() {
+        let plan = "[plan]\nname = \"p\"\n[[generation]]\ntrain = [\"a\"]\nretention = []\n[sealed]\nfamilies = [\"b\"]\n";
+        assert!(ExperimentPlan::parse(plan, CATALOG).is_ok());
+        let misspelt = plan.replace("retention = []", "retention = []\nretenton = [\"a\"]");
+        let refused = ExperimentPlan::parse(&misspelt, CATALOG)
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("retenton"), "{refused}");
+    }
+}

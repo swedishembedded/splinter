@@ -387,8 +387,8 @@ def render_catalog(entries: list[dict]) -> str:
     head = (
         "# SPDX-License-Identifier: Apache-2.0\n"
         "# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>\n#\n"
-        "# The repository task families: small original projects that `splinter\n"
-        "# practice` learns from their own tests. Measured fields are written by\n"
+        "# The repository task families: small original projects the learning\n"
+        "# factory's `task.mutate` makes tasks of by their own tests. Measured fields are written by\n"
         "# `python3 scripts/tasks/families.py catalog --write`; do not edit them.\n"
     )
     out = [head]
