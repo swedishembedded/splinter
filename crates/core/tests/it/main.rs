@@ -8,6 +8,7 @@
 //! others run beside it.
 
 mod factory;
+mod fuzz;
 mod recorded_calls;
 mod rng;
 mod roles;

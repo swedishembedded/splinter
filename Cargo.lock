@@ -5083,11 +5083,13 @@ dependencies = [
  "blake3",
  "futures",
  "jsonschema",
+ "proptest",
  "regex",
  "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "splinter-conformance",
  "thiserror 2.0.21",
 ]
 

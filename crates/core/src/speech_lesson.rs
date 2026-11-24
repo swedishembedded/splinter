@@ -59,7 +59,9 @@ const IMITATE_OPENERS: [&str; 5] = [
 #[must_use]
 pub fn parse_directive(transcript: &str) -> Option<Directive> {
     let text = transcript.trim();
-    let lower = text.to_lowercase();
+    // ASCII lowercasing keeps byte offsets (the openers are ASCII), so the
+    // original text is cut where the lowercased one matched.
+    let lower = text.to_ascii_lowercase();
     for opener in IMITATE_OPENERS {
         if let Some(rest) = lower.strip_prefix(opener) {
             let example = text[text.len() - rest.len()..]

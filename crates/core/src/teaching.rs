@@ -160,7 +160,9 @@ fn words(text: &str) -> usize {
 /// A statement as a fact: its subject is what comes before the first verb that
 /// joins it to what is said.
 fn fact(statement: &str, corrects: bool) -> Option<Teaching> {
-    let lower = statement.to_lowercase();
+    // Offsets into the lowercased text cut the original: only ASCII
+    // lowercasing (the copulas are ASCII) keeps them the same.
+    let lower = statement.to_ascii_lowercase();
     let (at, _) = COPULAS
         .iter()
         .filter_map(|c| lower.find(c).map(|i| (i, c)))
@@ -180,7 +182,8 @@ fn fact(statement: &str, corrects: bool) -> Option<Teaching> {
 /// A rule from what follows its opener: "always ...", "never ...", "don't ...",
 /// or the plain instruction, which binds as "do this".
 fn rule(rest: &str) -> Option<Teaching> {
-    let lower = rest.to_lowercase();
+    // ASCII lowercasing keeps byte offsets (the openers are ASCII).
+    let lower = rest.to_ascii_lowercase();
     let (instruction, force) = ["always ", "please always "]
         .iter()
         .find_map(|p| lower.strip_prefix(p).map(|r| (r, Force::Always)))
@@ -218,7 +221,8 @@ fn rule(rest: &str) -> Option<Teaching> {
 }
 
 fn procedure(name: &str, body: &str) -> Option<Teaching> {
-    let lower = body.to_lowercase();
+    // ASCII lowercasing keeps byte offsets (the delimiters are ASCII).
+    let lower = body.to_ascii_lowercase();
     let mut steps = Vec::new();
     let mut from = 0;
     while from < body.len() {
@@ -233,7 +237,7 @@ fn procedure(name: &str, body: &str) -> Option<Teaching> {
     let steps: Vec<String> = steps
         .iter()
         .map(|s| {
-            let lower = s.to_lowercase();
+            let lower = s.to_ascii_lowercase();
             let s = [
                 "first, ",
                 "first ",
