@@ -1092,10 +1092,11 @@ gaps:
     refuse every current recipe.'
   severity: high
   confidence: high (read)
-  status: confirmed
-  resolution: 'open, a policy decision: refuse a training task of an examined family where the eval plan declares family
-    hold-out (task.mutate''s held-out families do), and a content-overlap check (normalised instruction and file shingles,
-    splinter-data overlap) for near copies'
+  status: fixed
+  resolution: 'the near copy is refused: a training task whose instruction repeats an examined one by the release leakage
+    gate''s rule (knowledge dedup::repeat_of, 3-word shingles at 0.8) cannot reach a dataset, with splinter-factory/it/resolve''s
+    one-byte copy as the spec; on bench''s vim-headless-mastery (168 train, 100 eval) the highest unrelated overlap is 0.037.
+    A family-level hold-out stays the user''s policy decision (families of one repository are trained and examined by design)'
 - id: G-NEW-03
   source_id: null
   where: brain (crates/sdk dataset_report / chat rendering), seen through crates/pipelines/tests/contract_brain

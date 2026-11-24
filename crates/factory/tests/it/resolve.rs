@@ -218,6 +218,35 @@ fn examination_tasks_never_reach_a_dataset_under_any_name() {
 }
 
 #[test]
+fn a_near_copy_of_an_examined_task_never_reaches_a_dataset() {
+    // A held-out task of some substance, and a copy of it under a training
+    // name with one byte changed: another digest, the same task.
+    let repo = Repo::new();
+    let instruction = "Fix the date parser in src/caldate.py.\n\nIt must accept ISO dates such as 2026-11-24,\nrefuse a month above 12 with ValueError,\nrefuse a day the month does not have,\nand keep leap years: 2024-02-29 is a date, 2023-02-29 is not.\nDo not change the tests.\n";
+    let tests = "#!/bin/sh\nset -e\npython3 -m pytest -q tests/test_iso.py\npython3 -m pytest -q tests/test_months.py\npython3 -m pytest -q tests/test_days.py\npython3 -m pytest -q tests/test_leap.py\necho done > /logs/verifier/reward.txt\n";
+    repo.write("tasks/vim/eval/001-held/instruction.md", instruction);
+    repo.write("tasks/vim/eval/001-held/tests/test.sh", tests);
+    resolve(&repo.root, RECIPE, connections()).expect("unrelated training tasks are no copies");
+    let toml =
+        std::fs::read_to_string(repo.root.join("tasks/vim/eval/001-held/task.toml")).unwrap();
+    repo.write("tasks/vim/train/003-copy/task.toml", &toml);
+    repo.write(
+        "tasks/vim/train/003-copy/instruction.md",
+        &instruction.replace("2026-11-24", "2026-11-25"),
+    );
+    repo.write("tasks/vim/train/003-copy/tests/test.sh", tests);
+    let problems = resolve(&repo.root, RECIPE, connections())
+        .expect_err("refused")
+        .0;
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.contains("train/003-copy") && p.contains("eval/001-held")),
+        "{problems:?}"
+    );
+}
+
+#[test]
 fn a_connection_drops_only_headers_the_gateway_forwards() {
     use splinter_factory::connections::Connections;
     let connections = Connections::parse(

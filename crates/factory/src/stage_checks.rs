@@ -22,7 +22,7 @@ use crate::graph::CompiledPlan;
 use crate::ops::{self, names, AttemptParams, EvaluationParams, ProjectParams, PromotionParams};
 use crate::plan::PlannedStage;
 use crate::registry::Registry;
-use splinter_core::factory::task::{TaskCollection, TaskRef};
+use splinter_core::factory::task::TaskRef;
 
 /// Why an evaluation under `plan` (at `path`) has no one source of tasks:
 /// its plan's collection, the stage's pinned tasks, or its examiner's.
@@ -297,7 +297,7 @@ pub(crate) fn examination_material(
     collections: &BTreeMap<String, LoadedCollection>,
     eval_plans: &BTreeMap<String, (EvalPlan, Option<LoadedCollection>)>,
 ) -> Vec<String> {
-    let examined: Vec<&TaskRef> = eval_plans
+    let examined: Vec<Examined<'_>> = eval_plans
         .values()
         .filter_map(|(plan, loaded)| loaded.as_ref().map(|l| (plan, l)))
         .flat_map(|(plan, loaded)| {
@@ -306,6 +306,10 @@ pub(crate) fn examination_material(
                 .tasks
                 .iter()
                 .filter(move |t| plan.split.is_none() || t.split == plan.split)
+                .map(|task| Examined {
+                    task,
+                    instruction: instruction_of(&loaded.root.join(&task.id)),
+                })
         })
         .collect();
     // The collections whose trials reach the dataset: through its attempt
@@ -317,29 +321,63 @@ pub(crate) fn examination_material(
         .filter_map(|a| a.source("tasks"))
         .collect();
     let mut problems = Vec::new();
-    for training in pins
-        .iter()
-        .filter_map(|p| collections.get(*p))
-        .map(|l| &l.collection)
-    {
+    for training in pins.iter().filter_map(|p| collections.get(*p)) {
         problems.extend(examined_tasks(training, &examined, &dataset.key));
     }
     problems
 }
 
-fn examined_tasks(training: &TaskCollection, examined: &[&TaskRef], dataset: &str) -> Vec<String> {
+/// An examined task and what it asks.
+struct Examined<'a> {
+    task: &'a TaskRef,
+    instruction: String,
+}
+
+/// What the task folder `dir` asks: its `instruction.md`, empty when it has
+/// none (a task with nothing to ask repeats nothing).
+fn instruction_of(dir: &std::path::Path) -> String {
+    std::fs::read_to_string(dir.join("instruction.md")).unwrap_or_default()
+}
+
+fn examined_tasks(
+    training: &LoadedCollection,
+    examined: &[Examined<'_>],
+    dataset: &str,
+) -> Vec<String> {
     let mut problems = Vec::new();
-    for task in &training.tasks {
+    for task in &training.collection.tasks {
         if task.split.as_deref() == Some("eval") {
             problems.push(format!(
                 "{} is examination material (split eval) and cannot reach dataset {dataset}: select the train split",
                 task.id
             ));
-        } else if let Some(same) = examined.iter().find(|e| e.digest == task.digest) {
+        } else if let Some(same) = examined.iter().find(|e| e.task.digest == task.digest) {
             problems.push(format!(
                 "{} is the same task as {}, which the eval plan examines; it cannot reach dataset {dataset}",
-                task.id, same.id
+                task.id, same.task.id
             ));
+        } else {
+            // A copy with a byte or a word changed has another digest: the
+            // same task by the rule the release's leakage gate holds
+            // instructions to (an exact repeat once normalised, or most word
+            // shingles shared).
+            let instruction = instruction_of(&training.root.join(&task.id));
+            let near = examined.iter().find(|e| {
+                !instruction.trim().is_empty()
+                    && splinter_knowledge::tasks::dedup::repeat_of(
+                        &instruction,
+                        &e.instruction,
+                        splinter_knowledge::tasks::DEFAULT_SHINGLE_WORDS,
+                        splinter_knowledge::tasks::DEFAULT_MAX_OVERLAP,
+                    )
+                    .is_some()
+            });
+            if let Some(copy) = near {
+                problems.push(format!(
+                    "{} asks what {} asks, which the eval plan examines (a near copy); it cannot reach dataset {dataset}",
+                    task.id, copy.task.id
+                ));
+            }
         }
     }
     problems

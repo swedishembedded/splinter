@@ -57,3 +57,4 @@ xport-field-unchecked	parsing	crates/knowledge/src/tabular.rs	    data.get(range
 judge-only-kind-kept	factory	crates/factory/src/task_ops.rs	    if out.is_empty() {	    if out.is_empty() && kind.verifiers.is_empty() {	splinter-factory	it	closed_book::
 stated-hedge-passes	verification	crates/eval/src/verifiers/formal.rs	        (true, false) if hedged(&answer, &reference) => Stating::Hedged,	        (true, false) if false && hedged(&answer, &reference) => Stating::Hedged,	splinter-knowledge	it	task_kinds::
 corrected-reply-supervised	data	crates/data/src/trajectory.rs	            && splinter_core::correction::corrects(&messages[at].content)	            && false	splinter-data	it	sft_final::
+near-copy-reaches-training	factory	crates/factory/src/stage_checks.rs	                !instruction.trim().is_empty()	                false	splinter-factory	it	resolve::a_near_copy
