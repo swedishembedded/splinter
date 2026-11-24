@@ -13,7 +13,7 @@
 //! ```text
 //! goal-train --train arm/train.jsonl --held-out held-out.jsonl --attempt-dir DIR \
 //!     --train-endpoint http://127.0.0.1:8803/v1 --brain-key-file KEY --artifact-store DIR \
-//!     --model-dir ~/project/shared/containers/brain-models/Qwen/Qwen3.8-27B-FP8 --steps 150 --out result.json
+//!     --model-dir <model-store>/Qwen/Qwen3.8-27B-FP8 --steps 150 --out result.json
 //! ```
 
 use std::path::PathBuf;

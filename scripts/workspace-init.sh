@@ -8,8 +8,8 @@
 #
 # Initialise a run workspace in any directory on any machine, from nothing but the repositories and the network:
 #
-#   scripts/workspace-init.sh --dir /scratch/local/work/ws
-#   /scratch/local/work/ws/run.sh recipes/vim-sft-qwen3-4b.yaml gpu1
+#   scripts/workspace-init.sh --dir <fast-local-disk>/ws
+#   <fast-local-disk>/ws/run.sh recipes/vim-sft-qwen3-4b.yaml gpu1
 #
 # Everything that is only work in progress (source snapshots, build targets, the worker's Python environment, the
 # sandbox image cache, run directories, temporary files) lives under --dir, so it can be a fast local disk that is lost
@@ -27,8 +27,9 @@ usage: workspace-init.sh --dir DIR [options]
   --dir DIR            the workspace (created, mode 700); local disk recommended
   --cache DIR          durable cache of frozen binaries and records
                        (default: $WORKSPACE_CACHE, else ~/.cache/splinter-workspace)
-  --models-dir DIR     where brain finds model weights (default: ~/project/shared/models when it exists)
-  --code DIR           where the brain, sven, splinter and bench checkouts are (default: ~/code)
+  --models-dir DIR     where brain finds model weights (default: brain's own model store)
+  --code DIR           where the brain, sven, splinter and bench checkouts are
+                       (default: the directory holding this splinter checkout)
   --brain-rev REV      commit of each repository to freeze (default: its checkout's HEAD)
   --sven-rev REV
   --splinter-rev REV
@@ -42,10 +43,10 @@ EOF
   exit 2
 }
 
-dir="" cache="${WORKSPACE_CACHE:-$HOME/.cache/splinter-workspace}" models="" code="$HOME/code" jobs=32
+code=$(cd "$(dirname "$0")/../.." && pwd)
+dir="" cache="${WORKSPACE_CACHE:-$HOME/.cache/splinter-workspace}" models="" jobs=32
 records="swedishembedded/vim-headless-mastery-sft" records_rev="main" records_config="" build_env=""
 declare -A rev=()
-[ -d "$HOME/project/shared/models" ] && models="$HOME/project/shared/models"
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir=$2; shift 2 ;;

@@ -11,7 +11,7 @@ SHELL := bash
 # Local checkouts, for `make deps/local` and `make deps/lock` only. A plain build uses
 # the remotes pinned in Cargo.lock.
 SVEN_DIR ?= ../sven
-BRAIN_DIR ?= ../edgeai/brain
+BRAIN_DIR ?= ../brain
 
 # The binaries and model store `make test/e2e/...` runs against.
 BRAIN_BIN ?= $(BRAIN_DIR)/target/release/brain
@@ -26,8 +26,9 @@ CARGO ?= cargo
 TEST_THREADS ?= 16
 
 # Shared-node lease kit (scripts/lease). One root holds the lane worktrees, the
-# per-lane cargo targets and the lock files.
-LEASE_ROOT ?= $(HOME)/project/shared/containers
+# per-lane cargo targets and the lock files: this user's state directory unless
+# a shared node names the root its users share (`make lease/... LEASE_ROOT=DIR`).
+LEASE_ROOT ?= $(or $(XDG_STATE_HOME),$(HOME)/.local/state)/splinter/lease
 LEASE_REPO ?= .
 LEASE_LANE ?=
 GPU_LOCK ?= $(LEASE_ROOT)/gpu.lock

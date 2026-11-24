@@ -9,8 +9,8 @@ run directories. `scripts/workspace-init.sh` creates all of it in one directory,
 repositories, a Rust toolchain, `uv` and the network:
 
 ```bash
-scripts/workspace-init.sh --dir /scratch/local/work/ws --build-env ~/project/shared/containers/build-env.sh
-/scratch/local/work/ws/run.sh recipes/vim-sft-qwen3-4b.yaml gpu1
+scripts/workspace-init.sh --dir <fast-local-disk>/ws --build-env <build-env.sh>
+<fast-local-disk>/ws/run.sh recipes/vim-sft-qwen3-4b.yaml gpu1
 ```
 
 `--dir` should be a fast local disk. Everything under it is work in progress and may be lost with the node:
