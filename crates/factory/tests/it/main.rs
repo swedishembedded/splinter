@@ -28,6 +28,7 @@ mod interventions;
 mod knowledge;
 mod machine_config;
 mod native;
+mod online;
 mod operator_security;
 mod practice;
 mod projections;

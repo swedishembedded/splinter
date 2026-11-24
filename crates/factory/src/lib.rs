@@ -20,6 +20,8 @@
 //! * [`graph`] - a `splinter.recipe/v2` recipe compiled into a typed graph
 //!   of operations.
 //! * [`ops`] - the built-in operations a v2 recipe uses.
+//! * [`online`] - online policy-gradient runs: groups of rollouts streamed
+//!   to a learner as they complete, under staleness and token bounds.
 //! * [`plan`] - the graph of stages.
 //! * [`run`] - the controller over one run directory, and every stage.
 //! * [`backend`] and [`training`] - the seams to the execution worker and
@@ -50,6 +52,7 @@ pub mod harness_op;
 pub mod hint;
 pub mod knowledge_ops;
 pub mod machine_config;
+pub mod online;
 pub mod ops;
 mod ops_dataset;
 pub mod plan;

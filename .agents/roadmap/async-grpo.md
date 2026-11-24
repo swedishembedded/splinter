@@ -15,8 +15,9 @@ versions; Splinter decides which tasks are drawn, which groups qualify and when 
   Groups progress independently; there is no batch barrier. A group is sent to the learner when its last attempt is
   scored.
 - **Lifecycle per group** (durable, fenced by the run's controller lease): `pending -> running -> scored ->
-  {filtered | stale | sent} -> consumed`. A resumed controller relaunches only `pending`/`running` attempts and
-  re-sends `scored`/`sent` groups the job has not acknowledged (the job deduplicates by group key).
+  {filtered | stale | sent}`, `sent -> {applied | stale}`, `applied -> committed` (and `applied -> sent` when a
+  restarted learner lost an uncommitted update). A resumed controller relaunches only `pending`/`running` rollouts and
+  re-sends `scored`/`sent`/`applied` groups the learner has not reported committed (it deduplicates by group key).
 - **Qualification** (Splinter's decision, measured never guessed): zero-variance groups are dropped before training
   but counted in reward statistics (overall reward, fraction of zero-std groups, their mean reward); a rollout whose
   requests do not all carry exact token ids and behaviour log-probabilities from a policy trace is not training
@@ -41,13 +42,23 @@ re-sent until brain reports it committed (applied is not durable).
 
 - [ ] Revision manifest for cross-repository runs (A01): brain, sven and Splinter commits, the training-record
       contract digest, model and tokenizer digests, hardware, resolved configuration; a run refuses mixed revisions.
-- [ ] Pure controller core (A23, A25-A26; no I/O): group state machine, staleness bound, token allowance gated when a
-      group starts (in-flight rollouts counted, so partial groups cannot deadlock the allowance), admission,
-      statistics; unit tests with a deterministic clock and scripted outcomes. Placement from the paused lane: shared
-      types in `splinter-core::factory::group`, the ledger in `splinter-store::factory::runstate::groups`, the
-      controller and seams in `splinter-factory::online` (design and trait signatures in that lane's notes).
-- [ ] Durable group ledger in the run state with resume (A28-A30): kill mid-run, resume, no finished attempt
-      repeated, no group trained twice, nothing committed lost.
+- [x] Pure controller core (A23, A25-A26): `splinter_factory::online::control` (no I/O, time an argument), shared
+      types in `splinter_core::factory::group`, seams in `splinter_factory::online::seams` (`RolloutExecutor`,
+      `Learner` with `Applied`/`Dropped`/`Committed` events, `TaskSelector` with `RoundRobin`, `GroupLedger`,
+      `RunClock`), the loop in `online::driver`. Decisions: the token gate applies when a group starts and counts
+      admitted rollouts at the mean tokens of a finished one (none finished yet: the `rollout_tokens` setting, a
+      pessimistic bound such as the sampling budget, so a slow first group holds no other back); queued tokens are
+      what the learner will hold (a queued group counts only its exact scored rollouts); the step estimate
+      is the mean of the last `step_window` step reports, never below the job's step budget (so the allowance always
+      holds a full step); an inexact rollout is never sent, and a group whose exact rollouts' rewards do not differ
+      is filtered `not-exact`; an infrastructure failure is retried `max_failures` times then abandoned, never
+      scored; truncation is counted, not filtered; backpressure time and the step estimate restart on resume, every
+      other statistic is rebuilt from the ledger. Tests `splinter-factory/it/online::`.
+- [x] Durable group ledger with resume (A28-A30): tables `groups` and `group_rollouts` in `state/controller.db`
+      (additive, schema version unchanged) under the controller's fence, records as JSONL in the row until the group
+      is terminal; `RunLedger` renews the lease. Kill-and-resume tests over the real run state: an executor killed
+      mid-run, a learner connection dropped after it took a group, a cancel followed by a learner restart; no
+      finished rollout started again, every group committed exactly once.
 - [ ] Discrete-event simulation of the controller (A27): at least 100k simulated episodes across slow generation,
       slow training, heavy-tailed durations, all-equal rewards, frequent publication, verifier outages, worker failures
       and cancellation; queues bounded, no deadlock, every attempt reaches an accounted terminal state.
