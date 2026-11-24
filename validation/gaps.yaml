@@ -770,9 +770,10 @@ gaps:
     signal); a group can be informative to one and flat to the other.'
   severity: low
   confidence: high
-  status: confirmed
-  resolution: two spread thresholds (1e-9 batch builder, 1e-12 learning signal); one constant would make one rule, together
-    with G-NEW-05's classifier
+  status: fixed
+  resolution: one rule, splinter_core::rewards::differ (spread at least 1e-12 over two or more rewards), used by the batch
+    sampler, the learning-signal estimate and the policy-gradient view; the sampler's 1e-9 and the two other constants are
+    gone
 - id: G-EK-21
   source_id: null
   where: crates/pipelines/src/powered/analysis.rs:p_tasks, crates/pipelines/src/release/statistics.rs:36,45

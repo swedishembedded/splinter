@@ -32,9 +32,6 @@ use splinter_core::rng::SplitMix64;
 
 use super::pass_rate::{Band, PassRates};
 
-/// Rewards closer than this are the same reward.
-pub const SPREAD_EPSILON: f64 = 1e-9;
-
 /// How likely, relative to a frontier task, a task never solved at the
 /// calibration depth is to be drawn: it is revisited rarely, since the policy
 /// may have learned it since.
@@ -89,13 +86,7 @@ impl Group {
         if self.attempts.len() < 2 {
             return GroupKind::TooSmall;
         }
-        let (low, high) = self
-            .attempts
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), a| {
-                (low.min(a.reward), high.max(a.reward))
-            });
-        if high - low > SPREAD_EPSILON {
+        if splinter_core::rewards::differ(self.attempts.iter().map(|a| a.reward)) {
             GroupKind::Informative
         } else if self.attempts.iter().all(|a| a.passed) {
             GroupKind::AllPass

@@ -103,6 +103,7 @@ pub mod outcome;
 pub mod prompt;
 pub mod release;
 pub mod repository_history;
+pub mod rewards;
 pub mod rng;
 pub mod role;
 pub mod selfcontained;

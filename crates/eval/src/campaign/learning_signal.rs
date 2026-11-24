@@ -34,7 +34,7 @@
 //! learnability `p * (1 - p)` with `p` smoothed.
 //!
 //! **Informative.** A group of two or more attempts whose rewards differ
-//! ([`MIN_SPREAD`]) carries an advantage; one whose rewards are all alike
+//! ([`splinter_core::rewards::differ`]) carries an advantage; one whose rewards are all alike
 //! carries none, whatever its shrunk variance says.
 //!
 //! **Families.** Tasks generated from one lineage (seeds of one template) are
@@ -54,9 +54,6 @@ use serde::{Deserialize, Serialize};
 
 /// The weight, in attempts, of the Beta prior the variance is shrunk towards.
 pub const PRIOR_ATTEMPTS: f64 = 2.0;
-
-/// How far apart a group's rewards must be to differ.
-pub const MIN_SPREAD: f64 = 1e-12;
 
 /// The prior's own expected `p * (1 - p)`, a Beta(1, 1)'s: what a task never
 /// attempted is credited with.
@@ -108,12 +105,7 @@ impl TaskSignal {
         let mean = (n > 0).then(|| rewards.iter().sum::<f64>() / n as f64);
         let variance =
             mean.map(|m| rewards.iter().map(|r| (r - m).powi(2)).sum::<f64>() / n as f64);
-        let (lo, hi) = rewards
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), r| {
-                (lo.min(*r), hi.max(*r))
-            });
-        let informative = n >= 2 && hi - lo >= MIN_SPREAD;
+        let informative = splinter_core::rewards::differ(rewards.iter().copied());
         let successes: f64 = rewards.iter().map(|r| r.clamp(0.0, 1.0)).sum();
         let (a, b) = (1.0 + successes, 1.0 + (n as f64 - successes));
         let prior = a * b / ((a + b) * (a + b + 1.0));

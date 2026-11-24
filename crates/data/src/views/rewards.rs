@@ -25,9 +25,6 @@ use serde_json::Value;
 
 use crate::ViewError;
 
-/// How far apart the best and the worst reward of a group must be for the
-/// group to say anything: closer, they are the same reward.
-const MIN_SPREAD: f64 = 1e-12;
 /// How far the weights of a reward shape may be from summing to one.
 const WEIGHT_SUM_TOLERANCE: f64 = 1e-9;
 
@@ -458,15 +455,11 @@ impl AdvantageKind {
     }
 }
 
-/// Whether a group's rewards say anything: more than one, and not all alike.
+/// Whether a group's rewards say anything: more than one, and not all alike
+/// ([`splinter_core::rewards::differ`], the one rule the campaign shares).
 #[must_use]
 pub fn signals(rewards: &[f64]) -> bool {
-    let (min, max) = rewards
-        .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), r| {
-            (lo.min(*r), hi.max(*r))
-        });
-    rewards.len() >= 2 && max - min >= MIN_SPREAD
+    splinter_core::rewards::differ(rewards.iter().copied())
 }
 
 /// One attempt of a group.
