@@ -92,9 +92,28 @@ fn a_recipe_validates_with_the_connections_its_repository_ships() {
         text.contains("hosted:some/model") && text.contains("connections.yaml"),
         "the refusal names where connections were looked for: {text}"
     );
+    // A connection the repository ships resolves its models ...
+    write(
+        &repo.root.join("connections.yaml"),
+        "connections:\n  hosted: { protocol: openai, url: \"https://example.invalid/v1\" }\n",
+    );
+    let (code, text) = repo.run(&["validate", "recipes/demo.yaml"]);
+    assert_eq!(code, 0, "{text}");
+    // ... but a credential is the machine's to give: a repository that names
+    // one is refused until this machine's configuration defines the connection.
     write(
         &repo.root.join("connections.yaml"),
         "connections:\n  hosted: { protocol: openai, url: \"https://example.invalid/v1\", token: \"env:KEY\" }\n",
+    );
+    let (code, text) = repo.run(&["validate", "recipes/demo.yaml"]);
+    assert_ne!(code, 0, "{text}");
+    assert!(
+        text.contains("config.yaml"),
+        "the refusal names the machine's file: {text}"
+    );
+    write(
+        &repo.home.join(".config/splinter/config.yaml"),
+        "schema: splinter.config/v1\nconnections:\n  hosted: { protocol: openai, url: \"https://example.invalid/v1\", token: \"env:KEY\" }\n",
     );
     let (code, text) = repo.run(&["validate", "recipes/demo.yaml"]);
     assert_eq!(code, 0, "{text}");
