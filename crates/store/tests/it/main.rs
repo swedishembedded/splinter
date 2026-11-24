@@ -13,6 +13,7 @@ mod claim_store;
 mod crash;
 mod documents;
 mod experience_store;
+mod factory_groups;
 mod factory_products;
 mod factory_runstate;
 mod fuzz;

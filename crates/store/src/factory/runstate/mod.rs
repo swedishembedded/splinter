@@ -11,7 +11,8 @@
 //! One SQLite database in WAL mode, `<run>/state/controller.db`, holds what a
 //! controller has decided: the lease that makes it the only controller
 //! ([`RunState::acquire`]), the [`stages`] of the run, and the logical
-//! [`rollouts`] slots with their physical attempts. Every mutation is one
+//! [`rollouts`] slots with their physical attempts, and the [`groups`] of an
+//! online run. Every mutation is one
 //! `BEGIN IMMEDIATE` transaction that first checks the caller's [`Fence`], so
 //! a controller that lost its lease cannot change anything even if it still
 //! holds a connection. After the commit, one JSON line describing the change
@@ -34,10 +35,12 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 use serde::Serialize;
 
+pub mod groups;
 mod model;
 mod rollouts;
 mod stages;
 
+pub use groups::{GroupEntry, GroupRecord, GroupRolloutRecord};
 pub use model::{
     AttemptId, AttemptRecord, AttemptState, SlotKey, SlotRecord, SlotState, StageOutcome,
     StageRecord, StageState,
@@ -151,6 +154,9 @@ pub enum RunStateError {
     /// No slot with this key.
     #[error("no slot {0} in the run state")]
     UnknownSlot(SlotKey),
+    /// No group (or no rollout of it) with this key.
+    #[error("no group {0} (or no such rollout of it) in the run state")]
+    UnknownGroup(splinter_core::factory::group::GroupKey),
     /// No attempt with this id.
     #[error("no attempt {0} in the run state")]
     UnknownAttempt(AttemptId),
@@ -236,6 +242,7 @@ impl RunState {
             )));
         }
         conn.execute_batch(SCHEMA)?;
+        conn.execute_batch(groups::SCHEMA)?;
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         Ok(Self {
             conn,

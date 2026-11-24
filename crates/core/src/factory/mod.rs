@@ -17,6 +17,8 @@
 //! * [`execution`] - one attempt at one logical slot, as a worker receives
 //!   it.
 //! * [`attempt`] - what a worker reports for one physical attempt.
+//! * [`group`] - a group of rollouts of one task in an online run: its key,
+//!   lifecycle and rollout outcomes.
 //! * [`trial`] - how one executed trial ended: the one outcome classifier.
 //! * [`product`] - trial results, datasets, model candidates and evaluation
 //!   results.
@@ -26,6 +28,7 @@
 
 pub mod attempt;
 pub mod execution;
+pub mod group;
 pub mod identity;
 pub mod items;
 pub mod operation;
