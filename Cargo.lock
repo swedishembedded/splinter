@@ -5233,6 +5233,7 @@ dependencies = [
  "async-trait",
  "atif",
  "futures",
+ "proptest",
  "schemars",
  "serde",
  "serde_json",

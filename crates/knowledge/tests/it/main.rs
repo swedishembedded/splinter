@@ -27,6 +27,7 @@ mod factory_documents;
 mod factory_firmware;
 mod factory_repositories;
 mod factory_store;
+mod fuzz;
 mod generation_calls;
 mod history_tasks;
 mod redact;

@@ -137,6 +137,17 @@ fn find_card(data: &[u8], tag: &[u8], from: usize) -> Option<usize> {
         .find(|&off| data[off..].starts_with(tag))
 }
 
+/// The bytes of a header field at `range`, or why the file is too short for
+/// it: every offset the reader takes from the file is checked, never trusted.
+fn field<'a>(
+    data: &'a [u8],
+    range: std::ops::Range<usize>,
+    what: &str,
+) -> Result<&'a [u8], XportError> {
+    data.get(range)
+        .ok_or_else(|| XportError::Malformed(format!("truncated {what}")))
+}
+
 /// Read a SAS transport (version 5) file holding one dataset.
 pub fn read_xport(data: &[u8]) -> Result<Table, XportError> {
     if !data.starts_with(LIBRARY_TAG) {
@@ -146,7 +157,7 @@ pub fn read_xport(data: &[u8]) -> Result<Table, XportError> {
     }
     let member = find_card(data, MEMBER_TAG, 0)
         .ok_or_else(|| XportError::NotXport("missing the member header record".into()))?;
-    let namestr_len: usize = text(&data[member + 74..member + 78])
+    let namestr_len: usize = text(field(data, member + 74..member + 78, "member header")?)
         .trim()
         .parse()
         .map_err(|_| XportError::Malformed("member header: NAMESTR length".into()))?;
@@ -163,10 +174,14 @@ pub fn read_xport(data: &[u8]) -> Result<Table, XportError> {
     );
     let nameheader = find_card(data, NAMESTR_TAG, member)
         .ok_or_else(|| XportError::Malformed("missing the NAMESTR header record".into()))?;
-    let nvars: usize = text(&data[nameheader + 54..nameheader + 58])
-        .trim()
-        .parse()
-        .map_err(|_| XportError::Malformed("NAMESTR header: variable count".into()))?;
+    let nvars: usize = text(field(
+        data,
+        nameheader + 54..nameheader + 58,
+        "NAMESTR header",
+    )?)
+    .trim()
+    .parse()
+    .map_err(|_| XportError::Malformed("NAMESTR header: variable count".into()))?;
     let first = nameheader + CARD;
     let mut vars = Vec::with_capacity(nvars);
     for v in 0..nvars {
@@ -203,7 +218,9 @@ pub fn read_xport(data: &[u8]) -> Result<Table, XportError> {
             "a variable lies outside the row".into(),
         ));
     }
-    let body = &data[rows_start..];
+    let body = data
+        .get(rows_start..)
+        .ok_or_else(|| XportError::Malformed("truncated observation header".into()))?;
     if find_card(body, MEMBER_TAG, 0).is_some() {
         return Err(XportError::MultipleMembers);
     }
