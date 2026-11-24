@@ -699,10 +699,13 @@ gaps:
     graph, redaction.'
   severity: high
   confidence: high
-  status: confirmed
-  resolution: '12 source mutants added (release gate, harness search, Student t, Wilson, skill order, signature, seal, power,
-    repository credential, socket filter): 44 of 44 killed. Still without one: the e-process gate, budget allocation, campaign
-    gate decisions, dedup'
+  status: fixed
+  resolution: 12 source mutants added earlier (release gate, harness search, Student t, Wilson, skill order, signature,
+    seal, power, repository credential, socket filter); now also the e-process (eprocess-ignores-exposure, eprocess-max-not-mixture),
+    the budget allocation (budget-charge-unscaled, budget-share-unclamped), the campaign gate decisions (campaign-gate-ignores-retention,
+    campaign-gate-advances-on-a-tie, campaign-gate-unspent-alpha, evidence-crossing-ignores-retention) and dedup (dedup-exact-only),
+    all killed; campaign-gate-unspent-alpha survived until a spec held significance to the level a generation spends. The
+    map has a near-copy row and the dev-validation row names its mutants
 - id: G-EK-13
   source_id: null
   where: crates/eval/tests/it/evidence_gate.rs:31, eval/src/campaign/dev_pool.rs:134, campaign/sampling.rs:356, eval/tests/it/golden.rs:69,

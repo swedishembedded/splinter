@@ -420,6 +420,44 @@ mod tests {
         assert_eq!(decision.champion_rate, Some(0.2));
     }
 
+    /// A sign test whose p-value is fixed.
+    struct FixedP(f64);
+
+    impl Significance for FixedP {
+        fn sign_test(&self, pairs: &[(bool, bool)]) -> SignTest {
+            let wins = pairs.iter().filter(|(c, b)| *c && !*b).count();
+            let losses = pairs.iter().filter(|(c, b)| !*c && *b).count();
+            SignTest {
+                discordant: wins + losses,
+                candidate_wins: wins,
+                p_value: self.0,
+            }
+        }
+    }
+
+    /// A generation is tested at the share of the campaign's level it is
+    /// spent, `alpha / (g (g + 1))`, never at the whole level: a p-value
+    /// between the two advances without being significant.
+    #[test]
+    fn significance_is_judged_at_the_level_the_generation_spends() {
+        let champion = result(&[("a", false), ("b", false)], &[]);
+        let candidate = result(&[("a", true), ("b", true)], &[]);
+        let gate = DevGate::default();
+        let between = FixedP(gate.total_alpha * 0.75);
+        let first = decide(&gate, 1, &champion, &candidate, &between);
+        assert_eq!(first.action, Action::Advance);
+        assert!((first.alpha - gate.total_alpha / 2.0).abs() < 1e-15);
+        assert!(!first.significant, "{first:?}");
+        let clear = decide(
+            &gate,
+            1,
+            &champion,
+            &candidate,
+            &FixedP(gate.total_alpha / 4.0),
+        );
+        assert!(clear.significant);
+    }
+
     #[test]
     fn a_small_gain_advances_without_claiming_significance() {
         let champion = result(&[("a", false), ("b", true)], &[]);
