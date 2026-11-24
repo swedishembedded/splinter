@@ -1288,14 +1288,17 @@ gaps:
     has no plain kind without a case'
 - id: G-NEW-14
   source_id: null
-  where: crates/agent/src/{work.rs:solve_in_workspace, harness_work.rs, workspace_episode.rs}; crates/pipelines/src/harbor.rs:ingest_harbor_trials
-    beside the factory recipe imports
-  what: After the legacy verbs went (G-AS-11), workspace episodes still run through three paths (solve_in_workspace for
-    workspace_solve and demonstrations, harness_work for the factory attempt harness and repo-replay, workspace_episode
-    for the minimind sample) and Harbor trials are still ingested both by experiences ingest-harbor and by the factory imports.
-    Each has a production caller, so a fix to episode or ingestion semantics has to be made more than once.
+  where: crates/pipelines/src/harbor.rs (read_result, read_verification, ingest_harbor_trials) beside workers/harbor (the
+    worker `import` command the factory backend calls, crates/factory/src/backend.rs)
+  what: 'Harbor trial directories are read by two implementations in two languages: `experiences ingest-harbor` reads result.json
+    and the verifier record in Rust, and the factory imports a Harbor job through the Python worker. Both grade through
+    the one classifier (splinter_core::factory::trial::grade), so a verdict cannot differ, but a change to the trial format
+    has to be made twice. (The three workspace-episode paths this gap first named are distinct drivers of sven that the
+    architecture keeps in the agent adapter, not copies: solve_in_workspace is the agent loop over a snapshot, harness_work
+    the same engine and options under a programmable harness, workspace_episode sven''s compact profile for the minimind
+    sample, which may not drive sven itself.)'
   severity: medium
   confidence: high (callers listed by grep)
   status: confirmed
-  resolution: 'open: consolidate onto the factory attempt harness and its imports, porting each caller; a refactor of live
-    paths, not a removal'
+  resolution: 'open, a decision: which reader is canonical. Reading in Rust everywhere drops the factory import''s dependency
+    on the Python worker; reading through the worker everywhere makes experiences ingest-harbor need the worker installed.'
