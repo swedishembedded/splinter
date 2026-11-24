@@ -210,3 +210,27 @@ fn an_endpoint_that_answered_no_request_is_the_infrastructures_not_the_agents_ze
     );
     assert_eq!(grade(&evidence, &policy).status, TrialStatus::Graded);
 }
+
+#[test]
+fn an_endpoint_rejecting_every_request_with_any_4xx_status_is_an_endpoint_rejection() {
+    let cases = cases();
+    let failed = cases
+        .iter()
+        .find(|c| c["name"] == "quit_after_one_turn")
+        .expect("the case");
+    let (mut evidence, policy) = evidence(failed);
+    // 400 and 499 are the first and last 4xx status.
+    for status in [400, 499] {
+        evidence.requests = vec![ModelRequest {
+            status: Some(status),
+            error: Some("rejected".into()),
+            ..ModelRequest::default()
+        }];
+        let graded = grade(&evidence, &policy);
+        assert_eq!(
+            graded.cause.map(|c| c.code),
+            Some("endpoint_rejected".to_owned()),
+            "HTTP {status}"
+        );
+    }
+}
