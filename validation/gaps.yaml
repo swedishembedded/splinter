@@ -1114,9 +1114,10 @@ gaps:
     or a labelled correction), not a rule on roles.
   severity: medium
   confidence: high (observed in the contract test)
-  status: confirmed
-  resolution: 'open, a spec decision: supervise a reply only when no later turn of the dialogue corrects it, with the correction
-    identified by the session''s correction claims (corrections_session / claim gates)'
+  status: fixed
+  resolution: 'a dialogue reply the other speaker''s next turn corrects (splinter_core::correction::corrects: a correcting
+    fact, or a reply opening with No, Wrong or Incorrect and punctuation) is context and never supervised, in sft-final''s
+    dialogues and session_dialogue alike; the brain contract test counts it out independently and passes'
 - id: G-NEW-05
   source_id: null
   where: crates/eval/src/campaign/sampling.rs:95-105

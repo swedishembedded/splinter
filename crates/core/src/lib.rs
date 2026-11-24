@@ -86,6 +86,7 @@ pub mod checkpoint;
 pub mod claim;
 pub mod clock;
 pub mod concurrency;
+pub mod correction;
 pub mod dataset;
 pub mod diagnosis;
 pub mod digest;

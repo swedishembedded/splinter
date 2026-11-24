@@ -17,7 +17,9 @@
 //! writes after working in the tree, never an answer it gives closed-book;
 //! [`SftStep`](crate::SftStep) trains it.
 //! A dialogue (a trajectory of several user steps) is the exception: its
-//! record is the whole conversation with every reply supervised.
+//! record is the whole conversation with every reply supervised but one the
+//! other speaker's next turn corrects ([`splinter_core::correction::corrects`]),
+//! which stays as the context the correction answers.
 
 use splinter_core::annotation::Strength;
 use splinter_core::experience::Environment;

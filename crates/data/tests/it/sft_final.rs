@@ -222,6 +222,11 @@ fn the_dataset_is_generic_messages_v2_and_names_its_digest() {
 /// A dialogue of three exchanges: the first user step is what the teacher
 /// was prompted with, the later ones are the other speaker's own words.
 fn dialogue() -> Experience {
+    dialogue_with("And then?")
+}
+
+/// [`dialogue`] with `turn` as the second user step.
+fn dialogue_with(turn: &str) -> Experience {
     let task = Task::new(
         "converse",
         Vec::new(),
@@ -246,7 +251,7 @@ fn dialogue() -> Experience {
     trajectory.steps = vec![
         step(1, StepOrigin::User, &format!("{PASSAGE}\n\n{INSTRUCTION}")),
         step(2, StepOrigin::Agent, "First reply."),
-        step(3, StepOrigin::User, "And then?"),
+        step(3, StepOrigin::User, turn),
         step(4, StepOrigin::Agent, "Second reply."),
         step(5, StepOrigin::User, "Why so?"),
         step(6, StepOrigin::Agent, "Third reply."),
@@ -382,4 +387,50 @@ fn an_answer_holding_reasoning_markup_is_excluded_not_trained() {
     let projection = SftFinal::new(Strength::Formal).project(&corpus).unwrap();
     assert!(projection.records.is_empty());
     assert_eq!(projection.count(Exclusion::ReasoningInText), 1);
+}
+
+/// [`dialogue`] with the second user turn `turn`.
+fn dialogue_answered(turn: &str) -> Vec<(String, bool)> {
+    let exp = dialogue_with(turn);
+    let records = project(
+        &SftFinal::new(Strength::Judged),
+        &exp,
+        &[verdict(&exp, Outcome::Pass, Strength::Judged)],
+    );
+    let RecordBody::Chat { messages, .. } = &records[0].body else {
+        panic!("a chat record")
+    };
+    messages
+        .iter()
+        .filter(|m| m.role == "assistant")
+        .map(|m| (m.content.clone(), m.train))
+        .collect()
+}
+
+#[test]
+fn a_reply_the_other_speaker_then_corrects_is_shown_and_never_trained_on() {
+    for correction in [
+        "No, it is the other way round.",
+        "Actually, the first one was wrong.",
+        "That is wrong: try again.",
+    ] {
+        assert_eq!(
+            dialogue_answered(correction),
+            [
+                ("First reply.".to_string(), false),
+                ("Second reply.".to_string(), true),
+                ("Third reply.".to_string(), true),
+            ],
+            "{correction}"
+        );
+    }
+    // A turn that carries on, or declines nothing, corrects nothing.
+    for carrying_on in ["No problem, and then?", "And then?", "Nothing else to add?"] {
+        assert!(
+            dialogue_answered(carrying_on)
+                .iter()
+                .all(|(_, train)| *train),
+            "{carrying_on}"
+        );
+    }
 }

@@ -42,7 +42,8 @@
 //! * A dialogue - a trajectory with a second user step and no tool call -
 //!   is the exception: [`dialogue`] renders it whole, the later user steps
 //!   (the other speaker's own words) as user turns and every reply
-//!   supervised.
+//!   supervised, but one the next turn corrects (`No, ...`, `Actually, ...`),
+//!   which is context.
 //! * Image content and an observation that answers no call of its step are
 //!   not representable, and the whole trajectory is refused: a record with
 //!   a hole in its context would teach from a state the solver never saw.
@@ -630,6 +631,16 @@ fn try_dialogue(
     }
     if messages.last().is_some_and(|m| m.role == "user") {
         return Err(Unprojectable::EndsUnanswered { step: last_step });
+    }
+    // A reply the other speaker's next turn corrects was wrong: it stays in
+    // the conversation, which the correction answers, and is never trained on.
+    for at in 1..messages.len() {
+        if messages[at].role == "user"
+            && messages[at - 1].role == "assistant"
+            && splinter_core::correction::corrects(&messages[at].content)
+        {
+            messages[at - 1].train = false;
+        }
     }
     Ok(messages)
 }

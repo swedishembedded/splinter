@@ -23,14 +23,19 @@ use crate::common::{answered, call, experience, say, task, trajectory, user, ver
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     Says(String),
-    Calls { name: String, arguments: String },
+    /// A reply the other speaker's next turn corrects: shown, never trained on.
+    Corrected(String),
+    Calls {
+        name: String,
+        arguments: String,
+    },
 }
 
 impl Action {
     /// The text brain's template writes for the action: its content, then each call's name and arguments.
     pub fn rendered(&self) -> String {
         match self {
-            Self::Says(text) => text.clone(),
+            Self::Says(text) | Self::Corrected(text) => text.clone(),
             Self::Calls { name, arguments } => format!("{name}{arguments}"),
         }
     }
@@ -130,7 +135,7 @@ pub fn attempts() -> Vec<Attempt> {
             experience: corrected,
             outcome: Outcome::Pass,
             actions: vec![
-                Action::Says("It uses port 8080.".into()),
+                Action::Corrected("It uses port 8080.".into()),
                 Action::Says("Port 9090, understood.".into()),
             ],
         },

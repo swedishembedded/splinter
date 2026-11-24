@@ -109,8 +109,8 @@ fn the_views_write_what_brains_trainer_reads_and_supervises_the_intended_tokens(
         "only the assistant's actions are supervised"
     );
 
-    // sft-final: the final answer alone of a tool run; a dialogue's every reply (the other speaker's turns are
-    // context).
+    // sft-final: the final answer alone of a tool run; a dialogue's every reply but one the next turn corrects
+    // (the other speaker's turns, and a corrected reply, are context).
     let (path, projection) = project(
         &bench,
         "sft-final",
@@ -124,7 +124,11 @@ fn the_views_write_what_brains_trainer_reads_and_supervises_the_intended_tokens(
             } else {
                 &a.actions[..]
             };
-            replies.iter().map(|x| action_tokens(x) + header()).sum()
+            replies
+                .iter()
+                .filter(|x| !matches!(x, Action::Corrected(_)))
+                .map(|x| action_tokens(x) + header())
+                .sum()
         })
         .collect();
     let report = bench.check_as(&path, DatasetKind::Chat);

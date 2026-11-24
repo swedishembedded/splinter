@@ -86,7 +86,7 @@ const REMEMBER_OPENERS: [&str; 6] = [
 ];
 
 /// Openers of a correction of something the agent said. Lowercase.
-const CORRECTION_OPENERS: [&str; 9] = [
+pub(crate) const CORRECTION_OPENERS: [&str; 9] = [
     "actually",
     "that is wrong",
     "that is incorrect",
