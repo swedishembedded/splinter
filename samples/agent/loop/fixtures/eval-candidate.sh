@@ -13,7 +13,7 @@
 # once for a candidate (`local:<checkpoint>+<adapter>`) over the same task
 # list and compare the two result directories' accepted counts, which this
 # script prints. A comparison that can release or block a model is the
-# release gate's, over the exam `splinter practice` reserved.
+# release gate's, over the families the recipe held out for evaluation.
 #
 # Usage: eval-candidate.sh <out-dir> <model-ref> <family:seed>...
 # Environment: AGENT_LOOP (the binary, default `agent-loop` on PATH),

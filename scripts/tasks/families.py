@@ -9,8 +9,9 @@
 
 """Checks of the repository task families under tasks/.
 
-A repository family is a small self-contained project that `splinter practice`
-learns from its own tests. This script is the family author's pre-flight and
+A repository family is a small self-contained project the learning factory's
+`task.mutate` operation (the repository-practice template) makes tasks of by
+its own tests. This script is the family author's pre-flight and
 the catalog's keeper; it does not replace the generator's admission funnel.
 
   check [TREE...]      baseline suite passes and is identical over five runs,
@@ -111,8 +112,8 @@ def digest(family: Family) -> str:
 
 
 def tree_id(family: Family) -> str:
-    """The git tree id of the family's files: what `splinter practice` records as
-    the tree of a snapshot of a copy of it, so a plan can recognise a family
+    """The git tree id of the family's files: what Splinter records as the tree of
+    a snapshot of a copy of it, so a plan can recognise a family
     by what a run is asked to read and not by what the run is called."""
     with tempfile.TemporaryDirectory() as scratch:
         copy = Path(scratch) / family.id

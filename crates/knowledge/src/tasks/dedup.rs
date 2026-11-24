@@ -68,8 +68,9 @@ pub struct Seen {
 }
 
 impl Seen {
-    /// Nothing seen yet; shingles of `shingle_words` words, a near
-    /// duplicate at `max_overlap` or more.
+    /// Nothing seen yet; shingles of `shingle_words` words (at least one,
+    /// which [`super::GenerationPolicy`] refuses otherwise), a near duplicate
+    /// at `max_overlap` or more.
     #[must_use]
     pub fn new(shingle_words: usize, max_overlap: f64) -> Self {
         Self {

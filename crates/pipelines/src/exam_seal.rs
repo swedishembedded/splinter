@@ -19,7 +19,7 @@
 //! * A workspace record that names no family cannot be shown to be outside
 //!   the exam and is refused.
 //! * The families a clean build trains on are remembered, so no later run
-//!   reserves one of them (see [`crate::practice`]).
+//!   reserves one of them.
 //!
 //! * An experience of a benchmark task that is not in the benchmark's `train`
 //!   split is refused: it is examination material ([`crate::bench::split`]).
