@@ -120,6 +120,14 @@ test/families:
 test/methods:
 	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
 
+## test/contract - lists the cross-project contract targets; runs nothing
+test/contract:
+	@bash scripts/make-help.sh test/contract
+
+## test/contract/brain - the records Splinter's views write are the records a served brain's trainer reads: every record accepted, only the assistant's actions supervised (counted independently), sampled ids and a refused broken record, on a tokenizer-only model on the CPU (BRAIN_BIN, no weights, no GPU, seconds; exit 3 means no brain binary)
+test/contract/brain:
+	bash scripts/contract/brain.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
+
 ## test/conformance - the per-PR validation tier: every per-PR row of the validation map (docs/contributing/validation.md) run once and written to target/conformance/evidence.jsonl (no model, no GPU, seconds to minutes)
 test/conformance:
 	python3 -I scripts/conformance/evidence.py --cargo "$(CARGO)"
@@ -540,7 +548,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/contract test/contract/brain test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

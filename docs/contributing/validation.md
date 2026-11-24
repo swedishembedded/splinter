@@ -12,6 +12,7 @@ specification and the test that proves it, and says how the proof is run.
 make test/conformance              # per-PR tier: every per-PR row below, and the evidence file (seconds)
 make test/conformance/integration  # integration tier: every source mutant (minutes)
 make test/methods                  # integration tier: learning effectiveness on a toy model (needs BRAIN_BIN)
+make test/contract/brain           # integration tier: the records Splinter writes are the records brain's trainer reads (needs BRAIN_BIN)
 ```
 
 ## Three kinds of correctness
@@ -79,6 +80,7 @@ of the package) or an integration test binary; filter a substring of the test na
 | Dev-validation gate | algorithmic | the greedy gate advances on a net dev gain and rolls back on none or on a retention loss past its margin, reporting significance at the alpha it may spend; the evidence gate advances only when its e-process crosses the round's level | `splinter-eval/lib/campaign::gate` `splinter-eval/it/evidence_gate` | per-PR | |
 | Solve concurrency | algorithmic | a remote model is asked up to its width at once, a served one as wide as its slots; one experience per attempt in task order (read with a barrier, no clock) | `splinter-pipelines/it/solve_concurrency` | per-PR | |
 | Learning methods | learning | each method moves a held-out score on a toy model | `make test/methods` | integration | |
+| Brain data contract | algorithmic | the datasets the sft-step, sft-final, preference, feedback and policy-gradient views write are accepted by a served brain's own dataset check, which reads them as its trainer does; the supervised tokens of each record equal the assistant's actions counted from their characters (never a system prompt, a user turn or a tool observation), a policy-gradient record trains exactly its sampled ids, and a hand-broken record (log-probability count, id mismatch) is refused with its rule; brain's tokenization and numerics are not claimed | `make test/contract/brain` | integration | |
 
 ## Not yet certified
 
