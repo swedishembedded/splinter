@@ -27,6 +27,14 @@
 //!   exists exactly when its manifest file does.
 //! * [`runstate`] - the controller's state: a fenced lease, stages with
 //!   optimistic versions, and the slots and attempts of rollouts.
+//!
+//! Some operations use the experience database's stores as scratch inside a
+//! stage: `task.generate` reads its documents through a source store in a
+//! temporary directory, and `answer.collect` keeps the store of the evidence
+//! it grades against in its product, as `sources/`, a directory of the
+//! product's files like any other. Neither is the run's state: what a run
+//! decided is in `state/`, what it made in its products, and no run reads a
+//! database outside its own directory.
 
 pub mod products;
 pub mod runstate;

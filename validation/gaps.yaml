@@ -485,10 +485,9 @@ gaps:
     ExpDB is required for those flows.
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: 'the store''s doc says factory state is independent of the experience database; true for products and run
-    state, but the knowledge, task, text-dataset and view operations build throwaway ExpDB stores in temporary directories:
-    the doc should say so (plan 10D: ExpDB stays optional)'
+  status: fixed
+  resolution: the factory store's doc says which operations use the experience database's stores as scratch (task.generate's
+    temporary source store, answer.collect's sources/ inside its product) and that neither is run state
 - id: G-FS-13
   source_id: F-13
   where: crates/orchestrator/src/jobs.rs:~170 (reconcile_at `if let Ok(record) = self.workspace.update_job(...)`)
