@@ -119,13 +119,16 @@ pub(crate) fn identity(
     let variant = variant(factory, stage)?;
     let key = dataset_key(stage)?;
     let inputs = vec![(key.clone(), factory.product(&key)?.1.digest())];
-    let parameters = json!({
+    let mut parameters = json!({
         "engine": variant.engine, "base": variant.base, "method": variant.method,
-        // By content: the same adapter continued is the same input, wherever its run is.
-        "start": variant.start.as_ref().map(|c| c.digest.hex()),
         // As the trainer will train them: a changed default is a new candidate.
         "params": trainer(factory, stage)?.resolve(&variant.method, &variant.params).map_err(|e| stage_error(&stage.key, e))?,
     });
+    if let Some(start) = &variant.start {
+        // By content: the same adapter continued is the same input, wherever its run is. A candidate
+        // trained from nothing keeps the identity it had before a start could be named.
+        parameters["start"] = json!(start.digest.hex());
+    }
     Ok(super::identity_of(
         &stage.versioned_operation(),
         &variant.name,
