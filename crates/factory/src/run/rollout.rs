@@ -154,38 +154,44 @@ fn made_ref(made: &Path) -> Result<FileRef, RunError> {
     })
 }
 
+/// The sandbox the environment at `path` (repository-relative) runs a stage
+/// `key` in, and the environment's digest: what a computation run in it is
+/// identified by, its mounts by the digest of their trees.
+pub(crate) fn sandbox_of(
+    factory: &Factory<'_>,
+    key: &str,
+    path: &str,
+) -> Result<(SandboxSpec, Digest), RunError> {
+    let environment = factory
+        .resolved
+        .environments
+        .get(path)
+        .ok_or_else(|| stage_error(key, format!("environment {path} is not resolved")))?;
+    let mut mounts = Vec::new();
+    for mount in &environment.mounts {
+        mounts.push(Mount {
+            source: mount.source.clone(),
+            digest: tree_digest(&factory.resolved.repository.join(&mount.source))?,
+            target: mount.target.clone(),
+            read_only: mount.read_only,
+        });
+    }
+    let spec = SandboxSpec {
+        provider: environment.sandbox.provider.clone(),
+        image: environment.sandbox.image.clone(),
+        cpus: environment.sandbox.resources.cpus,
+        memory_mib: environment.sandbox.resources.memory_gb.map(|g| g * 1024),
+        timeout_seconds: environment.timeout_seconds(),
+        network: environment.network.mode,
+        mounts,
+        isolation: environment.isolation,
+    };
+    Ok((spec, digest_of(environment)))
+}
+
 impl Arm<'_> {
     fn sandbox(&self, factory: &Factory<'_>) -> Result<(SandboxSpec, Digest), RunError> {
-        let environment = factory
-            .resolved
-            .environments
-            .get(&self.pass.environment)
-            .ok_or_else(|| {
-                stage_error(
-                    &self.key,
-                    format!("environment {} is not resolved", self.pass.environment),
-                )
-            })?;
-        let mut mounts = Vec::new();
-        for mount in &environment.mounts {
-            mounts.push(Mount {
-                source: mount.source.clone(),
-                digest: tree_digest(&factory.resolved.repository.join(&mount.source))?,
-                target: mount.target.clone(),
-                read_only: mount.read_only,
-            });
-        }
-        let spec = SandboxSpec {
-            provider: environment.sandbox.provider.clone(),
-            image: environment.sandbox.image.clone(),
-            cpus: environment.sandbox.resources.cpus,
-            memory_mib: environment.sandbox.resources.memory_gb.map(|g| g * 1024),
-            timeout_seconds: environment.timeout_seconds(),
-            network: environment.network.mode,
-            mounts,
-            isolation: environment.isolation,
-        };
-        Ok((spec, digest_of(environment)))
+        sandbox_of(factory, &self.key, &self.pass.environment)
     }
 
     fn invocation(&self, factory: &Factory<'_>) -> Result<AgentInvocation, RunError> {

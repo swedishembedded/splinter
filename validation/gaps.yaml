@@ -1184,3 +1184,17 @@ gaps:
   resolution: 'knowledge: every header field is read through one checked accessor and a truncated observation header is
     refused; every prefix of the fixture is answered, and one cut before its rows is refused (a cut among the rows cannot be
     told from fewer rows: the format records no row count)'
+- id: G-NEW-10
+  source_id: null
+  where: crates/factory/src/run/eval.rs (identity)
+  what: 'An evaluation stage''s identity held its plan''s file but not the tasks the plan selects nor the environment its
+    arms run in, so a changed held-out task (its verifier, its instruction) or a changed evaluation environment reused the
+    evaluation computed before: the release then decided on trials the current verifier never graded. The arms and the
+    pinned tasks inside the stage have identities that include them, but a stage reused whole never reaches them. Found
+    by the recompute enumeration (plan 9C).'
+  severity: critical
+  confidence: high (enumeration; both cases recomputed nothing before the fix)
+  status: fixed
+  resolution: 'factory: a development plan''s tasks (id and digest) and its environment (the sandbox it makes and the
+    environment''s digest, from the one function the rollout arms use) are part of the evaluation''s identity; a protected
+    plan''s stay the authority''s. splinter-factory/it/recompute holds the twelve changes'

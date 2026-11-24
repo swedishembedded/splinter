@@ -33,6 +33,7 @@ mod practice;
 mod projections;
 mod promotion;
 mod qualify;
+mod recompute;
 mod registry;
 mod repo;
 mod resolve;

@@ -44,7 +44,7 @@ use splinter_model::stats::one_sided_p;
 use splinter_store::factory::products::Staging;
 
 use super::pass::{RolloutPass, TaskSelector};
-use super::rollout::{run_arm, trials_of, Arm};
+use super::rollout::{run_arm, sandbox_of, trials_of, Arm};
 use super::training::candidate_of;
 use super::{io, read_json, stage_error, write_json, Factory, RunError};
 use crate::eval_plan::EvalPlan;
@@ -235,10 +235,29 @@ pub(crate) fn identity(
     let training = section.candidate.clone();
     let inputs = vec![(training.clone(), factory.product(&training)?.1.digest())];
     let comparisons = comparisons(&section, plan);
+    // A development plan's arms run its tasks in its environment: their
+    // contents are what the stage is computed from, as much as the plan's
+    // file is, so a changed task, verifier or environment computes the
+    // evaluation again. A protected plan's are the authority's.
+    let development = if plan.protected() {
+        serde_json::Value::Null
+    } else {
+        let environment = plan
+            .environment
+            .as_deref()
+            .ok_or_else(|| stage_error(&stage.key, "a development plan names its environment"))?;
+        let (sandbox, environment) = sandbox_of(factory, &stage.key, environment)?;
+        let tasks: Vec<_> = tasks(factory, &section, plan)?
+            .iter()
+            .map(|t| json!([t.id, t.digest]))
+            .collect();
+        json!({ "tasks": tasks, "environment": environment, "sandbox": sandbox })
+    };
     let parameters = json!({
         "plan": plan_digest(factory, &section)?, "agent": section.agent, "args": section.args,
         "files": pinned_files(factory, &section)?, "budget": section.budget,
         "baseline": super::models::binding_of(factory, &stage.key, &section.baseline)?.0, "comparisons": comparisons,
+        "development": development,
     });
     let backend = if plan.protected() {
         String::new()
