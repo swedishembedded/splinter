@@ -39,6 +39,20 @@ fn the_over_length_penalty_is_dapos_soft_ramp() {
     }
 }
 
+/// A manifest is read back under the rule that built it: a buffer longer than
+/// the budget would make the soft limit `max_tokens - buffer` wrap to a huge
+/// number and no attempt would ever be penalised.
+#[test]
+fn a_manifest_with_a_buffer_longer_than_the_budget_is_refused() {
+    let read = |max_tokens: u64, buffer: u64| {
+        serde_json::from_value::<Overlong>(json!({"max_tokens": max_tokens, "buffer": buffer}))
+    };
+    assert_eq!(read(100, 20).unwrap(), Overlong::new(100, 20).unwrap());
+    for (max_tokens, buffer) in [(100, 0), (100, 101)] {
+        assert!(read(max_tokens, buffer).is_err(), "{max_tokens}/{buffer}");
+    }
+}
+
 /// The penalty is added to the reward each trial earns, from the completion
 /// tokens its verdict records; a trial that recorded none is an error, not a
 /// short trial; the projection records the thresholds for the manifest.

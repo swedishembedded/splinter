@@ -107,12 +107,31 @@ impl PartialCredit {
 /// With `L = max_tokens`, `B = buffer` and `n` the attempt's completion
 /// tokens, the penalty is `0` for `n <= L - B`, `(L - B - n) / B` for
 /// `L - B < n <= L`, and `-1` for `n > L`.
+///
+/// The invariant `0 < B <= L` holds for every value: [`Overlong::new`] checks
+/// it, and so does reading one from a manifest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "OverlongThresholds")]
 pub struct Overlong {
     /// `L`: the completion tokens at and past which the full penalty applies.
-    pub max_tokens: u64,
+    max_tokens: u64,
     /// `B`: the tokens before `max_tokens` over which the penalty grows.
-    pub buffer: u64,
+    buffer: u64,
+}
+
+/// An [`Overlong`] as a manifest spells it, before the invariant is checked.
+#[derive(Deserialize)]
+struct OverlongThresholds {
+    max_tokens: u64,
+    buffer: u64,
+}
+
+impl TryFrom<OverlongThresholds> for Overlong {
+    type Error = ViewError;
+
+    fn try_from(thresholds: OverlongThresholds) -> Result<Self, ViewError> {
+        Self::new(thresholds.max_tokens, thresholds.buffer)
+    }
 }
 
 impl Overlong {
