@@ -68,7 +68,7 @@ scripts/validation/
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
 | M6 GPU certification | 13-14 | not possible here: no GPU |
 | M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
-| M8 Permanent quality system | 16 | partly: 50 source mutants, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C); the Phase 16 consolidations and the new make targets not done |
+| M8 Permanent quality system | 16 | partly: 50 source mutants, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C), the CPU targets of 16A (`test/conformance/external`, `test/storage/faults`, `test/factory/faults`); the Phase 16 consolidations, and the GPU and learning targets, not done |
 
 Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
