@@ -52,6 +52,7 @@ use atif::{ContentSegment, MessageBody, StepOrigin, TraceStep, Trajectory};
 use splinter_core::chat::{WireFunction, WireMessage, WireToolCall};
 use splinter_core::experience::{Environment, Experience};
 use splinter_core::prompt::{recorded_prompt, RecordedPrompt, SYSTEM_PROMPT};
+use splinter_core::tool_calls::outputs_by_call;
 
 use crate::markers::{
     chat_tools, has_unparsed_arguments, is_compaction, is_harness_prompt, is_incomplete,
@@ -409,23 +410,19 @@ fn try_conversation(
 }
 
 /// What each call of `step` asked and what came back: its tool, its
-/// arguments as sent and the text of the results that answered it.
+/// arguments as sent and the text of the output that answered it, paired as
+/// [`outputs_by_call`] pairs them (the one pairing the diagnosis and the
+/// repository history use too), so a step whose results do not name their
+/// calls is still read by position.
 fn calls_asked(step: &TraceStep, calls: &[WireToolCall]) -> Vec<(String, String, String)> {
     calls
         .iter()
-        .map(|call| {
-            let result = step
-                .observation
-                .iter()
-                .flat_map(|o| &o.results)
-                .filter(|r| r.source_call_id.is_some() && r.source_call_id == call.id)
-                .filter_map(|r| r.content.as_ref().and_then(text_of))
-                .collect::<Vec<_>>()
-                .join("\n");
+        .zip(outputs_by_call(step))
+        .map(|(call, output)| {
             (
                 call.function.name.clone(),
                 call.function.arguments.clone(),
-                result,
+                output,
             )
         })
         .collect()
@@ -723,4 +720,41 @@ pub fn portable_record(trajectory: &Trajectory) -> Result<crate::NativeRecord, U
         scrubbed: conversation.scrubbed,
         tools,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atif::{AgentProfile, ObservationEntry, StepObservation, ToolInvocation};
+    use serde_json::json;
+
+    /// An agent step running `cmd`, whose result names no call.
+    fn unnamed_run(step: u64, cmd: &str, result: &str) -> TraceStep {
+        let mut agent = TraceStep::new(step, StepOrigin::Agent, "");
+        agent.tool_calls =
+            Some(vec![ToolInvocation::new(format!("c{step}"), "shell")
+                .with_arguments(json!({ "cmd": cmd }))]);
+        let mut entry = ObservationEntry::for_call(format!("c{step}"), result);
+        entry.source_call_id = None;
+        agent.observation = Some(StepObservation::single(entry));
+        agent
+    }
+
+    /// A call is repeated when an earlier step made it and got the same
+    /// output; the output is the call's own whether or not the result names
+    /// the call it answers, so the same call answered differently is progress.
+    #[test]
+    fn a_repeat_is_the_same_call_with_the_same_output_even_if_results_name_no_call() {
+        let mut trajectory = Trajectory::new("ATIF-v1.7", AgentProfile::new("scripted", "1"));
+        trajectory.steps = vec![
+            unnamed_run(2, "python t.py", "boom"),
+            unnamed_run(3, "python t.py", "fixed"),
+            unnamed_run(4, "python t.py", "fixed"),
+        ];
+        let repeated: Vec<bool> = agent_steps(&trajectory)
+            .iter()
+            .map(|s| s.repeated)
+            .collect();
+        assert_eq!(repeated, [false, false, true]);
+    }
 }
