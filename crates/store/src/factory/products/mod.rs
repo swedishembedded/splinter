@@ -393,13 +393,7 @@ impl ProductStore {
     ) -> Result<ProductManifest, ProductError> {
         let manifest = match self.prepare(stage_id, name, &staging, view)? {
             Prepared::Existing(existing) => existing,
-            Prepared::Viewed(manifest) => {
-                let bytes = pretty(&manifest)?;
-                let path = self.product_path(stage_id);
-                write_atomic(&path, &bytes)
-                    .map_err(io_error(format!("commit {}", path.display())))?;
-                manifest
-            }
+            Prepared::Viewed(manifest) => self.commit(stage_id, manifest)?,
         };
         // The product is committed; leftovers are recover()'s to clean if this fails.
         let _ = fs::remove_file(self.pending_path(stage_id));
@@ -795,3 +789,7 @@ fn view_belongs_to_other_product(view: &Path, stage_hex: Option<&str>) -> bool {
     serde_json::from_slice::<ProductManifest>(&bytes)
         .is_ok_and(|m| Some(m.stage.hex()) != stage_hex)
 }
+
+mod commit;
+#[cfg(test)]
+mod tests;

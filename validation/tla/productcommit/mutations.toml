@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# One-line defects of the product commit, each of which TLC must find as a
+# violation of the named property. The first is the commit as it was before
+# crates/store/src/factory/products/commit.rs: an atomic rename over whatever
+# was there.
+
+module = "ProductCommit"
+config = "ProductCommit.cfg"
+
+[[mutation]]
+id = "commit-overwrites"
+find = "       \\/ /\\ manifest # None /\\ manifest = Content[w]\n          /\\ pc' = [pc EXCEPT ![w] = \"done\"]\n          /\\ returned' = [returned EXCEPT ![w] = manifest]\n          /\\ UNCHANGED manifest\n       \\/ /\\ manifest # None /\\ manifest # Content[w]\n          /\\ pc' = [pc EXCEPT ![w] = \"refused\"]\n          /\\ UNCHANGED <<manifest, returned>>\n"
+replace = "       \\/ /\\ manifest # None\n          /\\ manifest' = Content[w]\n          /\\ pc' = [pc EXCEPT ![w] = \"done\"]\n          /\\ returned' = [returned EXCEPT ![w] = Content[w]]\n"
+violates = "NoSilentLoss"
+
+[[mutation]]
+id = "prepared-returns-other-content"
+find = "       \\/ /\\ manifest = Content[w]\n          /\\ pc' = [pc EXCEPT ![w] = \"done\"]\n          /\\ returned' = [returned EXCEPT ![w] = manifest]\n"
+replace = "       \\/ /\\ manifest # None\n          /\\ pc' = [pc EXCEPT ![w] = \"done\"]\n          /\\ returned' = [returned EXCEPT ![w] = Content[w]]\n"
+violates = "NoSilentLoss"

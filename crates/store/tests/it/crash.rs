@@ -227,6 +227,7 @@ fn a_crash_at_any_durability_boundary_loses_nothing_committed_and_shows_nothing_
         "blob: synced",
         "view: placed",
         "atomic write: renamed",
+        "new write: linked",
         "publish: intent removed",
         "view: old view moved aside",
     ] {

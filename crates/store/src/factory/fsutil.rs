@@ -31,6 +31,41 @@ pub(super) fn sync_dir(dir: &Path) -> io::Result<()> {
     File::open(dir)?.sync_all()
 }
 
+/// Writes `bytes` to `path` only when nothing is there: the bytes go to a
+/// temporary sibling, are synced, and are linked into place, which fails
+/// when `path` exists, so a reader sees the whole file or none and a file
+/// already in place is never replaced. Whether this call created it.
+pub(super) fn write_new(path: &Path, bytes: &[u8]) -> io::Result<bool> {
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(dir)?;
+    let temp = temp_sibling(path);
+    let written = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()
+    })();
+    if let Err(error) = written {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
+    }
+    crate::faults::boundary("new write: temporary synced");
+    let linked = fs::hard_link(&temp, path);
+    let _ = fs::remove_file(&temp);
+    match linked {
+        Ok(()) => {
+            crate::faults::boundary("new write: linked");
+            sync_dir(dir)?;
+            crate::faults::boundary("new write: directory synced");
+            Ok(true)
+        }
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 /// Writes `bytes` to `path` atomically: a temporary sibling is written and
 /// synced, renamed into place, and the directory synced. Readers see the old
 /// file or the whole new one, never a torn one.

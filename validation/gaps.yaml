@@ -1302,3 +1302,17 @@ gaps:
   status: confirmed
   resolution: 'open, a decision: which reader is canonical. Reading in Rust everywhere drops the factory import''s dependency
     on the Python worker; reading through the worker everywhere makes experiences ingest-harbor need the worker installed.'
+- id: G-NEW-15
+  source_id: null
+  where: crates/store/src/factory/products/mod.rs:publish (prepare, then write_atomic of products/<stage>.json)
+  what: A publish checked that its stage was uncommitted when it prepared, then committed by an atomic rename over whatever
+    was there. Two publishers of one stage (a controller whose lease lapsed while it computed, and the one that took over)
+    could both pass the check; the second rename silently replaced the committed product, so the product store no longer
+    held the product the run state recorded. The run state is fenced; the product store was not.
+  severity: high
+  confidence: 'high (reproduced: products::tests failed against the old commit)'
+  status: fixed
+  resolution: the commit links the manifest into place only where none is (fsutil::write_new, products/commit.rs); a publisher
+    that comes second returns the committed product when its files are the same and is refused when they differ; specified
+    by products::tests (both interleavings), the crash enumeration crashes at the new commit boundaries, and validation/tla/productcommit
+    model-checks the protocol, its commit-overwrites mutation being the old commit
