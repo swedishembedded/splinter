@@ -64,11 +64,11 @@ scripts/validation/
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
 | M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D); the independent projector, task-kind and plugin matrices not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
-| M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B); formal models (10C) not built |
+| M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
 | M6 GPU certification | 13-14 | not possible here: no GPU |
 | M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
-| M8 Permanent quality system | 16 | partly: 44 source mutants, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C); the Phase 16 consolidations and the new make targets not done |
+| M8 Permanent quality system | 16 | partly: 50 source mutants, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C); the Phase 16 consolidations and the new make targets not done |
 
 Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
@@ -97,7 +97,7 @@ Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
         test/package: the staging modes followed the caller's umask (0000 here). test/methods: the driver's relative
         brain path and log directory, then G-NEW-06. All but G-NEW-06 fixed.
 - [x] The tiers after both waves, on the validation head: test/conformance 31/31 rows; external fixtures hold;
-      the runner's self-specification passes; test/conformance/integration kills 44 of 44 source mutants;
+      the runner's self-specification passes; test/conformance/integration kills 44 of 44 source mutants (50 of 50 with the six added since, each run alone);
       test/families passes; test/contract/brain passes against the CPU brain; test/methods blocked (G-NEW-06).
 - [x] Capability inventory `validation/capabilities.yaml` from source (340 capabilities: 250 SPECIFIED,
       31 ADVERSARIAL_PASS, 29 GOLDEN_PASS, 21 INTEGRATION_PASS, 9 UNMAPPED; agents' strict reading, every
@@ -167,6 +167,6 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   a corrected dialogue reply is supervised (G-NEW-04); trajectories splinter-agent composes are not checked by
   Harbor's ATIF validator (G-AS-13).
 - Not built: the independent Python projector of every view (6B), the task-kind and plugin matrices (4A, 4B), scripted agent transcripts (5A), knowledge ingestion and retrieval
-  benchmarks (3A-3C), formal concurrency models and crash injection beyond the product store (10), deterministic
+  benchmarks (3A-3C), TLA+ models and crash injection beyond the product store (10), deterministic
   learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

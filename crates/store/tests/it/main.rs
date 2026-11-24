@@ -25,6 +25,7 @@ mod pointers;
 mod projection;
 mod recovery;
 mod run_log;
+mod runstate_model;
 mod source_store;
 mod stage_ledger;
 mod state_layout;
