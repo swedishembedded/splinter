@@ -11,6 +11,7 @@
 mod common;
 
 mod advice_tasks;
+mod atif_composed;
 mod blocking;
 mod chat;
 mod claims;

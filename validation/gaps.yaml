@@ -991,9 +991,11 @@ gaps:
     with custom provenance.
   severity: high
   confidence: high
-  status: confirmed
-  resolution: 'captured: a real sven trajectory through the worker now passes Harbor''s own ATIF validator (test_agents::test_sven_runs_headless...).
-    Open: trajectories splinter-agent composes (correction.rs) are not yet checked by it'
+  status: fixed
+  resolution: 'every trajectory splinter-agent composes (a teacher''s correction, a policy''s continuation, a guided continuation)
+    is held to Harbor 0.20''s own ATIF validator (splinter-agent/it/atif_composed, run by make test/worker). It found the
+    defect: compose set model_name on the student''s user steps, which ATIF allows on agent steps only, so every corrected
+    trajectory was invalid ATIF; fixed'
 - id: G-AS-14
   source_id: F14
   where: crates/sandbox/src/landlock.rs:227-240 (NotFound => Ok(())), :228-230 (CString error => Ok(()))

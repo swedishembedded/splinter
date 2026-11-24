@@ -98,9 +98,10 @@ $(TEST_CRATE_TARGETS): test/crate/%:
 test/package:
 	bats scripts/package/install-deb.bats scripts/package/install-worker.bats scripts/package/publish-deb.bats
 
-## test/worker - the Harbor worker's own tests: Harbor jobs in the proot sandbox against stub models, no network (needs `make worker/install` and sven on PATH)
+## test/worker - the Harbor worker's own tests: Harbor jobs in the proot sandbox against stub models, no network, and every trajectory splinter-agent composes held to Harbor's ATIF validator (needs `make worker/install` and sven on PATH)
 test/worker:
 	cd workers/harbor && .venv/bin/python -m pytest
+	$(CARGO) test $(PROFILE) -p splinter-agent --test it -- atif_composed --ignored
 
 ## worker - lists the execution worker targets; does nothing
 worker:

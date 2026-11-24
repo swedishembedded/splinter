@@ -449,7 +449,11 @@ pub fn compose_as(
         step.step_id = id;
         id += 1;
         step.is_copied_context = Some(true);
-        step.model_name = Some(student_model.to_string());
+        // ATIF names a model only on an agent's step; the person's are the
+        // student's context, marked so in `extra`.
+        if step.source == StepOrigin::Agent {
+            step.model_name = Some(student_model.to_string());
+        }
         step.extra = marked(step.extra, "student", student_model);
         composed.steps.push(step);
     }
