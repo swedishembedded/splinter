@@ -129,3 +129,16 @@ fn a_good_step_of_an_unverified_or_failed_experience_is_admitted_only_without_ou
     let (step_credit, verified) = labelled_good(&[(Outcome::Pass, Strength::Executable)]);
     assert!(step_credit > 0 && verified > 0);
 }
+
+/// Step-level credit rescues a good step of a failed attempt, never of one
+/// that broke a constraint (the exposure audit's): that attempt touched
+/// material it must not, and is no training material whatever else was
+/// decided or labelled.
+#[test]
+fn a_good_step_of_an_attempt_that_broke_a_constraint_is_never_admitted() {
+    let exposed = [
+        (Outcome::Pass, Strength::Executable),
+        (Outcome::Fail, Strength::Constraint),
+    ];
+    assert_eq!(labelled_good(&exposed), (0, 0));
+}

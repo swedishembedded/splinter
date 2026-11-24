@@ -29,7 +29,9 @@
 //!   actions whose step is labelled [`Label::Good`] and not also bad. A
 //!   step label judges that step alone, and a failed attempt can hold
 //!   correct steps; with no good label it yields nothing and is counted
-//!   under why it did not pass;
+//!   under why it did not pass. [`Control::OutcomeVerified`] turns this off,
+//!   and an attempt that broke a constraint (the exposure audit's) is never
+//!   admitted by it, labels or no;
 //! * never a step ATIF marks as copied context;
 //! * never an action that repeats a call of the trajectory whose result was
 //!   the same ([`Exclusion::RepeatedAction`]): the tail of a loop stays in the
@@ -232,7 +234,9 @@ impl SftStep {
             )
         });
         if let Err(reason) = passed {
-            if !any_good || outcome_verified {
+            // A good step rescues an action of a failed or unverified
+            // attempt, never of one that broke a constraint.
+            if !any_good || outcome_verified || super::breaks_a_constraint(entry) {
                 projection.exclude(reason);
                 return;
             }
