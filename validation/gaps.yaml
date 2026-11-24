@@ -1160,3 +1160,27 @@ gaps:
   resolution: 'data: a reply that feedback answered is no action (the module doc states it); the enumeration is the spec
     (splinter-data/it/supervision_enumeration). A conversation rendered from recorded requests keeps its own rule and is not
     covered by this enumeration'
+- id: G-NEW-08
+  source_id: null
+  where: crates/core/src/teaching.rs (fact, rule, procedure); crates/core/src/speech_lesson.rs (parse_directive)
+  what: 'The parsers of what a person teaches and of a speech lesson''s directive took byte offsets from the text lowercased
+    by Unicode rules and cut the original with them. A letter whose lowercase is longer in UTF-8 (U+023A, 2 bytes, lowercases
+    to 3) moves every offset: "From now on Ⱥ" panicked (an index past the string), and a longer text cut the wrong span.
+    Any user message could crash what reads it. Found by the 16C property suite (minimal input shrunk and saved).'
+  severity: high
+  confidence: high (minimal input; the specification fails before the fix at three sites)
+  status: fixed
+  resolution: 'core: every offset is taken from ASCII lowercasing (the openers, copulas and delimiters are ASCII), as
+    parse_teaching already did; splinter-core/it/fuzz holds the minimal inputs and the property'
+- id: G-NEW-09
+  source_id: null
+  where: crates/knowledge/src/tabular.rs (read_xport)
+  what: 'The SAS transport reader sliced the member header, the NAMESTR header and the rows at offsets it found in the file
+    without checking them: a file cut short or damaged in a header panicked instead of being refused. Found by the 16C
+    property suite.'
+  severity: medium
+  confidence: high (every prefix of the fixture; the specification fails before the fix)
+  status: fixed
+  resolution: 'knowledge: every header field is read through one checked accessor and a truncated observation header is
+    refused; every prefix of the fixture is answered, and one cut before its rows is refused (a cut among the rows cannot be
+    told from fewer rows: the format records no row count)'

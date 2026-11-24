@@ -15,6 +15,7 @@ mod external;
 mod factory_run;
 mod fakes;
 mod foreach;
+mod fuzz;
 mod generations;
 mod golden;
 mod graph;

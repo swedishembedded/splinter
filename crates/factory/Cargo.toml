@@ -31,6 +31,8 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
+splinter-conformance = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 ed25519-dalek = { workspace = true }
