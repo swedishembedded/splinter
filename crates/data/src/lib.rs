@@ -70,6 +70,7 @@
 
 #![warn(missing_docs)]
 
+pub mod audio_folder;
 mod block_split;
 pub mod conversation_pg;
 mod corpus;

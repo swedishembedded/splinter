@@ -168,6 +168,7 @@ Every command takes these.
   - [splinter dataset conversations](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
   - [splinter dataset decision-fixtures](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
   - [splinter dataset check](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
+  - [splinter dataset verify-speech](#splinter-dataset-verify-speech) - Hear every recording of an audio dataset (a Hugging Face audio folder's metadata.jsonl) through a recogniser and check it says its transcript
   - [splinter dataset export](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 - [splinter goal](#splinter-goal) - Goal-directed learning
   - [splinter goal admit](#splinter-goal-admit) - Admit documents into a selection of learning material
@@ -1583,6 +1584,7 @@ Subcommands:
 - [`conversations`](#splinter-dataset-conversations) - Build a policy-gradient dataset from graded conversations with a counterpart (a client, a student)
 - [`decision-fixtures`](#splinter-dataset-decision-fixtures) - Write labelled decision fixtures (one example per labelled choice question) from the run records of an ablation benchmark output directory, split by task family and seed so that no task is in two splits
 - [`check`](#splinter-dataset-check) - Have the trainer read a stored dataset before any device is claimed
+- [`verify-speech`](#splinter-dataset-verify-speech) - Hear every recording of an audio dataset (a Hugging Face audio folder's metadata.jsonl) through a recogniser and check it says its transcript
 - [`export`](#splinter-dataset-export) - Copy a dataset and its manifest into a directory
 
 #### splinter dataset build
@@ -1694,6 +1696,28 @@ Options:
 
 - `--from <REF>`: The model the training starts from, as `train --from` names it: its base's tokenizer and chat template read the records. Without it, the policy.
 - `--max-block <TOKENS>`: The training row to check against, in tokens: longer examples are counted. Without it, the widest row brain takes.
+
+#### splinter dataset verify-speech
+
+Hear every recording of an audio dataset (a Hugging Face audio folder's metadata.jsonl) through a recogniser and check it says its transcript: a different text, a take read twice or cut short fails, a close but imperfect hearing is for review. The verdict and its evidence are written into each row; exits 1 unless every recording passes
+
+```text
+splinter dataset verify-speech [OPTIONS] <METADATA>
+```
+
+Arguments:
+
+- `<METADATA>` (required): The audio folder's metadata.jsonl: one row per recording, its `file_name` relative to this file's directory. Any format the brain server reads (WAV at any rate and channel count, Ogg/Opus, WebM/Opus)
+
+Options:
+
+- `--text-column <COLUMN>`: The column holding each recording's transcript. Default: `text`.
+- `--recognizer <MODEL>`: The recognition model, as the brain server lists it. Qwen3-ASR hears Swedish and English alike. Default: `brain/qwen3asr`.
+- `--pass-at <F>`: At or above this similarity (letters and digits compared, spacing and punctuation ignored) a recording passes. Default: `0.9`.
+- `--fail-below <F>`: Below this similarity a recording fails; between the two it is for review. Default: `0.6`.
+- `--min-length-ratio <F>`: The shortest hearing, over the transcript's length, that passes: a take cut short is below it. Default: `0.8`.
+- `--max-length-ratio <F>`: The longest hearing, over the transcript's length, that passes: a take read twice is above it. Default: `1.25`.
+- `--rehear`: Hear every recording again, even one unchanged since this recogniser last heard it.
 
 #### splinter dataset export
 

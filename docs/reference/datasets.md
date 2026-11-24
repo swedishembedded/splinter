@@ -345,3 +345,24 @@ example (total, min, mean, p50, p90, p99, max), the examples that supervise noth
 pairing policy or class weights its manifest records and the tokenizers its records name. It exits 1 when the trainer
 refuses any record or the records name more than one tokenizer. It asks a brain service started with `--training --artifact-store DIR`, with that directory given as
 `--brain-artifact-store`.
+
+## Checking recorded speech against its transcripts
+
+`splinter dataset verify-speech METADATA` checks an audio dataset in the Hugging Face audio-folder layout (a
+`metadata.jsonl` whose rows name their recording in `file_name`, relative to the file, and its transcript in `text`,
+or the column `--text-column` names) before it trains anything. Each recording is sent as it is to the brain
+server's transcription route, which reads WAV at any rate and channel count, Ogg/Opus and WebM/Opus, and what the
+recogniser (`--recognizer`, default `brain/qwen3asr`, which hears Swedish and English) heard is compared with the
+transcript on letters and digits alone: spacing, punctuation, case and bracketed marks such as `[laughter]` do not
+count, so neither does a recogniser joining or splitting compounds. Two numbers judge a take:
+
+- the similarity, one minus the character edit distance over the transcript's length: at least `--pass-at` (0.90)
+  passes, below `--fail-below` (0.60) fails, and between the two is for review;
+- the heard length over the transcript's, which must lie within `--min-length-ratio` and `--max-length-ratio`
+  (0.80 to 1.25) whatever the similarity: a take read twice is near 2, one cut short below 0.8.
+
+The verdict is written into each row with its evidence: `asr_model`, `asr_text`, `asr_similarity`,
+`asr_length_ratio`, `asr_audio_sha256`, `validation` (`pass`, `review` or `fail`) and `validation_reason`; every other
+column keeps its value and its place. A recording whose file and recogniser are those of its last hearing is not heard
+again, only judged again against the transcript as it now is (`--rehear` hears every one). A file that is missing or
+that the server cannot decode fails with the reason. The command exits 1 unless every recording passes.

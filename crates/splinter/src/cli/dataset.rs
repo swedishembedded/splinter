@@ -363,6 +363,43 @@ pub struct CheckArgs {
     pub max_block: Option<u32>,
 }
 
+/// `dataset verify-speech`.
+#[derive(Debug, clap::Args)]
+pub struct VerifySpeechArgs {
+    /// The audio folder's metadata.jsonl: one row per recording, its
+    /// `file_name` relative to this file's directory. Any format the brain
+    /// server reads (WAV at any rate and channel count, Ogg/Opus, WebM/Opus).
+    #[arg(value_name = "METADATA")]
+    pub metadata: std::path::PathBuf,
+    /// The column holding each recording's transcript.
+    #[arg(long, default_value = "text", value_name = "COLUMN")]
+    pub text_column: String,
+    /// The recognition model, as the brain server lists it. Qwen3-ASR hears
+    /// Swedish and English alike.
+    #[arg(long, default_value = "brain/qwen3asr", value_name = "MODEL")]
+    pub recognizer: String,
+    /// At or above this similarity (letters and digits compared, spacing and
+    /// punctuation ignored) a recording passes.
+    #[arg(long, default_value_t = 0.90, value_name = "F")]
+    pub pass_at: f64,
+    /// Below this similarity a recording fails; between the two it is for
+    /// review.
+    #[arg(long, default_value_t = 0.60, value_name = "F")]
+    pub fail_below: f64,
+    /// The shortest hearing, over the transcript's length, that passes: a
+    /// take cut short is below it.
+    #[arg(long, default_value_t = 0.80, value_name = "F")]
+    pub min_length_ratio: f64,
+    /// The longest hearing, over the transcript's length, that passes: a take
+    /// read twice is above it.
+    #[arg(long, default_value_t = 1.25, value_name = "F")]
+    pub max_length_ratio: f64,
+    /// Hear every recording again, even one unchanged since this recogniser
+    /// last heard it.
+    #[arg(long)]
+    pub rehear: bool,
+}
+
 fn history(text: &str) -> Result<HistoryCuration, String> {
     HistoryCuration::parse(text)
 }

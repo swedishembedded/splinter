@@ -37,9 +37,11 @@ use splinter_store::lineage::DatasetLineage;
 mod applicable;
 mod check;
 mod request;
+mod speech;
 
 pub use check::{check, DatasetCheck};
 pub use request::{BuildRequest, TransitionBuild, VoiceBuild};
+pub use speech::{verify_speech, HeardRow, SpeechCheck, SpeechVerification};
 
 use crate::bench::practice_material::PracticeFacts;
 use crate::describe::{describe, Described};

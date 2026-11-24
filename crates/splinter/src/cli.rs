@@ -593,6 +593,12 @@ pub enum DatasetCommand {
     DecisionFixtures(DecisionFixturesArgs),
     /// Have the trainer read a stored dataset before any device is claimed.
     Check(CheckArgs),
+    /// Hear every recording of an audio dataset (a Hugging Face audio folder's
+    /// metadata.jsonl) through a recogniser and check it says its transcript:
+    /// a different text, a take read twice or cut short fails, a close but
+    /// imperfect hearing is for review. The verdict and its evidence are
+    /// written into each row; exits 1 unless every recording passes.
+    VerifySpeech(VerifySpeechArgs),
     /// Copy a dataset and its manifest into a directory.
     Export {
         /// The dataset, by id or unique prefix.
@@ -651,7 +657,9 @@ pub use config::ConfigCommand;
 pub use consolidate::ConsolidateArgs;
 pub use control::ControlKind;
 pub use corrections::CorrectionsArgs;
-pub use dataset::{BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs};
+pub use dataset::{
+    BuildArgs, CheckArgs, ConversationsArgs, DecisionFixturesArgs, VerifySpeechArgs,
+};
 pub use env::{EnvCommand, ObjectiveArgs};
 pub use eval::{
     EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseArgs, ReleaseCommand,

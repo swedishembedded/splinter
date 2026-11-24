@@ -17,6 +17,16 @@ recording of either man exists (`splinter_core::speech::Portrayal`).
 
 Recognition is `POST /v1/audio/transcriptions` and synthesis `POST /v1/audio/speech`; the word error rate is Splinter's own arithmetic (`splinter_model::speech::wer`). Retired, because brain's API has no route for them: the speech ingress and projector (`ingress-train`), the speech-native listener (`listen-turns`), the TTS policy trainer (`speech-rl`), `takes` and `bundle` (with `splinter_core::speech_bundle`). The milestones below that name them are history. A speaker profile's seed reaches brain as `seed` (checked against the `X-Seed` it answers), and a profile may imitate a recorded voice (`VoiceReference`, voice-loop `--voice`, `--voice-text`, `--portrayal`), sent as `input_references` (2026-11-24; brain's `/audio/speech` took neither before).
 
+## Status 2026-11-24: recorded datasets are checked before they train
+
+`splinter dataset verify-speech` hears every recording of an audio-folder dataset through brain's
+transcription route and judges it against its transcript on letters and digits (pass, review, fail),
+writing the verdict into each row. On the 40 takes of one speaker's Swedish and English voice dataset
+with Qwen3-ASR: 34 pass and 6 are for review. The hearings of the six differ from their transcripts where the
+recogniser mishears Swedish words or writes numbers as digits the transcripts spell out; nobody has
+listened to them yet. Open: a recogniser
+that hears Swedish well enough that its review band is mostly real misreads.
+
 ## Rules for this effort
 
 - Every stage is measured on its own; a rate or latency that was not measured

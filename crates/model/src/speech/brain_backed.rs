@@ -84,16 +84,30 @@ impl BrainRecognizer {
     }
 }
 
-impl Recognizer for BrainRecognizer {
-    fn transcribe(&self, clip: &Clip) -> Result<Transcription, PolicyError> {
+impl BrainRecognizer {
+    /// What the recording `bytes` says, sent as they are: the server reads the
+    /// container from the bytes (WAV at any rate and channel count, Ogg/Opus,
+    /// WebM/Opus), mixes it to mono and resamples it for the model, and
+    /// refuses one it cannot decode, naming why.
+    ///
+    /// # Errors
+    /// The server cannot be reached, refuses the recording, or answers no text.
+    pub fn transcribe_recording(&self, bytes: &[u8]) -> Result<Transcription, PolicyError> {
         let failed = |reason: String| PolicyError::Transcription {
             reason: format!("{} at {}: {reason}", self.model, self.url),
+        };
+        let format = if bytes.starts_with(b"OggS") {
+            "ogg"
+        } else if bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+            "webm"
+        } else {
+            "wav"
         };
         let body = json!({
             "model": self.model,
             "input_audio": {
-                "data": base64::engine::general_purpose::STANDARD.encode(clip.to_wav()),
-                "format": "wav",
+                "data": base64::engine::general_purpose::STANDARD.encode(bytes),
+                "format": format,
             },
         });
         let reply = post_json(
@@ -109,6 +123,12 @@ impl Recognizer for BrainRecognizer {
         Ok(Transcription {
             text: text.trim().to_string(),
         })
+    }
+}
+
+impl Recognizer for BrainRecognizer {
+    fn transcribe(&self, clip: &Clip) -> Result<Transcription, PolicyError> {
+        self.transcribe_recording(&clip.to_wav())
     }
 }
 

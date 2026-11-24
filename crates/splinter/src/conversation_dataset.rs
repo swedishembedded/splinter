@@ -51,6 +51,40 @@ pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<bo
                 holdout_suites: args.holdout_suites,
             },
         )?,
+        DatasetCommand::VerifySpeech(args) => {
+            if !(0.0..=1.0).contains(&args.fail_below)
+                || args.fail_below > args.pass_at
+                || args.pass_at > 1.0
+            {
+                return Err(Error::Refused(format!(
+                    "--fail-below {} and --pass-at {} must satisfy 0 <= fail-below <= pass-at <= 1",
+                    args.fail_below, args.pass_at
+                )));
+            }
+            if !(args.min_length_ratio > 0.0
+                && args.min_length_ratio <= 1.0
+                && args.max_length_ratio >= 1.0)
+            {
+                return Err(Error::Refused(format!(
+                    "--min-length-ratio {} must be in (0, 1] and --max-length-ratio {} at least 1",
+                    args.min_length_ratio, args.max_length_ratio
+                )));
+            }
+            let check = splinter_sdk::datasets::SpeechCheck {
+                metadata: args.metadata,
+                text_column: args.text_column,
+                recognizer: args.recognizer,
+                policy: splinter_sdk::model::speech::MatchPolicy {
+                    pass_at: args.pass_at,
+                    fail_below: args.fail_below,
+                    length_ratio: (args.min_length_ratio, args.max_length_ratio),
+                },
+                rehear: args.rehear,
+            };
+            let verified = splinter_sdk::datasets::verify_speech(ctx, &check)?;
+            emit(json, &verified);
+            return Ok(verified.passes());
+        }
         DatasetCommand::Check(args) => {
             let checked = check(ctx, &args.id, args.from.as_ref(), args.max_block)?;
             emit(json, &checked);
@@ -62,6 +96,42 @@ pub fn dispatch(ctx: &Context, json: bool, command: DatasetCommand) -> Result<bo
         }
     }
     Ok(true)
+}
+
+impl crate::output::Report for splinter_sdk::datasets::SpeechVerification {
+    fn human(&self) -> String {
+        use std::fmt::Write as _;
+        let mut out = String::new();
+        let heard = self.rows.iter().filter(|r| r.heard_now).count();
+        let _ = writeln!(
+            out,
+            "{} recordings heard by {} ({heard} now): {} pass, {} review, {} fail",
+            self.rows.len(),
+            self.recognizer,
+            self.passed,
+            self.review,
+            self.failed
+        );
+        for row in self
+            .rows
+            .iter()
+            .filter(|r| r.verdict != splinter_sdk::model::speech::Verdict::Pass)
+        {
+            let verdict = if row.verdict == splinter_sdk::model::speech::Verdict::Fail {
+                "FAIL"
+            } else {
+                "review"
+            };
+            let _ = writeln!(
+                out,
+                "  {verdict:6} {}: {}",
+                row.id,
+                row.reason.as_deref().unwrap_or("")
+            );
+        }
+        let _ = writeln!(out, "verdicts written to {}", self.metadata);
+        out
+    }
 }
 
 impl crate::output::Report for splinter_sdk::datasets::DatasetCheck {
