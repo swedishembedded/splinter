@@ -21,6 +21,7 @@ mod claim_supersession;
 mod claim_task;
 mod denoise_task;
 mod external_bm25;
+mod external_capture;
 mod external_retrieval;
 mod external_sections;
 mod external_skill_order;

@@ -196,8 +196,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   corpus also reordered; BM25, dense and fused rankings equal an independent implementation's, and the fixture
   records recall, precision, MRR and nDCG of each against rank_bm25's (`validation/oracles/retrieval/benchmark.py`).
 - source sections (3A): documents built section by section, whose spans are known by construction; the sectioner
-  returns exactly them (`validation/oracles/knowledge/sections.py`), four mutants killed. Capture of archives,
-  nested repositories and command output against such ground truth is not built.
+  returns exactly them (`validation/oracles/knowledge/sections.py`), four mutants killed; repository capture likewise
+  (`validation/oracles/knowledge/capture_tree.py`: links, non-text, oversized, non-UTF-8 names, ignored and nested
+  repositories), four mutants killed. Revisions (`git archive` snapshots) and command runs keep their own specs.
 - claims and evidence (3B, G-NEW-17 found): the existing specs cover verbatim quotes, the agent's words, missing
   terms, supersession and reinforcement; the planted-instruction case found that a fact could rest on tool output
   alone, and such a claim is now refused.
@@ -214,5 +215,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   than one live path (G-NEW-14, a refactor of live callers); the preference, feedback, distill and retrieval
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
-  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), capture of archives, nested repositories and command output (3A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds needing a run's runtime, sources or judge (4A), scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
