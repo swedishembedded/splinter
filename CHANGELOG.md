@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (reruns of the tasks an evaluation arm failed)
+- An evaluation plan takes `rerun_failed: N`: after one attempt of every task, a task an arm did not pass is attempted up to N more times on its own, and a task that passed is not attempted again. A task is solved when any attempt passed; the paired test runs over tasks, so both arms get the same chances at a fraction of the cost of N+1 attempts of every task.
+
 ### Added (a policy-gradient run names where its behaviour log-probabilities come from)
 - `model.train` params take `behaviour: recorded|start` for rollout datasets. Rollouts collected through an agent carry no sampler log-probabilities, so brain refused the job; `start` takes them under the policy the run starts from, which is exact when the attempts came from that policy (the base model or the champion served as the start).
 

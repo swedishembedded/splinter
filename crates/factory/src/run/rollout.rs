@@ -94,6 +94,7 @@ pub fn trials_of(view: &Path) -> Result<Vec<TrialResult>, RunError> {
 
 /// One set of tasks attempted by one agent on one model in one environment:
 /// a rollout pass, or an arm of an evaluation.
+#[derive(Clone)]
 pub(crate) struct Arm<'r> {
     /// The slot namespace in the run state, unique in the run.
     pub name: String,

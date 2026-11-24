@@ -53,6 +53,9 @@ use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 use crate::tree::link_tree;
 
+mod report;
+mod reruns;
+
 /// The operation of an evaluation's pinned tasks.
 const EVAL_TASKS: &str = "tasks.pin@1";
 /// The operation of an evaluation's arms.
@@ -425,11 +428,12 @@ pub(crate) fn produce(
         briefs: None,
         continue_from: None,
     };
-    let (base_trials, base_product) = arm_trials(
+    let (base_trials, base_product) = reruns::with_reruns(
         factory,
         &baseline_key,
         &baseline,
         vec![("tasks".into(), tasks_digest.clone())],
+        plan.rerun_failed,
     )?;
     // The candidate is served again here: the trainer's server may have
     // restarted since it was trained.
@@ -470,7 +474,8 @@ pub(crate) fn produce(
             factory.product(&training_key)?.1.digest(),
         ),
     ];
-    let (cand_trials, cand_product) = arm_trials(factory, &key, &candidate_arm, inputs)?;
+    let (cand_trials, cand_product) =
+        reruns::with_reruns(factory, &key, &candidate_arm, inputs, plan.rerun_failed)?;
     let alpha = plan.decision.alpha / f64::from(comparisons);
     let (decision, statistics) = decide(
         &base_trials,
@@ -500,7 +505,8 @@ pub(crate) fn produce(
         signature: None,
     };
     write_json(&staging.path().join(RESULT_FILE), &result)?;
-    std::fs::write(staging.path().join("report.md"), report(&result)).map_err(io(staging.path()))
+    std::fs::write(staging.path().join("report.md"), report::report(&result))
+        .map_err(io(staging.path()))
 }
 
 /// The base model the `model.train` stage `training` trained from.
@@ -752,40 +758,8 @@ fn protected(
             .map(str::to_owned),
     };
     write_json(&staging.path().join(RESULT_FILE), &result)?;
-    std::fs::write(staging.path().join("report.md"), report(&result)).map_err(io(staging.path()))
-}
-
-/// The decision for a person.
-fn report(result: &EvalResult) -> String {
-    let mut out = format!("# Evaluation of {}\n\n", result.name);
-    if let (Some(baseline), Some(candidate)) = (&result.baseline, &result.candidate) {
-        out.push_str(
-            "| arm | model | trials | counted | passed | pass rate (counted) | pass rate (all trials) |\n|---|---|---|---|---|---|---|\n",
-        );
-        for (arm, a) in [("baseline", baseline), ("candidate", candidate)] {
-            let rate = |r: Option<f64>| r.map_or_else(|| "-".into(), |r| format!("{r:.3}"));
-            out.push_str(&format!(
-                "| {arm} | {} | {} | {} | {} | {} | {} |\n",
-                a.model,
-                a.trials,
-                a.counted,
-                a.passed,
-                rate(a.pass_rate),
-                rate(a.pass_rate_of_trials)
-            ));
-        }
-        out.push('\n');
-    } else {
-        out.push_str(
-            "A protected evaluation: the examiner's signed verdict is `verdict.json`.\n\n",
-        );
-    }
-    out.push_str(&format!(
-        "**Decision: {:?}**\n\n```json\n{}\n```\n",
-        result.decision,
-        serde_json::to_string_pretty(&result.statistics).unwrap_or_default()
-    ));
-    out
+    std::fs::write(staging.path().join("report.md"), report::report(&result))
+        .map_err(io(staging.path()))
 }
 
 /// The evaluation result of a committed eval view.

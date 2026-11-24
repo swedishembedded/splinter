@@ -81,6 +81,11 @@ pub struct EvalPlan {
     pub environment: Option<String>,
     /// Attempts per task and arm.
     pub attempts: u32,
+    /// Reruns of a task an arm failed, at most this many more attempts of that task alone
+    /// (0: none). A task counts as solved when any of its attempts passed; the reruns cost
+    /// only the tasks that need them.
+    #[serde(default)]
+    pub rerun_failed: u32,
     /// Arms run at once.
     #[serde(default = "four")]
     pub concurrency: u32,

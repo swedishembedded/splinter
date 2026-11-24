@@ -79,3 +79,37 @@ fn an_evaluation_has_one_source_of_tasks() {
     let none = refused(RECIPE.replace("plan: eval/dev.yaml", "plan: eval/given.yaml"));
     assert!(none.contains("bind the stage's tasks"), "{none}");
 }
+
+/// Reruns cost only the tasks that need them: a task an arm passed is attempted once, a task it
+/// failed is attempted again up to `rerun_failed` more times.
+#[test]
+fn only_the_tasks_an_arm_failed_are_rerun() {
+    let repo = repo();
+    // seed: the plan must state its seed; nothing here draws from it.
+    repo.write(
+        "eval/given.yaml",
+        "schema: splinter.evalplan/v1\nsplit: eval\nenvironment: environments/vim.yaml\n\
+         attempts: 1\nrerun_failed: 2\nseed: 5\ndecision: { alpha: 0.05 }\n",
+    );
+    let evaluations = |outcome: Outcome| {
+        // Training tasks pass either way; the held task is the one under evaluation.
+        let backend = FakeBackend::with(Outcome::Pass);
+        backend.script("eval/001-held", &[outcome; 20]);
+        let trainer = FakeTrainer::default();
+        let dir = tempfile::tempdir().unwrap();
+        run(&resolved(&repo, &given()), dir.path(), &backend, &trainer).unwrap();
+        backend
+            .executed()
+            .iter()
+            .filter(|s| s.slot.pass.contains("baseline") || s.slot.pass.contains(".candidate"))
+            .count()
+    };
+    // One task: the baseline both evaluation stages share, and a candidate each.
+    let arms = 3;
+    assert_eq!(evaluations(Outcome::Pass), arms, "a pass is not rerun");
+    assert_eq!(
+        evaluations(Outcome::Fail),
+        arms * 3,
+        "a failure is rerun twice"
+    );
+}

@@ -616,7 +616,11 @@ compiles its collection evaluates on the same compiled tasks:
 - **Evaluation** (`evaluation`). A development plan runs a baseline arm (once,
   shared by every evaluation with the same plan and baseline) and a candidate arm under the same agent, arguments, environment,
   tasks, attempts and seeds, and decides by the exact one-sided paired sign test
-  at the plan's alpha divided among the stage's `comparisons`. A protected plan names the
+  at the plan's alpha divided among the stage's `comparisons`. A plan's
+  `rerun_failed: N` gives a task an arm failed up to N more attempts of that task
+  alone (one attempt of every task first, nothing more for a task that passed); a
+  task counts as solved when any of its attempts passed, both arms get the same
+  chances, and the sign test runs over tasks. A protected plan names the
   task repository's examiner instead of tasks, whose sealed tasks never leave it:
 
   ```yaml
