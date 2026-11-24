@@ -23,7 +23,8 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use splinter_sdk::measure::overlap::RUN;
-use splinter_sdk::measure::verifiers::quotation::{contains_words as contains_run, words};
+use splinter_sdk::measure::verifiers::quotation::contains_words as contains_run;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::keys::{missing, Key};
 

@@ -627,9 +627,14 @@ gaps:
     each needs its own golden.
   severity: medium
   confidence: medium
-  status: confirmed
-  resolution: 'eight word splitters with different rules: one tokenizer module per purpose, each with its golden, is a Phase
-    16 cleanup'
+  status: fixed
+  resolution: 'one definition of a word, splinter_core::text::words (a lower-cased run of alphanumeric characters, specified
+    in text::tests), replaces ten identical copies (dedup, facts, claim tasks, BM25, the sealed-probe filter, memorisation,
+    quotation, self-containment, voice descriptions, word error rate), and the content-word filters of claim pairing, grounding,
+    judging and teaching are filters over it, so dedup, grounding, pairing and retrieval split text alike and differ only
+    in what they keep. Splitters left by purpose: exposure tokens on whitespace (a secret is compared with its punctuation),
+    redaction keeps byte spans, workspace contracts split identifiers, speech keeps apostrophes, device and distributed
+    parsers split command lines; expdb keeps its own copy, a foundation crate below core by the layering rules'
 - id: G-EK-06
   source_id: null
   where: crates/pipelines/src/release/statistics.rs:54-55

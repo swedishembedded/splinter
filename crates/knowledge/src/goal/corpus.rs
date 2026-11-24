@@ -21,8 +21,8 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use super::facts::words;
 use crate::sections::{sections, MARKDOWN};
+use splinter_core::text::words;
 
 pub use crate::objects::{Document, Provenance, NEUTRAL_AUTHORITY};
 

@@ -15,15 +15,7 @@
 //! The errors are the fewest word substitutions, insertions and deletions that
 //! turn the reference into the hypothesis (a word-level Levenshtein distance).
 
-/// The words of `text` as they are compared: letters and digits only, lower
-/// case.
-#[must_use]
-pub fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
+use splinter_core::text::words;
 
 /// The fewest word substitutions, insertions and deletions that turn
 /// `reference` into `hypothesis`.

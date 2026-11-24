@@ -13,7 +13,8 @@
 //! A model's own claim to know something is not evidence. These checks read
 //! the answer text and compare it with a reference the model never saw.
 
-use super::quotation::{quotations, words, TextIndex};
+use super::quotation::{quotations, TextIndex};
+use splinter_core::text::words;
 
 /// The answer a model gave, after its reasoning: the visible reply when it
 /// closed its reasoning block; when it finished without closing it, everything

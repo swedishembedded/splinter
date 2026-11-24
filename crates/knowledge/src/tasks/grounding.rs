@@ -17,6 +17,7 @@
 use std::collections::BTreeSet;
 
 use crate::gates::answer_numbers_traceable;
+use splinter_core::text::words;
 
 /// Words too common to show that a text is supported.
 pub const STOPWORDS: &[&str] = &[
@@ -62,8 +63,8 @@ pub fn support(reference: &str, evidence: &str) -> Support {
 /// The distinct content words of `text`; see the module documentation.
 #[must_use]
 pub fn content_words(text: &str) -> BTreeSet<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .map(str::to_lowercase)
+    words(text)
+        .into_iter()
         .filter(|word| {
             word.chars().any(|c| c.is_ascii_digit())
                 || (word.chars().count() >= 3 && !STOPWORDS.contains(&word.as_str()))

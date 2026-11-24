@@ -19,6 +19,7 @@
 //! from sentences or by a model.
 
 use serde::{Deserialize, Serialize};
+use splinter_core::text::words;
 
 /// What a fact is about: an attribute of an entity, in one of two forms.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -119,15 +120,6 @@ fn fact(form: Form, attribute: &str, entity: &str, value: &str) -> Option<Fact> 
         },
         value: value.to_string(),
     })
-}
-
-/// The lower-case alphanumeric words of `text`.
-#[must_use]
-pub fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }
 
 /// Whether `answer` states `value`: the value's words appear in the answer

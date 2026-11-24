@@ -21,6 +21,7 @@
 //! against it: an honest description of a passage names what the passage
 //! names.
 
+use splinter_core::text::words;
 use std::collections::HashSet;
 
 /// The fewest words a description holds: about 30 tokens.
@@ -60,15 +61,6 @@ impl std::fmt::Display for Rejection {
             Self::Copies => "copies",
         })
     }
-}
-
-/// The words of `text`, lower-cased, with everything that is not a letter
-/// or a digit taken as the space between them.
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }
 
 /// Every run of `n` consecutive words of `words`.

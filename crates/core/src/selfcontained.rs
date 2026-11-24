@@ -17,6 +17,7 @@
 
 use crate::experience::{Privileged, PrivilegedKind};
 use crate::kinds::{EXECUTABLE_CHECK, GENERATED_TEST, OUTPUT_CHECK, WORKSPACE_CHECK};
+use crate::text::words;
 
 /// Phrases by which an instruction points at material outside itself.
 /// Matched case-insensitively with runs of whitespace collapsed. The list
@@ -143,15 +144,6 @@ pub fn check_self_contained(
         }
     }
     Ok(())
-}
-
-/// The words of `text`, lower-cased, punctuation and whitespace aside: the
-/// units a quoted run is counted in.
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }
 
 #[cfg(test)]

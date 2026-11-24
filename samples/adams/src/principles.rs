@@ -21,7 +21,8 @@
 use std::collections::{BTreeSet, HashSet};
 
 use splinter_sdk::agent::schemars::JsonSchema;
-use splinter_sdk::measure::verifiers::quotation::{contains_words as occurs, words};
+use splinter_sdk::measure::verifiers::quotation::contains_words as occurs;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::curate::Document;
 

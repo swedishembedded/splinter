@@ -24,17 +24,10 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::Digest;
 
 use super::analysis::TaskRecord;
+use splinter_core::text::words;
 
 /// The run lengths the overlap is measured at.
 pub const RUNS: [usize; 3] = [8, 13, 20];
-
-/// The words of `text`: lower-case, letters and digits only.
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
 
 /// A hash of `run` that does not change between runs of the program.
 fn hash(run: &[String]) -> u64 {

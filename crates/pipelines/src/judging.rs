@@ -78,9 +78,9 @@ pub fn controls(
 
 /// The lower-case words of `text` of more than three letters, as a set.
 fn content_words(text: &str) -> std::collections::BTreeSet<String> {
-    text.split(|c: char| !c.is_alphanumeric())
+    splinter_core::text::words(text)
+        .into_iter()
         .filter(|w| w.chars().count() > 3)
-        .map(str::to_lowercase)
         .collect()
 }
 

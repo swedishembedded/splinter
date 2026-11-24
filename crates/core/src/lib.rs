@@ -116,6 +116,7 @@ pub mod speech_lesson;
 pub mod spoken;
 pub mod teaching;
 pub mod terms;
+pub mod text;
 pub mod tool_calls;
 pub mod training;
 mod training_parallel;

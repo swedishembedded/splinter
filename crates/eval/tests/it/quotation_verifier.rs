@@ -19,8 +19,9 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{
     Digest, Environment, Experience, Privileged, PrivilegedKind, Provenance, Span, Task,
 };
+use splinter_core::text::words;
 use splinter_eval::verifiers::quotation::{
-    quotations, words, EvidenceText, QuotationPolicy, QuotationVerifier, TextIndex,
+    quotations, EvidenceText, QuotationPolicy, QuotationVerifier, TextIndex,
 };
 use splinter_eval::verifiers::{annotation, Verifier, VerifyError};
 
@@ -212,7 +213,8 @@ fn quotations_are_the_marked_passages_of_enough_words() {
 
 #[test]
 fn a_run_of_words_is_found_only_as_consecutive_words_and_an_empty_run_is_nowhere() {
-    use splinter_eval::verifiers::quotation::{contains_words, words};
+    use splinter_core::text::words;
+    use splinter_eval::verifiers::quotation::contains_words;
     let text = words("The steward waited; the water kept rising all night.");
     assert!(contains_words(&text, &words("the water kept rising")));
     assert!(

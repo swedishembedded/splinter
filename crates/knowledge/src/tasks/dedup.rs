@@ -31,6 +31,7 @@ use std::collections::{BTreeSet, HashSet};
 use splinter_core::digest::Digest;
 
 use crate::gates::normalize;
+use splinter_core::text::words;
 
 /// What an instruction is compared by: the content of its first fenced block
 /// when it shows one - a task that shows material is that material, and two
@@ -205,14 +206,6 @@ pub fn contradictions(
 fn digest(instruction: &str) -> Digest {
     Digest::of(normalize(instruction).as_bytes())
 }
-
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
-
 /// `text`'s words joined by single spaces, with a space before and after,
 /// so a substring match is a match of whole words.
 fn spaced_words(text: &str) -> String {

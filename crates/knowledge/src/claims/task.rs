@@ -30,6 +30,7 @@ use splinter_store::sources::SourceStore;
 use super::terms::names_of;
 use crate::tasks::grounding::STOPWORDS;
 use crate::tasks::TAUGHT;
+use splinter_core::text::words;
 
 /// A task made from a claim, with what a variant must keep naming.
 #[derive(Clone, Debug, PartialEq)]
@@ -156,11 +157,4 @@ pub fn subject_of(question: &str, statement: &str) -> Option<String> {
         }
     }
     best.map(str::to_string)
-}
-
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }

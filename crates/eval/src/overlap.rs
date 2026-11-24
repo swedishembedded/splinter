@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 use splinter_core::digest::Digest;
 
-use crate::verifiers::quotation::words;
+use splinter_core::text::words;
 
 /// Words in a run: a stretch of this many words in the same order is a
 /// passage, not a coincidence of idiom.

@@ -12,20 +12,13 @@
 use std::collections::HashMap;
 
 use super::{Hit, Passage};
+use splinter_core::text::words;
 
 /// How fast repeating a word stops adding to a score.
 const K1: f64 = 1.2;
 
 /// How much a passage's length counts against it.
 const B: f64 = 0.75;
-
-/// The lower-case alphanumeric words of `text`.
-fn tokens(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
 
 /// BM25 over a fixed set of passages.
 pub struct Bm25 {
@@ -43,7 +36,7 @@ impl Bm25 {
         let mut holders: HashMap<String, usize> = HashMap::new();
         let mut frequencies = Vec::with_capacity(passages.len());
         for passage in passages {
-            let words = tokens(&passage.text);
+            let words = words(&passage.text);
             let mut counts: HashMap<String, u32> = HashMap::new();
             for word in &words {
                 *counts.entry(word.clone()).or_default() += 1;
@@ -69,7 +62,7 @@ impl Bm25 {
     /// passages sharing no word with it are not hits.
     #[must_use]
     pub fn search(&self, query: &str, k: usize) -> Vec<Hit> {
-        let mut terms = tokens(query);
+        let mut terms = words(query);
         terms.sort();
         terms.dedup();
         let n = self.frequencies.len() as f64;

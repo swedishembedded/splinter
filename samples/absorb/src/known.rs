@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
-use splinter_sdk::measure::verifiers::quotation::words;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::facts::{admit, Evidence, Fact, Manifest, Origin, Proposal, Refusal};
 use crate::grading::judge_model;

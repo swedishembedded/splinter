@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use splinter_sdk::agent::schemars::{self, JsonSchema};
 use splinter_sdk::agent::solve::Model;
 use splinter_sdk::agent::typed::TypedCall;
-use splinter_sdk::measure::verifiers::quotation::words;
+use splinter_sdk::vocabulary::text::words;
 use splinter_sdk::Context;
 
 use crate::facts::Fact;

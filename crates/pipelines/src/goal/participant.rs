@@ -22,8 +22,8 @@ use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use splinter_core::text::words;
 use splinter_knowledge::goal::corpus::SectionId;
-use splinter_knowledge::goal::facts::words;
 use splinter_knowledge::goal::hard::canonical;
 use splinter_knowledge::retrieve::{fuse, Bm25, Dense, Embedder, Hit, Passage};
 

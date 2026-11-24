@@ -20,7 +20,8 @@
 
 use std::collections::HashSet;
 
-use splinter_sdk::measure::verifiers::quotation::{quotations, words};
+use splinter_sdk::measure::verifiers::quotation::quotations;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::curate::Document;
 use splinter_sdk::measure::verifiers::quotation::contains_words as occurs;

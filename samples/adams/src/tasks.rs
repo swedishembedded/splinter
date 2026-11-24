@@ -244,7 +244,7 @@ pub fn continuation_ok(answer: &str, reference: &str) -> bool {
 }
 
 fn normalised_words(text: &str) -> Vec<String> {
-    splinter_sdk::measure::verifiers::quotation::words(text)
+    splinter_sdk::vocabulary::text::words(text)
 }
 
 /// Whether `answer` is a right answer to `task`.

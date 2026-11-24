@@ -31,6 +31,7 @@ use splinter_core::experience::{Experience, Task};
 use splinter_store::sources::SourceStore;
 
 use super::{single_reference, Finding, Verifier, VerifyError};
+use splinter_core::text::words;
 
 /// Where the source text of a task comes from.
 pub trait EvidenceText: Send + Sync {
@@ -106,16 +107,6 @@ impl QuotationVerifier {
             policy,
         }
     }
-}
-
-/// Lower-case alphanumeric words of `text`: what two printings of a passage
-/// agree on once spacing, punctuation and capitals are set aside.
-#[must_use]
-pub fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }
 
 /// Whether `haystack` holds `needle` as consecutive words. An empty `needle`

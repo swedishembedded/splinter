@@ -20,7 +20,7 @@
 
 use splinter_sdk::agent::schemars::JsonSchema;
 use splinter_sdk::agent::typed::TypedCall;
-use splinter_sdk::measure::verifiers::quotation::words;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::curate::Document;
 use crate::helper::Helper;

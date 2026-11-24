@@ -43,10 +43,11 @@ use std::collections::{BTreeSet, HashMap};
 use serde::{Deserialize, Serialize};
 
 use super::corpus::{Candidate, SectionId, Vocabulary};
-use super::facts::{states, words, Fact, FactKey};
+use super::facts::{states, Fact, FactKey};
 use super::gaps::Gap;
 use super::semantic::Semantic;
 use super::source::FactSource;
+use splinter_core::text::words;
 
 /// Something that answers questions: the participant being measured.
 pub trait Examinee {

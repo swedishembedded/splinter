@@ -203,7 +203,7 @@ pub fn without_salutation(body: &str) -> String {
 
 /// Lower-case alphanumeric words of `text`: what two printings of a letter
 /// agree on once spacing, punctuation and capitals are set aside.
-pub use splinter_sdk::measure::verifiers::quotation::words;
+pub use splinter_sdk::vocabulary::text::words;
 
 /// For each letter, the index of the first letter of its family: letters
 /// that print the same text, found by Splinter's own overlap rule over what

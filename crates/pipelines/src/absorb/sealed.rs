@@ -26,6 +26,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use splinter_core::text::words;
 use splinter_data::{Projection, Record, RecordBody};
 use splinter_orchestrator::error::{io, OrchestratorError};
 
@@ -95,14 +96,6 @@ impl std::fmt::Display for Leak {
 #[derive(Clone, Debug, Default)]
 pub struct SealedProbes {
     probes: Vec<Probe>,
-}
-
-/// The lower-cased words of `text`, runs of letters and digits.
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
 }
 
 fn grams(text: &str) -> BTreeSet<Vec<String>> {

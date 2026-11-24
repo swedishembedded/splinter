@@ -536,8 +536,8 @@ fn content_words(text: &str) -> BTreeSet<String> {
         "your", "our", "his", "her", "its", "has", "have", "had", "not", "but", "from", "into",
         "about", "there", "then", "than", "will",
     ];
-    text.split(|c: char| !c.is_alphanumeric())
-        .map(str::to_lowercase)
+    crate::text::words(text)
+        .into_iter()
         .filter(|w| w.len() > 2 && !COMMON.contains(&w.as_str()))
         .map(|w| {
             if w.len() > 3 {

@@ -43,8 +43,8 @@ const NAMELESS_OVERLAP: f64 = 0.5;
 /// The lower-cased words of `text` that say what it is about: at least four
 /// letters or any digit, and no stop word.
 fn content_words(text: &str) -> BTreeSet<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .map(str::to_lowercase)
+    splinter_core::text::words(text)
+        .into_iter()
         .filter(|w| {
             (w.chars().count() >= 4 || w.chars().any(|c| c.is_ascii_digit()))
                 && !STOP_WORDS.contains(&w.as_str())

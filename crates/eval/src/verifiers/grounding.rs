@@ -37,8 +37,9 @@ use splinter_core::annotation::{Producer, Strength};
 use splinter_core::digest::Digest;
 use splinter_core::experience::{Experience, Task};
 
-use super::quotation::{quotations, words, EvidenceText, TextIndex};
+use super::quotation::{quotations, EvidenceText, TextIndex};
 use super::{Finding, Verifier, VerifyError};
+use splinter_core::text::words;
 
 /// How strict the check is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -22,7 +22,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::corpus::{Candidate, Vocabulary};
-use super::facts::{states, words};
+use super::facts::states;
+use splinter_core::text::words;
 
 /// More probes than this are not clustered pairwise.
 pub const MAX_CLUSTERED_PROBES: usize = 4096;

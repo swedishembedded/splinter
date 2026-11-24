@@ -21,7 +21,8 @@ use std::sync::Arc;
 
 use splinter_sdk::agent::schemars::JsonSchema;
 use splinter_sdk::agent::typed::TypedCall;
-use splinter_sdk::measure::verifiers::quotation::{words, TextIndex};
+use splinter_sdk::measure::verifiers::quotation::TextIndex;
+use splinter_sdk::vocabulary::text::words;
 
 use crate::domains::Domain;
 use crate::helper::Helper;
