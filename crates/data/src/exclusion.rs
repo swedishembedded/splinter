@@ -15,7 +15,9 @@ pub enum Exclusion {
     Undecided,
     /// Decided below the view's minimum strength.
     TooWeak,
-    /// Decided fail where the view needs a pass.
+    /// Decided fail where the view needs a pass; or, for any view, the
+    /// attempt broke a constraint (an exposure audit's), which no view admits
+    /// whatever else was decided about it.
     Failed,
     /// No final output where the view needs one.
     NoFinalOutput,

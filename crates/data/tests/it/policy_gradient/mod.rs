@@ -144,6 +144,19 @@ fn add_with(
     calls: Option<&[splinter_core::harness::ModelCall]>,
     tweak: impl FnOnce(&mut [TraceStep]),
 ) {
+    let experience = conversation_of(corpus, trial, shown_images, calls, tweak);
+    let note = graded(&experience, trial, evidence);
+    corpus.insert(experience, vec![note]).unwrap();
+}
+
+/// The experience of one conversation of `trial`, not yet in `corpus`.
+fn conversation_of(
+    corpus: &Corpus,
+    trial: &Trial,
+    shown_images: bool,
+    calls: Option<&[splinter_core::harness::ModelCall]>,
+    tweak: impl FnOnce(&mut [TraceStep]),
+) -> splinter_core::experience::Experience {
     let mut call_step = call(3, "c0", "shell", json!({"command": "ls"}), "part.py");
     call_step.reasoning_content = Some("look".into());
     let mut steps = vec![
@@ -164,9 +177,7 @@ fn add_with(
             splinter_core::harness::RecordedCalls::record("abc", calls).to_value();
     }
     let at = format!("2026-11-01T00:00:00.{:03}Z", corpus.entries().len());
-    let experience = experience(&bench_task(trial.version), trajectory, Some("Done."), &at);
-    let note = graded(&experience, trial, evidence);
-    corpus.insert(experience, vec![note]).unwrap();
+    experience(&bench_task(trial.version), trajectory, Some("Done."), &at)
 }
 
 fn corpus(trials: &[Trial]) -> Corpus {
@@ -712,4 +723,5 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
 }
 
 mod exact_tokens;
+mod identity;
 mod shaping;

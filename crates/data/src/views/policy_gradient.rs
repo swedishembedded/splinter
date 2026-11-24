@@ -17,10 +17,13 @@
 //!   conversations are one rollout. The verdict the bench ingestion records on
 //!   each experience names the trial, the task (id and version), the model
 //!   that ran it and the metrics the verifier measured. An experience whose
-//!   verdict names no trial or task cannot be placed in a group and is counted
-//!   as [`Exclusion::NoRollout`]; one with no decision, or one decided below
-//!   the minimum strength, as [`Exclusion::Undecided`] or
-//!   [`Exclusion::TooWeak`].
+//!   verdict names no trial or task, or only one of the two, cannot be placed
+//!   in a group and is counted as [`Exclusion::NoRollout`]; one with no
+//!   decision, or one decided below the minimum strength, as
+//!   [`Exclusion::Undecided`] or [`Exclusion::TooWeak`]; one that broke a
+//!   constraint (the exposure audit's) as [`Exclusion::Failed`], never a
+//!   member of a group. Preference and feedback name attempts by the same
+//!   rule (`attempts::identify`).
 //! * The attempt's reward is [`RewardShape::reward`]: a pass earns `1.0`, a
 //!   failure what the configured metrics earn below the ceiling (or, under
 //!   `shaped-partial`, its credit above its task's naive floor), either less
@@ -77,11 +80,12 @@
 use std::collections::BTreeMap;
 
 use serde_json::Value;
-use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
+use splinter_core::annotation::Strength;
 use splinter_core::harness::HarnessConversation;
 use splinter_core::usage::TokenUsage;
 use splinter_store::decision::decide;
 
+use super::attempts::identify;
 use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
@@ -286,49 +290,16 @@ impl PolicyGradient {
         if decision.strength < self.min_strength {
             return Ok(Err(Exclusion::TooWeak));
         }
-        let counted = if decision.passed {
-            Outcome::Pass
-        } else {
-            Outcome::Fail
+        let identity = match identify(entry, decision) {
+            Ok(identity) => identity,
+            Err(reason) => return Ok(Err(reason)),
         };
-        let deciding = entry.notes.iter().find_map(|note| match &note.body {
-            AnnotationBody::Verdict {
-                outcome,
-                strength,
-                evidence,
-            } if *strength == decision.strength && strength.counted(*outcome) == counted => {
-                Some(evidence)
-            }
-            _ => None,
-        });
-        let text = |evidence: &Value, pointer: &str| {
-            evidence.pointer(pointer).map(|v| match v.as_str() {
-                Some(text) => text.to_string(),
-                None => v.to_string(),
-            })
-        };
-        let Some(evidence) = deciding else {
+        // The view must know which conversations are one trial.
+        let Some(trial) = identity.trial else {
             return Ok(Err(Exclusion::NoRollout));
         };
-        let provenance = &entry.experience.provenance;
-        // A benchmark verdict names its trial and task; a workspace verdict
-        // names neither, and the attempt is placed by what the experience
-        // records itself: its task's address and its attempt number.
-        let (trial, task) = match (text(evidence, "/trial"), text(evidence, "/task/id")) {
-            (Some(trial), Some(task)) => (trial, task),
-            (None, None) => match provenance.attempt {
-                Some(attempt) => (
-                    format!("attempt-{attempt}"),
-                    entry.experience.task.id.to_string(),
-                ),
-                None => return Ok(Err(Exclusion::NoRollout)),
-            },
-            _ => return Ok(Err(Exclusion::NoRollout)),
-        };
-        let policy = text(evidence, "/model")
-            .or_else(|| provenance.policy.clone())
-            .unwrap_or_else(|| provenance.solver.clone());
-        let digest = text(evidence, "/task/digest");
+        let evidence = identity.evidence;
+        let digest = identity.digest;
         let usage = TokenUsage::of_trial(evidence);
         let completion_tokens = completion_tokens(usage, &entry.experience.trajectory);
         let reward = self.reward.reward(
@@ -340,9 +311,9 @@ impl PolicyGradient {
         )?;
         Ok(Ok(Rollout {
             group: GroupKey {
-                task,
-                version: text(evidence, "/task/version").unwrap_or_default(),
-                policy,
+                task: identity.task,
+                version: identity.version,
+                policy: identity.policy,
             },
             trial,
             reward,

@@ -30,12 +30,18 @@
 //! its version and the model, as the bench intake records them) and otherwise
 //! from the experience itself (its task, its policy or solver). Its name in
 //! the group is its trial, else its attempt number, else its experience id.
-//! The group's key is the digest a policy-gradient record names its group by,
-//! so the records of both views name the same groups.
+//! [`identify`] does this for every view, the policy-gradient view included,
+//! and the group's key is the digest a policy-gradient record names its group
+//! by, so the records of all three name the same groups. They differ in one
+//! respect only: an experience that names no attempt cannot be placed by the
+//! policy-gradient view (it must know which conversations are one trial), and
+//! stands for an attempt of its own in the other two. An attempt that broke a
+//! constraint is left out of all three.
 
 use serde_json::Value;
 use splinter_core::annotation::{AnnotationBody, Outcome, Strength};
 use splinter_core::digest::digest_of;
+use splinter_store::decision::Decision;
 
 use crate::trajectory::Conversation;
 use crate::{Entry, Exclusion};
@@ -43,6 +49,94 @@ use crate::{Entry, Exclusion};
 /// The score statuses of an examiner's record that say the infrastructure,
 /// not the model, failed.
 const INFRASTRUCTURE_STATUSES: [&str; 3] = ["environment_error", "model_error", "agent_error"];
+
+/// Which attempt of which task by which policy an experience is, as its
+/// deciding verdict says and, where the verdict is silent, as the experience
+/// itself does. The one place a group and a trial are named, so every view that
+/// groups attempts ([`PolicyGradient`](super::PolicyGradient), [`Preference`](super::Preference),
+/// [`Feedback`](super::Feedback)) names the same ones.
+pub(crate) struct Identity<'a> {
+    /// The task.
+    pub(crate) task: String,
+    /// The task's version; empty when the verdict names none.
+    pub(crate) version: String,
+    /// The policy that made the attempt: the verdict's model, else the
+    /// experience's policy, else its solver (a solver with no separate policy
+    /// is its own).
+    pub(crate) policy: String,
+    /// The attempt's name in its group: the verdict's trial, else the
+    /// experience's attempt number; `None` when neither names one, where a
+    /// view must decide whether an experience can stand for an attempt alone.
+    pub(crate) trial: Option<String>,
+    /// The task's content digest, as the verdict records it.
+    pub(crate) digest: Option<String>,
+    /// The evidence of the deciding verdict: what the verifier recorded.
+    pub(crate) evidence: &'a Value,
+}
+
+/// The attempt `entry` is, given the `decision` its verdicts reached.
+///
+/// A benchmark verdict names its trial and its task together; a workspace
+/// verdict names neither and the attempt is placed by what the experience
+/// records: its task's address and its attempt number. A verdict naming only
+/// one of the two contradicts itself and places nothing.
+///
+/// # Errors
+/// [`Exclusion::Failed`] when the attempt broke a constraint (an exposure
+/// audit's): such an attempt is never training material, and the verdict that
+/// says so is the deciding one but carries no trial, so it would otherwise be
+/// misplaced; [`Exclusion::NoRollout`] when the deciding verdict's evidence
+/// is missing or names a trial without a task or a task without a trial.
+pub(crate) fn identify(entry: &Entry, decision: Decision) -> Result<Identity<'_>, Exclusion> {
+    if super::breaks_a_constraint(entry) {
+        return Err(Exclusion::Failed);
+    }
+    let counted = if decision.passed {
+        Outcome::Pass
+    } else {
+        Outcome::Fail
+    };
+    let evidence = entry
+        .notes
+        .iter()
+        .find_map(|note| match &note.body {
+            AnnotationBody::Verdict {
+                outcome,
+                strength,
+                evidence,
+            } if *strength == decision.strength && strength.counted(*outcome) == counted => {
+                Some(evidence)
+            }
+            _ => None,
+        })
+        .ok_or(Exclusion::NoRollout)?;
+    let text = |pointer: &str| {
+        evidence
+            .pointer(pointer)
+            .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
+    };
+    let provenance = &entry.experience.provenance;
+    let (trial, task) = match (text("/trial"), text("/task/id")) {
+        (Some(trial), Some(task)) => (Some(trial), task),
+        (None, None) => (
+            provenance
+                .attempt
+                .map(|attempt| format!("attempt-{attempt}")),
+            entry.experience.task.id.to_string(),
+        ),
+        _ => return Err(Exclusion::NoRollout),
+    };
+    Ok(Identity {
+        task,
+        version: text("/task/version").unwrap_or_default(),
+        policy: text("/model")
+            .or_else(|| provenance.policy.clone())
+            .unwrap_or_else(|| provenance.solver.clone()),
+        trial,
+        digest: text("/task/digest"),
+        evidence,
+    })
+}
 
 /// A verified attempt.
 #[derive(Clone, Debug)]
@@ -57,7 +151,10 @@ pub(crate) struct Attempt {
     pub(crate) name: String,
 }
 
-/// The verified attempt `entry` is, or why it is left out.
+/// The verified attempt `entry` is, or why it is left out. An experience that
+/// names no attempt stands for one of its own, named by its id: these views
+/// compare experiences, so none needs to be told apart from a sibling
+/// conversation of the same trial.
 pub(crate) fn verified(entry: &Entry, min_strength: Strength) -> Result<Attempt, Exclusion> {
     let Some(decision) = entry.decision() else {
         return Err(if infrastructure_failure(entry) {
@@ -73,40 +170,17 @@ pub(crate) fn verified(entry: &Entry, min_strength: Strength) -> Result<Attempt,
             Exclusion::TooWeak
         });
     }
-    let counted = if decision.passed {
-        Outcome::Pass
-    } else {
-        Outcome::Fail
-    };
-    let evidence = entry.notes.iter().find_map(|note| match &note.body {
-        AnnotationBody::Verdict {
-            outcome,
-            strength,
-            evidence,
-        } if *strength == decision.strength && strength.counted(*outcome) == counted => {
-            Some(evidence)
-        }
-        _ => None,
-    });
-    let text = |pointer: &str| {
-        evidence
-            .and_then(|e| e.pointer(pointer))
-            .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
-    };
-    let provenance = &entry.experience.provenance;
-    let task = text("/task/id").unwrap_or_else(|| entry.experience.task.id.to_string());
-    let version = text("/task/version").unwrap_or_default();
-    let policy = text("/model")
-        .or_else(|| provenance.policy.clone())
-        .unwrap_or_else(|| provenance.solver.clone());
-    let name = text("/trial")
-        .or_else(|| provenance.attempt.map(|a| format!("attempt-{a}")))
-        .unwrap_or_else(|| entry.id.to_string());
+    let identity = identify(entry, decision)?;
     Ok(Attempt {
         passed: decision.passed,
         strength: decision.strength,
-        group: digest_of(&[task.as_str(), version.as_str(), policy.as_str()]).to_string(),
-        name,
+        group: digest_of(&[
+            identity.task.as_str(),
+            identity.version.as_str(),
+            identity.policy.as_str(),
+        ])
+        .to_string(),
+        name: identity.trial.unwrap_or_else(|| entry.id.to_string()),
     })
 }
 

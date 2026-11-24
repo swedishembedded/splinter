@@ -59,7 +59,12 @@ attempt did against the others at the same task:
 - An attempt is a benchmark trial; its conversations (the roles of a harness) are one
   rollout. The verdict `ingest-bench` records names the trial, the task id and version, the
   model that ran it and the metrics the verifier measured; an experience whose verdict names
-  no trial or task is left out as `no_rollout`.
+  no trial or task, or only one of the two, is left out as `no_rollout`. A workspace verdict
+  names neither, and the attempt is placed by its experience: its task and its attempt number.
+  An attempt a constraint verdict failed (the exposure audit's) is never a group member: it is
+  left out as `failed`, whatever else was decided about it. `preference` and `feedback` group
+  attempts by the same rule, so their records name the same groups and trials; they differ in
+  one respect, that an experience naming no attempt at all stands for one of its own there.
 - The reward of a pass is `1.0`. A failure earns `--fail-ceiling` (default `0.5`, always
   below one, so any pass outranks any failure) times the weighted sum of the metrics named
   by repeated `--reward-metric NAME=WEIGHT` (metrics in [0, 1], weights non-negative and
