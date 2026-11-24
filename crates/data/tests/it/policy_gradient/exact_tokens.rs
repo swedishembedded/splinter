@@ -409,3 +409,34 @@ fn a_build_that_trains_only_sampled_tokens_leaves_every_proxy_action_out_and_say
     let scrubbed = traced(call_step, answer, Some("\x2fhome/marsch/part.py"));
     assert_eq!(lines(&view().project(&scrubbed).unwrap()).len(), 4);
 }
+
+/// The ids are the prompt the policy was sent: a record whose system prompt
+/// is replaced carries none (counted, the prompt replaced), while setting
+/// the prompt it already opens with leaves its ids as they are.
+#[test]
+fn a_record_whose_system_prompt_is_replaced_carries_no_ids() {
+    let (call_step, answer) = good();
+    let corpus = traced(call_step, answer, None);
+    let projection = view().project(&corpus).unwrap();
+    let opening = lines(&projection)[0]["messages"][0].clone();
+    assert_eq!(opening["role"], "system", "{opening}");
+
+    let same = projection
+        .clone()
+        .with_system_prompt(opening["content"].as_str().unwrap());
+    assert_eq!(same.tokens.exact, 4);
+    assert_exact(&lines(&same)[0], &[(&[1, 2, 3], &[10, 11], &[-0.5, -0.25])]);
+
+    let replaced = projection.with_system_prompt("You are another agent.");
+    for line in lines(&replaced) {
+        assert!(line.get("tokenizer_digest").is_none(), "{line}");
+        for message in supervised(&line) {
+            assert!(message.get("token_ids").is_none(), "{message}");
+        }
+    }
+    assert_eq!(replaced.tokens.exact, 0);
+    assert_eq!(
+        replaced.tokens.proxy.get(&ProxyReason::PromptReplaced),
+        Some(&4)
+    );
+}

@@ -78,6 +78,10 @@ pub enum ProxyReason {
     /// One recorded step became several actions, so the ids belong to none of
     /// them alone.
     SplitStep,
+    /// The record's system prompt was replaced after it was projected
+    /// ([`crate::Projection::with_system_prompt`]): the ids are of the prompt
+    /// the policy was sent, which the record no longer holds.
+    PromptReplaced,
     /// The conversation was rebuilt from the trajectory, not read from the
     /// requests the model was sent, so its context is not the one the ids
     /// were sampled after.

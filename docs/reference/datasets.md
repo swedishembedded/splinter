@@ -130,7 +130,8 @@ attempt did against the others at the same task:
   from the trajectory, not read from the requests the model was sent, so brain's check of the
   prompt ids would refuse it), `no_trace`, `sampler_logprobs` (figures taken after
   top-k/top-p), `count_mismatch`, `invalid_ids`, `invalid_logprobs` (a log-probability that is not a finite number at most zero), `scrubbed` (the scrub changed text of the
-  conversation, and ids decode to the unscrubbed text), `mixed_tokenizer` and `split_step`.
+  conversation, and ids decode to the unscrubbed text), `mixed_tokenizer`, `split_step` and `prompt_replaced` (the record's system prompt was replaced after projection: the
+  ids are of the prompt the policy was sent).
   Fields are never attached in part.
 - The build report and the manifest list every group (task, version, policy) with each
   trial's reward and whether it was written, including groups that yielded no record. The exam seal is

@@ -393,9 +393,36 @@ impl Projection {
                 _ => None,
             };
             let Some(messages) = messages else { continue };
-            match messages.first_mut().filter(|m| m.role == "system") {
-                Some(first) => first.content = prompt.to_string(),
-                None => messages.insert(0, render::message("system", prompt, false)),
+            let changed = match messages.first_mut().filter(|m| m.role == "system") {
+                Some(first) if first.content == prompt => false,
+                Some(first) => {
+                    first.content = prompt.to_string();
+                    true
+                }
+                None => {
+                    messages.insert(0, render::message("system", prompt, false));
+                    true
+                }
+            };
+            // The sampled ids are of the prompt the policy was sent: a
+            // replaced one leaves them describing text the record no longer
+            // holds, so they go, counted.
+            if let RecordBody::Chat {
+                outcome: Some(outcome),
+                ..
+            } = &mut record.body
+            {
+                if changed {
+                    if let Some(sampled) = outcome.sampled.take() {
+                        let traced = sampled.turns.iter().flatten().count();
+                        self.tokens.exact = self.tokens.exact.saturating_sub(traced);
+                        *self
+                            .tokens
+                            .proxy
+                            .entry(crate::sampled::ProxyReason::PromptReplaced)
+                            .or_insert(0) += traced;
+                    }
+                }
             }
         }
         self.system_prompt = Some(prompt.to_string());
