@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step, sft-final and policy-gradient groups (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), every environment plugin against its tools or labelled fixtures (4B), the executable verifier's Python and Lua tables (4A); the reference projector of the other views and the judged kinds' matrix not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of every view and the factory's product statistics recomputed from the trials (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), every environment plugin against its tools or labelled fixtures (4B), the executable verifier's Python and Lua tables (4A); the judged kinds' matrix not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
@@ -226,17 +226,18 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - independent reference projectors of the retrieval view's triples, of self-distillation (which attempts are
   distilled under each setting, and the teacher context) of recorded preferences and of preference repairs (6B, part of
   G-FS-17), nine mutants killed; the repairs' showed a dead check of where a pair parts, deleted.
+- the factory's product statistics recomputed from the trials (6B, closing G-FS-17): every evaluation's sign test
+  and decision and the dataset waterfall, on the reference run (its pinned golden held to them) and a mixed one.
 - document plugin (4B, G-NEW-20 found): documents labelled by construction showed the fact reader cutting a value
   at its point (`3.6 bar` read as `3`), so a question was graded against a fact no document states; the reader now
   ends a sentence only at a full stop before whitespace (crates/knowledge/tests/it/document_reference.rs).
 
 ## Open
 
-- Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 113; 89 fixed, 19 rejected):
+- Confirmed and open, each in `validation/gaps.yaml` with its proposal (4 of 113; 90 fixed, 19 rejected):
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
-  header on plain conversations (G-NEW-03, brain's); the factory's product statistics have no
-  second implementation yet (G-FS-17, 6B); a Python
+  header on plain conversations (G-NEW-03, brain's); a Python
   answer can forge what its checks observe (G-NEW-19).
 - Not built: the task-kind matrix of the
   kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).

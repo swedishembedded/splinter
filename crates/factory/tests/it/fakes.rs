@@ -71,6 +71,12 @@ pub struct FakeBackend {
     pub echo_instruction: bool,
     /// The instruction of every task copy executed, in order.
     pub instructions: Mutex<Vec<String>>,
+    /// The outcome of a candidate's attempt at `task#slot`, before
+    /// `candidate_on` and `candidate`.
+    pub candidate_slots: BTreeMap<String, Outcome>,
+    /// How every attempt ended, as (pass, task, slot, outcome), in order:
+    /// what a test recomputes the run's statistics from.
+    pub returned: Mutex<Vec<(String, String, u32, Outcome)>>,
 }
 
 impl FakeBackend {
@@ -95,6 +101,10 @@ impl FakeBackend {
     fn outcome(&self, spec: &ExecutionSpec) -> Outcome {
         if let Some(model) = &spec.model {
             if model.model.contains("candidate") {
+                let slot = format!("{}#{}", spec.task.id, spec.slot.slot);
+                if let Some(outcome) = self.candidate_slots.get(&slot) {
+                    return *outcome;
+                }
                 if let Some(outcome) = self.candidate_on.get(&spec.task.id) {
                     return *outcome;
                 }
@@ -325,6 +335,12 @@ impl ExecutionBackend for FakeBackend {
                 .iter()
                 .find(|(text, _)| harness.contains(text.as_str()))
                 .map_or_else(|| self.outcome(spec), |(_, outcome)| *outcome);
+            self.returned.lock().unwrap().push((
+                spec.slot.pass.clone(),
+                spec.task.id.clone(),
+                spec.slot.slot,
+                outcome,
+            ));
             if outcome != Outcome::Lost {
                 let given = self.echo_instruction.then_some(instruction.as_str());
                 attempt(batch.out, spec, outcome, given, self.vary_failures);

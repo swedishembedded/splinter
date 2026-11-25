@@ -18,6 +18,7 @@ mod foreach;
 mod fuzz;
 mod generations;
 mod golden;
+mod golden_statistics;
 mod graph;
 mod harness_op;
 mod harness_pass;

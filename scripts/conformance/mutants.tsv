@@ -112,3 +112,5 @@ critique-makes-another-task	views	crates/data/src/views/preference.rs	.same_apar
 recorded-relation-paired-twice	views	crates/data/src/views/preference.rs	if !paired.insert((&chosen.id, &rejected.id)) {	if !paired.insert((&chosen.id, &rejected.id)) && false {	splinter-data	it	recorded_preferences
 recorded-replies-compared-without-calls	views	crates/data/src/views/preference.rs	if same_message(&better, &worse) {	if better.content == worse.content {	splinter-data	it	recorded_preferences
 failed-repair-paired	views	crates/data/src/views/preference.rs	                p.attempt.passed\n            })\n            .collect();	                true\n            })\n            .collect();	splinter-data	it	attempt_pairs::repairs
+eval-decides-without-the-test	eval	crates/factory/src/run/eval.rs	} else if p < alpha && difference >= min_difference && difference > 0.0 {	} else if p <= 1.0 && difference >= min_difference && difference > 0.0 {	splinter-factory	it	golden_statistics
+eval-losses-uncounted	eval	crates/factory/src/run/eval.rs	losses += usize::from(b && !c);	losses += 0;	splinter-factory	it	golden_statistics
