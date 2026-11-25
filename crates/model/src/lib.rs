@@ -52,6 +52,7 @@ pub mod error;
 pub mod exam;
 #[cfg(feature = "scripted")]
 pub mod fixture;
+mod fleet_launch;
 pub mod fleet_tls;
 pub mod local;
 pub mod manifest;

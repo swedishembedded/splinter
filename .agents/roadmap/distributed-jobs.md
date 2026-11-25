@@ -352,6 +352,23 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       (2026-11-22): Qwen3-4B served `full_train` over 4 GH200s, gradient
       sharding, report `parallel` world 4 over `nccl`; the export served and
       generated (brain's ledger holds the numbers).
+- [x] **The fleet's servers are the tasks of one step (2026-11-25).** On
+      an HPE Slingshot fabric the network (a VNI) is granted per step, and
+      a hand-made 8-rank `speech_sft` run found that two single-node steps
+      fell off the fabric while one step over both nodes held it. So
+      `ManagedBrain::start_fleet` starts every node's `brain serve` as a
+      task of ONE `srun --overlap` step (`--nodes=<n> --ntasks-per-node=1`;
+      `splinter_model::fleet_launch`), each task picking its node's command
+      by `SLURMD_NODENAME` (`NodeSteps::per_node_script`) and writing its
+      exit status into its node's directory, so a server that ends before
+      it is ready is named while the others still run; the step's output
+      goes to `fleet.log`. Measured 2026-11-25 in job 5741706 on n105+n460
+      (brain 2d1a5e9a, the sha256 of its binary): `splinter doctor` started
+      the fleet as one step, listed the 8 GH200s over TLS and staged under
+      `/scratch/local/brain-models`, 14.5 s wall, no process left on either
+      node. Tests: `crates/sandbox/src/step.rs` (the script run per node),
+      `crates/model/tests/service.rs` (`fleet`: one step, a stand-in `srun`
+      running a task per node, a failing node named, nothing left).
 
 ## Decisions
 

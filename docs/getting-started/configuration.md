@@ -109,20 +109,25 @@ splinter doctor --cluster-nodes n442
 ### A brain server on every node
 
 When the allocation spans nodes (or `--cluster-nodes` names some) and no
-`--brain-endpoint` is given, Splinter starts one `brain serve` per usable node
-as a job step (`srun --overlap --nodelist=<node> --nodes=1 --ntasks=1
---gpus-per-node=<n> ...`), each serving every card of its node as in-process
-replicas (`--device gpu0,...,gpu<n-1>` unless `--device` names others), bound
-to the node's address on a port its system picks. Every server answers to one
+`--brain-endpoint` is given, Splinter starts one `brain serve` on every usable
+node, all of them tasks of ONE job step (`srun --overlap
+--nodelist=<nodes> --nodes=<n> --ntasks-per-node=1 --gpus-per-node=<g> ...`):
+on an HPE Slingshot fabric the network is granted per step, so servers in
+steps of their own could not reach each other over it, and a training job
+over them would fall off the fabric. Each task picks its node's server by
+the scheduler's node name (`SLURMD_NODENAME`); each server serves every card
+of its node as in-process replicas (`--device gpu0,...,gpu<g-1>` unless
+`--device` names others), bound to the node's address on a port its system
+picks. Every server answers to one
 key, written owner-only into the fleet's directory under the state root, with
 the ready markers, the connection records each server publishes, a list of
 the endpoints (`endpoints`, one URL per line, for other clients while the
-fleet runs) and each node's log (`<node>.log`). The adapter directory and the
+fleet runs) and the step's log (`fleet.log`). The adapter directory and the
 artifact store under the state root are shared by every server, so the state
 root and the model store must be on a filesystem every node sees. Splinter
-waits until every server is ready (a server that does not start fails the
+waits until every server is ready (a server that ends first fails the
 run, naming its node), asks as many attempts at once as the servers decode
-together, and stops every step on exit: `SIGTERM` to `srun`, then `scancel`
+together, and stops the step on exit: `SIGTERM` to `srun`, then `scancel`
 of the step if it has not ended.
 
 The servers serve TLS. The fleet makes a certificate authority of its own

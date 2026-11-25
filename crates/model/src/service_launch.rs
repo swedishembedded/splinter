@@ -9,31 +9,24 @@
 // info@swedishembedded.com.
 
 //! A `brain serve` over a whole model store, the service a run requests
-//! every local model from: started on this machine's loopback, or on a node
-//! of the allocation as a job step bound to that node's address, and waited
-//! for until it is ready.
+//! every local model from: started on this machine's loopback and waited
+//! for until it is ready. The servers of a fleet, one on each node of the
+//! allocation, are started by `fleet_launch` with the same arguments.
 //!
-//! Starting is two halves, [`spawn_service`] and [`Pending::wait`], so several
-//! nodes' servers are started from the caller's own thread (a server dies
-//! with the thread that started it) and load at once.
+//! Starting is two halves, [`spawn_service`] and [`Pending::wait`].
 
 use std::ffi::OsString;
-use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use splinter_sandbox::step::{die_with_caller, NodeSteps, Placement, StepProcess};
+use splinter_sandbox::step::{die_with_caller, StepProcess};
 use sven_sdk::CancelToken;
 
 use crate::server::{
     forward_lines, free_port, read_key, recent_output, wait_ready, Failure, DEFAULT_SERVE_SLOTS,
 };
-
-/// How long a server on a node may take to publish its connection record
-/// once it reported ready: the shared filesystem may show the file late.
-const RECORD_WAIT: Duration = Duration::from_secs(60);
 
 /// What it takes to start a server that serves a whole model store, as the
 /// service every `local:` model of a run is requested from.
@@ -70,43 +63,6 @@ pub struct ServiceLaunch<'a> {
     /// A file every line the server writes is appended to; only the last
     /// lines are kept otherwise.
     pub log: Option<&'a Path>,
-    /// Where it runs.
-    pub host: ServiceHost<'a>,
-}
-
-/// Where a service runs.
-pub enum ServiceHost<'a> {
-    /// This machine, on the loopback, with a key of its own.
-    Local,
-    /// A node of the allocation, as a job step.
-    Node(NodeService<'a>),
-}
-
-/// A service started on a node of the allocation.
-pub struct NodeService<'a> {
-    /// How a step is started there.
-    pub steps: &'a NodeSteps,
-    /// The node.
-    pub node: &'a str,
-    /// The node's address the server binds; the port is the one it is
-    /// given by the system, read back from its connection record.
-    pub address: IpAddr,
-    /// The GPUs the step takes on the node.
-    pub gpus: u32,
-    /// The key every server of the fleet answers to (`--api-key-file`).
-    pub key_file: &'a Path,
-    /// The certificate chain and private key the server serves TLS with
-    /// (`--tls-cert`, `--tls-key`); `None` serves plaintext off the loopback
-    /// (`--insecure-plaintext`), which the caller asked for by name.
-    pub tls: Option<(&'a Path, &'a Path)>,
-    /// The node-local directory brain stages the model store's entries in
-    /// (`--stage-models`, from `--models-dir`); `None` reads them from the
-    /// shared store.
-    pub stage: Option<&'a Path>,
-    /// The secret a training job over several servers proves membership with
-    /// (`--train-job-secret`), and, for the server that holds rank 0, the
-    /// address it binds as the job's coordinator (`--train-job-coordinator`).
-    pub train_job: Option<(&'a Path, Option<&'a str>)>,
 }
 
 /// The server's process: a child of this one, or the `srun` of its step.
@@ -118,7 +74,7 @@ pub enum ServiceProcess {
 }
 
 impl ServiceProcess {
-    fn child(&mut self) -> &mut Child {
+    pub(crate) fn child(&mut self) -> &mut Child {
         match self {
             Self::Local(child) => child,
             Self::Step(step) => &mut step.child,
@@ -162,22 +118,20 @@ impl Service {
     }
 }
 
-/// A service started and not yet ready.
+/// A service started on this machine and not yet ready.
 pub struct Pending {
     process: ServiceProcess,
     lines: Receiver<String>,
-    work: PathBuf,
     ready: PathBuf,
-    /// The key file the server writes, or the one it was given.
-    key: KeySource,
-    /// Where it listens, `scheme://host:port`, when known before it is
-    /// ready (the loopback port this process chose).
-    origin: Option<String>,
+    /// The key file the server writes.
+    key: PathBuf,
+    /// Where it listens, `http://127.0.0.1:port`: the port this process chose.
+    origin: String,
     slots: u32,
     startup: Duration,
 }
 
-enum KeySource {
+pub(crate) enum KeySource {
     /// `--api-keys-out`: the server's own key, as JSON.
     Written(PathBuf),
     /// `--api-key-file`: the key the caller gave every server.
@@ -186,7 +140,7 @@ enum KeySource {
 
 /// The `brain` arguments of `launch`, listening on `address`, publishing
 /// its key and readiness as `key` and `ready` say.
-fn service_args(
+pub(crate) fn service_args(
     launch: &ServiceLaunch<'_>,
     address: &str,
     key: &KeySource,
@@ -258,68 +212,19 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
         }
     }
     let slots = launch.max_batch.unwrap_or(DEFAULT_SERVE_SLOTS).max(1);
-    let (mut command, key, origin) = match &launch.host {
-        ServiceHost::Local => {
-            let port =
-                free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
-            let address = format!("127.0.0.1:{port}");
-            let key = KeySource::Written(launch.work.join("keys.json"));
-            let mut command = Command::new(launch.binary);
-            command.args(service_args(launch, &address, &key, &ready));
-            // SIGINT, so a training job saves its state as on a cancel.
-            die_with_caller(&mut command, libc::SIGINT);
-            (command, key, Some(format!("http://{address}")))
-        }
-        ServiceHost::Node(node) => {
-            let key = KeySource::Given(node.key_file.to_path_buf());
-            // Port 0: the node's system picks a free one, which the server's
-            // connection record names once it is bound.
-            let mut args = service_args(launch, &format!("{}:0", node.address), &key, &ready);
-            if let Some(dir) = node.stage {
-                // Global flags, before the subcommand.
-                let staging = crate::distributed::staging_args(dir, launch.models);
-                args.splice(0..0, staging.into_iter().map(OsString::from));
-            }
-            if let Some((secret, coordinator)) = node.train_job {
-                args.push("--train-job-secret".into());
-                args.push(secret.into());
-                if let Some(address) = coordinator {
-                    args.push("--train-job-coordinator".into());
-                    args.push(address.into());
-                }
-            }
-            match node.tls {
-                Some((chain, private_key)) => {
-                    args.push("--tls-cert".into());
-                    args.push(chain.into());
-                    args.push("--tls-key".into());
-                    args.push(private_key.into());
-                }
-                // Off the loopback brain serves plaintext only when told.
-                None => args.push("--insecure-plaintext".into()),
-            }
-            let program: Vec<String> = std::iter::once(launch.binary.as_os_str())
-                .chain(args.iter().map(OsString::as_os_str))
-                .map(|word| word.to_string_lossy().into_owned())
-                .collect();
-            let script = launch.work.join("serve.sh");
-            std::fs::write(&script, node.steps.script(launch.work, &program)).map_err(|e| {
-                Failure::Unmeasured(format!("cannot write {}: {e}", script.display()))
-            })?;
-            let mut command = node.steps.command(
-                &Placement {
-                    nodes: vec![node.node.to_string()],
-                    tasks_per_node: 1,
-                    gpus_per_node: node.gpus,
-                },
-                &script,
-            );
-            // SIGTERM: `srun` forwards it to the step; a SIGINT only makes it
-            // print the step's status.
-            die_with_caller(&mut command, libc::SIGTERM);
-            (command, key, None)
-        }
-    };
+    let port = free_port().map_err(|e| Failure::Unmeasured(format!("no free port: {e}")))?;
+    let address = format!("127.0.0.1:{port}");
+    let key = launch.work.join("keys.json");
+    let mut command = Command::new(launch.binary);
+    command.args(service_args(
+        launch,
+        &address,
+        &KeySource::Written(key.clone()),
+        &ready,
+    ));
+    // SIGINT, so a training job saves its state as on a cancel.
+    die_with_caller(&mut command, libc::SIGINT);
+    let origin = format!("http://{address}");
     let program = command.get_program().to_string_lossy().into_owned();
     let mut child = command
         .stdin(Stdio::null())
@@ -338,18 +243,10 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
         None => None,
     };
     let lines = forward_lines(&mut child, log);
-    let process = match &launch.host {
-        ServiceHost::Local => ServiceProcess::Local(child),
-        ServiceHost::Node(node) => ServiceProcess::Step(StepProcess {
-            child,
-            dir: launch.work.to_path_buf(),
-            scancel: node.steps.scancel.clone(),
-        }),
-    };
+    let process = ServiceProcess::Local(child);
     Ok(Pending {
         process,
         lines,
-        work: launch.work.to_path_buf(),
         ready,
         key,
         origin,
@@ -377,121 +274,14 @@ impl Pending {
                 recent_output(&self.lines, kept)
             ))
         };
-        let key = match &self.key {
-            KeySource::Written(path) => read_key(path),
-            KeySource::Given(path) => {
-                crate::endpoint::BrainEndpoints::read_key(path).map_err(|e| e.to_string())
-            }
-        }
-        .map_err(|why| with_output(why, &mut kept))?;
-        let origin = match self.origin.take() {
-            Some(origin) => origin,
-            None => bound_origin(&self.work, cancel).map_err(|why| with_output(why, &mut kept))?,
-        };
+        let key = read_key(&self.key).map_err(|why| with_output(why, &mut kept))?;
         Ok(Service {
             process: self.process,
             lines: self.lines,
             kept,
-            origin,
+            origin: self.origin,
             key,
             slots: self.slots,
         })
-    }
-}
-
-/// The `scheme://host:port` the OpenAI surface of the server whose runtime
-/// directory is `work` bound, from its connection record (`serve-<pid>.json`).
-fn bound_origin(work: &Path, cancel: &CancelToken) -> Result<String, String> {
-    let deadline = Instant::now() + RECORD_WAIT;
-    loop {
-        if let Some(origin) = read_record(work)? {
-            return Ok(origin);
-        }
-        if cancel.is_cancelled() {
-            return Err("cancelled while reading the server's connection record".into());
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "the server reported ready but published no connection record in {} within {}s",
-                work.display(),
-                RECORD_WAIT.as_secs()
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-}
-
-/// The OpenAI surface's `scheme://host:port` from a connection record in
-/// `work`, if one is there yet.
-fn read_record(work: &Path) -> Result<Option<String>, String> {
-    let entries =
-        std::fs::read_dir(work).map_err(|e| format!("cannot read {}: {e}", work.display()))?;
-    for entry in entries.filter_map(Result::ok) {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !(name.starts_with("serve-") && name.ends_with(".json")) {
-            continue;
-        }
-        // A record being written reads as no record yet.
-        let Ok(text) = std::fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        let Ok(record) = serde_json::from_str::<serde_json::Value>(&text) else {
-            continue;
-        };
-        let url = record["surfaces"].as_array().and_then(|surfaces| {
-            surfaces
-                .iter()
-                .find(|s| s["provider"] == "openai")
-                .and_then(|s| s["url"].as_str())
-        });
-        let Some(url) = url else {
-            return Err(format!("{name} names no openai surface: {text}"));
-        };
-        let origin = url.trim_end_matches('/');
-        let usable = ["http://", "https://"].iter().any(|scheme| {
-            origin
-                .strip_prefix(scheme)
-                .is_some_and(|rest| !rest.is_empty() && !rest.ends_with(":0"))
-        });
-        if !usable {
-            return Err(format!("{name} names an unusable openai url {url:?}"));
-        }
-        return Ok(Some(origin.to_string()));
-    }
-    Ok(None)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_bound_address_is_read_from_the_connection_record() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(read_record(dir.path()).unwrap(), None);
-        std::fs::write(
-            dir.path().join("serve-77.json"),
-            r#"{"pid":77,"surfaces":[{"provider":"openai","url":"http://10.0.0.5:41234"}]}"#,
-        )
-        .unwrap();
-        assert_eq!(
-            read_record(dir.path()).unwrap().as_deref(),
-            Some("http://10.0.0.5:41234")
-        );
-        std::fs::write(
-            dir.path().join("serve-77.json"),
-            r#"{"pid":77,"surfaces":[{"provider":"openai","url":"https://10.0.0.5:41234/"}]}"#,
-        )
-        .unwrap();
-        assert_eq!(
-            read_record(dir.path()).unwrap().as_deref(),
-            Some("https://10.0.0.5:41234")
-        );
-        std::fs::write(
-            dir.path().join("serve-77.json"),
-            r#"{"pid":77,"surfaces":[{"provider":"anthropic","url":"http://10.0.0.5:1"}]}"#,
-        )
-        .unwrap();
-        assert!(read_record(dir.path()).is_err(), "no openai surface");
     }
 }

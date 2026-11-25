@@ -135,16 +135,28 @@ mod fleet {
     use splinter_sandbox::step::NodeSteps;
 
     /// A stand-in `srun`: records its arguments and runs the step's script
-    /// here, as task 0 of a step whose id is its pid.
+    /// here once for every node of `--nodelist`, as the task of that node
+    /// (`SLURMD_NODENAME`, `SLURM_PROCID` in list order) of a step whose id
+    /// is its pid, each task in a process group of its own; `SIGTERM` ends
+    /// every task, as the scheduler forwards it.
     fn srun(dir: &Path) -> std::path::PathBuf {
         let script = dir.join("srun");
         std::fs::write(
             &script,
             r#"#!/bin/sh
 echo "$@" >> "$0.args"
+for word in "$@"; do case "$word" in --nodelist=*) nodes=${word#--nodelist=} ;; esac; done
 while [ "$1" != sh ]; do shift; done
 shift
-SLURM_JOB_ID=42 SLURM_STEP_ID=$$ SLURM_PROCID=0 exec sh "$@"
+groups=
+trap 'for g in $groups; do kill -TERM -$g 2>/dev/null; done; exit 143' TERM
+rank=0
+for node in $(echo "$nodes" | tr , ' '); do
+  SLURM_JOB_ID=42 SLURM_STEP_ID=$$ SLURM_PROCID=$rank SLURMD_NODENAME=$node setsid sh "$@" &
+  groups="$groups $!"
+  rank=$((rank + 1))
+done
+wait
 "#,
         )
         .unwrap();
@@ -260,16 +272,25 @@ exec sleep 600
         assert_eq!(mode & 0o777, 0o600);
 
         let srun_args = std::fs::read_to_string(dir.path().join("srun.args")).unwrap();
+        assert_eq!(
+            srun_args.lines().count(),
+            1,
+            "one step over every node, so their tasks share the fabric: {srun_args}"
+        );
         for wanted in [
             "--overlap",
-            "--nodelist=localhost",
-            "--nodelist=127.0.0.1",
-            "--nodes=1",
+            "--nodelist=localhost,127.0.0.1",
+            "--nodes=2",
+            "--ntasks-per-node=1",
             "--gpus-per-node=4",
             "--mem=8G",
         ] {
             assert!(srun_args.contains(wanted), "{wanted} in {srun_args}");
         }
+        assert!(
+            !srun_args.contains("--network=single_node_vni"),
+            "a step over several nodes has its fabric access: {srun_args}"
+        );
         for node in ["localhost", "127.0.0.1"] {
             let args = std::fs::read_to_string(work.join(node).join("args")).unwrap();
             for wanted in [

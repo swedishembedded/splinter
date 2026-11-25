@@ -18,6 +18,7 @@
 
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -27,11 +28,10 @@ use sven_sdk::CancelToken;
 
 use crate::endpoint::{BrainEndpoints, ServersJob, TrainSpan};
 use crate::error::PolicyError;
+use crate::fleet_launch::{spawn_fleet, Fleet, FleetLaunch, NodeEndpoint, NodeServer};
 use crate::served_train::ArtifactStore;
 use crate::server::{remember, Failure};
-use crate::service_launch::{
-    spawn_service, NodeService, Service, ServiceHost, ServiceLaunch, ServiceProcess,
-};
+use crate::service_launch::{spawn_service, Service, ServiceLaunch, ServiceProcess};
 
 /// How long a server Splinter starts may take to bind and report ready: it
 /// scans the model store before it does.
@@ -250,7 +250,8 @@ pub const AUTHORITY_FILE: &str = "ca.pem";
 /// The brain servers this process started: stopped, and their scratch
 /// directory removed, when dropped.
 pub struct ManagedBrain {
-    processes: Vec<ServiceProcess>,
+    /// `None` once stopped, before the scratch directory goes.
+    process: Option<ServiceProcess>,
     endpoints: BrainEndpoints,
     work: PathBuf,
     /// The last lines the servers wrote, kept for an operator to read when a
@@ -292,7 +293,7 @@ impl ManagedBrain {
     pub fn start(settings: &ServiceSettings, cancel: &CancelToken) -> Result<Self, PolicyError> {
         let work = settings.state.join(format!("run-{}", std::process::id()));
         let (adapters, artifacts) = prepare(&settings.state, &work)?;
-        let launch = settings.launch(&work, &adapters, &artifacts, None, ServiceHost::Local);
+        let launch = settings.launch(&work, &adapters, &artifacts, None);
         let started = spawn_service(&launch).and_then(|pending| pending.wait(cancel));
         let service = match started {
             Ok(service) => service,
@@ -315,11 +316,13 @@ impl ManagedBrain {
             .with_attempt_concurrency(service.slots as usize)
             .with_adapter_directory(adapters)
             .with_artifact_store(ArtifactStore::open(&artifacts)?);
-        Ok(Self::running(
-            vec![(String::new(), service)],
-            endpoints,
-            work,
-        ))
+        let Service {
+            process,
+            lines,
+            kept,
+            ..
+        } = service;
+        Ok(Self::running(process, lines, kept, endpoints, work))
     }
 
     /// Starts one server per node of `settings.nodes`, each a job step bound
@@ -341,22 +344,19 @@ impl ManagedBrain {
         let work = service.state.join(format!("fleet-{}", std::process::id()));
         let (adapters, artifacts) = prepare(&service.state, &work)?;
         let started = Self::start_steps(settings, &work, &adapters, &artifacts, cancel);
-        let (services, train_job) = match started {
+        let (fleet, train_job) = match started {
             Ok(started) => started,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&work);
                 return Err(error);
             }
         };
-        let slots: usize = services.iter().map(|(_, s)| s.slots as usize).sum();
-        let urls = services.iter().map(|(_, s)| s.url()).collect();
-        let key = services[0].1.key.clone();
+        let slots: usize = fleet.servers.iter().map(|s| s.slots as usize).sum();
+        let urls: Vec<String> = fleet.servers.iter().map(NodeEndpoint::url).collect();
+        let key = fleet.servers[0].key.clone();
         // One URL per line, for a client that is pointed at the fleet by file.
         let listing = work.join(ENDPOINTS_FILE);
-        let text: String = services
-            .iter()
-            .map(|(_, s)| format!("{}\n", s.url()))
-            .collect();
+        let text: String = urls.iter().map(|url| format!("{url}\n")).collect();
         if let Err(source) = std::fs::write(&listing, text) {
             let _ = std::fs::remove_dir_all(&work);
             return Err(PolicyError::Io {
@@ -370,18 +370,25 @@ impl ManagedBrain {
             .with_artifact_store(ArtifactStore::open(&artifacts)?);
         let span = train_job.span(&endpoints, settings.nodes.len(), settings.gpus_per_node);
         let endpoints = endpoints.with_train_span(span);
-        Ok(Self::running(services, endpoints, work))
+        let Fleet {
+            process,
+            lines,
+            kept,
+            ..
+        } = fleet;
+        Ok(Self::running(process, lines, kept, endpoints, work))
     }
 
-    /// Every node's server started, then waited for; the first that fails
-    /// names its node and stops the rest.
+    /// Every node's server started as a task of one step, then waited for;
+    /// a server that fails is named and the step, with every server, is
+    /// stopped.
     fn start_steps(
         settings: &FleetSettings,
         work: &Path,
         adapters: &Path,
         artifacts: &Path,
         cancel: &CancelToken,
-    ) -> Result<(Vec<(String, Service)>, TrainJob), PolicyError> {
+    ) -> Result<(Fleet, TrainJob), PolicyError> {
         // Owner-only: the key and the scripts of every server.
         set_owner_only(work)?;
         let key_file = work.join(KEY_FILE);
@@ -407,11 +414,10 @@ impl ManagedBrain {
             Some(Self::trust_fleet(work, &addresses)?)
         };
         let train_job = TrainJob::prepare(work, addresses[0].1)?;
-        let mut pending = Vec::with_capacity(settings.nodes.len());
-        // Started from this thread, one after the other, so each loads while
-        // the next starts; a server dies with the thread that started it.
-        for (index, (node, address)) in addresses.iter().enumerate() {
-            let address = *address;
+        let mut service = settings.service.clone();
+        service.device.clone_from(&device);
+        let mut node_dirs = Vec::with_capacity(addresses.len());
+        for (index, (node, _)) in addresses.iter().enumerate() {
             let node_work = work.join(node);
             std::fs::create_dir_all(&node_work).map_err(|source| PolicyError::Io {
                 path: node_work.clone(),
@@ -430,14 +436,16 @@ impl ManagedBrain {
                 }
                 None => None,
             };
-            let log = work.join(format!("{node}.log"));
-            let mut service = settings.service.clone();
-            service.device.clone_from(&device);
-            let host = ServiceHost::Node(NodeService {
-                steps: &settings.steps,
+            node_dirs.push((node_work, tls));
+        }
+        let servers = addresses
+            .iter()
+            .zip(&node_dirs)
+            .enumerate()
+            .map(|(index, ((node, address), (node_work, tls)))| NodeServer {
+                launch: service.launch(node_work, adapters, artifacts, None),
                 node,
-                address,
-                gpus: settings.gpus_per_node,
+                address: *address,
                 key_file: &key_file,
                 tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
                 stage: settings.stage_models.as_deref(),
@@ -445,30 +453,27 @@ impl ManagedBrain {
                     train_job.secret.as_path(),
                     (index == 0).then_some(train_job.coordinator.as_str()),
                 )),
-            });
-            let launch = service.launch(&node_work, adapters, artifacts, Some(&log), host);
-            let started = spawn_service(&launch).map_err(|failure| {
+            })
+            .collect();
+        let log = work.join("fleet.log");
+        let launch = FleetLaunch {
+            steps: &settings.steps,
+            work,
+            gpus_per_node: settings.gpus_per_node,
+            log: Some(&log),
+            startup: STARTUP,
+            servers,
+        };
+        let nodes = settings.nodes.join(",");
+        let fleet = spawn_fleet(&launch)
+            .and_then(|pending| pending.wait(cancel))
+            .map_err(|failure| {
                 refused(
-                    node,
-                    failure_reason(failure, &format!("the brain server on {node}")),
+                    &nodes,
+                    failure_reason(failure, &format!("the brain servers on {nodes}")),
                 )
             })?;
-            pending.push((node.clone(), started));
-        }
-        let mut services = Vec::with_capacity(pending.len());
-        for (node, started) in pending {
-            let service = started.wait(cancel).map_err(|failure| {
-                refused(
-                    &node,
-                    format!(
-                        "the brain server on {node} did not start: {}",
-                        failure_reason(failure, &format!("the brain server on {node}"))
-                    ),
-                )
-            })?;
-            services.push((node, service));
-        }
-        Ok((services, train_job))
+        Ok((fleet, train_job))
     }
 
     /// Issues the fleet's certificates for `nodes`, publishes the authority
@@ -485,54 +490,39 @@ impl ManagedBrain {
         Ok(issued.servers)
     }
 
-    fn running(services: Vec<(String, Service)>, endpoints: BrainEndpoints, work: PathBuf) -> Self {
+    /// The servers' process (the local server, or the fleet's step), what
+    /// it writes and the last lines it wrote so far.
+    fn running(
+        process: ServiceProcess,
+        lines: Receiver<String>,
+        kept: Vec<String>,
+        endpoints: BrainEndpoints,
+        work: PathBuf,
+    ) -> Self {
         // Everything the servers write is read as it comes, so a full pipe
         // never stops one; only the last lines are kept.
         let output = Arc::new(Mutex::new(Vec::new()));
-        let mut processes = Vec::with_capacity(services.len());
-        for (node, service) in services {
-            let Service {
-                process,
-                lines,
-                kept,
-                ..
-            } = service;
-            let tag = |line: String| {
-                if node.is_empty() {
-                    line
-                } else {
-                    format!("{node}: {line}")
-                }
-            };
-            {
-                let mut held = output
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                for line in kept {
-                    remember(&mut held, tag(line));
-                }
+        {
+            let mut held = output
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for line in kept {
+                remember(&mut held, line);
             }
-            let drained = Arc::clone(&output);
-            let node = node.clone();
-            std::thread::spawn(move || {
-                for line in lines {
-                    let line = if node.is_empty() {
-                        line
-                    } else {
-                        format!("{node}: {line}")
-                    };
-                    remember(
-                        &mut drained
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                        line,
-                    );
-                }
-            });
-            processes.push(process);
         }
+        let drained = Arc::clone(&output);
+        std::thread::spawn(move || {
+            for line in lines {
+                remember(
+                    &mut drained
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    line,
+                );
+            }
+        });
         Self {
-            processes,
+            process: Some(process),
             endpoints,
             work,
             output,
@@ -566,7 +556,7 @@ impl ManagedBrain {
 impl Drop for ManagedBrain {
     fn drop(&mut self) {
         // Stopped before their scratch directory goes: the keys live there.
-        self.processes.clear();
+        self.process = None;
         let _ = std::fs::remove_dir_all(&self.work);
     }
 }
@@ -578,7 +568,6 @@ impl ServiceSettings {
         adapters: &'a Path,
         artifacts: &'a Path,
         log: Option<&'a Path>,
-        host: ServiceHost<'a>,
     ) -> ServiceLaunch<'a> {
         ServiceLaunch {
             binary: &self.binary,
@@ -592,7 +581,6 @@ impl ServiceSettings {
             max_batch: self.max_batch,
             startup: STARTUP,
             log,
-            host,
         }
     }
 }

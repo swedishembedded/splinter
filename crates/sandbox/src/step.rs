@@ -35,6 +35,11 @@ use std::time::{Duration, Instant};
 /// The file a step's script writes `<job id>.<step id>` into.
 pub const STEP_ID_FILE: &str = "step.id";
 
+/// The file a task of a step with one task per node ([`NodeSteps::per_node_script`])
+/// writes its program's exit status into, in its node's directory: how a
+/// caller tells which node's program ended while the step's other tasks run.
+pub const TASK_EXIT_FILE: &str = "task.exit";
+
 /// How long a step is given to end after `SIGTERM` before it is cancelled.
 pub const STOP_GRACE: Duration = Duration::from_secs(30);
 
@@ -66,7 +71,56 @@ pub struct Placement {
     pub gpus_per_node: u32,
 }
 
+/// The task one node of a step runs: its own directory and its own command
+/// (a server bound to that node's address, with that node's certificate).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NodeTask {
+    /// The node, by the name the scheduler gives it (`SLURMD_NODENAME`).
+    pub node: String,
+    /// The directory the task runs in and records its exit in.
+    pub dir: PathBuf,
+    /// The program and its arguments.
+    pub command: Vec<String>,
+}
+
 impl NodeSteps {
+    /// The script ONE step with a task on each node of `tasks` runs (one
+    /// step, not one per node: on an HPE Slingshot fabric a network VNI is
+    /// granted per step, so only the tasks of one step reach each other over
+    /// it). Task 0 writes the step id into `dir/`[`STEP_ID_FILE`]; each task
+    /// picks its node's entry by the scheduler's `SLURMD_NODENAME`, enters
+    /// its directory, runs its command under the exec prefix and writes the
+    /// exit status into its [`TASK_EXIT_FILE`]. A node with no entry fails
+    /// with its name.
+    #[must_use]
+    pub fn per_node_script(&self, dir: &Path, tasks: &[NodeTask]) -> String {
+        let mut script = format!(
+            "#!/bin/sh\n\
+             if [ \"${{SLURM_PROCID:-0}}\" = 0 ]; then printf '%s.%s\\n' \"$SLURM_JOB_ID\" \"$SLURM_STEP_ID\" > {}/{STEP_ID_FILE}; fi\n\
+             case \"${{SLURMD_NODENAME:-}}\" in\n",
+            quote(&dir.display().to_string())
+        );
+        for task in tasks {
+            let words: Vec<String> = self
+                .exec_prefix
+                .iter()
+                .chain(&task.command)
+                .map(|word| shell_word(word))
+                .collect();
+            let task_dir = quote(&task.dir.display().to_string());
+            script.push_str(&format!(
+                "{node})\n    cd {task_dir} || exit 1\n    {command}\n    status=$?\n    \
+                 echo \"$status\" > {task_dir}/{TASK_EXIT_FILE}\n    exit \"$status\" ;;\n",
+                node = quote(&task.node),
+                command = words.join(" ")
+            ));
+        }
+        script.push_str(
+            "*)\n    echo \"this step has no task for node ${SLURMD_NODENAME:-(unnamed)}\" >&2\n    exit 1 ;;\nesac\n",
+        );
+        script
+    }
+
     /// The script a step runs in `dir`: it writes the step id into
     /// `dir/`[`STEP_ID_FILE`], enters `dir` and starts `command` under the
     /// exec prefix, with the placeholders (in the prefix too, so a wrapper
@@ -448,6 +502,78 @@ mod tests {
             script
                 .contains("exec 'apptainer' 'exec' '/i.sif' 'brain' '--job-rank' ${SLURM_PROCID}"),
             "{script}"
+        );
+    }
+
+    #[test]
+    fn a_step_of_one_task_per_node_runs_each_nodes_command_in_its_directory_and_records_its_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let task = |node: &str, command: &str| NodeTask {
+            node: node.into(),
+            dir: dir.path().join(node),
+            command: vec!["sh".into(), "-c".into(), command.into()],
+        };
+        let tasks = [
+            task("n105", "pwd > where; exit 0"),
+            task("n460", "pwd > where; echo \"$VIA\" > via; exit 3"),
+        ];
+        for task in &tasks {
+            fs::create_dir(&task.dir).unwrap();
+        }
+        let plain = NodeSteps {
+            exec_prefix: vec!["env".into(), "VIA=prefix".into()],
+            ..NodeSteps::default()
+        };
+        let script = dir.path().join("step.sh");
+        fs::write(&script, plain.per_node_script(dir.path(), &tasks)).unwrap();
+        let run = |node: &str, procid: &str| {
+            Command::new("sh")
+                .arg(&script)
+                .env("SLURMD_NODENAME", node)
+                .env("SLURM_PROCID", procid)
+                .env("SLURM_JOB_ID", "77")
+                .env("SLURM_STEP_ID", "4")
+                .output()
+                .unwrap()
+        };
+        let second = run("n460", "1");
+        assert_eq!(
+            second.status.code(),
+            Some(3),
+            "the task exits as its program did"
+        );
+        let n460 = dir.path().join("n460");
+        assert_eq!(
+            fs::read_to_string(n460.join("where")).unwrap().trim(),
+            n460.display().to_string()
+        );
+        assert_eq!(
+            fs::read_to_string(n460.join("via")).unwrap().trim(),
+            "prefix"
+        );
+        assert_eq!(
+            fs::read_to_string(n460.join(TASK_EXIT_FILE))
+                .unwrap()
+                .trim(),
+            "3"
+        );
+        assert!(
+            read_step_id(dir.path()).is_none(),
+            "only task 0 records the step"
+        );
+        assert!(run("n105", "0").status.success());
+        assert_eq!(read_step_id(dir.path()).as_deref(), Some("77.4"));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("n105").join(TASK_EXIT_FILE))
+                .unwrap()
+                .trim(),
+            "0"
+        );
+        let stray = run("n999", "2");
+        assert!(!stray.status.success());
+        assert!(
+            String::from_utf8_lossy(&stray.stderr).contains("n999"),
+            "a node the step has no task for is named"
         );
     }
 
