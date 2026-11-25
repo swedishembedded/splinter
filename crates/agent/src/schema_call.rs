@@ -132,14 +132,14 @@ impl SchemaCall {
 }
 
 /// Whether the call's failure is this input's alone: the model's answer was malformed or broke the schema, or it spent
-/// the call's tokens or time without one. The item is rejected with the reason and the others go on. A cancellation or
+/// the call's tokens or time without one, or ended on an announcement of work to come. The item is rejected with the reason and the others go on. A cancellation or
 /// an outage is the run's, not the item's.
 fn unanswerable(error: &CallError) -> bool {
     match error {
         CallError::Invalid { .. } | CallError::Postcondition { .. } => true,
-        CallError::Stopped { conclusion } => matches!(
+        CallError::Stopped { conclusion } => !matches!(
             conclusion,
-            sven_sdk::RunConclusion::BudgetExhausted | sven_sdk::RunConclusion::Timeout
+            sven_sdk::RunConclusion::Cancelled | sven_sdk::RunConclusion::Waiting
         ),
         _ => false,
     }
@@ -228,10 +228,13 @@ mod tests {
 
     #[test]
     fn an_item_that_spends_its_budget_is_rejected_and_a_cancellation_stops_the_run() {
-        use sven_sdk::RunConclusion::{BudgetExhausted, Cancelled, Timeout};
+        use sven_sdk::RunConclusion::{
+            BudgetExhausted, Cancelled, StoppedWithoutConclusion, Timeout,
+        };
         let stopped = |conclusion| CallError::Stopped { conclusion };
         assert!(unanswerable(&stopped(BudgetExhausted)));
         assert!(unanswerable(&stopped(Timeout)));
+        assert!(unanswerable(&stopped(StoppedWithoutConclusion)));
         assert!(!unanswerable(&stopped(Cancelled)));
         assert!(!unanswerable(&CallError::Infrastructure(anyhow::anyhow!(
             "outage"

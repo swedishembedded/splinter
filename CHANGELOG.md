@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed (one item's spent budget stopped a whole fan-out)
-- An `agent` item whose call spent its output tokens or its time without an answer is rejected with that reason, like an answer that breaks the schema; the other items go on. It stopped the stage and the run before, so one long reply in two hundred lost the rest of the wave.
+- An `agent` item whose call spent its output tokens or its time without an answer, or ended on an announcement of work to come, is rejected with that reason, like an answer that breaks the schema; the other items go on. It stopped the stage and the run before, so one long reply in two hundred lost the rest of the wave.
 
 ### Fixed (an `agent` stage over many items failed with "dispatch task is gone")
 - The calls of an `agent` stage run on one shared runtime. Each had a runtime of its own, dropped when the call ended, which left the pooled connections of the stage's one HTTP client without their tasks: with a few hundred calls at once the next call to pick such a connection failed, four times in a row, and the stage stopped.
