@@ -166,6 +166,73 @@ re-sent until brain reports it committed (applied is not durable).
 - [ ] Qwen3-0.6B and Qwen3-4B on one card (A34-A36): synchronous against asynchronous at equal generated tokens,
       trained tokens, updates, GPU hours and wall time; useful throughput, experience utilisation, held-out and
       retention.
+      **Partial (lane agrpo-real, 2026-11-25).** A container restart lost the node-local run directories, and the
+      cards were then withdrawn. The figures below were read from the runs before that; the settings are in
+      `~/project/shared/tmp/agrpo/agrpo-real/cfg` and the scripts in `.../scripts` (run.sh, batch.sh, analyze.py,
+      table.py, probe.py).
+      - Task family `tasks/integer-arithmetic` (base pass rates in `tasks/README.md`): Qwen3-0.6B has 59 train and 28
+        held-out tasks in (0.1, 0.9); Qwen3-4B has 10 and 10, since its answers are mostly all right or all wrong.
+      - Smoke (A34, Qwen3-0.6B, 12 groups of 8, `max_staleness 2`, clipped, rank 16): three versions published,
+        9 groups applied and 9 committed, none applied or committed twice. At version 1 the ratio mean was 0.998 but
+        the min and max were 0.05 and 2.77 (clip 7.8%), an int8 KV cache artefact (brain knowledge 588); with
+        `--kv-cache f32` they were 0.90 and 1.09 (clip 0). Every later run serves with f32 KV.
+      - Defects the real stack showed, all fixed on this branch: rollouts drawn before the policy was served
+        (80b8dda88); a learner trained in thinking mode for no-think rollouts (9662d6623, knowledge 223); a
+        finished run's result read before the job had ended (80b8dda88); an unanswered finish (80b8dda88); and the
+        synchronous-run deadlock (40fdab3b4, knowledge 222). The last one stopped the first S arm; the S figures
+        below are from the run after the fix.
+      - S against A, Qwen3-0.6B, ONE seed each (seed 1; the planned seeds 2-3 and the score-centred arm C were not
+        run). 128 groups of 8 over the 59 tasks, `step_tokens 1024`, `queue_tokens 4096`, `publish_every 1`,
+        clipped, temperature 1.0, `max_output_tokens 512`, rank 16. Served with `--kv-cache f32 --ctx 4096
+        --max-batch 16`, one GH200 shared with another tenant's 63 GB server (binary set bin-760c04d3b-s5). Held-out:
+        28 tasks x 32 draws, before (base) and after (candidate) on the run's server, 95% two-level bootstrap.
+
+        | figure | S (max_staleness 0) | A (max_staleness 2) |
+        |---|---|---|
+        | wall s (GPU s: one card) | 235 | 220 |
+        | optimiser steps | 6 | 7 |
+        | generated / trained tokens | 24716 / 6787 | 23981 / 7565 |
+        | groups dropped stale | 1 | 0 |
+        | zero-variance groups (of 128) | 95 | 92 |
+        | useful tokens/s (trained/wall) | 28.8 | 34.4 |
+        | experience utilisation (trained/generated) | 0.275 | 0.315 |
+        | learner wait s | 154 | 178 |
+        | backpressure s | 53.7 | 0 |
+        | staleness mean / max (versions) | 0 / 0 | 0.19 / 1 |
+        | train reward, first / last quarter of rollouts | 0.805 / 0.973 | 0.711 / 0.902 |
+        | held-out before | 0.693 [0.593, 0.780] | 0.695 [0.589, 0.787] |
+        | held-out after | 0.790 [0.643, 0.913] | 0.781 [0.631, 0.915] |
+        | held-out after - before | +0.097 [-0.031, 0.231] | +0.086 [-0.001, 0.169] |
+
+        What this shows: both arms ran to the end with no group trained twice, and both were generation-bound (the
+        learner waited 65-81% of the wall). A was 6% shorter in wall time and trained 11% more tokens from 3% fewer
+        generated ones, and S lost 54 s to backpressure. Most of the generation went to groups whose rewards did
+        not differ (72-74% of groups). What it does not show: any difference between the arms beyond noise (one
+        seed each), or a held-out gain (both intervals include 0 or nearly 0). A pilot of A at 64 groups (an earlier
+        binary) gave +0.086 [-0.006, 0.174]. The held-out gain is mostly a format: the base often ends a correct sum
+        with chatter, which the grader scores as wrong, and the trained policy ends on the number. Products did
+        not improve (mul 3x3 unchanged).
+      - Rollout cost: a 0.6B rollout of about 37 tokens took 2.1 s on average (1 s resolution, 512 rollouts, 16
+        slots), while a direct request through brain at the same concurrency took about 0.5 s. That leaves roughly
+        1.6 s per rollout outside the model (sven session, tree, verifier); this is inferred, not profiled. From
+        start to the first rollout took 28 s.
+      - Profile of a short Qwen3-4B run: brain roadmap `async-policy-gradient.md`, end-to-end item. One runaway
+        rollout (three attempts at the 2048-token context) took 74% of a 175 s run, and the learner waited 84%.
+      Proposals (bottleneck, baseline, evidence, change, oracle), ranked by measured share:
+      1. Runaway rollouts: 129 s of 175 s (4B profile); a context-exhausted rollout is retried twice as an
+         infrastructure failure. Change: `max_output_tokens` (landed here, after-numbers not measured), and
+         context exhaustion recorded as truncation, not retried. Oracle: the same 4B workload's wall and truncated
+         count.
+      2. Zero-variance groups: 72-74% of groups, so 69-72% of generated tokens are never trained. Change: draw
+         tasks near the frontier (drop a task for the run once its groups come back all-pass), the adaptive-difficulty
+         item. Oracle: experience utilisation and held-out at equal generated tokens.
+      3. Learner starvation, 65-84% of the wall: per-rollout overhead (about 1.6 s of 2.1 s, inferred) and 16 slots.
+         Change: profile the episode path first (sven session start, tree copy, verifier), then raise the slots
+         with brain's `--max-batch`. Oracle: rollouts/s and useful tokens/s at a fixed task set.
+      4. Startup, 27-28 s before the first rollout (two base loads plus the first publication): share the frozen
+         base (brain A37-A39).
+      Open: seeds 2-3 of S and A, the score-centred arm C (configs `cfg/cmp-C-*.with`), the Qwen3-4B pair, the
+      after-measurement of `max_output_tokens`, and retention.
 - [ ] Merging append-only calls of one session into one sample (A15), against the per-call reference, once the
       re-forwarded context is measured.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.

@@ -207,3 +207,5 @@ in the same commit.
 | [219](219-a-duplicate-answer-says-the-learner-holds-a-group-not-how.md) | A duplicate answer says the learner holds a group, not whether it applied it |
 | [220](220-brain-writes-every-step-figure-as-a-float.md) | brain writes every step figure as a float |
 | [221](221-a-stopped-controller-leaves-its-streaming-job-holding-the-run.md) | A stopped controller leaves its streaming job holding the run |
+| [222](222-a-synchronous-run-deadlocks-on-groups-its-learner-dropped-silently.md) | A synchronous run deadlocks on groups its learner dropped silently |
+| [223](223-a-no-think-rollout-must-be-trained-in-no-think-mode.md) | A no-think rollout must be trained in no-think mode |
