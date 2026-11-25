@@ -26,6 +26,13 @@ fixtures:
     oracle_sha256: "ca588efb5a4e97877ea758f8b1cd314af971a7d95e6ad3420fcd2b3a12d4e942"
     references: ["reference-projector"]
     test: "splinter-data/it/recorded_preferences"
+  data/repair-pairs:
+    path: "validation/fixtures/data/repair-pairs.json"
+    sha256: "cc0f6edb72695bbfdc62ceda468e610228021bc3322c6ea9d6870ee89ea5192d"
+    oracle: "validation/oracles/data/repair_pairs.py"
+    oracle_sha256: "145893b24e4effc7992330fed2f01c1bf9a452cdb94f135971dffddeaf4c06d1"
+    references: ["reference-projector"]
+    test: "splinter-data/it/attempt_pairs::repairs"
   data/retrieval-triples:
     path: "validation/fixtures/data/retrieval-triples.json"
     sha256: "02dd16802b4e935490e211118257fb84db8dcaf93c372eb30bea68d96af9a8e9"

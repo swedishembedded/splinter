@@ -111,3 +111,4 @@ teacher-told-the-wrong-outcome	views	crates/data/src/views/privileged.rs	    tex
 critique-makes-another-task	views	crates/data/src/views/preference.rs	.same_apart_from_critiques(&rejected.experience.to_task())	.same_apart_from_critiques(&rejected.experience.to_task()) && false	splinter-data	it	recorded_preferences
 recorded-relation-paired-twice	views	crates/data/src/views/preference.rs	if !paired.insert((&chosen.id, &rejected.id)) {	if !paired.insert((&chosen.id, &rejected.id)) && false {	splinter-data	it	recorded_preferences
 recorded-replies-compared-without-calls	views	crates/data/src/views/preference.rs	if same_message(&better, &worse) {	if better.content == worse.content {	splinter-data	it	recorded_preferences
+failed-repair-paired	views	crates/data/src/views/preference.rs	                p.attempt.passed\n            })\n            .collect();	                true\n            })\n            .collect();	splinter-data	it	attempt_pairs::repairs

@@ -38,6 +38,7 @@ use splinter_data::{
 };
 
 mod external;
+mod repairs;
 
 const TOKENIZER: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const OTHER_TOKENIZER: &str =

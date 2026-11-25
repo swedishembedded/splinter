@@ -554,9 +554,9 @@ gaps:
   resolution: golden products are blessed from the implementation output, so they guard regressions only; the independent
     recomputation they lack now exists for the sft-step and sft-final views (data/sft-projection), policy-gradient grouping
     and its records (data/policy-gradient-groups), the preference and feedback views attempt pairing and keeping (data/attempt-pairs),
-    the retrieval view's triples (data/retrieval-triples), self-distillation's choice and teacher context (data/self-distill)
-    and recorded preferences (data/recorded-preferences), each of which kills its views mutants on its own; preference
-    repairs and the factory product statistics still have no second implementation
+    the retrieval view's triples (data/retrieval-triples), self-distillation's choice and teacher context (data/self-distill),
+    recorded preferences (data/recorded-preferences) and preference repairs (data/repair-pairs), each of which kills its
+    views mutants on its own; the factory product statistics still have no second implementation
 - id: G-FS-18
   source_id: F-18
   where: crates/orchestrator/src/config.rs (629 lines, 2 unit tests)
