@@ -277,7 +277,11 @@ impl TaskFamily for FactoryFamily {
             .map_err(|e| infrastructure(e.to_string()))?
         {
             Verdict::Graded(vector) => {
-                let reward = vector.get("reward").copied().unwrap_or(0.0);
+                // The host refuses a grade without a `reward` entry
+                // (`Verdict::Malformed`); none is invented here either.
+                let Some(&reward) = vector.get("reward") else {
+                    return Err(infrastructure("the verifier graded no `reward`".into()));
+                };
                 Ok(Graded {
                     reward,
                     passed: reward >= 1.0,
