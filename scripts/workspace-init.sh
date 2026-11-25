@@ -129,12 +129,14 @@ freeze brain "$brain_full" brain brain-gpu-worker
 freeze sven "$sven_full" sven
 freeze splinter "$splinter_full" splinter
 
-# The Harbor worker's own Python environment, installed from the same splinter commit.
-if [ ! -x "$dir/venv/bin/splinter-harbor-worker" ]; then
+# The Harbor worker's own Python environment, installed from the same splinter commit: reinstalled when the commit changes,
+# so the worker is never older than the splinter that starts it.
+if [ ! -x "$dir/venv/bin/splinter-harbor-worker" ] || [ "$(cat "$dir/venv/.worker-commit" 2>/dev/null)" != "$splinter_full" ]; then
   say "installing the Harbor worker"
-  python3 -m venv "$dir/venv"
-  "$dir/venv/bin/pip" install --quiet "$(snapshot splinter "$splinter_full")/workers/harbor" \
+  [ -x "$dir/venv/bin/pip" ] || python3 -m venv "$dir/venv"
+  "$dir/venv/bin/pip" install --quiet --force-reinstall --no-deps "$(snapshot splinter "$splinter_full")/workers/harbor" \
     || die "the Harbor worker did not install (network?)"
+  printf '%s\n' "$splinter_full" >"$dir/venv/.worker-commit"
 fi
 
 # The task repository (bench) at its commit, with the SFT records and the generated collections.

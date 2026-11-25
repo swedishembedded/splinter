@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (every task's image was a full copy of its tools)
+- A Dockerfile whose steps after the first `COPY` are only `COPY` and `WORKDIR` is built in two layers: the steps before it once, as a shared archive named by the base and those steps, and a task's own layer holding only the files its `COPY`s write. A dataset of 1,500 vim tasks took 440 GB of image archives and ran the `apt-get install` for every task (minutes each); it now holds one 306 MB archive and 30 KB a task, and builds in seconds. A destination that passes through a symbolic link of the shared tree falls back to the one-archive build.
+- `workspace-init.sh` installs the Harbor worker again when the splinter commit changes. It was installed once and kept, so a workspace's worker was older than the splinter that started it.
+
 ### Fixed (one item's spent budget stopped a whole fan-out)
 - An `agent` item whose call spent its output tokens or its time without an answer, or ended on an announcement of work to come, is rejected with that reason, like an answer that breaks the schema; the other items go on. It stopped the stage and the run before, so one long reply in two hundred lost the rest of the wave.
 

@@ -31,7 +31,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from splinter_harbor_worker.rootfs.archive import build_archive
+from splinter_harbor_worker.rootfs.archive import build_layers
 from splinter_harbor_worker.rootfs.build import DEFAULT_PATH, base_env
 from splinter_harbor_worker.rootfs.registry import PlatformUnavailable, RegistryClient, host_platform, parse_reference
 
@@ -100,11 +100,11 @@ def _built(dockerfile: Path, context: Path, cache: Path, name: str, client: Regi
            log: Callable[[str], None], why: dict, builder: str = "userns") -> TaskImage:
     digest = hashlib.sha256(dockerfile.read_bytes()).hexdigest()
     context_digest = _context_digest(context)
-    archive, record = build_archive(dockerfile, context, cache=cache, name=f"{_slug(name)}-{context_digest[:12]}",
+    archives, record = build_layers(dockerfile, context, cache=cache, name=f"{_slug(name)}-{context_digest[:12]}",
                                     client=client, log=log, builder=builder)
-    return TaskImage((archive,), record["env"], record["workdir"], {
+    return TaskImage(archives, record["env"], record["workdir"], {
         "source": "dockerfile", "dockerfile_sha256": digest, "context_sha256": context_digest, "base": record["base"],
-        "platform": "/".join(host_platform()), "archive": archive.name,
+        "platform": "/".join(host_platform()), "archives": [a.name for a in archives],
         "builder": record.get("builder", "userns"), **why,
     })
 

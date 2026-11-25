@@ -18,6 +18,12 @@ exhaust (an image is tens of thousands of files; a whole dataset's images are hu
 Where user namespaces are not available (``builder="proot"``) the same steps run through ``proot`` on a tree below the
 cache's ``work/``, which is removed once archived.
 
+A Dockerfile whose steps after its first ``COPY`` are only ``COPY`` and ``WORKDIR`` (a task image: install the tools, then
+put the task's files in) is built in two layers (``build_layers``): the steps before the first ``COPY`` once, as a shared
+archive named by the digest of the base and those steps, and the rest as a small archive of only the files they write. A
+dataset of thousands of tasks then holds one copy of the installed tools and a few kilobytes per task, and builds the
+installation once, not once per task.
+
 A sandbox unpacks the archive into its own tmpfs (``sandbox/userns_keeper.py``). The name carries the
 build context's digest (``images._context_digest``: the Dockerfile and every file beside it), so an unchanged context
 is built once and a context with any changed file is built again; a concurrent build of the same name waits for the
@@ -32,9 +38,11 @@ import os
 import shutil
 import subprocess
 import sys
+import posixpath
 import tarfile
+import tempfile
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from splinter_harbor_worker.errors import ExternalToolError
 from splinter_harbor_worker.rootfs import dockerfile
@@ -61,8 +69,11 @@ def build_archive(
     client: RegistryClient | None = None,
     log: Callable[[str], None] = lambda message: None,
     builder: str = "userns",
+    until: int | None = None,
 ) -> tuple[Path, dict]:
-    """(the archive of the built tree, its image record); an archive of the same name is reused. ``builder``
+    """(the archive of the built tree, its image record); an archive of the same name is reused. ``until`` builds only the
+    first that many steps and records the directories and symbolic links of the tree (``dirs``, ``symlinks``), which a
+    layer built on it needs to know. ``builder``
     ``proot`` builds where user namespaces are not available: the tree is a directory below the cache's ``work/``,
     removed once archived, and the ``RUN`` steps run through ``proot``."""
     if builder not in BUILDERS:
@@ -84,7 +95,9 @@ def build_archive(
         partial = archive.with_name(f"{archive.name}.partial-{os.getpid()}")
         log_path = cache / "logs" / f"{name}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        listing = cache / "work" / f"{name}.listing.json" if until is not None else None
         spec = {"dockerfile": str(dockerfile_path), "context": str(context), "layers": [str(p) for p in base.layers],
+                "until": until, "listing": str(listing) if listing else None,
                 "env": env, "mountpoint": str(mountpoint), "archive": str(partial), "shim": str(shim) if shim else None,
                 "log": str(log_path), "proot": proot_binary() if builder == "proot" else None}
         log(f"{name}: building {dockerfile_path} on {plan.base} " + ("with proot" if spec["proot"] else "in memory"))
@@ -109,9 +122,110 @@ def build_archive(
             "env": env, "workdir": plan.workdir, "base": {"reference": plan.base, "manifest_digest": base.manifest_digest},
             "dockerfile_sha256": hashlib.sha256(text.encode()).hexdigest(), "builder": builder,
         }
+        if listing is not None:
+            record.update(json.loads(listing.read_text()))
+            listing.unlink()
         partial.replace(archive)
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         return archive, record
+
+
+LAYERED = ("COPY", "WORKDIR")
+
+
+def shared_prefix(plan: dockerfile.Plan) -> int | None:
+    """How many leading steps can be built once for every image that shares them: those before the first ``COPY``, when
+    there are any and everything after is ``COPY`` or ``WORKDIR`` (a step that runs commands on the task's files would
+    need the whole tree). ``None`` when the Dockerfile does not have that shape."""
+    first = next((i for i, step in enumerate(plan.steps) if step.kind == "COPY"), None)
+    if not first or any(step.kind not in LAYERED for step in plan.steps[first:]):
+        return None
+    return first
+
+
+def prefix_name(plan: dockerfile.Plan, base_digest: str, until: int) -> str:
+    """The name of the shared archive: the base image, the environment and the first ``until`` steps decide its content."""
+    key = json.dumps([base_digest, sorted(plan.env.items()), [repr(step) for step in plan.steps[:until]]], sort_keys=True)
+    return "prefix-" + hashlib.sha256(key.encode()).hexdigest()[:20]
+
+
+def build_layers(
+    dockerfile_path: Path,
+    context: Path,
+    *,
+    cache: Path,
+    name: str,
+    client: RegistryClient | None = None,
+    log: Callable[[str], None] = lambda message: None,
+    builder: str = "userns",
+) -> tuple[tuple[Path, ...], dict]:
+    """(the archives to unpack in order, the image record): the shared prefix and the task's own layer where the
+    Dockerfile has the shape ``shared_prefix`` names, else the one archive ``build_archive`` makes."""
+    plan = dockerfile.parse(dockerfile_path.read_text())
+    until = shared_prefix(plan)
+    client = client or RegistryClient(cache)
+    if until is not None:
+        base = client.pull(plan.base)
+        shared, shared_record = build_archive(dockerfile_path, context, cache=cache, client=client, log=log, builder=builder,
+                                              name=prefix_name(plan, base.manifest_digest, until), until=until)
+        layer = _layer(plan.steps[until:], context, shared_record, cache, name, log)
+        if layer is not None:
+            record = {k: v for k, v in shared_record.items() if k not in ("dirs", "symlinks")}
+            record["workdir"] = plan.workdir
+            record["archives"] = [shared.name, layer.name]
+            return (shared, layer), record
+    archive, record = build_archive(dockerfile_path, context, cache=cache, name=name, client=client, log=log, builder=builder)
+    return (archive,), record
+
+
+def _layer(steps: tuple, context: Path, shared: dict, cache: Path, name: str, log: Callable[[str], None]) -> Path | None:
+    """The archive of exactly what ``steps`` (``COPY`` and ``WORKDIR``) write on top of the shared tree, or ``None`` when
+    a destination passes through a symbolic link of that tree, which the layer cannot resolve without unpacking it."""
+    from splinter_harbor_worker.rootfs.build import run_step
+
+    archive = cache / "images" / f"{name}.layer.tar"
+    if archive.is_file():
+        return archive
+    dirs, symlinks = set(shared["dirs"]), set(shared["symlinks"])
+    destinations = [posixpath.normpath(step.destination) for step in steps]
+    for destination in destinations:
+        path = PurePosixPath(destination)
+        if any(str(parent) in symlinks for parent in (path, *path.parents)):
+            return None
+    work = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=_workdir(cache)))
+    try:
+        tree = work / "root"
+        tree.mkdir()
+        existing = [d for d in destinations if d in dirs]
+        for d in existing:  # a destination that is a directory of the shared tree is one here: `COPY x /dir` goes into it
+            (tree / d.lstrip("/")).mkdir(parents=True, exist_ok=True)
+        for step in steps:
+            run_step(step, tree, context, {}, work / "layer.log", None)
+        partial = archive.with_name(f"{archive.name}.partial-{os.getpid()}")
+        archive.parent.mkdir(parents=True, exist_ok=True)
+
+        def as_root(info: tarfile.TarInfo) -> tarfile.TarInfo:
+            info.uid = info.gid = 0
+            info.uname = info.gname = "root"
+            return info
+
+        with tarfile.open(partial, "w", format=tarfile.PAX_FORMAT) as out:
+            for path in sorted(tree.rglob("*")):
+                inside = "/" + path.relative_to(tree).as_posix()
+                if path.is_dir() and not path.is_symlink() and inside in dirs:
+                    continue  # the directory is already there, with its own mode
+                out.add(path, arcname=path.relative_to(tree).as_posix(), recursive=False, filter=as_root)
+        partial.replace(archive)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    log(f"{name}: layer {archive.name}")
+    return archive
+
+
+def _workdir(cache: Path) -> Path:
+    path = cache / "work"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _build_in_namespace(spec: dict) -> None:
@@ -125,10 +239,23 @@ def _build_in_namespace(spec: dict) -> None:
     unpack_layers([Path(p) for p in spec["layers"]], tree)
     plan = dockerfile.parse(Path(spec["dockerfile"]).read_text())
     prepare_tree(tree, Path(spec["shim"]) if spec["shim"] else None)
-    for step in plan.steps:
+    steps = plan.steps if spec.get("until") is None else plan.steps[: spec["until"]]
+    for step in steps:
         run_step(step, tree, Path(spec["context"]), spec["env"], Path(spec["log"]), spec.get("proot"))
     finish_tree(tree)
     make_deletable(tree)
+    if spec.get("listing"):
+        dirs, symlinks = [], []
+        for root, names, files in os.walk(tree):
+            relative = "/" + Path(root).relative_to(tree).as_posix().removeprefix(".")
+            relative = relative.rstrip("/") or "/"
+            for name in (*names, *files):
+                path = Path(root) / name
+                if path.is_symlink():
+                    symlinks.append(posixpath.join(relative, name))
+                elif path.is_dir():
+                    dirs.append(posixpath.join(relative, name))
+        Path(spec["listing"]).write_text(json.dumps({"dirs": sorted(dirs), "symlinks": sorted(symlinks)}))
     with tarfile.open(spec["archive"], "w", format=tarfile.PAX_FORMAT) as out:
         for entry in sorted(tree.iterdir()):
             out.add(entry, arcname=entry.name)
