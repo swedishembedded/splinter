@@ -31,6 +31,7 @@ the file of its tree the reply is written to: `answer_file = "answer.txt"`. A pr
 it offers the agent no tool and sends no follow-up; the reply of a run that concluded is written to
 that file before the change is read back, so the task's own `test.sh` grades it like any file the
 agent wrote. A path that is not relative and inside the tree is refused when the task is read.
+`tasks/toy-answers` is such a family, small enough for a toy model to answer.
 The task is held to the bar of every workspace task: its check fails on the tree the
 solver is given on every run, and with `--oracle require` the change `solve.sh` makes
 (run on the host with `/solution` and the working directory mapped to the tree) must

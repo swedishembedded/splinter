@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+schema_version = "1.4"
+[task]
+name = "toy-answers/one-letter"
+description = "A reply that starts with a letter, answered in the reply: an untrained toy model's first byte is one now and then."
+
+[agent]
+timeout_sec = 120.0
+# The reply is the answer: it is written to answer.txt in the tree, and no tool is offered.
+answer_file = "answer.txt"
+
+[verifier]
+timeout_sec = 30.0
+
+[metadata]
+bench_family = "toy-answers"

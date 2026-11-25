@@ -53,6 +53,14 @@ workspace is scanned for any rendering of the episode's hidden state, and an
 instance whose workspace contains its own answer fails before any model is
 involved.
 
+## Toy families
+
+`toy-answers` holds Harbor task folders answered in the reply (`[agent] answer_file`), each
+rewarded by its own `tests/test.sh` when the reply starts with an ASCII letter. An untrained toy
+model draws its first byte from a nearly flat distribution, so some of its replies start with a
+letter and a group of its rollouts often has rewards that differ: what online training on the CPU
+(`make test/online`) needs to have anything to train. They are not repository families and are not in `catalog.toml`.
+
 ## Repository families
 
 Eight small original projects, each learned from its own
