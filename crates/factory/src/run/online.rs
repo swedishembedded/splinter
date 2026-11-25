@@ -389,6 +389,7 @@ pub(crate) fn produce(
                     .top_logprobs
                     .filter(|_| params.estimator == "score-centred"),
                 start: start.as_deref(),
+                job_place: &factory.work(&stage.key).join("stream-job.json"),
             })
             .map_err(|e| fail(e.to_string()))?;
         let served = learner.served_as();

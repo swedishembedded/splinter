@@ -18,7 +18,8 @@
 //!   its events names the run's `epoch` and published `version`.
 //! * **Offer** (`POST /jobs/{id}/records?epoch=N`, a JSONL body of complete
 //!   groups): [`Offered::Taken`] with the keys accepted and the ones the run
-//!   already holds, [`Offered::Full`] (429) or [`Offered::NotReady`] (503)
+//!   already holds, [`Offered::Full`] (429) or [`Offered::NotReady`] (503, or
+//!   a server out of reach for up to five minutes, which may be restarting)
 //!   with when to ask again; an invalid body is [`StreamError::Refused`].
 //! * **Events** (`GET /jobs/{id}/events`, resumed with `Last-Event-ID`): read
 //!   on a thread of their own and drained by [`StreamJob::events`]: groups
@@ -42,7 +43,11 @@ use serde::Serialize;
 use serde_json::{json, Map, Value};
 
 use super::job::{message_of, EventParser};
+
+mod place;
 use crate::endpoint::BrainEndpoints;
+use place::with_sources;
+pub use place::JobPlace;
 
 /// How long a short call (create, offer, finish) may take.
 const CALL: Duration = Duration::from_secs(120);
@@ -55,6 +60,10 @@ const REOPEN: Duration = Duration::from_millis(200);
 
 /// How long a 429 or 503 without `Retry-After` is waited out.
 const DEFAULT_RETRY: Duration = Duration::from_secs(1);
+
+/// How long a new job is asked for again while the server is busy (a run's last job still letting go of it, a
+/// device serving) or cannot be reached (restarting).
+const START_WAIT: Duration = Duration::from_secs(300);
 
 /// What the job's `stream` document holds.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -148,7 +157,7 @@ pub enum Offered {
         /// When to ask again.
         retry_after: Duration,
     },
-    /// The job is not ready yet (503): ask again after `retry_after`.
+    /// The job is not ready yet (503), or its server cannot be reached for now: ask again after `retry_after`.
     NotReady {
         /// When to ask again.
         retry_after: Duration,
@@ -223,6 +232,19 @@ pub enum StreamError {
     Transport(String),
 }
 
+/// One round of asking the endpoints for a job.
+enum Placed {
+    /// An endpoint placed it (or the run was refused for good).
+    Job(Result<StreamJob, StreamError>),
+    /// Every endpoint was busy or out of reach: ask again after `wait`.
+    Busy {
+        runtime: tokio::runtime::Runtime,
+        client: reqwest::Client,
+        wait: Duration,
+        refusals: Vec<String>,
+    },
+}
+
 /// A running streaming job.
 pub struct StreamJob {
     runtime: tokio::runtime::Runtime,
@@ -237,6 +259,8 @@ pub struct StreamJob {
     frames: Receiver<Value>,
     stop: Arc<AtomicBool>,
     reader: Option<std::thread::JoinHandle<()>>,
+    /// Since when the endpoint could not be reached, while it cannot.
+    unreachable_since: Option<std::time::Instant>,
 }
 
 /// The HTTP client of one runtime: a client is used on the runtime that
@@ -273,15 +297,52 @@ impl StreamJob {
     ///
     /// # Errors
     /// No endpoint placed it, it was refused, or its first frame never came.
+    ///
+    /// An endpoint that is busy (429, 503) or cannot be reached is asked again, with the wait it names, for up to
+    /// five minutes: a run's last job may still be letting go of the run, or the server may be restarting.
     pub fn start(brain: &BrainEndpoints, spec: &StreamSpec) -> Result<Self, StreamError> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        let mut runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| StreamError::Failed(format!("starting a runtime: {e}")))?;
-        let client = runtime.block_on(async { http_client() })?;
+        let mut client = runtime.block_on(async { http_client() })?;
         let body =
             json!({"model": "brain/train", "action": "train", "params": spec.create_params()});
+        let deadline = std::time::Instant::now() + START_WAIT;
+        loop {
+            match Self::place_once(runtime, client, brain, &body) {
+                Placed::Job(job) => return job,
+                Placed::Busy {
+                    runtime: r,
+                    client: c,
+                    wait,
+                    refusals,
+                } => {
+                    if std::time::Instant::now() + wait > deadline {
+                        return Err(StreamError::Failed(format!(
+                            "no endpoint placed the streaming run within {}s: {}",
+                            START_WAIT.as_secs(),
+                            refusals.join("; ")
+                        )));
+                    }
+                    eprintln!("splinter: no endpoint took the streaming run yet ({}); asking again in {}s", refusals.join("; "), wait.as_secs_f32());
+                    std::thread::sleep(wait);
+                    (runtime, client) = (r, c);
+                }
+            }
+        }
+    }
+
+    /// One round over `brain`'s endpoints: the job the first one placed, or, when every one was busy or out of
+    /// reach, the wait before the next round.
+    fn place_once(
+        runtime: tokio::runtime::Runtime,
+        client: reqwest::Client,
+        brain: &BrainEndpoints,
+        body: &Value,
+    ) -> Placed {
         let mut refusals = Vec::new();
+        let mut wait: Option<Duration> = None;
         for url in brain.urls() {
             let sent = runtime.block_on(async {
                 client
@@ -296,11 +357,18 @@ impl StreamJob {
                 Ok(response) => response,
                 Err(e) => {
                     refusals.push(format!("{url}: {e}"));
+                    if e.is_connect() || e.is_timeout() {
+                        wait = Some(wait.unwrap_or(DEFAULT_RETRY).min(DEFAULT_RETRY * 2));
+                    }
                     continue;
                 }
             };
             let status = response.status();
+            let busy = matches!(status.as_u16(), 429 | 503).then(|| retry_after(&response));
             let text = runtime.block_on(response.text()).unwrap_or_default();
+            if let Some(after) = busy {
+                wait = Some(wait.map_or(after, |w| w.min(after)));
+            }
             if status != reqwest::StatusCode::ACCEPTED {
                 refusals.push(format!(
                     "{url} (HTTP {}): {}",
@@ -312,13 +380,23 @@ impl StreamJob {
             let id = serde_json::from_str::<Value>(&text)
                 .ok()
                 .and_then(|v| v["id"].as_str().map(str::to_string))
-                .ok_or_else(|| StreamError::Transport(format!("{url} created a job with no id")))?;
-            return Self::follow(runtime, client, url.clone(), brain.key().to_string(), id);
+                .ok_or_else(|| StreamError::Transport(format!("{url} created a job with no id")));
+            return Placed::Job(id.and_then(|id| {
+                Self::follow(runtime, client, url.clone(), brain.key().to_string(), id)
+            }));
         }
-        Err(StreamError::Failed(format!(
+        if let Some(wait) = wait {
+            return Placed::Busy {
+                runtime,
+                client,
+                wait,
+                refusals,
+            };
+        }
+        Placed::Job(Err(StreamError::Failed(format!(
             "no endpoint placed the streaming run: {}",
             refusals.join("; ")
-        )))
+        ))))
     }
 
     fn follow(
@@ -350,6 +428,7 @@ impl StreamJob {
             frames,
             stop,
             reader: Some(reader),
+            unreachable_since: None,
         };
         // A job reports its progress (`{"step", "total"}`) and its stages
         // (`{"type": "stage"}`) before it streams: the run starts at its
@@ -431,7 +510,31 @@ impl StreamJob {
                 .send()
                 .await
         });
-        let response = sent.map_err(|e| StreamError::Transport(format!("{}: {e}", self.url)))?;
+        let response = match sent {
+            Ok(response) => {
+                self.unreachable_since = None;
+                response
+            }
+            // No answer: the server may be restarting, or it closed a connection the client reused. An offer is
+            // idempotent (the run takes a group once, by its key), so it is made again until the server has been
+            // out of reach for long; once it is back, the job's events say whether the run went with it.
+            Err(e) => {
+                let since = *self
+                    .unreachable_since
+                    .get_or_insert_with(std::time::Instant::now);
+                if since.elapsed() > START_WAIT {
+                    return Err(StreamError::Transport(format!(
+                        "{}: no answer for {}s: {}",
+                        self.url,
+                        START_WAIT.as_secs(),
+                        with_sources(&e)
+                    )));
+                }
+                return Ok(Offered::NotReady {
+                    retry_after: DEFAULT_RETRY,
+                });
+            }
+        };
         let status = response.status().as_u16();
         let wait = retry_after(&response);
         let text = self.runtime.block_on(response.text()).unwrap_or_default();

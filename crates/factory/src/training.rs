@@ -177,6 +177,10 @@ pub struct OnlineTrain<'a> {
     pub top_k: Option<u32>,
     /// The adapter the run continues, if it continues one.
     pub start: Option<&'a Path>,
+    /// Where the run's job is recorded (the endpoint that placed it and its id), beside the run's state: a job a
+    /// stopped controller left running is cancelled before the run is asked for again, since brain starts no other
+    /// job of the run while one runs.
+    pub job_place: &'a Path,
 }
 
 /// The LoRA parameters brain's fine-tune takes, from a recipe's `params`.
@@ -592,7 +596,7 @@ impl Trainer for BrainTrainer {
         &self,
         request: &OnlineTrain<'_>,
     ) -> Result<Box<dyn crate::online::seams::StreamLearner>, TrainError> {
-        use splinter_model::served_train::{StreamDoc, StreamJob, StreamSpec};
+        use splinter_model::served_train::{JobPlace, StreamDoc, StreamJob, StreamSpec};
         let store = self.endpoints.artifact_store().map_err(error)?.clone();
         let start_adapter = request
             .start
@@ -619,7 +623,22 @@ impl Trainer for BrainTrainer {
                 start_adapter,
             },
         };
+        // A job a stopped controller left running holds the run: brain starts no other job of it meanwhile.
+        match std::fs::read(request.job_place) {
+            Ok(bytes) => {
+                let left: JobPlace = serde_json::from_slice(&bytes)
+                    .map_err(|e| TrainError(format!("{}: {e}", request.job_place.display())))?;
+                StreamJob::cancel_left(&self.endpoints, &left).map_err(error)?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(TrainError(format!("{}: {e}", request.job_place.display()))),
+        }
         let job = StreamJob::start(&self.endpoints, &spec).map_err(error)?;
+        let kept = request.job_place.with_extension("tmp");
+        serde_json::to_vec(&job.job_place())
+            .map_err(error)
+            .and_then(|bytes| std::fs::write(&kept, bytes).map_err(error))
+            .and_then(|()| std::fs::rename(&kept, request.job_place).map_err(error))?;
         Ok(Box::new(crate::online::brain::BrainLearner::new(
             job, store,
         )))

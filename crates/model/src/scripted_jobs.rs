@@ -229,6 +229,15 @@ pub(crate) fn route(
             "application/json",
             &json!({"outputs": outputs, "blobs": {}}).to_string(),
         );
+    } else if request_line.starts_with(&format!("DELETE /v1/jobs/{JOB_ID}"))
+        && jobs.stream_runs.cancel()
+    {
+        let _ = respond(
+            stream,
+            "200 OK",
+            "application/json",
+            &json!({"id": JOB_ID, "status": "cancelled"}).to_string(),
+        );
     } else if request_line.starts_with(&format!("DELETE /v1/jobs/{JOB_ID}")) {
         // As brain: a running job is cancelled (and still held); an ended one
         // is forgotten, which frees its place.
@@ -325,7 +334,12 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
                     &json!({"id": JOB_ID, "status": "running"}).to_string(),
                 );
             }
-            Err(why) => error(stream, "400 Bad Request", &format!("train: {why}")),
+            Err(crate::scripted_stream::NotCreated::Invalid(why)) => {
+                error(stream, "400 Bad Request", &format!("train: {why}"));
+            }
+            Err(crate::scripted_stream::NotCreated::Busy(why)) => {
+                error(stream, "429 Too Many Requests", &format!("train: {why}"));
+            }
         }
         return;
     }

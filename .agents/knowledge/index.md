@@ -205,3 +205,5 @@ in the same commit.
 | [217](217-a-token-bounded-producer-deadlocks-on-tokens-its-consumer-never-sees.md) | A token-bounded producer deadlocks on tokens its consumer never sees, or on a consumer that refuses below a step |
 | [218](218-a-copied-contract-drifts-unless-its-digest-is-pinned.md) | A copied contract drifts unless its digest is pinned and the server reports its own |
 | [219](219-a-duplicate-answer-says-the-learner-holds-a-group-not-how.md) | A duplicate answer says the learner holds a group, not whether it applied it |
+| [220](220-brain-writes-every-step-figure-as-a-float.md) | brain writes every step figure as a float |
+| [221](221-a-stopped-controller-leaves-its-streaming-job-holding-the-run.md) | A stopped controller leaves its streaming job holding the run |

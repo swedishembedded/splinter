@@ -22,7 +22,9 @@
 //! a duplicate of a key this job did not accept in its own epoch is
 //! therefore reported as committed. **A restart** (the job lost, or another
 //! epoch) is a [`LearnerError::restarted`]: the controller resumes against
-//! the run started again and sends everything not committed.
+//! the run started again and sends everything not committed. A job that
+//! continues the run publishes the policy its checkpoint holds before it
+//! trains; that first version is a committed one.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -90,6 +92,16 @@ pub fn records_of(group: &OutgoingGroup) -> Result<String, LearnerError> {
     Ok(body)
 }
 
+/// A count in a step frame: brain writes every step figure as a float (its metrics map), so a count is a
+/// non-negative whole number in either spelling; anything else is not a count.
+fn count(value: &serde_json::Value) -> Option<u64> {
+    value.as_u64().or_else(|| {
+        let x = value.as_f64()?;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        (x >= 0.0 && x.fract() == 0.0 && x < 2f64.powi(53)).then_some(x as u64)
+    })
+}
+
 impl BrainLearner {
     /// The learner of `job`, whose adapters are published to `store`.
     #[must_use]
@@ -108,14 +120,14 @@ impl BrainLearner {
     }
 
     fn step(&mut self, pg: &serde_json::Value) -> LearnerEvent {
-        let tokens = pg["policy_tokens"].as_u64().unwrap_or(0);
+        let tokens = count(&pg["policy_tokens"]).unwrap_or(0);
         let t = &mut self.telemetry;
         t.steps += 1;
         t.trained_tokens += tokens;
-        if let Some(dropped) = pg["dropped_stale"].as_u64() {
+        if let Some(dropped) = count(&pg["dropped_stale"]) {
             t.dropped_stale = t.dropped_stale.max(dropped);
         }
-        if let Some(max) = pg["staleness_max"].as_u64() {
+        if let Some(max) = count(&pg["staleness_max"]) {
             t.staleness_max = Some(t.staleness_max.unwrap_or(0).max(max));
         }
         if let (Some(mean), Some(queue), Some(wait)) = (
@@ -194,6 +206,15 @@ impl Learner for BrainLearner {
                     step,
                     lineage,
                 } => {
+                    // A job that continues the run publishes, before it trains, the policy its checkpoint
+                    // holds: that version is committed.
+                    if self.job.epoch() > 1
+                        && self.telemetry.steps == 0
+                        && self.telemetry.published.is_empty()
+                    {
+                        self.telemetry.committed_step =
+                            Some(self.telemetry.committed_step.unwrap_or(0).max(step));
+                    }
                     self.telemetry.published.push(PublishedVersion {
                         version,
                         digest,

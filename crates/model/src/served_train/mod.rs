@@ -53,7 +53,7 @@ pub use feedback::train_feedback_served;
 pub use job::REFUSED_WAIT;
 pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
 pub use score::score_chat;
-pub use stream::{Offered, StreamDoc, StreamError, StreamEvent, StreamJob, StreamSpec};
+pub use stream::{JobPlace, Offered, StreamDoc, StreamError, StreamEvent, StreamJob, StreamSpec};
 
 use std::path::Path;
 

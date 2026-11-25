@@ -100,6 +100,25 @@ pub struct Streams {
 }
 
 impl Streams {
+    /// Cancels the live run as brain cancels a job: its training state is written (what it applied is committed)
+    /// and it ends. `false` when no run is live.
+    pub(crate) fn cancel(&self) -> bool {
+        let mut live = self.live.lock().unwrap();
+        let Some(run) = live.as_mut().filter(|run| !run.done && !run.gone) else {
+            return false;
+        };
+        let mut durable = self.durable.lock().unwrap();
+        let durable = durable.entry(run.resume_key.clone()).or_default();
+        let mut push = |run: &mut Live, frame: Value| {
+            let id = run.frames.last().map_or(1, |f| f.0 + 1);
+            run.frames.push((id, frame));
+        };
+        commit(run, durable, &mut push);
+        push(run, json!({"type": "done", "status": "cancelled"}));
+        run.done = true;
+        true
+    }
+
     /// Ends the streaming run's hold on the job routes: a job of another
     /// kind was created.
     pub(crate) fn clear(&self) {
@@ -149,9 +168,17 @@ fn number(doc: &Value, key: &str, default: u64) -> u64 {
 
 /// Creates a streaming run from `params` (which hold a `stream` document);
 /// returns its first frame's epoch, or the refusal.
-pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
+/// Why the scripted service did not create a streaming run.
+pub(crate) enum NotCreated {
+    /// The stream document is invalid (400).
+    Invalid(String),
+    /// A job of the run is still running (429).
+    Busy(String),
+}
+
+pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, NotCreated> {
     let doc: Value = serde_json::from_str(params["stream"].as_str().unwrap_or("{}"))
-        .map_err(|e| format!("stream: {e}"))?;
+        .map_err(|e| NotCreated::Invalid(format!("stream: {e}")))?;
     for field in [
         "publish_adapter",
         "publish_every",
@@ -159,13 +186,28 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
         "queue_tokens",
     ] {
         if doc.get(field).is_none() {
-            return Err(format!("stream: missing {field}"));
+            return Err(NotCreated::Invalid(format!("stream: missing {field}")));
         }
     }
     if number(&doc, "queue_tokens", 0) < number(&doc, "step_tokens", 1) {
-        return Err("stream: queue_tokens is below step_tokens".into());
+        return Err(NotCreated::Invalid(
+            "stream: queue_tokens is below step_tokens".into(),
+        ));
     }
     let resume_key = params["resume_key"].as_str().unwrap_or("").to_string();
+    // As brain: a run's next job starts only once its last one has let go of the run (brain answers 429 once its
+    // admission deadline passes, the last job holding the run's lane).
+    if streams
+        .live
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|run| run.resume_key == resume_key && !run.done && !run.gone)
+    {
+        return Err(NotCreated::Busy(format!(
+            "a job of resume_key {resume_key:?} is still running"
+        )));
+    }
     let mut durable = streams.durable.lock().unwrap();
     let record = durable.entry(resume_key.clone()).or_default();
     record.epoch += 1;
@@ -178,6 +220,17 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
         "queue_tokens": doc["queue_tokens"], "max_staleness": doc["max_staleness"],
     });
     let epoch = record.epoch;
+    let mut frames = vec![
+        (1, json!({"step": 0, "total": 100})),
+        (2, json!({"type": "stage", "stage": "staging the datasets"})),
+        (3, first),
+    ];
+    // As brain: a server that restarted serves nothing of the run, so the job continued from its checkpoint
+    // publishes the policy the checkpoint holds before it takes records.
+    if record.restarted && epoch > 1 {
+        record.version += 1;
+        frames.push((4, json!({"type": "published", "version": record.version, "digest": format!("sha256:{}", record.last_adapter.clone().unwrap_or_default()), "step": record.committed_step})));
+    }
     *streams.live.lock().unwrap() = Some(Live {
         resume_key,
         checkpoint_every: params["checkpoint_every"].as_u64().unwrap_or(1).max(1),
@@ -187,11 +240,7 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
         applied: Vec::new(),
         // As brain: a progress frame (untyped) and a stage frame come before
         // the stream frame.
-        frames: vec![
-            (1, json!({"step": 0, "total": 100})),
-            (2, json!({"type": "stage", "stage": "staging the datasets"})),
-            (3, first),
-        ],
+        frames,
         finishing: false,
         done: false,
         gone: false,
@@ -373,11 +422,12 @@ fn advance(
         let queue_tokens: u64 = run.queue.iter().map(|g| g.tokens).sum();
         push(
             run,
+            // brain's step figures are its metrics map's: every one a float, counts included.
             json!({"type": "step", "step": step, "pg": {
-                "staleness_mean": staleness_mean, "staleness_max": staleness_max,
-                "policy_tokens": tokens, "learner_wait_seconds": 0.0,
-                "queue_groups": run.queue.len(), "queue_tokens": queue_tokens,
-                "time_in_queue_seconds": 0.0, "dropped_stale": run.dropped_stale,
+                "staleness_mean": staleness_mean, "staleness_max": staleness_max as f64,
+                "policy_tokens": tokens as f64, "learner_wait_seconds": 0.0,
+                "queue_groups": run.queue.len() as f64, "queue_tokens": queue_tokens as f64,
+                "time_in_queue_seconds": 0.0, "dropped_stale": run.dropped_stale as f64,
             }}),
         );
         run.applied.extend(taken);

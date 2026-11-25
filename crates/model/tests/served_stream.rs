@@ -123,7 +123,7 @@ fn groups_are_queued_trained_published_and_committed_and_a_full_queue_says_so() 
         .any(|e| matches!(e, StreamEvent::Applied { step: 1, groups } if groups == &["g0"])));
     assert!(seen
         .iter()
-        .any(|e| matches!(e, StreamEvent::Step { pg } if pg["policy_tokens"] == 10)));
+        .any(|e| matches!(e, StreamEvent::Step { pg } if pg["policy_tokens"] == 10.0)));
     assert!(seen
         .iter()
         .any(|e| matches!(e, StreamEvent::Published { version: 1, .. })));

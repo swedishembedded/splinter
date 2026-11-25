@@ -141,6 +141,7 @@ fn groups_reach_the_streaming_job_and_a_restart_is_resumed_from_its_checkpoint()
         max_steps: None,
         top_k: None,
         start: None,
+        job_place: &dir.path().join("stream-job.json"),
     };
 
     // A group's records are brain's v2 lines of each member's calls.
@@ -174,6 +175,12 @@ fn groups_reach_the_streaming_job_and_a_restart_is_resumed_from_its_checkpoint()
         .iter()
         .any(|e| matches!(e, LearnerEvent::Published { version: 2 })));
     let telemetry = learner.telemetry();
+    assert_eq!(
+        (telemetry.steps, telemetry.trained_tokens),
+        (2, 20),
+        "the step frames' figures, which brain writes as floats"
+    );
+    assert!(telemetry.staleness_max.is_some(), "{telemetry:?}");
     let (version, digest) = telemetry.committed_version().unwrap();
     assert_eq!(version, 2);
     assert!(
@@ -209,4 +216,57 @@ fn groups_reach_the_streaming_job_and_a_restart_is_resumed_from_its_checkpoint()
         ["online:0"],
         "committed before the restart"
     );
+    assert!(
+        resumed.telemetry().committed_version().is_some(),
+        "the version the resumed job serves from its checkpoint is committed, before it trains a step"
+    );
+}
+
+/// A controller that stopped left its job running, waiting for records that will never come; brain starts no
+/// other job of the run while it does. The resumed controller cancels the job it left (its record names the job,
+/// beside the run's state), so the run's next job starts and takes the groups again.
+#[test]
+fn a_resumed_controller_cancels_the_job_it_left_running_and_continues_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("artifacts");
+    std::fs::create_dir_all(&store).unwrap();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript::over(store.clone()));
+    let endpoints = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap());
+    let trainer = BrainTrainer::new(endpoints, dir.path().join("models"));
+    let base: ModelRef = "brain:Qwen/Toy".parse().unwrap();
+    let params = Map::from_iter([("estimator".to_string(), json!("clipped"))]);
+    let place = dir.path().join("stream-job.json");
+    let request = OnlineTrain {
+        base: &base,
+        params: &params,
+        resume_key: "online-run",
+        checkpoint_every: Some(100),
+        publish_adapter: "splinter/online:s:abc:latest",
+        publish_every: 1,
+        step_tokens: 10,
+        queue_tokens: 100,
+        max_staleness: 4,
+        max_steps: None,
+        top_k: None,
+        start: None,
+        job_place: &place,
+    };
+
+    let mut left = trainer.stream(&request).unwrap();
+    assert_eq!(left.send(&group(0)).unwrap(), SendOutcome::Accepted);
+    polled_until(left.as_mut(), |e| {
+        e.iter().any(|e| matches!(e, LearnerEvent::Applied { .. }))
+    });
+    // The controller is killed: its job lives on.
+    std::mem::forget(left);
+
+    let mut resumed = trainer.stream(&request).unwrap();
+    assert_eq!(
+        resumed.send(&group(0)).unwrap(),
+        SendOutcome::Duplicate,
+        "the cancelled job wrote its state: what it applied is committed"
+    );
+    assert_eq!(resumed.send(&group(1)).unwrap(), SendOutcome::Accepted);
 }
