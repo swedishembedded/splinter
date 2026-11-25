@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
 use serde::Serialize;
-use splinter_sdk::factory::backend::HarborWorker;
+use splinter_sdk::factory::backend::{ExecutionBackend, NoWorker};
 use splinter_sdk::factory::resolution::Resolved;
 use splinter_sdk::factory::run::{self, Factory, RunError, RunManifest, Services, REPORT_FILE};
 use splinter_sdk::factory::templates;
@@ -248,8 +248,14 @@ impl Report for Ran<'_> {
     }
 }
 
-fn services(config: &Config) -> Result<(HarborWorker, Option<BrainTrainer>), Error> {
-    Ok((worker(config).map_err(refused)?, trainer(config)))
+/// The execution worker (or, on a machine that offers none, a backend that
+/// refuses with why, for a recipe that executes no attempts) and the trainer.
+fn services(config: &Config) -> (Box<dyn ExecutionBackend>, Option<BrainTrainer>) {
+    let backend: Box<dyn ExecutionBackend> = match worker(config) {
+        Ok(worker) => Box::new(worker),
+        Err(why) => Box::new(NoWorker(why.to_string())),
+    };
+    (backend, trainer(config))
 }
 
 /// Run `resolved` into `dir`.
@@ -260,18 +266,31 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
             s.operation == splinter_sdk::factory::ops::names::TRAIN
                 || s.operation == splinter_sdk::factory::ops::names::EVALUATION
         });
-    let (backend, brain) = services(config)?;
-    if needs_trainer && brain.is_none() {
+    let online = resolved
+        .plan
+        .stages
+        .iter()
+        .any(|s| s.operation == splinter_sdk::factory::run::online::ONLINE);
+    let (backend, brain) = services(config);
+    if (needs_trainer || online) && brain.is_none() {
         return Err(refused(
             "the recipe trains or evaluates; give brain with --brain-endpoint (and --brain-artifact-store, --brain-adapter-dir)",
         ));
     }
+    // An online stage's rollouts run here, as sven sessions against the
+    // version its learner serves.
+    let context = online
+        .then(|| splinter_sdk::Context::new(config.clone(), false))
+        .transpose()?;
+    let rollouts = context
+        .as_ref()
+        .and_then(|ctx| splinter_sdk::factory::online_rollouts(config, ctx));
     let services = Services {
-        backend: &backend,
+        backend: backend.as_ref(),
         trainer: brain.as_ref().map(|b| b as _),
         models: Some(&HostModels),
         variables: Some(&host_variable),
-        online: None,
+        online: rollouts.as_ref().map(|r| r as _),
     };
     let mut factory =
         Factory::open(resolved, dir, services, &owner(config)).map_err(|e| match e {
@@ -531,7 +550,9 @@ pub fn export(args: &ExportArgs) -> Result<Exit, Error> {
 /// the run continued so the session reaches what depends on the pass.
 pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error> {
     let resolved = resolve_run(config, &args.run).map_err(refused)?;
-    let (backend, brain) = services(config)?;
+    // A played session runs on the execution worker.
+    let backend = worker(config).map_err(refused)?;
+    let brain = trainer(config);
     let services = Services {
         backend: &backend,
         trainer: brain.as_ref().map(|b| b as _),

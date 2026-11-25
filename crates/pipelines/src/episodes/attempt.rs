@@ -68,7 +68,9 @@ pub(super) enum Done {
 /// What every attempt of a run shares.
 pub(super) struct Run<'a> {
     pub(super) ctx: &'a Context,
-    pub(super) reference: &'a ModelRef,
+    /// The policy as configured, when it is one this context loads (a
+    /// model handed in is asked as it is).
+    pub(super) reference: Option<&'a ModelRef>,
     pub(super) model: &'a Model,
     pub(super) policy: &'a PolicyIdentity,
     pub(super) config: &'a Digest,
@@ -199,9 +201,11 @@ impl Run<'_> {
         // A model brain serves is asked from the endpoint the seed pins the
         // attempt to; every model, whoever serves it, is sent the sampling
         // with each request.
-        let model = ctx
-            .resampled(self.reference, sampling)?
-            .unwrap_or_else(|| self.model.clone());
+        let model = match self.reference {
+            Some(reference) => ctx.resampled(reference, sampling)?,
+            None => None,
+        }
+        .unwrap_or_else(|| self.model.clone());
         let mut record = EpisodeRecord {
             format: RECORD_FORMAT.into(),
             key: planned.key.clone(),

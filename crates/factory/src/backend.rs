@@ -154,6 +154,26 @@ pub trait ExecutionBackend: Send + Sync {
     }
 }
 
+/// The backend of a machine that offers no execution worker: every
+/// execution is refused with why, so a recipe whose stages execute no
+/// attempts (an online stage runs its own rollouts) still runs there.
+#[derive(Clone, Debug)]
+pub struct NoWorker(pub String);
+
+impl ExecutionBackend for NoWorker {
+    fn identity(&self) -> String {
+        "no execution worker".into()
+    }
+
+    fn execute(&self, _batch: Batch<'_>) -> Result<Vec<AttemptReport>, BackendError> {
+        Err(BackendError::Worker(self.0.clone()))
+    }
+
+    fn reconcile(&self, _out: &Path) -> Result<Vec<AttemptReport>, BackendError> {
+        Err(BackendError::Worker(self.0.clone()))
+    }
+}
+
 /// Every attempt report under `out/attempts`, sorted by slot and attempt.
 ///
 /// # Errors

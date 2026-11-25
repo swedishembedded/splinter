@@ -137,7 +137,7 @@ pub struct OnlineSettings {
 struct Shared<'c> {
     ctx: &'c Context,
     tasks: Vec<PracticeTask>,
-    reference: ModelRef,
+    reference: Option<ModelRef>,
     model: splinter_agent::solve::Model,
     policy: PolicyIdentity,
     config: Digest,
@@ -151,7 +151,7 @@ impl Shared<'_> {
     fn run(&self) -> attempt::Run<'_> {
         attempt::Run {
             ctx: self.ctx,
-            reference: &self.reference,
+            reference: self.reference.as_ref(),
             model: &self.model,
             policy: &self.policy,
             config: &self.config,
@@ -321,9 +321,18 @@ impl RolloutExecutor for OnlineEpisodes<'_, '_> {
     }
 }
 
-/// Runs `body` with an executor of rollouts of `tasks` under the policy
-/// `reference`, as `settings` say; every rollout still running when `body`
-/// returns is cancelled and waited for.
+/// The policy an online run's rollouts ask.
+#[derive(Clone)]
+pub enum OnlinePolicy {
+    /// A model the context loads by reference (and resamples per attempt).
+    Reference(ModelRef),
+    /// A model reached as it is: the version a learner serves under an id.
+    Model(splinter_agent::solve::Model),
+}
+
+/// Runs `body` with an executor of rollouts of `tasks` under `policy`, as
+/// `settings` say; every rollout still running when `body` returns is
+/// cancelled and waited for.
 ///
 /// # Errors
 /// [`EpisodeError::Settings`] for a sampling that cuts the distribution or
@@ -331,7 +340,7 @@ impl RolloutExecutor for OnlineEpisodes<'_, '_> {
 pub fn run_online<R>(
     ctx: &Context,
     tasks: Vec<PracticeTask>,
-    reference: &ModelRef,
+    policy: &OnlinePolicy,
     settings: OnlineSettings,
     clock: &dyn RunClock,
     body: impl FnOnce(&mut OnlineEpisodes<'_, '_>) -> R,
@@ -347,11 +356,14 @@ pub fn run_online<R>(
         temperature: settings.sampling.temperature,
         ..settings.episode
     };
-    let model = ctx.model(reference)?;
+    let (reference, model) = match policy {
+        OnlinePolicy::Reference(reference) => (Some(reference.clone()), ctx.model(reference)?),
+        OnlinePolicy::Model(model) => (None, model.clone()),
+    };
     let shared = Shared {
         ctx,
         tasks,
-        reference: reference.clone(),
+        reference,
         policy: PolicyIdentity {
             model: model.identity.clone(),
             adapter: None,
@@ -390,8 +402,11 @@ pub fn run_online<R>(
 pub struct FactoryRollouts<'c> {
     ctx: &'c Context,
     episode: EpisodeSettings,
-    policy: Box<dyn Fn(&str) -> ModelRef + Send + Sync + 'c>,
+    policy: Box<PolicyOf<'c>>,
 }
+
+/// How the policy a learner serves under an id is reached.
+type PolicyOf<'c> = dyn Fn(&str) -> Result<OnlinePolicy, String> + Send + Sync + 'c;
 
 impl<'c> FactoryRollouts<'c> {
     /// Rollouts in `ctx`, each bounded as `episode` says (its seed and
@@ -401,7 +416,7 @@ impl<'c> FactoryRollouts<'c> {
     pub fn new(
         ctx: &'c Context,
         episode: EpisodeSettings,
-        policy: impl Fn(&str) -> ModelRef + Send + Sync + 'c,
+        policy: impl Fn(&str) -> Result<OnlinePolicy, String> + Send + Sync + 'c,
     ) -> Self {
         Self {
             ctx,
@@ -438,7 +453,7 @@ impl OnlineRollouts for FactoryRollouts<'_> {
             top_logprobs: request.top_logprobs,
             scratch: request.scratch.to_path_buf(),
         };
-        let policy = (self.policy)(request.policy);
+        let policy = (self.policy)(request.policy)?;
         run_online(
             self.ctx,
             tasks,

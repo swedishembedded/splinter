@@ -45,7 +45,7 @@ use splinter_model::scripted_endpoint::{Card, ScriptedEndpoint, SCRIPTED_KEY};
 use splinter_model::scripted_jobs::JobScript;
 use splinter_model::served_train::ArtifactStore;
 use splinter_orchestrator::Context;
-use splinter_pipelines::episodes::online::FactoryRollouts;
+use splinter_pipelines::episodes::online::{FactoryRollouts, OnlinePolicy};
 use splinter_pipelines::episodes::EpisodeSettings;
 use sven_sdk::model::{
     CompletionRequest, LogprobKind, ModelProvider, ResponseEvent, ResponseStream, ServedIdentity,
@@ -245,7 +245,7 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
         );
     // seed: the probe's outcomes are scripted; episodes draw their own seeds.
     let rollouts = FactoryRollouts::new(&ctx, EpisodeSettings::new(1, 0), |_served| {
-        ModelRef::policy_default()
+        Ok(OnlinePolicy::Reference(ModelRef::policy_default()))
     });
     let backend = FakeBackend {
         candidate: Some(Outcome::Pass),

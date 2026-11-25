@@ -40,7 +40,7 @@ use splinter_factory::online::seams::{
 };
 use splinter_orchestrator::Context;
 use splinter_pipelines::episodes::online::{
-    run_online, OnlineEpisodes, OnlineSampling, OnlineSettings,
+    run_online, OnlineEpisodes, OnlinePolicy, OnlineSampling, OnlineSettings,
 };
 use splinter_pipelines::episodes::{load_collection, EpisodeError, EpisodeSettings, PracticeTask};
 use sven_sdk::model::{
@@ -240,7 +240,7 @@ fn concurrent_rollouts_are_rewarded_by_the_verifier_and_carry_one_exact_record_p
     let ends = run_online(
         &s.ctx,
         s.tasks.clone(),
-        &ModelRef::policy_default(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
         settings(&s.work, OnlineSampling::untruncated(0.8)),
         &SystemRunClock,
         |executor| rollouts(executor, &s.tasks[0], 3),
@@ -305,7 +305,7 @@ fn a_publication_between_two_calls_gives_the_span_of_both_versions() {
     let ends = run_online(
         &s.ctx,
         s.tasks.clone(),
-        &ModelRef::policy_default(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
         settings(&s.work, OnlineSampling::untruncated(0.8)),
         &SystemRunClock,
         |executor| rollouts(executor, &s.tasks[0], 1),
@@ -334,7 +334,7 @@ fn a_call_without_its_trace_makes_an_inexact_rollout_and_a_failed_verifier_is_an
     let ends = run_online(
         &s.ctx,
         s.tasks.clone(),
-        &ModelRef::policy_default(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
         settings(&s.work, OnlineSampling::untruncated(0.8)),
         &SystemRunClock,
         |executor| rollouts(executor, &s.tasks[0], 1),
@@ -356,7 +356,7 @@ fn a_call_without_its_trace_makes_an_inexact_rollout_and_a_failed_verifier_is_an
     let ends = run_online(
         &s.ctx,
         s.tasks.clone(),
-        &ModelRef::policy_default(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
         settings(&s.work, OnlineSampling::untruncated(0.8)),
         &SystemRunClock,
         |executor| rollouts(executor, &s.tasks[0], 1),
@@ -386,7 +386,7 @@ fn a_cutting_sampler_is_refused_and_a_cancelled_run_stops_its_rollouts() {
         let refused = run_online(
             &s.ctx,
             s.tasks.clone(),
-            &ModelRef::policy_default(),
+            &OnlinePolicy::Reference(ModelRef::policy_default()),
             settings(&s.work, cut),
             &SystemRunClock,
             |_| (),
@@ -411,7 +411,7 @@ fn a_cutting_sampler_is_refused_and_a_cancelled_run_stops_its_rollouts() {
     let ended = run_online(
         &s.ctx,
         s.tasks.clone(),
-        &ModelRef::policy_default(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
         settings(&s.work, OnlineSampling::untruncated(0.8)),
         &SystemRunClock,
         |executor| {

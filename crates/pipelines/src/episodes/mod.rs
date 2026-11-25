@@ -473,7 +473,7 @@ pub(crate) fn run_with_adapter(
     }
     let run = attempt::Run {
         ctx,
-        reference: request.policy,
+        reference: Some(request.policy),
         model: &model,
         policy: &policy,
         config: &config,

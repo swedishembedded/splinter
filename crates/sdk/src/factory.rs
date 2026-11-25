@@ -119,6 +119,43 @@ pub fn grants_of(config: &Config) -> Result<Grants, SetupError> {
         })
 }
 
+/// The online rollouts this machine offers an online training stage: practice
+/// episodes in `ctx`, each against the version the stage's learner serves,
+/// reached on the configured brain endpoint by the id it publishes under
+/// (with brain's policy trace on every request). `None` without brain
+/// endpoints.
+#[must_use]
+pub fn online_rollouts<'c>(
+    config: &Config,
+    ctx: &'c splinter_orchestrator::Context,
+) -> Option<splinter_pipelines::episodes::online::FactoryRollouts<'c>> {
+    use splinter_pipelines::episodes::online::{FactoryRollouts, OnlinePolicy};
+    let brain = config.brain.clone()?;
+    // seed: every online stage gives the rollouts its own seed; this one is replaced.
+    let episode = splinter_pipelines::episodes::EpisodeSettings::new(1, 0);
+    Some(FactoryRollouts::new(ctx, episode, move |served| {
+        let url = brain
+            .urls()
+            .first()
+            .ok_or("the brain endpoints name no URL")?
+            .clone();
+        let remote = RemoteModel {
+            // brain's driver asks the server for its policy trace.
+            spec: format!("brain/{served}"),
+            base_url: Some(url),
+            api_key: Some(brain.key().to_string()),
+            ..RemoteModel::default()
+        };
+        let loaded = ModelSelection::Remote(remote)
+            .load_remote()
+            .map_err(|e| format!("the served policy {served}: {e}"))?;
+        Ok(OnlinePolicy::Model(Model::new(
+            loaded.provider(),
+            loaded.identity(),
+        )))
+    }))
+}
+
 /// A variable of this process's environment, for an operator its machine
 /// grants it to (read where the configuration reads the environment).
 #[must_use]
