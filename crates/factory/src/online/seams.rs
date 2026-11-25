@@ -385,6 +385,8 @@ pub struct RolloutsRequest<'a> {
     pub temperature: f32,
     /// The sampler's top-K asked of every request.
     pub top_logprobs: Option<u32>,
+    /// The most tokens a rollout's reply may sample (`None`: the context's room).
+    pub max_output_tokens: Option<u64>,
     /// The seed every rollout's draws derive from.
     pub seed: u64,
     /// Where running rollouts keep their scratch files.

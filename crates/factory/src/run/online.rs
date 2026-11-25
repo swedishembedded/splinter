@@ -122,6 +122,10 @@ pub struct OnlineParams {
     /// The sampler's top-K asked of every request.
     #[serde(default)]
     pub top_logprobs: Option<u32>,
+    /// The most tokens a rollout's reply may sample: one that reaches it ends truncated (counted, never trained)
+    /// instead of running on to the end of the served context. Unset, a reply may fill the context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
     /// Steps between the learner's durable checkpoints.
     #[serde(default)]
     pub checkpoint_every: Option<u32>,
@@ -181,6 +185,9 @@ impl OnlineParams {
             return Err("params.thinking: the rollouts are drawn with thinking off and the learner trains that mode; \
                  it is not a setting of an online run"
                 .into());
+        }
+        if p.max_output_tokens == Some(0) {
+            return Err("max_output_tokens is at least 1".into());
         }
         if p.groups == 0 || p.publish_every == 0 {
             return Err("groups and publish_every are at least 1".into());
@@ -410,6 +417,7 @@ pub(crate) fn produce(
                     policy: &served,
                     temperature: params.temperature,
                     top_logprobs: params.top_logprobs,
+                    max_output_tokens: params.max_output_tokens,
                     seed: params.seed,
                     scratch: &scratch,
                 },
@@ -650,6 +658,7 @@ mod tests {
             (json!({"temperature": 0.0}), "temperature"),
             (json!({"surprise": 1}), "unknown field"),
             (json!({"params": {"thinking": true}}), "thinking"),
+            (json!({"max_output_tokens": 0}), "max_output_tokens"),
         ] {
             let refused = Online.check(&params(bad.clone())).unwrap_err();
             assert!(refused.contains(why), "{bad}: {refused}");

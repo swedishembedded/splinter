@@ -58,6 +58,10 @@ const MARKER: &str = "hidden-online-marker-41b2";
 /// policy trace and the identity of the version that decoded it.
 struct Policy;
 
+/// The output bound every request that asked for the policy trace (an online
+/// rollout's) carried.
+static ROLLOUT_BOUNDS: std::sync::Mutex<Vec<Option<u32>>> = std::sync::Mutex::new(Vec::new());
+
 #[async_trait::async_trait]
 impl ModelProvider for Policy {
     fn name(&self) -> &str {
@@ -67,6 +71,12 @@ impl ModelProvider for Policy {
         "policy-1"
     }
     async fn complete(&self, req: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        if req.want_logprobs {
+            ROLLOUT_BOUNDS
+                .lock()
+                .unwrap()
+                .push(req.max_output_tokens_override);
+        }
         let solves = req.sampling.seed.is_some_and(|s| s % 2 == 0);
         let asked = request_of(&req);
         let command = if asked.contains("greeting.txt") {
@@ -157,6 +167,7 @@ stages:
       step_tokens: 8
       queue_tokens: 64
       checkpoint_every: 1
+      max_output_tokens: 48
       seed: 3
   - id: eval
     uses: evaluation
@@ -289,6 +300,13 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
     assert!(
         ops.contains(&"train.online") && ops.contains(&"evaluation"),
         "{ops:?}"
+    );
+
+    // A rollout's reply is bounded as the stage says: a runaway sample ends truncated, not at the context's end.
+    let bounds = ROLLOUT_BOUNDS.lock().unwrap().clone();
+    assert!(
+        !bounds.is_empty() && bounds.iter().all(|b| b.is_some_and(|b| b <= 48)),
+        "{bounds:?}"
     );
 
     let applied = service.jobs().stream_runs.applied();

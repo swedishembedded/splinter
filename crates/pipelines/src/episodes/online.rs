@@ -447,6 +447,7 @@ impl OnlineRollouts for FactoryRollouts<'_> {
         let settings = OnlineSettings {
             episode: EpisodeSettings {
                 seed: request.seed,
+                max_output_tokens: request.max_output_tokens.or(self.episode.max_output_tokens),
                 ..self.episode.clone()
             },
             sampling: OnlineSampling::untruncated(request.temperature),
