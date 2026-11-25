@@ -1377,3 +1377,16 @@ gaps:
   resolution: open; closing it needs the check never to run the answer's code in its own process, e.g. the answer served
     by a separate interpreter and called with plain data (JSON arguments and results) so no answer object reaches the
     check; that changes what a Python check may do and is a decision for the check protocol
+- id: G-NEW-20
+  source_id: null
+  where: crates/knowledge/src/goal/facts.rs (PatternFacts, sentence splitting)
+  what: 'The fact reader cut a text at every full stop, so a value with a point in it was cut short. In "The relief setting
+    of valve L1 is 3.6 bar." it read the fact as 3, and in a dotted firmware version only the part before the first
+    point. document-questions then asked a recall question expecting "3" and grounded it in a fact the document never
+    states, and a derived question could add the cut figures. The claim quotes the same reader checks were read the same
+    way (found by the labelled document fixtures of 4B).'
+  severity: medium
+  confidence: high (reproduced by document_reference::every_question_is_grounded_in_a_labelled_fact...)
+  status: fixed
+  resolution: a full stop ends a sentence only when whitespace or the end of the line follows it; specified by
+    goal::facts::tests::a_value_with_a_point_in_it_is_read_whole and the labelled golden; mutant facts-cut-at-every-point

@@ -20,6 +20,7 @@ mod claim_gates;
 mod claim_supersession;
 mod claim_task;
 mod denoise_task;
+mod document_reference;
 mod external_bm25;
 mod external_capture;
 mod external_retrieval;

@@ -82,10 +82,30 @@ pub struct PatternFacts;
 
 impl FactExtractor for PatternFacts {
     fn facts(&self, text: &str) -> Vec<Fact> {
-        text.split_inclusive(['.', '\n'])
+        sentences(text)
             .filter_map(|sentence| fact_of(sentence.trim().trim_end_matches('.').trim()))
             .collect()
     }
+}
+
+/// The sentences of `text`: each line, cut after a full stop that ends a
+/// sentence (one followed by whitespace or the end of the line), never inside
+/// a value (`3.6 bar`, `v1.2.7`).
+fn sentences(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().flat_map(|line| {
+        let mut cuts = Vec::new();
+        let mut start = 0;
+        let bytes = line.as_bytes();
+        for (at, &byte) in bytes.iter().enumerate() {
+            let ends = byte == b'.' && bytes.get(at + 1).is_none_or(u8::is_ascii_whitespace);
+            if ends {
+                cuts.push(&line[start..=at]);
+                start = at + 1;
+            }
+        }
+        cuts.push(&line[start..]);
+        cuts
+    })
 }
 
 /// The attribute of a [`Form::Link`] fact.
@@ -151,6 +171,15 @@ mod tests {
             facts[0].question(),
             "What is the service interval of alder pump 3?"
         );
+    }
+
+    #[test]
+    fn a_value_with_a_point_in_it_is_read_whole() {
+        let facts = PatternFacts.facts(
+            "The relief setting of valve L1 is 3.6 bar. The firmware of valve L1 is v1.2.7.\n",
+        );
+        let values: Vec<&str> = facts.iter().map(|f| f.value.as_str()).collect();
+        assert_eq!(values, ["3.6 bar", "v1.2.7"]);
     }
 
     #[test]
