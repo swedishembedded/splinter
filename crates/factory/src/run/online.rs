@@ -47,6 +47,7 @@ use splinter_core::factory::operation::{
     ArtifactKind, OperationDescriptor, Port, Reproducibility, OPERATION_SCHEMA,
 };
 use splinter_core::factory::product::{CandidateKind, ModelCandidate, CANDIDATE_SCHEMA};
+use splinter_core::revision::{ModelDigests, REVISIONS_FILE};
 use splinter_store::factory::products::Staging;
 
 use super::training::CANDIDATE_FILE;
@@ -459,10 +460,13 @@ pub(crate) fn produce(
     };
     let mut trained = trained;
     let candidate = candidate(factory, stage, &params, &base, &mut trained, staging)?;
-    write_json(
-        &staging.path().join("report.json"),
-        &report(&trained, started),
-    )?;
+    // The code, servers, data and configuration of the run, with the base and
+    // tokenizer the learner named: in the product and in the report.
+    let revisions = factory.stage_revisions(identity, served_models(&trained.telemetry));
+    write_json(&staging.path().join(REVISIONS_FILE), &revisions)?;
+    let mut report = report(&trained, started);
+    report["revisions"] = json!(revisions);
+    write_json(&staging.path().join("report.json"), &report)?;
     write_experiences(factory, &tag, staging)?;
     write_json(&staging.path().join(CANDIDATE_FILE), &candidate)
 }
@@ -515,6 +519,30 @@ fn candidate(
     })
 }
 
+/// The base and tokenizer the learner's versions name: each base digest a
+/// published version's lineage names, with the tokenizer the run streamed
+/// against; none when the server named neither.
+fn served_models(telemetry: &LearnerTelemetry) -> Vec<ModelDigests> {
+    let mut models: Vec<ModelDigests> = telemetry
+        .published
+        .iter()
+        .filter_map(|p| p.lineage.as_ref())
+        .map(|lineage| ModelDigests {
+            base_digest: Some(lineage.base_digest.clone()),
+            tokenizer_digest: telemetry.tokenizer_digest.clone(),
+        })
+        .collect();
+    if models.is_empty() && telemetry.tokenizer_digest.is_some() {
+        models.push(ModelDigests {
+            base_digest: None,
+            tokenizer_digest: telemetry.tokenizer_digest.clone(),
+        });
+    }
+    models.sort();
+    models.dedup();
+    models
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn report(trained: &Trained, started: Instant) -> Value {
     let stats = &trained.report.stats;
@@ -551,6 +579,9 @@ fn report(trained: &Trained, started: Instant) -> Value {
         "useful_tokens_per_second": (wall > 0.0).then(|| trained_tokens as f64 / wall),
         "wall_seconds": wall,
         "learner_restarts": trained.restarts,
+        // Which run-level identity served each version: the weights every
+        // rollout of that version was drawn from, named across servers.
+        "versions": telemetry.published,
     })
 }
 

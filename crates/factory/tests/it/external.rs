@@ -87,6 +87,7 @@ fn run(repo: &Repo, dir: &Path) {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     Factory::open(&resolved, dir, services, "test")
         .unwrap()
@@ -217,6 +218,7 @@ stages:
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -292,6 +294,7 @@ fn an_operator_gets_only_the_variables_its_machine_grants() {
         models: None,
         variables: Some(&host),
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -431,6 +434,7 @@ stages:
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -476,6 +480,7 @@ fn an_operator_reads_only_what_its_identity_pins() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     let ran = Factory::open(&resolved, dir.path(), services, "test")

@@ -221,6 +221,7 @@ fn run(repo: &Repo, recipe: &str, dir: &Path) -> BTreeMap<String, (Digest, bool)
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let resolved = resolved(repo, recipe);
     let mut factory = Factory::open(&resolved, dir, services, "test-controller").unwrap();

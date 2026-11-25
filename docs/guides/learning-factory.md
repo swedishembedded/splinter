@@ -648,7 +648,9 @@ compiles its collection evaluates on the same compiled tasks:
   committed. A stage may start from a candidate (`inputs: { start: $stages.sft.model }`, an
   adapter of its base): the job serves it as its first version, which the first rollouts are
   drawn from. The candidate is the adapter the ended job leaves (its last, committed version); `report.json`
-  holds the online statistics and `experiences.jsonl` one line per committed group. The run
+  holds the online statistics, `versions` (every published version with the run-level identity
+  brain names for it: `lineage {run, epoch, update, base_digest, adapter_digest}`) and the stage's
+  `revisions` (below), and `experiences.jsonl` one line per committed group. The run
   needs the agent runtime's online rollouts (the SDK's embedding gives them; the command
   line does not yet).
 - **Replay** (`model.train` with `replay`). A candidate trained on new chat records can rehearse
@@ -717,6 +719,30 @@ compiles its collection evaluates on the same compiled tasks:
 
 A run refuses to continue on inputs that changed since it started. Change the
 recipe and fork the run: every product the change leaves alone is reused.
+
+A run also pins the code it started on (`revisions.json` in the run
+directory: the Splinter, sven and brain commits of the build, whether its
+trees were dirty, its executable's digest and the training-record contract
+it writes). A resume by a build of other commits is refused, naming each
+difference; the same executable always resumes. A recipe that means to run
+across builds says `revisions: mixed` at its top level (the default is
+`pinned`). Every stage that trains or evaluates (`model.train`,
+`train.online`, `evaluation`) keeps its own `revisions.json` in its product:
+the build that ran it, what each brain server said it is (its build and
+commit, backend, devices and training-record contract, from
+`GET /v1/capabilities` and `GET /v1/devices`), the base and tokenizer digests
+brain reported for the stage, the digests of its inputs (datasets, task
+collections, candidates) and its resolved configuration. A brain server
+that reports another training-record contract than the one this build
+writes (its digest differs from the copy of brain's example set the build
+was pinned against) is refused by name before any stage runs. A server that
+reports none (a brain build older than the report) trains with a warning
+naming it, and its `engine` and `training_records` are recorded as `null`,
+unknown; a recipe that needs the contract says `contract: required` at its
+top level (the default is `checked`), and such a server is then refused
+too. A build against local checkouts
+(`make deps/local`) names those checkouts' commits and dirty flags, not the
+lock's.
 
 ```sh
 splinter fork runs/vim-mastery --recipe recipes/vim-mastery-r32.yaml --out runs/vim-mastery-r32

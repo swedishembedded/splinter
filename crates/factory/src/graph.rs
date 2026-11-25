@@ -134,6 +134,42 @@ pub struct RecipeV2 {
     /// What it produces, by name.
     #[serde(default)]
     pub outputs: BTreeMap<String, String>,
+    /// Whether a resume may run on a build of other commits than the run
+    /// started on: `pinned` (refused by name) unless the recipe says `mixed`.
+    #[serde(default)]
+    pub revisions: RevisionPolicy,
+    /// Whether a brain server that reports no training-record contract may
+    /// train: `checked` (it may, recorded as unknown; another contract is
+    /// always refused) unless the recipe says `required`.
+    #[serde(default)]
+    pub contract: ContractPolicy,
+}
+
+/// How strictly a run holds its brain servers to the training-record
+/// contract this build writes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContractPolicy {
+    /// A server reporting another contract is refused; one reporting none
+    /// (an older brain build) trains, with a warning, its contract recorded
+    /// as unknown.
+    #[default]
+    Checked,
+    /// A server reporting none is refused too.
+    Required,
+}
+
+/// Whether a run may continue on another build than it started on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RevisionPolicy {
+    /// A resume on a build of other commits (or a dirty or unknown tree that
+    /// is not the same executable) is refused, naming each difference.
+    #[default]
+    Pinned,
+    /// A resume may run on another build; every stage's revision manifest
+    /// still names the build that ran it.
+    Mixed,
 }
 
 /// Where a bound product comes from.
@@ -188,6 +224,10 @@ pub struct CompiledPlan {
     pub stages: Vec<CompiledStage>,
     /// Its outputs.
     pub outputs: BTreeMap<String, Source>,
+    /// Whether a resume may run on another build.
+    pub revisions: RevisionPolicy,
+    /// How strictly servers are held to the record contract.
+    pub contract: ContractPolicy,
 }
 
 /// `text` as a reference.
@@ -742,6 +782,8 @@ pub fn compile_partly(
         models: recipe.models,
         stages,
         outputs,
+        revisions: recipe.revisions,
+        contract: recipe.contract,
     };
     Ok((plan, problems))
 }

@@ -66,6 +66,7 @@ pub mod policy_gradient;
 pub mod precision;
 mod progress;
 pub mod report;
+pub mod revision;
 pub mod scratch;
 #[cfg(feature = "scripted")]
 pub mod scripted_endpoint;

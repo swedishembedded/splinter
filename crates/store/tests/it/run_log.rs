@@ -208,6 +208,7 @@ fn a_run_names_the_build_that_made_it_and_an_old_run_reads_back_without_one() {
             brain: Some("c".repeat(40)),
         },
         dirty: Some(true),
+        dependencies_dirty: std::collections::BTreeMap::new(),
         binary_digest: Some(binary.clone()),
         gpu_contexts: Some(0),
     };

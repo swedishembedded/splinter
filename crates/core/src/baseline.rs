@@ -174,6 +174,7 @@ mod tests {
                 brain: Some("c".repeat(40)),
             },
             dirty: Some(false),
+            dependencies_dirty: std::collections::BTreeMap::new(),
             binary_digest: Some(Digest::sha256_of(b"binary")),
             gpu_contexts: None,
         })

@@ -100,6 +100,18 @@ struct Shared {
     peak: AtomicUsize,
     seen: Mutex<Vec<Seen>>,
     stop: AtomicBool,
+    server: Mutex<serde_json::Value>,
+}
+
+/// The `server` object a scripted endpoint reports by default: a brain build
+/// that checks the training-record contract this build of Splinter writes.
+#[must_use]
+pub fn default_server() -> serde_json::Value {
+    serde_json::json!({
+        "engine": {"version": "6.0.0", "commit": "0123456789abcdef0123456789abcdef01234567", "dirty": false},
+        "backend": "cuda",
+        "training_records": splinter_core::revision::RecordContract::pinned(),
+    })
 }
 
 /// A running scripted endpoint, stopped when dropped.
@@ -129,6 +141,7 @@ impl ScriptedEndpoint {
             peak: AtomicUsize::new(0),
             seen: Mutex::new(Vec::new()),
             stop: AtomicBool::new(false),
+            server: Mutex::new(default_server()),
         });
         let serving = Arc::clone(&shared);
         std::thread::spawn(move || {
@@ -143,6 +156,14 @@ impl ScriptedEndpoint {
             }
         });
         Self { port, shared }
+    }
+
+    /// Report `server` as `GET /v1/capabilities`'s `server` object; `null`
+    /// leaves the object out, as a brain build older than it does.
+    #[must_use]
+    pub fn with_server(self, server: serde_json::Value) -> Self {
+        *self.shared.server.lock().unwrap() = server;
+        self
     }
 
     /// Every request takes `delay` to answer.
@@ -341,6 +362,13 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
             .collect();
         let list = serde_json::json!({ "object": "list", "data": data }).to_string();
         let _ = respond(&mut stream, "200 OK", "application/json", &list);
+    } else if request_line.starts_with("GET /v1/capabilities") {
+        let server = shared.server.lock().unwrap().clone();
+        let mut list = serde_json::json!({"object": "list", "data": []});
+        if !server.is_null() {
+            list["server"] = server;
+        }
+        let _ = respond(&mut stream, "200 OK", "application/json", &list.to_string());
     } else if request_line.starts_with("GET /v1/devices") {
         // Two cards of 80 GiB, the first with 30 GiB held.
         let gib = 1u64 << 30;

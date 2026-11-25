@@ -119,6 +119,17 @@ pub trait Trainer: Send + Sync {
     /// The endpoint does not serve it.
     fn serve(&self, base: &ModelRef, adapter: Option<&Path>) -> Result<String, TrainError>;
 
+    /// What every brain server the trainer reaches says it is (its build,
+    /// backend, record contract and devices), for the revision manifest of
+    /// a stage it trains or evaluates; empty for a trainer that reaches
+    /// none.
+    ///
+    /// # Errors
+    /// A server could not be asked.
+    fn served_revisions(&self) -> Result<Vec<splinter_core::revision::ServedRevision>, TrainError> {
+        Ok(Vec::new())
+    }
+
     /// Start (or continue, under the same resume key) an online
     /// policy-gradient run that takes groups while it trains and serves every
     /// version it publishes.
@@ -437,6 +448,10 @@ fn error(e: impl ToString) -> TrainError {
 impl Trainer for BrainTrainer {
     fn identity(&self) -> String {
         "brain served-train".into()
+    }
+
+    fn served_revisions(&self) -> Result<Vec<splinter_core::revision::ServedRevision>, TrainError> {
+        splinter_model::revision::served_revisions(&self.endpoints).map_err(error)
     }
 
     fn resolve(&self, method: &str, params: &Value) -> Result<Value, TrainError> {

@@ -681,6 +681,7 @@ fn build_info() -> BuildInfo {
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock")),
         option_env!("SPLINTER_GIT_REV"),
         option_env!("SPLINTER_GIT_DIRTY"),
+        &splinter_sdk::vocabulary::build::LocalCheckouts::default(),
         None,
     )
 }

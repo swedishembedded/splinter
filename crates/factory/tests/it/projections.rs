@@ -100,6 +100,7 @@ fn one_set_of_attempts_gives_sft_preference_and_policy_gradient_datasets() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -203,6 +204,7 @@ fn each_dataset_is_trained_by_its_objectives_regime() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -276,6 +278,7 @@ fn a_preference_dataset_leaves_out_the_pairs_longer_than_the_block() {
             models: None,
             variables: None,
             online: None,
+            build: splinter_core::build::BuildInfo::this_executable(),
         };
         let dir = tempfile::tempdir().unwrap();
         let outcome = Factory::open(&resolved, dir.path(), services, "test")
@@ -316,6 +319,7 @@ fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -379,6 +383,7 @@ fn an_earlier_dataset_is_replayed_beside_the_new_records() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

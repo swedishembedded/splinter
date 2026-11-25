@@ -136,6 +136,13 @@ impl Streams {
     }
 }
 
+/// The base digest every published version's lineage names.
+pub const SCRIPTED_BASE_DIGEST: &str =
+    "sha256:baba000000000000000000000000000000000000000000000000000000000000";
+/// The tokenizer digest a scripted run's `stream` frame names.
+pub const SCRIPTED_TOKENIZER_DIGEST: &str =
+    "sha256:70c0000000000000000000000000000000000000000000000000000000000000";
+
 fn number(doc: &Value, key: &str, default: u64) -> u64 {
     doc[key].as_u64().unwrap_or(default)
 }
@@ -165,7 +172,8 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
     // A run continued from its checkpoint: what came after it is lost.
     record.step = record.committed_step;
     let first = json!({
-        "type": "stream", "epoch": record.epoch, "publish_adapter": doc["publish_adapter"],
+        "type": "stream", "epoch": record.epoch, "tokenizer_digest": SCRIPTED_TOKENIZER_DIGEST,
+        "publish_adapter": doc["publish_adapter"],
         "version": record.version, "step_tokens": doc["step_tokens"],
         "queue_tokens": doc["queue_tokens"], "max_staleness": doc["max_staleness"],
     });
@@ -383,9 +391,13 @@ fn advance(
             let _ = std::fs::write(store.join(digest.hex()), &bytes);
             durable.last_adapter = Some(digest.hex().to_string());
             let sha = format!("sha256:{}", Digest::sha256_of(&bytes).hex());
+            // The run-level identity brain names beside the serving version.
+            let lineage = json!({"run": run.resume_key, "epoch": durable.epoch, "update": step,
+                                 "base_digest": SCRIPTED_BASE_DIGEST, "adapter_digest": sha});
             push(
                 run,
-                json!({"type": "published", "version": durable.version, "digest": sha, "step": step}),
+                json!({"type": "published", "version": durable.version, "digest": sha, "step": step,
+                       "lineage": lineage}),
             );
         }
         if step.is_multiple_of(run.checkpoint_every) {

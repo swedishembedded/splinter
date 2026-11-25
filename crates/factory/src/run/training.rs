@@ -234,6 +234,19 @@ pub(crate) fn produce(
         load_checked: true,
     };
     write_json(&staging.path().join("report.json"), &trained.report)?;
+    // The base the training job reports it trained on, by digest.
+    let models = trained.report["base_digest"]
+        .as_str()
+        .map(|digest| splinter_core::revision::ModelDigests {
+            base_digest: Some(digest.to_owned()),
+            tokenizer_digest: None,
+        })
+        .into_iter()
+        .collect();
+    write_json(
+        &staging.path().join(splinter_core::revision::REVISIONS_FILE),
+        &factory.stage_revisions(identity, models),
+    )?;
     write_json(&staging.path().join(CANDIDATE_FILE), &candidate)
 }
 

@@ -320,10 +320,28 @@ pub struct LearnerTelemetry {
     pub time_in_queue_seconds: Option<f64>,
     /// Groups it dropped as too old.
     pub dropped_stale: u64,
-    /// Every version it published: `(version, digest, step)`.
-    pub published: Vec<(u64, String, u64)>,
+    /// Every version it published, in order.
+    pub published: Vec<PublishedVersion>,
     /// The step of its last durable checkpoint.
     pub committed_step: Option<u64>,
+    /// `sha256:<hex>` of the base's tokenizer, as the learner named it.
+    pub tokenizer_digest: Option<String>,
+}
+
+/// One version a learner published: the serving-local version, the adapter's
+/// digest, the step it holds and, when the server names it, the run-level
+/// identity of its weights (which run, epoch and update; base and adapter
+/// digests), so what served each version is attributable to exact code.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct PublishedVersion {
+    /// The serving-local version.
+    pub version: u64,
+    /// The adapter's digest.
+    pub digest: String,
+    /// The step it holds.
+    pub step: u64,
+    /// Its run-level identity.
+    pub lineage: Option<splinter_core::revision::PolicyLineage>,
 }
 
 impl LearnerTelemetry {
@@ -334,9 +352,9 @@ impl LearnerTelemetry {
         let step = self.committed_step?;
         self.published
             .iter()
-            .filter(|(_, _, at)| *at <= step)
-            .max_by_key(|(version, _, _)| *version)
-            .map(|(version, digest, _)| (*version, digest.as_str()))
+            .filter(|p| p.step <= step)
+            .max_by_key(|p| p.version)
+            .map(|p| (p.version, p.digest.as_str()))
     }
 }
 

@@ -111,6 +111,7 @@ fn a_document_yields_only_the_knowledge_its_sections_state() {
         models: Some(&Extractors),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -182,6 +183,7 @@ fn each_question_is_given_the_sections_that_bear_on_it() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

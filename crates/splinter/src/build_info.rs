@@ -10,7 +10,7 @@
 //! and release names it. The commits are embedded at build time (see
 //! `build.rs`) and read from the lock the build used; nothing here runs git.
 
-use splinter_sdk::vocabulary::build::BuildInfo;
+use splinter_sdk::vocabulary::build::{BuildInfo, LocalCheckouts};
 
 /// The lock this binary was built with.
 const LOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock"));
@@ -19,10 +19,21 @@ const LOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Carg
 /// `gpu_contexts` as the configuration read them from the lease wrapper.
 /// Whatever cannot be established stays absent.
 pub fn current(gpu_contexts: Option<u32>) -> BuildInfo {
+    let local = LocalCheckouts {
+        sven: (
+            option_env!("SPLINTER_SVEN_LOCAL_REV"),
+            option_env!("SPLINTER_SVEN_LOCAL_DIRTY"),
+        ),
+        brain: (
+            option_env!("SPLINTER_BRAIN_LOCAL_REV"),
+            option_env!("SPLINTER_BRAIN_LOCAL_DIRTY"),
+        ),
+    };
     BuildInfo::embedded(
         LOCK,
         option_env!("SPLINTER_GIT_REV"),
         option_env!("SPLINTER_GIT_DIRTY"),
+        &local,
         gpu_contexts,
     )
 }

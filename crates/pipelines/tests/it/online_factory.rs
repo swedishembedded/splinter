@@ -260,6 +260,7 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
         models: None,
         variables: None,
         online: Some(&rollouts),
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let run = scratch.0.join("run");
 
@@ -332,6 +333,46 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
     );
     assert!(report["frac_zero_std"].is_number() && report["reward_mean"].is_number());
     assert!(report["experience_utilisation"].as_f64().unwrap() > 0.0);
+    // Every published version names the run-level identity that served it, and
+    // the report carries the run's revision manifest: the server it reached (its
+    // record contract this build's), the base and tokenizer it named.
+    let versions = report["versions"]
+        .as_array()
+        .expect("the published versions");
+    assert!(!versions.is_empty(), "{report:#}");
+    for version in versions {
+        let lineage = &version["lineage"];
+        assert_eq!(lineage["update"], version["step"], "{version}");
+        assert_eq!(lineage["adapter_digest"], version["digest"], "{version}");
+        assert!(lineage["epoch"].as_u64().unwrap() >= 1, "{version}");
+        assert!(
+            lineage["run"].as_str().unwrap().starts_with("online-"),
+            "{version}"
+        );
+    }
+    let revisions = &report["revisions"];
+    assert_eq!(
+        revisions["training_records"]["digest"],
+        splinter_core::revision::RECORD_CONTRACT_DIGEST
+    );
+    assert_eq!(
+        revisions["served"][0]["training_records"]["digest"],
+        splinter_core::revision::RECORD_CONTRACT_DIGEST,
+        "{revisions:#}"
+    );
+    assert_eq!(
+        revisions["models"],
+        serde_json::json!([{"base_digest": splinter_model::scripted_stream::SCRIPTED_BASE_DIGEST,
+                "tokenizer_digest": splinter_model::scripted_stream::SCRIPTED_TOKENIZER_DIGEST}])
+    );
+    assert!(revisions["inputs"]
+        .as_array()
+        .is_some_and(|i| !i.is_empty()));
+    let product: Value = serde_json::from_str(
+        &std::fs::read_to_string(view.join(splinter_core::revision::REVISIONS_FILE)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(&product, revisions, "the product holds the same manifest");
     let candidate: Value =
         serde_json::from_str(&std::fs::read_to_string(view.join("candidate.json")).unwrap())
             .unwrap();

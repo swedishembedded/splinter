@@ -173,6 +173,10 @@ pub enum StreamEvent {
         digest: String,
         /// The step it holds.
         step: u64,
+        /// Which weights the version is, independently of the server (the
+        /// run, epoch, update, base and adapter digests), when the server
+        /// names it.
+        lineage: Option<splinter_core::revision::PolicyLineage>,
     },
     /// These groups were too far behind and dropped unapplied.
     Dropped {
@@ -229,6 +233,7 @@ pub struct StreamJob {
     epoch: u64,
     version: u64,
     publish_adapter: String,
+    tokenizer_digest: Option<String>,
     frames: Receiver<Value>,
     stop: Arc<AtomicBool>,
     reader: Option<std::thread::JoinHandle<()>>,
@@ -341,6 +346,7 @@ impl StreamJob {
             epoch: 0,
             version: 0,
             publish_adapter: String::new(),
+            tokenizer_digest: None,
             frames,
             stop,
             reader: Some(reader),
@@ -371,7 +377,15 @@ impl StreamJob {
             .as_str()
             .unwrap_or_default()
             .to_string();
+        job.tokenizer_digest = first["tokenizer_digest"].as_str().map(str::to_owned);
         Ok(job)
+    }
+
+    /// `sha256:<hex>` of the base's tokenizer, as the run's `stream` frame
+    /// names it; `None` when the server does not.
+    #[must_use]
+    pub fn tokenizer_digest(&self) -> Option<&str> {
+        self.tokenizer_digest.as_deref()
     }
 
     /// The run's epoch: one more for every job that continued it.
@@ -471,10 +485,19 @@ impl StreamJob {
                 }),
                 "published" => {
                     self.version = self.version.max(number("version"));
+                    let lineage = match frame.get("lineage").filter(|l| !l.is_null()) {
+                        Some(lineage) => {
+                            Some(serde_json::from_value(lineage.clone()).map_err(|e| {
+                                StreamError::Failed(format!("a published frame's lineage: {e}"))
+                            })?)
+                        }
+                        None => None,
+                    };
                     events.push(StreamEvent::Published {
                         version: number("version"),
                         digest: frame["digest"].as_str().unwrap_or_default().to_string(),
                         step: number("step"),
+                        lineage,
                     });
                 }
                 "dropped" => events.push(StreamEvent::Dropped { groups: groups() }),

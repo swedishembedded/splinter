@@ -56,6 +56,7 @@ fn run(
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let mut factory = Factory::open(&resolved, dir, services, "test").map_err(|e| e.to_string())?;
     factory.run().map(|_| ()).map_err(|e| e.to_string())

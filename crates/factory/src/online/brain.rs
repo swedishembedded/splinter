@@ -35,7 +35,7 @@ use splinter_model::served_train::{ArtifactStore, Offered, StreamError, StreamEv
 
 use super::seams::{
     Learner, LearnerError, LearnerEvent, LearnerState, LearnerTelemetry, OutgoingGroup,
-    SendOutcome, StreamLearner,
+    PublishedVersion, SendOutcome, StreamLearner,
 };
 
 /// An online run's learner on a streaming job.
@@ -192,8 +192,14 @@ impl Learner for BrainLearner {
                     version,
                     digest,
                     step,
+                    lineage,
                 } => {
-                    self.telemetry.published.push((version, digest, step));
+                    self.telemetry.published.push(PublishedVersion {
+                        version,
+                        digest,
+                        step,
+                        lineage,
+                    });
                     events.push(LearnerEvent::Published { version });
                 }
                 StreamEvent::Dropped { groups } => events.push(LearnerEvent::Dropped {
@@ -229,7 +235,10 @@ impl Learner for BrainLearner {
 
 impl StreamLearner for BrainLearner {
     fn telemetry(&self) -> LearnerTelemetry {
-        self.telemetry.clone()
+        LearnerTelemetry {
+            tokenizer_digest: self.job.tokenizer_digest().map(str::to_owned),
+            ..self.telemetry.clone()
+        }
     }
 
     fn final_adapter(&mut self, to: &Path) -> Result<(), LearnerError> {

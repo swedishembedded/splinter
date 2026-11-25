@@ -441,11 +441,17 @@ pub struct FakeTrainer {
     pub starts: Mutex<Vec<Option<std::path::PathBuf>>>,
     /// Each training request's replayed record files and their share.
     pub replayed: Mutex<Vec<(usize, Option<f32>)>>,
+    /// What its servers say they are.
+    pub served: Vec<splinter_core::revision::ServedRevision>,
 }
 
 impl Trainer for FakeTrainer {
     fn identity(&self) -> String {
         "fake-trainer 1".into()
+    }
+
+    fn served_revisions(&self) -> Result<Vec<splinter_core::revision::ServedRevision>, TrainError> {
+        Ok(self.served.clone())
     }
 
     fn resolve(
@@ -491,7 +497,7 @@ impl Trainer for FakeTrainer {
             files: vec![adapter.clone(), record],
             adapter: Some(adapter),
             params: request.params.clone(),
-            report: json!({"records": records}),
+            report: json!({"records": records, "base_digest": format!("sha256:{}", "e".repeat(64))}),
         })
     }
 

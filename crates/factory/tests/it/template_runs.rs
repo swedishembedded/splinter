@@ -132,6 +132,7 @@ fn run_text(repo: &Path, text: &str, out: &Path, fakes: &Fakes) {
         models: Some(&fakes.models),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     Factory::open(&resolved, out, services, "template-test")
         .unwrap()

@@ -105,6 +105,7 @@ pub mod prompt;
 pub mod quantile;
 pub mod release;
 pub mod repository_history;
+pub mod revision;
 pub mod rewards;
 pub mod rng;
 pub mod role;

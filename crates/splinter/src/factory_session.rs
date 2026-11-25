@@ -291,6 +291,7 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
         models: Some(&HostModels),
         variables: Some(&host_variable),
         online: rollouts.as_ref().map(|r| r as _),
+        build: &config.build,
     };
     let mut factory =
         Factory::open(resolved, dir, services, &owner(config)).map_err(|e| match e {
@@ -559,6 +560,7 @@ pub fn play(config: &Config, json: bool, args: &PlayArgs) -> Result<Exit, Error>
         models: Some(&HostModels),
         variables: Some(&host_variable),
         online: None,
+        build: &config.build,
     };
     let trial = {
         let mut factory =

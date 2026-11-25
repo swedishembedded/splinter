@@ -203,3 +203,4 @@ in the same commit.
 | [215](215-at-about-a-hundred-records-own-verified-passes-teach-as-much-as-teacher-passes.md) | At about a hundred records, the base's own verified passes teach as much as teacher passes, and out-of-support teacher passes hurt |
 | [216](216-a-path-recorded-in-a-sandbox-names-the-sandboxs-paths.md) | A path recorded in a sandbox names the sandbox's paths; the host fork must take them as its own tree |
 | [217](217-a-token-bounded-producer-deadlocks-on-tokens-its-consumer-never-sees.md) | A token-bounded producer deadlocks on tokens its consumer never sees, or on a consumer that refuses below a step |
+| [218](218-a-copied-contract-drifts-unless-its-digest-is-pinned.md) | A copied contract drifts unless its digest is pinned and the server reports its own |

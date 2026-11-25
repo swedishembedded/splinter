@@ -50,6 +50,11 @@ pub struct BuildInfo {
     /// Whether the splinter tree had uncommitted changes at build time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dirty: Option<bool>,
+    /// For a build against local checkouts of sven and brain (whose working
+    /// trees it built, not the locked commits): whether each had uncommitted
+    /// changes, by repository. Empty for a build of the locked commits.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dependencies_dirty: std::collections::BTreeMap<String, bool>,
     /// The SHA-256 of the executable that ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary_digest: Option<Digest>,
@@ -63,22 +68,39 @@ impl BuildInfo {
     /// The build of the running process, from what the binary embedded at
     /// build time: the `lock` it was built with (which names sven and brain),
     /// splinter's own commit and the dirty flag as the build script printed
-    /// them (`"true"`/`"false"`), and the SHA-256 of the executable. Whatever
-    /// cannot be established stays absent.
+    /// them (`"true"`/`"false"`), the `local` checkouts it built instead of
+    /// the locked commits, and the SHA-256 of the executable. Whatever cannot
+    /// be established stays absent.
     #[must_use]
     pub fn embedded(
         lock: &str,
         splinter: Option<&str>,
         dirty: Option<&str>,
+        local: &LocalCheckouts<'_>,
         gpu_contexts: Option<u32>,
     ) -> Self {
+        let flag = |v: Option<&str>| v.and_then(|v| v.parse::<bool>().ok());
+        let mut dependencies_dirty = std::collections::BTreeMap::new();
+        for (name, (_, local_dirty)) in [("sven", local.sven), ("brain", local.brain)] {
+            if let Some(local_dirty) = flag(local_dirty) {
+                dependencies_dirty.insert(name.to_owned(), local_dirty);
+            }
+        }
+        // A local checkout's HEAD is what was built; the lock's commit is not.
+        let built = |local: (Option<&str>, Option<&str>), package: &str| {
+            local
+                .0
+                .or_else(|| locked_revision(lock, package))
+                .map(str::to_owned)
+        };
         Self {
             revisions: Revisions {
                 splinter: splinter.map(str::to_owned),
-                sven: locked_revision(lock, "sven-sdk").map(str::to_owned),
-                brain: locked_revision(lock, "brain").map(str::to_owned),
+                sven: built(local.sven, "sven-sdk"),
+                brain: built(local.brain, "brain"),
             },
-            dirty: dirty.and_then(|v| v.parse().ok()),
+            dirty: flag(dirty),
+            dependencies_dirty,
             binary_digest: running_binary_digest(),
             gpu_contexts,
         }
@@ -89,6 +111,29 @@ impl BuildInfo {
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
     }
+
+    /// What the running process knows of itself without a build script:
+    /// only its executable's digest, measured once. A test or a tool that
+    /// embeds no commits names its build this way.
+    #[must_use]
+    pub fn this_executable() -> &'static Self {
+        static BUILD: OnceLock<BuildInfo> = OnceLock::new();
+        BUILD.get_or_init(|| Self {
+            binary_digest: running_binary_digest(),
+            ..Self::default()
+        })
+    }
+}
+
+/// The sven and brain checkouts a build compiled instead of the commits its
+/// lock pins, as its build script found them: each one's HEAD and dirty flag
+/// (`"true"`/`"false"`), `None` for a dependency built from the lock.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LocalCheckouts<'a> {
+    /// sven's checkout: `(HEAD, dirty)`.
+    pub sven: (Option<&'a str>, Option<&'a str>),
+    /// brain's checkout: `(HEAD, dirty)`.
+    pub brain: (Option<&'a str>, Option<&'a str>),
 }
 
 /// The executable that trained a model: the file, its SHA-256, and the build
@@ -205,16 +250,39 @@ source = \"git+https://example.org/brain#abc123\"\n\n\
 
     #[test]
     fn an_embedded_build_names_the_locked_commits_the_flag_and_the_executable() {
-        let build = BuildInfo::embedded(LOCK, Some("1234abc"), Some("false"), Some(2));
+        let build = BuildInfo::embedded(
+            LOCK,
+            Some("1234abc"),
+            Some("false"),
+            &LocalCheckouts::default(),
+            Some(2),
+        );
         assert_eq!(build.revisions.splinter.as_deref(), Some("1234abc"));
         assert_eq!(build.revisions.sven.as_deref(), Some("def456"));
         assert_eq!(build.revisions.brain.as_deref(), Some("abc123"));
         assert_eq!(build.dirty, Some(false));
         assert!(build.binary_digest.is_some());
         assert_eq!(build.gpu_contexts, Some(2));
-        let unknown = BuildInfo::embedded("", None, Some("maybe"), None);
+        let unknown =
+            BuildInfo::embedded("", None, Some("maybe"), &LocalCheckouts::default(), None);
         assert_eq!(unknown.revisions, Revisions::default());
         assert_eq!(unknown.dirty, None);
+        // A build of local checkouts names their HEADs, not the lock's commits, and says which were dirty.
+        let local = LocalCheckouts {
+            sven: (Some("5ee5"), Some("true")),
+            brain: (None, None),
+        };
+        let built = BuildInfo::embedded(LOCK, Some("1234abc"), Some("false"), &local, None);
+        assert_eq!(built.revisions.sven.as_deref(), Some("5ee5"));
+        assert_eq!(
+            built.revisions.brain.as_deref(),
+            Some("abc123"),
+            "brain was built from the lock"
+        );
+        assert_eq!(
+            built.dependencies_dirty,
+            [("sven".to_string(), true)].into_iter().collect()
+        );
     }
 
     #[test]
@@ -229,8 +297,13 @@ source = \"git+https://example.org/brain#abc123\"\n\n\
             let file = std::fs::File::open(&exe).unwrap();
             Digest::sha256_of_reader(std::io::BufReader::new(file)).unwrap()
         };
-        let identity =
-            BinaryIdentity::of(&BuildInfo::embedded(LOCK, Some("abc"), Some("true"), None));
+        let identity = BinaryIdentity::of(&BuildInfo::embedded(
+            LOCK,
+            Some("abc"),
+            Some("true"),
+            &LocalCheckouts::default(),
+            None,
+        ));
         assert_eq!(
             identity.path.as_deref(),
             Some(exe.display().to_string().as_str())

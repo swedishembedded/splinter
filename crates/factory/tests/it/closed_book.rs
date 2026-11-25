@@ -105,6 +105,7 @@ fn verdict(answer: &str) -> String {
         models: Some(&student),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -192,6 +193,7 @@ fn graded(recipe: &str, document: &str, proposal: &Value, answer: &str, producer
         models: Some(&classroom),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -318,6 +320,7 @@ fn answered_tasks_give_a_retrieval_dataset_of_the_passages_they_rest_on() {
         models: Some(&classroom),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -370,6 +373,7 @@ fn passed_answers_give_an_sft_dataset_of_the_question_and_the_answer() {
         models: Some(&classroom),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -439,6 +443,7 @@ fn scenario_a_a_document_becomes_a_trained_sft_candidate() {
         models: Some(&classroom),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")
@@ -471,6 +476,7 @@ fn answered(kinds: &str, proposal: &Value) -> (usize, Vec<String>) {
         models: Some(&classroom),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

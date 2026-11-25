@@ -40,6 +40,7 @@ mod models;
 mod pass;
 pub mod play;
 pub mod release;
+mod revisions;
 pub mod rollout;
 mod rollout_report;
 pub mod task_mutate;
@@ -53,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::clock::{unix_now, SystemClock};
 use splinter_core::digest::Digest;
 use splinter_core::factory::identity::StageIdentity;
+use splinter_core::revision::{ServedRevision, REVISIONS_FILE};
 use splinter_store::factory::products::{ProductError, ProductManifest, ProductStore, Staging};
 use splinter_store::factory::runstate::{Fence, RunState, RunStateError, StageOutcome, StageState};
 
@@ -142,6 +144,16 @@ pub enum RunError {
     /// The run was cancelled; what is committed stays.
     #[error("the run was cancelled; resume it to continue")]
     Cancelled,
+    /// The run started on another build, and its recipe pins revisions.
+    #[error("the run started on another build, and its recipe pins its revisions (`revisions: pinned`); resume it with the build it started on, fork it, or start it with `revisions: mixed`:\n  {}", .0.join("\n  "))]
+    RevisionsChanged(Vec<String>),
+    /// A brain server checks another training-record contract than this
+    /// build writes.
+    #[error("{0}")]
+    ContractMismatch(String),
+    /// The trainer's servers could not say which build they are.
+    #[error("the trainer's servers could not say which build they are: {0}")]
+    ServerUnreadable(String),
     /// The directory is not a factory run.
     #[error("{}", not_a_run_message(.0))]
     NotARun(PathBuf),
@@ -217,6 +229,10 @@ pub struct Services<'a> {
     /// Runs an online stage's rollouts; needed when the recipe trains
     /// online.
     pub online: Option<&'a dyn crate::online::seams::OnlineRollouts>,
+    /// The build this controller runs (its commits, dirty flags and
+    /// executable), which the run pins when it starts and every stage that
+    /// trains or evaluates records.
+    pub build: &'a splinter_core::build::BuildInfo,
 }
 
 /// One stage as the run recorded it.
@@ -277,6 +293,9 @@ pub struct Factory<'a> {
     /// Renews the lease while this controller lives; stopped before the
     /// lease is released.
     heartbeat: Option<lease::Heartbeat>,
+    /// What the trainer's brain servers said they are when the run opened,
+    /// when it trains or evaluates.
+    pub(crate) served: Vec<ServedRevision>,
 }
 
 /// How long a controller's lease lasts without renewal, in seconds.
@@ -334,6 +353,10 @@ impl<'a> Factory<'a> {
             }
             Err(e) => return Err(io(&lock_path)(e)),
         }
+        // The build the run is pinned to, and what its servers are: refused
+        // before the lease is taken, so a refusal holds nothing.
+        revisions::pin(run, services.build, resolved.compiled.revisions)?;
+        let served = revisions::served(resolved, &services)?;
         // A variant the trainer would refuse is refused before any rollout
         // spends anything.
         if let Some(trainer) = services.trainer {
@@ -368,6 +391,7 @@ impl<'a> Factory<'a> {
             collections: resolved.collections.clone(),
             cancel: Box::new(|| false),
             heartbeat,
+            served,
         }
         .with_cancel_file())
     }
@@ -488,7 +512,21 @@ impl<'a> Factory<'a> {
             online::ONLINE => online::produce(factory, stage, &identity, staging),
             _ => release::produce(factory, stage, staging),
         };
-        let committed = self.commit(&stage.key, &stage.operation, &identity, &produce)?;
+        // A stage that trains or evaluates names the code, server, data and
+        // configuration it ran with (its own produce may name models too).
+        let records_revisions = matches!(
+            stage.operation.as_str(),
+            names::TRAIN | names::EVALUATION | online::ONLINE
+        );
+        let produce_named = |factory: &Self, staging: &Staging| {
+            produce(factory, staging)?;
+            let path = staging.path().join(REVISIONS_FILE);
+            if records_revisions && !path.exists() {
+                write_json(&path, &factory.stage_revisions(&identity, Vec::new()))?;
+            }
+            Ok(())
+        };
+        let committed = self.commit(&stage.key, &stage.operation, &identity, &produce_named)?;
         Ok((identity, committed))
     }
 

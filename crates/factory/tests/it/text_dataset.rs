@@ -75,6 +75,7 @@ fn documents_become_a_continued_pretraining_dataset() {
         models: None,
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     let mut factory = Factory::open(&resolved, dir.path(), services, "test").unwrap();

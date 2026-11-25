@@ -99,6 +99,7 @@ fn a_harness_stage_returns_each_items_value() {
         models: Some(&Summarisers),
         variables: None,
         online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     let dir = tempfile::tempdir().unwrap();
     Factory::open(&resolved, dir.path(), services, "test")

@@ -40,8 +40,29 @@ re-sent until brain reports it committed (applied is not durable).
 
 ## Open
 
-- [ ] Revision manifest for cross-repository runs (A01): brain, sven and Splinter commits, the training-record
-      contract digest, model and tokenizer digests, hardware, resolved configuration; a run refuses mixed revisions.
+- [x] Revision manifest for cross-repository runs (A01, lane agrpo-prov): `splinter_core::revision`. A run pins
+      `revisions.json` (`RunRevisions`: the build's Splinter, sven and brain commits, dirty flags, executable digest,
+      the record contract it writes) when it starts; a resume by a build of other commits is refused
+      (`RunError::RevisionsChanged`, one line per difference; a dirty or unknown tree differs unless it is the same
+      executable) unless the recipe says `revisions: mixed`. Every `model.train`, `train.online` and `evaluation`
+      product holds `revisions.json` (`StageRevisions`): the build, what each brain server says it is
+      (`ServedRevision` from `GET /v1/capabilities` `server` and `GET /v1/devices`: engine version and commit,
+      backend, hardware, record contract), the base and tokenizer digests brain reported for the stage (a training
+      job's `base_digest`; the published versions' lineage and the stream frame's `tokenizer_digest`), the input
+      digests and the resolved configuration. A server whose record contract differs from the pinned
+      `RECORD_CONTRACT_DIGEST` (the digest of this build's copy of brain's example set, held to it by a unit test) is
+      refused by name before any stage (`RunError::ContractMismatch`); one that reports none (a frozen older brain,
+      which other runs use on purpose) trains with a warning naming its endpoint and is recorded with `engine` and
+      `training_records` `null`, unless the recipe says `contract: required` (default `checked`), which refuses it. A local build (`make deps/local`) embeds its
+      checkouts' HEADs and dirty flags (`crates/splinter/build.rs`, `BuildInfo::embedded` with `LocalCheckouts`), not
+      the lock's commits. `train.online`'s report carries the manifest and `versions` (every published version with
+      its run-level `lineage {run, epoch, update, base_digest, adapter_digest}`, `PublishedVersion`). The copy of the
+      example set had drifted from brain's (knowledge 218); it is brain's again. Tests: `splinter-core` `revision::`,
+      `build::`, `splinter-factory` `it::revisions` (stage manifests, the resume refusal and `mixed`, the contract
+      refusal, the brain trainer against a scripted server), `splinter-pipelines` `it::online_factory` (versions and
+      the report's manifest). Open: the evaluation stage's manifest names no model digests (brain's chat replies
+      carry `base_digest`, which the evaluation does not collect); sven's per-request `policy_lineage` is not yet read
+      into trajectory records.
 - [x] Pure controller core (A23, A25-A26): `splinter_factory::online::control` (no I/O, time an argument), shared
       types in `splinter_core::factory::group`, seams in `splinter_factory::online::seams` (`RolloutExecutor`,
       `Learner` with `Applied`/`Dropped`/`Committed` events, `TaskSelector` with `RoundRobin`, `GroupLedger`,
