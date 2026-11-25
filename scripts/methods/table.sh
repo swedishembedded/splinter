@@ -11,7 +11,8 @@
 # or the run itself fails.
 #
 # The smokes ask a `brain serve` for every generation, so they need a built brain: its binary's directory is put
-# first on PATH, where the smokes find it.
+# first on PATH, where the smokes find it. Their toy base is written by brain's qwen3 sample
+# (sample-models-qwen3 toy), which a brain build places beside `brain`.
 #
 # usage: scripts/methods/table.sh <cargo> <profile flag> <brain binary>
 
@@ -21,6 +22,10 @@ cargo=${1:-cargo}
 profile=${2:---release}
 brain=${3:?usage: table.sh <cargo> <profile flag> <brain binary>}
 [ -x "$brain" ] || { echo "table.sh: no brain binary at $brain (BRAIN_BIN)" >&2; exit 3; }
+[ -x "$(dirname "$brain")/sample-models-qwen3" ] || {
+  echo "table.sh: no sample-models-qwen3 beside $brain (build it with brain: cargo build -p sample-models-qwen3)" >&2
+  exit 3
+}
 # The smokes run in their crate's directory: the binary's directory goes on PATH as an absolute path.
 brain=$(realpath "$brain")
 PATH="$(dirname "$brain"):$PATH"

@@ -118,7 +118,7 @@ test/families:
 	python3 scripts/tasks/families.py mutate
 	python3 scripts/tasks/test_runaway.py
 
-## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model served by a built brain (BRAIN_BIN) on the CPU, printed as a table of held-out scores before and after (no GPU, minutes; exit 3 means no brain binary)
+## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model served by a built brain (BRAIN_BIN, with brain's qwen3 sample sample-models-qwen3 beside it) on the CPU, printed as a table of held-out scores before and after (no GPU, minutes; exit 3 means no brain binary or sample)
 test/methods:
 	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
 

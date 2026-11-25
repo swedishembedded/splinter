@@ -19,7 +19,7 @@ use splinter_core::clock::FixedClock;
 use splinter_core::experience::{Environment, Experience, Provenance, Task};
 use splinter_data::{write_dataset, Corpus, Projection, SftFinal, View};
 use splinter_model::answer::{Answerer, Decoding};
-use splinter_model::fixture::toy_chat_checkpoint;
+use splinter_model::fixture::{toy_chat_checkpoint, QWEN3_SAMPLE};
 use splinter_model::policy_gradient::{
     Behaviour, PolicyGradientOptions, PolicyGradientTune, Reference,
 };
@@ -58,7 +58,8 @@ impl Lab {
         let binary = splinter_orchestrator::Config::from_env()
             .brain_binary
             .expect("the method smokes need a `brain` binary on PATH");
-        toy_chat_checkpoint(&binary, &base, 5).unwrap();
+        // brain's qwen3 sample writes the toy; a brain build places it beside `brain`.
+        toy_chat_checkpoint(&binary.with_file_name(QWEN3_SAMPLE), &base, 5).unwrap();
         let brain = ManagedBrain::start(
             &ServiceSettings {
                 binary,
