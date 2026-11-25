@@ -540,6 +540,8 @@ fn try_run(repo: &Repo, dir: &Path) -> Result<(), String> {
         trainer: None,
         models: None,
         variables: None,
+        online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
     };
     Factory::open(&resolved, dir, services, "test")
         .and_then(|mut f| f.run())
