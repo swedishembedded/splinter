@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (an `agent` stage over many items failed with "dispatch task is gone")
+- The calls of an `agent` stage run on one shared runtime. Each had a runtime of its own, dropped when the call ended, which left the pooled connections of the stage's one HTTP client without their tasks: with a few hundred calls at once the next call to pick such a connection failed, four times in a row, and the stage stopped.
+
 ### Fixed (a model role bound to a brain server reasoned through its whole output budget)
 - A recipe model role on the `brain` connection (`brain:Qwen/...`) is asked through sven's brain driver, which switches the model's reasoning off for a caller that wants an answer. The generic OpenAI client used before left a reasoning model thinking until its output budget was spent: an `agent` stage over 254 manual sections spent 10,000 tokens on each reply to produce 600.
 

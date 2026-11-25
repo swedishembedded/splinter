@@ -99,10 +99,7 @@ impl SchemaCall {
             call = call.max_output_tokens(tokens);
         }
         let session = call.start(model).map_err(|e| e.to_string())?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| e.to_string())?;
+        let runtime = shared_runtime()?;
         // A connection that drops while the reply streams is transient: the reply is only used
         // whole, so the call is asked again from the start, under the retries of every model call.
         let mut pause = crate::retry::FIRST_PAUSE;
@@ -134,6 +131,26 @@ impl SchemaCall {
         };
         Ok((reply, measured.spent))
     }
+}
+
+/// The runtime every schema call runs on. The model a stage is bound to is one client with one connection pool for all
+/// of its calls; a call with a runtime of its own leaves the pooled connections' tasks behind it when it ends, and the
+/// next call that picks one fails with "dispatch task is gone". Calls on different threads share this runtime's
+/// workers, so a pooled connection outlives the call that opened it.
+fn shared_runtime() -> Result<&'static tokio::runtime::Runtime, String> {
+    static RUNTIME: std::sync::OnceLock<Result<tokio::runtime::Runtime, String>> =
+        std::sync::OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .thread_name("schema-call")
+                .enable_all()
+                .build()
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(Clone::clone)
 }
 
 #[cfg(test)]
