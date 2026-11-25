@@ -101,6 +101,7 @@ struct Shared {
     seen: Mutex<Vec<Seen>>,
     stop: AtomicBool,
     server: Mutex<serde_json::Value>,
+    capabilities: Mutex<serde_json::Value>,
 }
 
 /// The `server` object a scripted endpoint reports by default: a brain build
@@ -142,6 +143,7 @@ impl ScriptedEndpoint {
             seen: Mutex::new(Vec::new()),
             stop: AtomicBool::new(false),
             server: Mutex::new(default_server()),
+            capabilities: Mutex::new(serde_json::json!([])),
         });
         let serving = Arc::clone(&shared);
         std::thread::spawn(move || {
@@ -163,6 +165,14 @@ impl ScriptedEndpoint {
     #[must_use]
     pub fn with_server(self, server: serde_json::Value) -> Self {
         *self.shared.server.lock().unwrap() = server;
+        self
+    }
+
+    /// List `actions` as `GET /v1/capabilities`'s `data` (`[{"model",
+    /// "action", "params": [{"name"}]}]`); none by default.
+    #[must_use]
+    pub fn with_capabilities(self, actions: serde_json::Value) -> Self {
+        *self.shared.capabilities.lock().unwrap() = actions;
         self
     }
 
@@ -372,7 +382,8 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         let _ = respond(&mut stream, "200 OK", "application/json", &list);
     } else if request_line.starts_with("GET /v1/capabilities") {
         let server = shared.server.lock().unwrap().clone();
-        let mut list = serde_json::json!({"object": "list", "data": []});
+        let actions = shared.capabilities.lock().unwrap().clone();
+        let mut list = serde_json::json!({"object": "list", "data": actions});
         if !server.is_null() {
             list["server"] = server;
         }

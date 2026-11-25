@@ -187,15 +187,11 @@ fn trains_across_cards(endpoints: &BrainEndpoints) -> Result<bool, String> {
 /// Whether a capability listing (`{"data": [{"model", "action", "params":
 /// [{"name"}]}]}`) has `brain/train`'s `train` take `cards` and `job`.
 fn takes_cards_and_job(listing: &serde_json::Value) -> bool {
-    let params: Vec<&str> = listing["data"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|entry| entry["model"] == "brain/train" && entry["action"] == "train")
-        .flat_map(|entry| entry["params"].as_array().into_iter().flatten())
-        .filter_map(|param| param["name"].as_str())
-        .collect();
-    params.contains(&"cards") && params.contains(&"job")
+    crate::served_train::action_params(listing, "train").is_some_and(|params| {
+        ["cards", "job"]
+            .iter()
+            .all(|p| params.iter().any(|n| n == p))
+    })
 }
 
 /// Where a fleet of servers runs: one `brain serve` per node of the

@@ -21,12 +21,11 @@
 //! it there, and its files are fetched from the artifact store into the same
 //! place, each checked against its digest.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
 use serde_json::{Map, Value};
-use splinter_core::digest::Digest;
 
+use super::artifacts::ListedFile;
 use super::check::{check_dataset, CheckSpec};
 use super::request::{set, source};
 use crate::consolidate::{Checkpoint, FullTune};
@@ -204,13 +203,6 @@ pub fn merge_served(
     received(brain, &dir, &report, install)
 }
 
-/// One file of a checkpoint's manifest.
-#[derive(Deserialize)]
-struct ManifestFile {
-    name: String,
-    digest: String,
-}
-
 /// The checkpoint a job reported, read from where it was installed; its
 /// files fetched there when this machine does not share the server's store.
 fn received(
@@ -223,38 +215,16 @@ fn received(
         dir: attempt_dir.to_path_buf(),
         reason,
     };
-    let files: Vec<ManifestFile> = serde_json::from_value(report["files"].clone())
+    let files: Vec<ListedFile> = serde_json::from_value(report["files"].clone())
         .map_err(|e| failed(format!("the service listed no checkpoint files: {e}")))?;
     let dir = install.dir();
     if !dir.is_dir() {
-        let store = brain.artifact_store()?;
         let staging = install
             .models_dir
             .join("local")
             .join(format!(".{}.fetching", install.name));
         let _ = std::fs::remove_dir_all(&staging);
-        for file in &files {
-            let relative = Path::new(&file.name);
-            if relative
-                .components()
-                .any(|c| !matches!(c, Component::Normal(_)))
-            {
-                return Err(failed(format!(
-                    "the checkpoint names a file outside itself: {:?}",
-                    file.name
-                )));
-            }
-            let dest = staging.join(relative);
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent).map_err(|source| PolicyError::Io {
-                    path: parent.to_path_buf(),
-                    source,
-                })?;
-            }
-            let digest = Digest::from_content_hex(&file.digest)
-                .map_err(|e| failed(format!("{}: {e}", file.name)))?;
-            store.fetch(&digest, &dest)?;
-        }
+        brain.artifact_store()?.fetch_listed(&files, &staging)?;
         std::fs::rename(&staging, &dir).map_err(|source| PolicyError::Io {
             path: dir.clone(),
             source,

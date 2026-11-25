@@ -295,7 +295,14 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     let call: Value = serde_json::from_slice(body).unwrap_or_default();
     let action = call["action"].as_str().unwrap_or_default().to_string();
     if call["model"] != "brain/train"
-        || !["train", "check_dataset", "full_train", "merge"].contains(&action.as_str())
+        || ![
+            "train",
+            "check_dataset",
+            "full_train",
+            "merge",
+            "speech_sft",
+        ]
+        .contains(&action.as_str())
     {
         error(stream, "404 Not Found", "no such model or action");
         return;
@@ -347,7 +354,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     let data: Value =
         serde_json::from_str(params["data"].as_str().unwrap_or("{}")).unwrap_or_default();
     // brain resolves each digest in its store and verifies the file against it.
-    let named = ["dataset_digest", "adapter_digest"]
+    let named = ["dataset_digest", "held_out_digest", "adapter_digest"]
         .iter()
         .filter_map(|name| params[*name].as_str().map(str::to_string));
     for hex in digests_of(&data).into_iter().chain(named) {
@@ -400,7 +407,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
             return;
         }
         (None, "check_dataset") => (Vec::new(), check(script, &params)),
-        (None, "full_train" | "merge") => checkpoint(script, &action, &params),
+        (None, "full_train" | "merge" | "speech_sft") => checkpoint(script, &action, &params),
         (None, _) => {
             jobs.trained.fetch_add(1, Ordering::SeqCst);
             let (frames, report) = train(script, &params);
@@ -608,8 +615,9 @@ fn check(script: &JobScript, params: &Value) -> Value {
     report
 }
 
-/// A checkpoint job: two files and their manifest published to the store,
-/// installed in the model store when the script names one.
+/// A checkpoint job (`full_train`, `speech_sft` or `merge`): two files and
+/// their manifest published to the store, installed in the model store when
+/// the script names one.
 fn checkpoint(
     script: &JobScript,
     action: &str,
@@ -637,14 +645,15 @@ fn checkpoint(
             std::fs::write(dir.join(file), bytes).unwrap();
         }
     }
-    let full = action == "full_train";
+    // Every checkpoint job but a merge trains, in steps, as ranks.
+    let full = action != "merge";
     let steps = if full { script.steps } else { 0 };
     let frames = (1..=steps)
         .map(|s| (u64::from(s), "frame".to_string(), json!({"type": "step", "step": s, "steps": steps, "loss": 1.0 / f64::from(s), "seconds": f64::from(s)})))
         .collect();
     let report = json!({
         "status": "completed",
-        "objective": if full { "full_sft" } else { "merge" },
+        "objective": match action { "full_train" => "full_sft", other => other },
         "weights_sha256": Digest::sha256_of(&weights).as_str(),
         "steps_completed": steps,
         "initial_loss": if full { json!(2.0) } else { Value::Null },

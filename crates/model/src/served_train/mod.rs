@@ -41,9 +41,10 @@ mod parallel;
 mod preference;
 mod request;
 mod score;
+mod served_job;
 mod stream;
 
-pub use artifacts::ArtifactStore;
+pub use artifacts::{ArtifactStore, Fetched, ListedFile};
 pub use check::{
     check_dataset, check_published, CheckSpec, DatasetKind, DatasetReport, Distribution,
     RecordLength, Refusal, MAX_BLOCK,
@@ -53,6 +54,10 @@ pub use feedback::train_feedback_served;
 pub use job::REFUSED_WAIT;
 pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
 pub use score::score_chat;
+pub(crate) use served_job::action_params;
+pub use served_job::{
+    run_served_job, Published, SeedUsed, ServedJob, ServedJobReport, RESULT_FILE,
+};
 pub use stream::{JobPlace, Offered, StreamDoc, StreamError, StreamEvent, StreamJob, StreamSpec};
 
 use std::path::Path;

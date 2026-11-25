@@ -136,6 +136,80 @@ impl ArtifactStore {
     }
 }
 
+/// One file of a checkpoint a job published, as brain lists it in its
+/// report's `files`: its path in the checkpoint and its digest in the store.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct ListedFile {
+    /// Its path inside the checkpoint, relative.
+    pub name: String,
+    /// The BLAKE3 digest, in hex, it is published under.
+    pub digest: String,
+}
+
+/// A file fetched out of the store.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Fetched {
+    /// Its path inside the checkpoint.
+    pub name: String,
+    /// The digest it was fetched by and verified against.
+    pub digest: String,
+    /// Its length.
+    pub bytes: u64,
+    /// Where it was written.
+    pub path: PathBuf,
+}
+
+impl ArtifactStore {
+    /// Fetches every file of `files` to its name under `dir`, each checked
+    /// against its digest. A name that is absolute, or reaches out of `dir`
+    /// (`..`), is refused before anything is written.
+    ///
+    /// # Errors
+    /// A name or digest is unusable, or a file is missing or altered.
+    pub fn fetch_listed(
+        &self,
+        files: &[ListedFile],
+        dir: &Path,
+    ) -> Result<Vec<Fetched>, PolicyError> {
+        let refused = |reason: String| PolicyError::Endpoint {
+            url: self.root.display().to_string(),
+            reason,
+        };
+        let mut planned = Vec::with_capacity(files.len());
+        for file in files {
+            let relative = Path::new(&file.name);
+            if file.name.is_empty()
+                || relative
+                    .components()
+                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
+            {
+                return Err(refused(format!(
+                    "the checkpoint names a file outside itself: {:?}",
+                    file.name
+                )));
+            }
+            let digest = Digest::from_content_hex(&file.digest)
+                .map_err(|e| refused(format!("{}: {e}", file.name)))?;
+            planned.push((file, dir.join(relative), digest));
+        }
+        let mut fetched = Vec::with_capacity(planned.len());
+        for (file, dest, digest) in planned {
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent).map_err(Self::io(parent))?;
+            }
+            self.fetch(&digest, &dest)?;
+            let bytes = std::fs::metadata(&dest).map_err(Self::io(&dest))?.len();
+            fetched.push(Fetched {
+                name: file.name.clone(),
+                digest: file.digest.clone(),
+                bytes,
+                path: dest,
+            });
+        }
+        Ok(fetched)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
