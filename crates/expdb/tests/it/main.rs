@@ -17,6 +17,7 @@ mod clocks;
 mod collector;
 mod compaction;
 mod concurrency;
+mod crash;
 mod derivations;
 mod entities;
 mod evaluations;

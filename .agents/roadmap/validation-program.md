@@ -64,7 +64,7 @@ scripts/validation/
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
 | M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of every view and the factory's product statistics recomputed from the trials (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), every environment plugin against its tools or labelled fixtures (4B), the executable verifier's Python and Lua tables (4A); the judged kinds' matrix not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed, the exam seal's gaps fixed (G-DC-11, G-NEW-01), the factory's evaluation statistics recomputed from its trials; losses and gradients are brain's (not certified here) |
-| M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C), TLC model-checking the run state, product commit, collection beside a pin and compaction with a mutation of each property (10C, `make test/conformance/tla`) |
+| M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store and of the experience database (10B), the run state against a reference model with the 10C properties (10A, 10C), TLC model-checking the run state, product commit, collection beside a pin and compaction with a mutation of each property (10C, `make test/conformance/tla`) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
 | M6 GPU certification | 13-14 | not possible here: no GPU |
 | M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
@@ -235,6 +235,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   specified), replay's group-less records, the token meter's batch, the inline means and variances (each
   denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
   only through the source store).
+- crash injection beyond the product store (10B): the experience database ended after every storage call of a
+  scenario that writes, compacts, retires refs and collects, in both layouts; nothing committed lost, no flush shown
+  in part (crates/expdb/tests/it/crash.rs).
 - the factory's product statistics recomputed from the trials (6B, closing G-FS-17): every evaluation's sign test
   and decision and the dataset waterfall, on the reference run (its pinned golden held to them) and a mixed one.
 - document plugin (4B, G-NEW-20 found): documents labelled by construction showed the fact reader cutting a value
@@ -249,5 +252,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   header on plain conversations (G-NEW-03, brain's); a Python
   answer can forge what its checks observe (G-NEW-19).
 - Not built: the task-kind matrix of the
-  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
