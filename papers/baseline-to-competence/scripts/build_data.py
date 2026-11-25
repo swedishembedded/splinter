@@ -18,7 +18,7 @@ from pathlib import Path
 
 from tex import fmt_p, macro, sign_p, wilson
 
-NAMES = {"qwen3-0.6b": "Zero", "qwen3-4b": "Four", "qwen3-8b": "Eight", "qwen3.8-27b": "Big"}
+NAMES = {"qwen3-0.6b": "Zero", "qwen3-4b": "Four", "qwen3-8b": "Eight", "qwen3.8-27b": "Big", "qwen3-4b-strong": "FourStrong"}
 SIZE = {"qwen3-0.6b": "0.6B", "qwen3-4b": "4B", "qwen3-8b": "8B", "qwen3.8-27b": "27B"}
 WORDS = ["One", "Two", "Three", "Four", "Five"]
 

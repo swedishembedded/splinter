@@ -14,7 +14,7 @@ adapter \trainEightFullPassed{} (\cref{fig:train}). \Cref{tab:stages} lists ever
 
 An independent measurement of an adapter trained the same way on the same records, made before a machine restart,
 agrees on solved-within-five (4B \examFourFirstFive{}, 8B \examEightFirstFive{}) and differs on pass@1 (4B
-\examFourFirstOne{}, 8B \examEightFirstOne{}): the first attempt of 100 tasks moves by about ten tasks between
+\examFourFirstOne{}, 8B \examEightFirstOne{}): the first attempt of 100 tasks moved by four tasks at 4B and eleven at 8B between
 measurements, and we therefore treat solved-within-five as the measurement and pass@1 as a noisy companion.
 
 \begin{figure}[t]
@@ -88,7 +88,7 @@ measurements, and we therefore treat solved-within-five as the measurement and p
   held-out records are whole tasks the training set does not contain.}\label{fig:loss}
 \end{figure}
 
-\begin{table}[t]
+\begin{table}[!ht]
 \centering\small\setlength{\tabcolsep}{3.5pt}
 \input{stages-table}
 \caption{Exam results by stage. Each row is 100 tasks, one attempt and up to four reruns of the failed; loop-stopped is the
@@ -105,7 +105,7 @@ those continuations. Each failure therefore becomes verified training data that 
 produced, \integrationAdmitted{} were new solutions of their task; \integrationDuplicate{} repeated a tool-call sequence the
 task already had and \integrationOvercap{} exceeded the per-task cap of sixteen (\cref{tab:data}).
 
-\paragraph{Growing the set from 2\,359 to \integrationTrainAfter{} records helped the 8B and not the 4B.} Trained on
+\paragraph{Growing the training set from \integrationTrainBefore{} to \integrationTrainAfter{} records helped the 8B and not the 4B.} Trained on
 the integrated set, the 8B adapter solves \examEightRtwoFive{} tasks within five attempts against \examEightRtworefFive{}
 for the previous adapter measured in the same run (\winsEightRtwo{} wins, \lossesEightRtwo{} losses, one-sided $p$
 \pEightRtwo{}); the 4B adapter solves \examFourRtwoFive{} against \examFourRtworefFive{} (\winsFourRtwo{} wins,
@@ -120,21 +120,23 @@ of the 4B base's next calls and \behaviourEightBaseExamRepeatPct{}\% of the 8B b
 \behaviourEightFullExamRepeatPct{}\% at 8B, the 0.6B stays at \behaviourZeroFullExamRepeatPct{}\%. A run that repeats
 itself is ended by the loop watchdog after six identical calls: \behaviourFourFullExamLoopPct{}\% of the 4B adapter's exam
 attempts and \behaviourEightFullExamLoopPct{}\% of the 8B adapter's still end that way
-(\behaviourFourBaseExamLoopPct{}\% and \behaviourEightBaseExamLoopPct{}\% for the bases). Most of the remaining failures of
-the adapters are therefore not wrong edits but runs that never leave a loop.
+(\behaviourFourBaseExamLoopPct{}\% and \behaviourEightBaseExamLoopPct{}\% for the bases). Runs that never leave a loop are therefore a large share of the failures that remain; we did not classify the rest.
 
 \subsection{A loop penalty in the policy gradient}
 Starting from the first adapter, a clipped policy gradient on its own graded attempts (eight attempts of every practice
 task at temperature 1.0), with the penalties of \cref{sec:method} (a full pass's reward for a loop-stopped attempt, half a
 pass for repeating failed calls), moved the policy (median per-step KL to its starting adapter \optimiserFourKl{} at 4B and
-\optimiserEightKl{} at 8B, median clip fraction \optimiserFourClip{}\% and \optimiserEightClip{}\%). It did not reduce looping on the exams. Against the adapter it started from, the share of exam attempts
+\optimiserEightKl{} at 8B, median clip fraction \optimiserFourClip{}\% and \optimiserEightClip{}\%). It did not reduce looping on the exams in any useful way. Against the adapter it started from, the share of exam attempts
 ended by the loop watchdog is \behaviourFourPgExamLoopPct{}\% against \behaviourFourPgrefExamLoopPct{}\% at 4B and
 \behaviourEightPgExamLoopPct{}\% against \behaviourEightPgrefExamLoopPct{}\% at 8B; the share of repeated failed calls is
 \behaviourFourPgExamRepeatPct{}\% against \behaviourFourPgrefExamRepeatPct{}\% and
 \behaviourEightPgExamRepeatPct{}\% against \behaviourEightPgrefExamRepeatPct{}\%. The 4B solves \examFourPgFive{} tasks
 within five attempts against \examFourPgrefFive{} (no change). The 8B solves \examEightPgFive{} against
-\examEightPgrefFive{} (\winsEightPg{} wins, \lossesEightPg{} losses, $p$ \pEightPg{}), a gain that comes with no
-reduction in looping, so it is not evidence that the penalty works.
+\examEightPgrefFive{} (\winsEightPg{} wins, \lossesEightPg{} losses, $p$ \pEightPg{}), a gain that comes with a loop share only four points lower, so it is not evidence that the penalty works.
+A penalty twice as strong, trained for twice as many steps (median KL \optimiserFourStrongKl{}, clip fraction
+\optimiserFourStrongClip{}\%), raised the loop-stopped share of the 4B to \behaviourFourPgdExamLoopPct{}\% against
+\behaviourFourPgdrefExamLoopPct{}\% for the adapter it started from and solved \examFourPgdFive{} tasks within five attempts
+against \examFourPgdrefFive{} (\winsFourPgd{} wins, \lossesFourPgd{} losses).
 On the practice tasks looping is rare (\behaviourFourFullTrainLoopPct{}\% of the 4B adapter's attempts and
 \behaviourEightFullTrainLoopPct{}\% of the 8B's, against about 30\% on the exams), which leaves the penalty few
 examples of the behaviour it targets.

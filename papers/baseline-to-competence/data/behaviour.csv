@@ -9,6 +9,8 @@ qwen3-4b,rtworef,exam,113,472,0.233
 qwen3-4b,rtwo,exam,135,476,0.359
 qwen3-4b,pgref,exam,111,456,0.239
 qwen3-4b,pg,exam,136,456,0.325
+qwen3-4b,pgdref,exam,135,472,0.266
+qwen3-4b,pgd,exam,177,492,0.485
 qwen3-4b,base,train,66,912,0.63
 qwen3-4b,full,train,58,912,0.284
 qwen3-8b,base,exam,140,500,0.687

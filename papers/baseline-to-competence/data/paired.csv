@@ -7,3 +7,4 @@ qwen3-8b,rtwo,task,18,9
 qwen3-4b,pg,task,10,10
 qwen3-8b,pg,task,17,7
 qwen3.8-27b,records,attempt,91,107
+qwen3-4b,pgd,task,7,9

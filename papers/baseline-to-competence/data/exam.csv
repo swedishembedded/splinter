@@ -7,6 +7,8 @@ qwen3-4b,rtworef,7,14,17,18,20
 qwen3-4b,rtwo,6,11,13,16,19
 qwen3-4b,pgref,11,17,18,20,24
 qwen3-4b,pg,11,16,18,21,24
+qwen3-4b,pgdref,7,13,17,20,22
+qwen3-4b,pgd,2,2,10,18,20
 qwen3-8b,base,0,0,0,0,0
 qwen3-8b,full,3,11,17,22,29
 qwen3-8b,rtworef,10,16,20,23,25

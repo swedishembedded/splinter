@@ -2,21 +2,23 @@
 \paragraph{What the process does.} A model that fails every exam learns, from a few thousand verified trajectories, to
 recover from an editor error and to finish a quarter to a third of tasks it has never seen. The largest single step is the
 first: the trained adapters pass \trainFourFullPct{}\% of attempts at the practice tasks against \trainFourBasePct{}\% for
-the bases. What the teacher's continuations add is the example a student cannot produce itself, a correction after its own
-mistake, and the \recoverySolvedPct{}\% of continuations that verify make each failed attempt usable as data.
+the bases. What the teacher's continuations add is a correction after the student's own mistake, which the student's passing
+attempts never contain; \recoverySolvedPct{}\% of the continuations verified.
 
 \paragraph{Where it stops.} The 0.6B model learns the practice tasks (\trainZeroFullPct{}\% of attempts) and solves
-\examZeroFullFive{} of 100 exams: some tasks need more than a model of that size does with this tool. At 4B and 8B about
+\examZeroFullFive{} of 100 exams, so a model of that size does not reach the exams with this tool and this data. At 4B and 8B about
 30\% of exam attempts still end in a loop. The penalty we tried is not the fix: with the looping attempts kept in the data
-and the optimiser moving the policy, it left the loop share where it was. The practice tasks hold few looping attempts for
+and the optimiser moving the policy, it left the loop share near where it was (four points lower at the 8B, higher at the 4B). The practice tasks hold few looping attempts for
 the reward to act on, and the exams are harder than the tasks the policy trains on. A model that already solves half of the
 exams does not need the process: the 27B teacher's own adapter solves \examBigRecordsFive{} within five attempts against
 \examBigBaseFive{} for the base.
 
-\paragraph{Limits.} Each arm has one seed. The first attempt of 100 tasks moved by about ten tasks between two measurements
+\paragraph{Limits.} Each arm has one seed. The first attempt of 100 tasks moved by up to eleven tasks between two measurements
 of the same recipe, which is why we compare solved-within-five and test over tasks, and the gains of the second round and of
 the policy gradient at the 8B are single measurements with inconclusive or marginal tests. The exams are 100 tasks of one
 domain and carry a wide interval (\examFourFullFiveLo--\examFourFullFiveHi{}\% at 4B). Base-model arms of the round-one
 measurements left 10 (4B) and 23 (8B) of the base slots uncounted after retries; the bases solved none of the counted
-slots, and the adapter arms counted every slot. The teacher is a larger model of the same family, and the records are as
+slots, and the adapter arms counted every slot. The policy-gradient recipe was changed once after seeing an exam result: its first run, whose training rows were bounded at
+8\,192 tokens, ended more attempts in a loop than the adapter it started from, and the bound had removed the long, looping attempts
+from its data. The reported runs use the corrected bound, and a stronger variant is reported beside them. The teacher is a larger model of the same family, and the records are as
 good as its verified solutions: nothing here shows what happens when no stronger model exists.

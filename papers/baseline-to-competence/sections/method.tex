@@ -25,10 +25,10 @@
 
 \paragraph{Records.} A record is one complete trajectory under the system prompt and tool schema the model is served,
 every assistant turn supervised, in the form the model's chat template renders. Only trajectories the grader passed
-become records. The first records are a teacher's verified solutions of the practice tasks.
+become records. The first records are a teacher's verified solutions of the practice tasks, almost all by the 27B model.
 
 \paragraph{The student's own solutions.} The trained adapter attempts every practice and composite task four times at
-the evaluation sampling settings. Each verified pass is a candidate record. These records are on-policy, so they teach
+the evaluation sampling settings (the 4B and 8B a second time at temperature 1.0 for variety). Each verified pass is a candidate record. These records are on-policy, so they teach
 the model what it can already do more reliably, and they reach tasks the teacher records cover with other tool-call
 sequences.
 
@@ -42,7 +42,7 @@ continued from their failed attempts too, so recovery data covers partial as wel
 
 \paragraph{Integration and provenance.} A candidate record enters the set only as a new solution of its task. Its
 fingerprint is the sequence of tool calls (tool name and whitespace-normalised arguments, ignoring the free-text intent
-argument), and a record whose fingerprint the task already has is dropped; at most twelve records per task are kept. The
+argument), and a record whose fingerprint the task already has is dropped; at most twelve records per task are kept (sixteen in the second round). The
 split is by whole task: roughly one tenth of tasks new to the set are held out for validation, and a task keeps its side.
 Every record carries the model that produced it (\cref{tab:data}).
 
