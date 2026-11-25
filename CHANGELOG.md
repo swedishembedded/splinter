@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (a fan-out may run more items at once)
+- A fan-out stage's `concurrency` may be up to 1024 (it was 64), so a recipe can keep a fleet of cards busy: twelve cards with sixty slots each take 720 calls at once.
+
 ### Fixed (an operator the machine does not grant stopped every recipe)
 - An operator the machine does not grant what it needs (a variable, the network) no longer fails every recipe of its repository: it is withheld from the registry, a recipe that does not use it resolves as before, and one that does is refused naming the operator and what it lacks. `workspace-init.sh` skips the collection step for a bench revision that has no `collections/`.
 

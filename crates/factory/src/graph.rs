@@ -56,8 +56,8 @@ pub const RECIPE_V2_SCHEMA: &str = "splinter.recipe/v2";
 pub const SUBRECIPE: &str = "recipe";
 /// How deep subrecipes may nest; deeper is refused as a likely cycle.
 const MAX_NESTING: usize = 16;
-/// The most items of a fan-out that may run at once.
-pub const MAX_CONCURRENCY: u32 = 64;
+/// The most items of a fan-out that may run at once: a fleet of a dozen cards with sixty slots each is under it.
+pub const MAX_CONCURRENCY: u32 = 1024;
 
 /// An input of the recipe: a product of a kind, read from a path of the
 /// task repository.
