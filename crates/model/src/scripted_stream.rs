@@ -176,7 +176,13 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, String> {
         queue: VecDeque::new(),
         held: HashSet::new(),
         applied: Vec::new(),
-        frames: vec![(1, first)],
+        // As brain: a progress frame (untyped) and a stage frame come before
+        // the stream frame.
+        frames: vec![
+            (1, json!({"step": 0, "total": 100})),
+            (2, json!({"type": "stage", "stage": "staging the datasets"})),
+            (3, first),
+        ],
         finishing: false,
         done: false,
         gone: false,

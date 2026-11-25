@@ -345,19 +345,24 @@ impl StreamJob {
             stop,
             reader: Some(reader),
         };
-        let first = job
-            .frames
-            .recv_timeout(FIRST_FRAME)
-            .map_err(|_| StreamError::Failed("the run sent no first frame".into()))?;
+        // A job reports its progress (`{"step", "total"}`) and its stages
+        // (`{"type": "stage"}`) before it streams: the run starts at its
+        // stream frame (or ends at `done`).
+        let deadline = std::time::Instant::now() + FIRST_FRAME;
+        let first = loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let frame = job
+                .frames
+                .recv_timeout(left)
+                .map_err(|_| StreamError::Failed("the run sent no stream frame".into()))?;
+            if frame["type"] == "stream" || frame["type"] == "done" {
+                break frame;
+            }
+        };
         if first["type"] == "done" {
             return Err(StreamError::Failed(format!(
                 "the run ended before it streamed: {}",
                 first["error"]
-            )));
-        }
-        if first["type"] != "stream" {
-            return Err(StreamError::Transport(format!(
-                "the run's first frame is not its stream frame: {first}"
             )));
         }
         job.epoch = first["epoch"].as_u64().unwrap_or(0);
