@@ -260,3 +260,26 @@ fn a_verifier_metric_that_is_no_valid_measurement_makes_the_trial_unusable_not_m
         assert!(cause.message.contains(metric), "{}", cause.message);
     }
 }
+
+/// An agent that never asked its model anything and completed no turn failed to run, not the task.
+#[test]
+fn an_agent_that_never_asked_its_model_is_not_graded_a_failure() {
+    let cases = cases();
+    let failed = cases
+        .iter()
+        .find(|c| c["name"] == "quit_after_one_turn")
+        .expect("the case");
+    let (mut evidence, policy) = evidence(failed);
+    evidence.requests = Vec::new();
+    evidence.turns = Some(0);
+    evidence.model_responses = None;
+    let graded = grade(&evidence, &policy);
+    assert_eq!(
+        (graded.status, graded.counted, graded.passed),
+        (TrialStatus::AgentError, false, None)
+    );
+    assert_eq!(graded.cause.expect("a cause").code, "no_model_request");
+    // With a completed turn the same trial is the model's.
+    evidence.turns = Some(1);
+    assert_eq!(grade(&evidence, &policy).status, TrialStatus::Graded);
+}

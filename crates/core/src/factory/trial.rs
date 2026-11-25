@@ -660,6 +660,21 @@ pub fn classify(
             )),
         );
     }
+    // An agent that never asked its model anything and completed no turn did not fail the task: it failed to
+    // run (a refused setting, a missing binary). Grading it a failure would count the infrastructure against
+    // the model, and a whole arm of such trials would read as a model that solves nothing.
+    if evidence.requests.is_empty()
+        && evidence.turns == Some(0)
+        && evidence.model_responses.unwrap_or(0) == 0
+    {
+        return (
+            TrialStatus::AgentError,
+            Some(Cause::new(
+                "no_model_request",
+                "the agent made no model request and completed no turn, so the model was never asked",
+            )),
+        );
+    }
     if let Some(exception) = result.get("exception_info").filter(|e| present(Some(e))) {
         let text = |key: &str| match exception.get(key) {
             Some(Value::String(s)) => s.clone(),

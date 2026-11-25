@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (an agent that never asked its model was graded a failure)
+- A trial whose agent made no model request and completed no turn (a refused sampling setting, a missing binary) was a graded failure of the model. It is now an `agent_error`, which is never counted, so an arm whose agent could not start no longer reads as a model that solves nothing and cannot satisfy a promotion gate as the baseline it was beaten against.
+
 ### Fixed (a fork point after a reply that called no tool)
 - A fork correction whose located step was a reply that called no tool failed the whole stage ("there is no turn to continue after it"). It now continues from the latest earlier step a model turn can follow.
 
