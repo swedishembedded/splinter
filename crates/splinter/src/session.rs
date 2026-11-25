@@ -551,6 +551,9 @@ impl Session {
             Command::Runs(RunsCommand::List) => emit(json, &runs::list(ctx)?),
             Command::Runs(RunsCommand::Show { id }) => emit(json, &runs::show(ctx, &id)?),
             Command::Runs(RunsCommand::Cancel { id }) => emit(json, &runs::cancel(ctx, &id)?),
+            Command::Jobs(crate::cli::JobsArgs {
+                command: Some(crate::cli::JobsCommand::RunServed(args)),
+            }) => return crate::jobs_session::run_served(ctx, json, *args),
             Command::Jobs(args) => return crate::jobs_session::jobs(&self.splinter, json, args),
             // Runs in `main` before a session is built: it needs none.
             Command::Config(_) => unreachable!("`splinter config` runs before a session"),

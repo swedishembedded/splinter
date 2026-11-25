@@ -27,6 +27,7 @@ navigation:
       - docs/guides/agent-sessions.md
       - docs/guides/personas.md
       - docs/guides/training.md
+      - docs/guides/distributed-training.md
       - docs/guides/evaluation.md
       - docs/guides/releases.md
       - docs/guides/improving-a-harness.md

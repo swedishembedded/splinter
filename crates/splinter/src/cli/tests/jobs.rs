@@ -108,3 +108,46 @@ fn a_distributed_submission_prepares_a_plan_for_every_rank() {
     assert_eq!(plain.plan, None);
     assert!(!plain.command.iter().any(|part| part == JOB_PLAN_FLAG));
 }
+
+#[test]
+fn a_served_job_takes_its_action_params_artifacts_and_output() {
+    let Command::Jobs(JobsArgs {
+        command: Some(JobsCommand::RunServed(run)),
+    }) = command(&[
+        "jobs",
+        "run-served",
+        "--action",
+        "speech_sft",
+        "--params",
+        "p.json",
+        "--artifact",
+        "dataset_digest=train.bttshrd",
+        "--artifact",
+        "held_out_digest=held=out.bttshrd",
+        "--out",
+        "ckpt",
+    ])
+    else {
+        panic!("jobs run-served");
+    };
+    assert_eq!(run.action, "speech_sft");
+    assert_eq!(
+        run.artifacts,
+        [
+            ("dataset_digest".to_string(), "train.bttshrd".into()),
+            ("held_out_digest".to_string(), "held=out.bttshrd".into()),
+        ],
+        "a file name may hold '='; the param is what comes before the first"
+    );
+    assert_eq!(run.out.as_deref(), Some(std::path::Path::new("ckpt")));
+    let base = ["jobs", "run-served", "--action", "a", "--params", "p.json"];
+    for bad in ["=file", "param=", "no-equals"] {
+        let mut words = base.to_vec();
+        words.extend(["--artifact", bad]);
+        assert!(parse(&words).is_err(), "{bad} is not PARAM=FILE");
+    }
+    assert!(
+        parse(&["jobs", "run-served", "--action", "a"]).is_err(),
+        "params are needed"
+    );
+}

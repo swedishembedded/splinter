@@ -40,12 +40,53 @@ pub enum JobsCommand {
         #[arg(value_name = "JOB")]
         id: String,
     },
+    /// Run one `brain/train` action (`speech_sft`, `full_train`, `train`,
+    /// ...) on the brain servers as one job: over every card of every
+    /// server when the action takes `cards` and `job`, else on one card.
+    /// Inside an allocation the servers are started on its nodes (one step,
+    /// one server per node) and stopped after; `--brain-endpoint` uses
+    /// running ones. Rank 0's step frames are printed as JSON lines on
+    /// stdout as they come; Ctrl-C cancels the job on every server.
+    RunServed(Box<RunServedArgs>),
     /// Stop a job's workers and record it cancelled.
     Cancel {
         /// The job's digest, or a unique prefix of its hex.
         #[arg(value_name = "JOB")]
         id: String,
     },
+}
+
+/// `jobs run-served`.
+#[derive(Debug, Args)]
+pub struct RunServedArgs {
+    /// The `brain/train` action, as the servers' `GET /v1/capabilities`
+    /// lists it.
+    #[arg(long, value_name = "ACTION")]
+    pub action: String,
+    /// A file holding the action's params as one JSON object, as brain
+    /// takes them; `cards` and `job` are set by the spread, and a `seed`
+    /// left out is drawn and reported.
+    #[arg(long, value_name = "FILE")]
+    pub params: std::path::PathBuf,
+    /// `PARAM=FILE`: publish FILE to the servers' artifact store and set
+    /// PARAM to its digest (`dataset_digest=train.bttshrd`); repeat for more.
+    #[arg(long = "artifact", value_name = "PARAM=FILE", value_parser = artifact)]
+    pub artifacts: Vec<(String, std::path::PathBuf)>,
+    /// Fetch the files the job publishes (a checkpoint, an adapter, a
+    /// training record) into DIR by digest, each verified, with the result
+    /// as `result.json`.
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<std::path::PathBuf>,
+}
+
+/// `PARAM=FILE`.
+fn artifact(text: &str) -> Result<(String, std::path::PathBuf), String> {
+    match text.split_once('=') {
+        Some((param, file)) if !param.is_empty() && !file.is_empty() => {
+            Ok((param.to_string(), file.into()))
+        }
+        _ => Err(format!("{text:?} is not PARAM=FILE")),
+    }
 }
 
 /// `jobs submit`.

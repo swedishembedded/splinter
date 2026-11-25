@@ -195,6 +195,7 @@ Every command takes these.
   - [splinter jobs reconcile](#splinter-jobs-reconcile) - Ask each unfinished job's launcher what became of it and record the answer
   - [splinter jobs retry](#splinter-jobs-retry) - Start the next attempt of every job whose last attempt failed and whose retry policy allows another
   - [splinter jobs show](#splinter-jobs-show) - Show one job, its state and the specification it runs
+  - [splinter jobs run-served](#splinter-jobs-run-served) - Run one `brain/train` action (`speech_sft`, `full_train`, `train`, ...) on the brain servers as one job
   - [splinter jobs cancel](#splinter-jobs-cancel) - Stop a job's workers and record it cancelled
 - [splinter state](#splinter-state) - Show, maintain, verify, repair, archive and restore the state
   - [splinter state status](#splinter-state-status) - What the experience database holds, as files
@@ -1962,6 +1963,7 @@ Subcommands:
 - [`reconcile`](#splinter-jobs-reconcile) - Ask each unfinished job's launcher what became of it and record the answer
 - [`retry`](#splinter-jobs-retry) - Start the next attempt of every job whose last attempt failed and whose retry policy allows another
 - [`show`](#splinter-jobs-show) - Show one job, its state and the specification it runs
+- [`run-served`](#splinter-jobs-run-served) - Run one `brain/train` action (`speech_sft`, `full_train`, `train`, ...) on the brain servers as one job
 - [`cancel`](#splinter-jobs-cancel) - Stop a job's workers and record it cancelled
 
 #### splinter jobs submit
@@ -2020,6 +2022,21 @@ splinter jobs show [OPTIONS] <JOB>
 Arguments:
 
 - `<JOB>` (required): The job's digest, or a unique prefix of its hex.
+
+#### splinter jobs run-served
+
+Run one `brain/train` action (`speech_sft`, `full_train`, `train`, ...) on the brain servers as one job: over every card of every server when the action takes `cards` and `job`, else on one card. Inside an allocation the servers are started on its nodes (one step, one server per node) and stopped after; `--brain-endpoint` uses running ones. Rank 0's step frames are printed as JSON lines on stdout as they come; Ctrl-C cancels the job on every server
+
+```text
+splinter jobs run-served [OPTIONS] --action <ACTION> --params <FILE>
+```
+
+Options:
+
+- `--action <ACTION>` (required): The `brain/train` action, as the servers' `GET /v1/capabilities` lists it.
+- `--params <FILE>` (required): A file holding the action's params as one JSON object, as brain takes them; `cards` and `job` are set by the spread, and a `seed` left out is drawn and reported.
+- `--artifact <PARAM=FILE>...`: `PARAM=FILE`: publish FILE to the servers' artifact store and set PARAM to its digest (`dataset_digest=train.bttshrd`); repeat for more.
+- `--out <DIR>`: Fetch the files the job publishes (a checkpoint, an adapter, a training record) into DIR by digest, each verified, with the result as `result.json`.
 
 #### splinter jobs cancel
 

@@ -560,7 +560,7 @@ pub use goal::GoalCommand;
 pub use harbor::{HarborCommand, OracleArg};
 pub use hub::{HubArgs, IngestHfArgs, PublishArgs};
 pub use improve::ImproveArgs;
-pub use jobs::{help as jobs_help, JobsArgs, JobsCommand};
+pub use jobs::{help as jobs_help, JobsArgs, JobsCommand, RunServedArgs};
 pub use objects::ObjectsCommand;
 pub use reference::CliReferenceArgs;
 pub use review::{CritiqueArgs, VerifyArgs};

@@ -48,6 +48,7 @@
 //!   stages above as one run.
 //! * [`doctor`] - whether a run can start here, before one does;
 //! * [`serving`] - the brain servers kept for other programs until interrupted;
+//!   [`served_job`] - any `brain/train` action run on them as one job;
 //! * [`status`], [`experiences`], [`ask`] - inspection and questions;
 //!   [`compare`] - two experience sets of the same tasks compared, a family
 //!   counted once; [`arm_compare`] - graded trials of several arms (Harbor
@@ -116,6 +117,7 @@ mod rl_build;
 pub mod router;
 pub mod sealed;
 pub mod served;
+pub mod served_job;
 pub mod serving;
 pub mod sessions;
 pub mod set_import;

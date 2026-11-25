@@ -377,6 +377,38 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       failed 3 of 6 runs of `--test service` once a fleet test was added;
       `server::spawn_when_written` retries it (50 x 10 ms), 8 of 8 passed
       (knowledge 224).
+- [x] **Any served training action runs over the fleet with one command
+      (2026-11-25).** `splinter jobs run-served --action ACTION --params
+      FILE [--artifact PARAM=FILE ...] [--out DIR]`
+      (`served_train::run_served_job`, the pipeline `served_job`) runs a
+      `brain/train` action as written by its caller: datasets published to
+      the artifact store by digest, the spread chosen from the servers'
+      capabilities for that action (every card of every server when it
+      takes `cards` and `job`, the first server's cards for `cards` only,
+      else one card, said), a seed drawn and reported when none is given,
+      every server's run followed through `job::run_spread`, rank 0's frames
+      on stdout as JSON lines, a failure or Ctrl-C cancelling every server,
+      the `parallel` report checked, and the published files fetched by
+      digest, verified, into the output directory with `result.json`. It
+      runs on a fleet it starts (one step over the allocation's nodes, or
+      one local server) or on running servers (`--brain-endpoint` and the
+      `--brain-train-*` flags). `--cluster-node-cards NODE=CARDS` lets a
+      node bring fewer cards. Measured 2026-11-25 in job 5741706 on n105
+      (brain 2d1a5e9a, Qwen3-TTS 1.7B `speech_sft`, lane G's synthetic 8k
+      shard, 30 steps, 32 utterances x 4 accumulation, seed 20261125): a
+      fleet of one server x 4 cards ran 4 ranks over NCCL, 2 min 23 s wall
+      from command start to teardown, 4111 frames/s over steps 2-30, the
+      12 checkpoint files fetched and verified; two running servers x 2
+      cards on the same node (one job, `first_rank` 0 and 2, TCP transport)
+      ran 4 ranks, 2 min 15 s wall, 4133 frames/s, and published the same
+      checkpoint digest (6897a093...) and final loss (9.8723) as the 1 x 4
+      run. Both reports list no devices in `parallel` (a brain gap in
+      `speech_sft`'s report, flagged as a warning). Not yet run: the
+      multi-node fleet with `run-served` (the 3-node, 12-rank production
+      run). Tests: `crates/model/tests/served_job.rs` (spread fields,
+      digests, one card for an action without `job`, a failure on one
+      server, a cancel, refusals), `crates/pipelines/src/served_job.rs`,
+      the grammar spec in `crates/splinter/src/cli/tests/jobs.rs`.
 
 ## Decisions
 

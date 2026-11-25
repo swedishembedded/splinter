@@ -84,8 +84,8 @@ pub use splinter_pipelines::{
     describe, dialogue, doctor, episodes, eval, exam, exam_set, experiences, experiment,
     factory_index, goal, graded, harbor, history, hub, improve, judge, lineage, objects,
     policy_used, powered, preflight, raft, rehearsal, release, rerank, reserve, retrieval, router,
-    sealed, served, serving, sessions, set_import, solving, sources, state, status, tasks,
-    timeline, train, variants, verify,
+    sealed, served, served_job, serving, sessions, set_import, solving, sources, state, status,
+    tasks, timeline, train, variants, verify,
 };
 
 // The layers, each under one name.

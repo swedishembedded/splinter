@@ -7,15 +7,20 @@
 // procure our services by sending an email to info@swedishembedded.com.
 
 //! `jobs ...`: submit, list, reconcile, show and cancel jobs through the SDK,
-//! and print what each did.
+//! and print what each did; `jobs run-served` runs one action on the brain
+//! servers.
 
 use serde::Serialize;
 
 use splinter_sdk::jobs::{JobSubmission, JobView};
+use splinter_sdk::model::served_train::ServedJobReport;
+use splinter_sdk::runs::{record, Recorded};
+use splinter_sdk::served_job::ServedJobRequest;
 use splinter_sdk::store::jobs::JobRecord;
+use splinter_sdk::Context;
 use splinter_sdk::{Error, Splinter};
 
-use crate::cli::{JobsArgs, JobsCommand};
+use crate::cli::{JobsArgs, JobsCommand, RunServedArgs};
 use crate::output::{self, shell_words, Report};
 use crate::session::Exit;
 
@@ -42,6 +47,9 @@ pub fn jobs(splinter: &Splinter, json: bool, args: JobsArgs) -> Result<Exit, Err
             },
         ),
         JobsCommand::Show { id } => output::emit(json, &jobs.show(&id)?),
+        JobsCommand::RunServed(_) => {
+            unreachable!("jobs run-served runs on a context and is routed before this match")
+        }
         JobsCommand::Cancel { id } => output::emit(
             json,
             &Cancelled {
@@ -169,6 +177,81 @@ impl Report for Cancelled {
     fn human(&self) -> String {
         let mut out = line(&self.job);
         out.push_str(&detail(&self.job));
+        out
+    }
+}
+
+/// A served job's report, under the run that recorded it.
+#[derive(Debug, Serialize)]
+pub struct RanServed(pub Recorded<ServedJobReport>);
+
+/// Runs `jobs run-served`: rank 0's step frames on stdout as JSON lines as
+/// they come, then the report (with `--json`, as one more line, the one
+/// that has a `run`).
+pub fn run_served(ctx: &Context, json: bool, args: RunServedArgs) -> Result<Exit, Error> {
+    let request = ServedJobRequest {
+        action: args.action,
+        params: args.params,
+        artifacts: args.artifacts,
+        out_dir: args.out,
+    };
+    let ran = record(ctx, "jobs run-served", &request, |run| {
+        let cancel = run.cancel_token();
+        splinter_sdk::served_job::run(ctx, &request, &cancel, &mut |frame| {
+            println!("{frame}");
+        })
+    })?;
+    let report = RanServed(ran);
+    if json {
+        match serde_json::to_string(&report) {
+            Ok(line) => println!("{line}"),
+            Err(e) => eprintln!("splinter: the report could not be written as JSON: {e}"),
+        }
+    } else {
+        print!("{}", report.human());
+    }
+    Ok(Exit::Ok)
+}
+
+impl Report for RanServed {
+    fn human(&self) -> String {
+        let job = &self.0.report;
+        let asked = &job.parallel.requested;
+        let mut out = format!(
+            "{}: completed in {:.1}s (run {})\n  spread: {} rank(s) over {} server(s), {} on the first\n",
+            job.action, job.seconds, self.0.run, asked.world_size, asked.servers, asked.first_server_ranks
+        );
+        if let Some(seed) = job.seed {
+            let how = if seed.drawn { " (drawn)" } else { "" };
+            out.push_str(&format!("  seed: {}{how}\n", seed.value));
+        }
+        match &job.parallel.reported {
+            Some(got) => out.push_str(&format!(
+                "  parallelism: world {} over {}, transport {}\n",
+                got.world_size,
+                got.collective.as_deref().unwrap_or("unreported"),
+                got.transport.as_deref().unwrap_or("unreported")
+            )),
+            None => out.push_str("  parallelism: not reported\n"),
+        }
+        for warning in job.parallel.warnings() {
+            out.push_str(&format!("  WARNING {warning}\n"));
+        }
+        for field in ["steps_completed", "final_loss", "checkpoint_digest"] {
+            if let Some(value) = job.result.get(field).filter(|v| !v.is_null()) {
+                out.push_str(&format!("  {field}: {value}\n"));
+            }
+        }
+        if let Some(first) = job.fetched.first() {
+            let dir = first
+                .path
+                .parent()
+                .map_or_else(String::new, |p| p.display().to_string());
+            out.push_str(&format!(
+                "  fetched: {} file(s), verified, under {dir}\n",
+                job.fetched.len()
+            ));
+        }
         out
     }
 }
