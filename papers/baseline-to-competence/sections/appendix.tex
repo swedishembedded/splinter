@@ -1,7 +1,7 @@
 \section{Reproducing the results}\label{app:repro}
 Everything below runs on one machine with four CUDA GPUs of 96\,GB (GH200) and rebuilds every number from released tasks
 and traces. Nothing depends on state kept between runs: the work directory may be lost and rebuilt, and rebuilding this
-study's work directory after a machine restart reproduced the first training run's final loss to four digits.
+study's work directory after a machine restart reproduced the 4B adapter's final training loss (0.3117) exactly.
 
 \paragraph{Artifacts.} Tasks: the compiled Harbor tasks of the Vim course, \path{swedishembedded/vim-headless-mastery}
 (168 practice and 100 exam tasks; the 60 composite tasks are the family \code{course-composite} of the task repository's
@@ -31,7 +31,8 @@ WS/run.sh --fork vim-sft-qwen3-4b-champion --warm Qwen/Qwen3.8-27B-FP8 \
     recipes/vim-sft-qwen3-4b-r2-data.yaml gpu0
 # 5. integrate the three sizes' records (new solutions only, at most 16 per task)
 WS/run.sh recipes/vim-sft-integrate.yaml gpu0
-# 6. retrain on the integrated set (records config full2), measure against the champion
+# 6. retrain on the integrated set (a workspace initialised with --records-config full2),
+#    measure against the champion
 WS/run.sh recipes/vim-sft-qwen3-4b-r2-champion.yaml gpu0
 # 7. policy gradient with the loop penalty, starting from the champion
 WS/run.sh recipes/vim-sft-qwen3-4b-pg-c.yaml gpu0

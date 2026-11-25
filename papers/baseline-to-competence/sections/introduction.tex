@@ -20,7 +20,7 @@ measurement on held-out tasks. It contributes:
   solutions of their task, and every record names the model that made it.
 \item \textbf{A measurement} on 100 held-out exams under a fixed protocol: one attempt per task, then up to four
   reruns of the tasks that failed, a paired test over tasks, and validity rules for infrastructure failures.
-\item \textbf{A loop penalty} in a policy-gradient reward, aimed at the dominant failure of small models, repeating a
+\item \textbf{A loop penalty} in a policy-gradient reward, aimed at a common failure of small models, repeating a
   failed call until the loop watchdog ends the run, and the finding that it does not by itself reduce looping.
 \item \textbf{A reproduction recipe} that rebuilds every number from released tasks and traces with one orchestrator
   (\cref{app:repro}).

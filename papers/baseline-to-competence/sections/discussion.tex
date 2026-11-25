@@ -13,7 +13,9 @@ the reward to act on, and the exams are harder than the tasks the policy trains 
 exams does not need the process: the 27B teacher's own adapter solves \examBigRecordsFive{} within five attempts against
 \examBigBaseFive{} for the base.
 
-\paragraph{Limits.} Each arm has one seed. The first attempt of 100 tasks moved by up to eleven tasks between two measurements
+\paragraph{Limits.} Each arm has one seed. The same full-set adapter was measured five times at the 4B and four times at the 8B across
+the runs of this paper, solving 20 to 24 and 25 to 29 tasks within five attempts: differences of a few tasks between rows of
+\cref{tab:stages} are within that spread. The 0.6B was not retrained on the integrated set. The first attempt of 100 tasks moved by up to eleven tasks between two measurements
 of the same recipe, which is why we compare solved-within-five and test over tasks, and the gains of the second round and of
 the policy gradient at the 8B are single measurements with inconclusive or marginal tests. The exams are 100 tasks of one
 domain and carry a wide interval (\examFourFullFiveLo--\examFourFullFiveHi{}\% at 4B). Base-model arms of the round-one

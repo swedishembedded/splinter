@@ -33,7 +33,7 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \end{groupplot}
 \end{tikzpicture}
 \caption{Held-out exams, 100 tasks. The base models solve none, even with four reruns of every failed task. The adapters
-  were trained on the verified set; pass@1 is the first attempt of each task.}\label{fig:exam}
+  were trained on the full set; pass@1 is the first attempt of each task.}\label{fig:exam}
 \end{figure}
 
 \begin{figure}[t]
@@ -52,7 +52,7 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \addplot[okOrange, thick, dashed, mark=triangle*, mark size=2pt] table[x=k,y=first] {withink-eight.dat};
 \end{groupplot}
 \end{tikzpicture}
-\caption{Exam tasks solved as reruns of the failed tasks are allowed. The dashed curve is an independent measurement of
+\caption{Exam tasks solved as the number of allowed attempts grows (the first attempt, then reruns of the failed tasks). The dashed curve is an independent measurement of
   an adapter trained the same way on the same records before a machine restart; the two agree on solved-within-five and
   differ on pass@1.}\label{fig:withink}
 \end{figure}
@@ -93,8 +93,8 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \input{stages-table}
 \caption{Exam results by stage. Each row is 100 tasks, one attempt and up to four reruns of the failed; loop-stopped is the
   share of attempts the watchdog ended and repeat after error the share of calls after a Vim error that repeated the failed call.
-  Rows marked $\dagger$ or $\ddagger$ are measured in one run, against each other, under the same load: the full-set adapter
-  appears again there because each comparison re-measures it.}\label{tab:stages}
+  The two rows marked $\dagger$, and the two marked $\ddagger$, were measured together in one run; the full-set adapter
+  appears again because each comparison re-measures it.}\label{tab:stages}
 \end{table}
 
 \subsection{What the data does}
@@ -114,7 +114,7 @@ Both are single measurements, and pass@1 at the 8B moved the other way (\examEig
 \examEightRtworefOne{}).
 
 \subsection{How the models fail}
-The dominant failure of the base models is to repeat a failed call. After a Vim error, \behaviourFourBaseExamRepeatPct{}\%
+The most common failure of the base models that we measure is to repeat a failed call. After a Vim error, \behaviourFourBaseExamRepeatPct{}\%
 of the 4B base's next calls and \behaviourEightBaseExamRepeatPct{}\% of the 8B base's repeat the call that just failed
 (\behaviourZeroBaseExamRepeatPct{}\% at 0.6B). Training cuts this to \behaviourFourFullExamRepeatPct{}\% at 4B and
 \behaviourEightFullExamRepeatPct{}\% at 8B, the 0.6B stays at \behaviourZeroFullExamRepeatPct{}\%. A run that repeats
