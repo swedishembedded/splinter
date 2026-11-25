@@ -1376,10 +1376,14 @@ gaps:
     from defeat.'
   severity: high
   confidence: high (asserted as known gaps in verifier_conformance::the_executable_verifier_conforms)
-  status: confirmed
-  resolution: open; closing it needs the check never to run the answer's code in its own process, e.g. the answer served
-    by a separate interpreter and called with plain data (JSON arguments and results) so no answer object reaches the
-    check; that changes what a Python check may do and is a decision for the check protocol
+  status: fixed
+  resolution: by decision, the python3 runtime runs a check apart from the answer (Guard::Separate, its harness in
+    crates/sandbox/src/python_harness.py). The check's process starts the answer in an interpreter of its own and calls
+    its functions with plain data only, by exact type, so no object of the answer's reaches the check. What the answer
+    prints is forwarded in order, a name it gives that is a builtin stays the check's own, and an answer that ends its
+    process fails. A check can no longer touch the answer's objects or internals, only call its functions. The three
+    forgeries are now cases of the conformance table, with an int whose == is rewritten; mutants
+    python-check-takes-builtin-names and python-check-in-the-answers-process
 - id: G-NEW-20
   source_id: null
   where: crates/knowledge/src/goal/facts.rs (PatternFacts, sentence splitting)

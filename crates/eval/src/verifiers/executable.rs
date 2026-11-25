@@ -35,13 +35,16 @@
 //! the program early may be exactly what it tests. Completion is recorded
 //! as `check_completed` (`null` where it was not asked).
 //!
-//! A check must also call the language's own functions. Where a solution
-//! can rebind what a check relies on (in Lua, `assert` and `print` are
-//! globals: `function assert() end` would make every check pass), the
-//! runtime's [`Guard`] keeps the originals before the solution, under a
-//! name derived from the same digest, and binds them again for the check
-//! after it. The digests in the evidence are of the solution and the check
-//! alone, as before.
+//! A check must also observe what the solution does, not what the solution
+//! makes it see. The runtime's guard ([`splinter_sandbox::Guard`]) keeps the
+//! two apart. In Lua, where `assert` and `print` are globals a solution
+//! could rebind (`function assert() end` would make every check pass), the
+//! originals are kept before the solution, under a name derived from the
+//! same digest, and bound again for the check after it. In Python, where a
+//! solution can reach everything in its process (`builtins.print`, an object
+//! equal to everything), the check runs in a process of its own and calls
+//! the solution's functions in another, with plain data only. The digests in
+//! the evidence are of the solution and the check alone.
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -51,7 +54,7 @@ use splinter_core::evidence::EXECUTABLE_PRODUCER;
 use splinter_core::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
 use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
 use splinter_sandbox::{
-    CodeCall, CodeResult, Guard, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
+    CodeCall, CodeResult, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
 };
 
 use super::normalise::Normalisation;
@@ -277,13 +280,16 @@ pub(crate) fn run_check(
         .expect
         .needs_completion()
         .then(|| format!("splinter-check-completed-{digest}"));
-    let mut code = match &spec.guard {
-        Some(guard) => guarded(guard, &digest, solution, &check.code),
-        None => program.clone(),
+    let checked = match &line {
+        Some(line) => assemble(&check.code, &spec.completion_for(line)),
+        None => check.code.clone(),
     };
-    if let Some(line) = &line {
-        code = assemble(&code, &spec.completion_for(line));
-    }
+    // The kept names of a rebinding guard sit under an identifier derived
+    // from the digest, which the solution cannot know.
+    let code = match &spec.guard {
+        Some(guard) => guard.program(&format!("splinter_{}", digest.hex()), solution, &checked),
+        None => assemble(solution, &checked),
+    };
     let mut result = env.run(&CodeCall {
         code,
         stdin: check.stdin.clone(),
@@ -296,16 +302,6 @@ pub(crate) fn run_check(
         completed,
         unmet,
     })
-}
-
-/// `solution` between `guard`'s prelude and its rebinding, then
-/// `check_code`; the kept names sit under an identifier derived from
-/// `digest`, which the solution cannot know.
-fn guarded(guard: &Guard, digest: &Digest, solution: &str, check_code: &str) -> String {
-    let name = format!("splinter_{}", digest.hex());
-    let before = assemble(&guard.prelude_for(&name), solution);
-    let after = assemble(&before, &guard.rebind_for(&name));
-    assemble(&after, check_code)
 }
 
 /// Removes `line` from the end of `stdout`, where the completion statement

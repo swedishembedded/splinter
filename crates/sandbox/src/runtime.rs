@@ -14,7 +14,7 @@
 //! program in its language prints one line (the statement a verifier
 //! appends to see that the code before it ran to its end) and, where the
 //! language lets a solver's code rebind the names a verifier's code calls,
-//! how to keep them (a [`Guard`]). A
+//! how to keep a check from them (a [`Guard`]). A
 //! sandbox resolves it to a [`ResolvedRuntime`]: the program it will run,
 //! the version string that program reports, and - where the sandbox can see
 //! the executable - the digest of its content. Those are what an
@@ -43,9 +43,17 @@ pub const FILE: &str = "{file}";
 /// The placeholder in a completion statement for the line it prints.
 pub const LINE: &str = "{line}";
 
-/// The placeholder in a [`Guard`] for the name it keeps the runtime's own
-/// names under.
+/// The placeholder in a [`Guard::Rebind`] for the name it keeps the
+/// runtime's own names under.
 pub const NAME: &str = "{name}";
+
+/// The placeholder in a [`Guard::Separate`] harness for the answer's source,
+/// as a string literal.
+pub const ANSWER: &str = "{answer}";
+
+/// The placeholder in a [`Guard::Separate`] harness for the check's source,
+/// as a string literal.
+pub const CHECK: &str = "{check}";
 
 /// What the version line of the `lua` runtime must begin with.
 pub const LUA_VERSION: &str = "Lua 5.1";
@@ -85,42 +93,75 @@ pub struct RuntimeSpec {
     /// in 5.4. `None` accepts any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_prefix: Option<String>,
-    /// How code a verifier appends after a solver's calls the language's
-    /// own functions whatever the solver's code rebound; `None` where it
-    /// cannot rebind what a check relies on (Python's `assert` is a
-    /// statement).
+    /// How a verifier's check of a solver's code is kept from what that
+    /// code does to the language's own names and objects; `None` runs the
+    /// check after the code in one program.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guard: Option<Guard>,
 }
 
-/// Statements that keep a runtime's own names for the code after a
-/// solver's: [`Guard::prelude`] runs before the solver's code and keeps the
-/// names under [`NAME`], an identifier the solver cannot know (it is derived
-/// from a digest of the program that holds the check) and so cannot reach;
-/// [`Guard::rebind`] follows the solver's code and binds the names, for the
-/// code after it, to what was kept. The solver's own functions still see
-/// what the solver bound: only the appended code is held to the originals.
+/// How a check runs beside a solver's code without the code reaching what
+/// the check relies on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Guard {
-    /// Keeps the runtime's names under [`NAME`].
-    pub prelude: String,
-    /// Binds them again, for the code after it.
-    pub rebind: String,
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Guard {
+    /// One program: `prelude` runs before the solver's code and keeps the
+    /// language's names under [`NAME`], an identifier the solver cannot know
+    /// (derived from a digest of the program that holds the check) and so
+    /// cannot reach; `rebind` follows the code and binds the names, for the
+    /// check after it, to what was kept. The solver's own functions still
+    /// see what the solver bound. For a language whose code cannot reach a
+    /// variable it cannot name (Lua without its debug library).
+    Rebind {
+        /// Keeps the runtime's names under [`NAME`].
+        prelude: String,
+        /// Binds them again, for the code after it.
+        rebind: String,
+    },
+    /// Two processes: `harness` is the check's program, with [`ANSWER`] and
+    /// [`CHECK`] standing for the two sources as string literals; it runs
+    /// the answer in an interpreter of its own and calls it with plain data
+    /// only, so no object of the answer's reaches the check. For a language
+    /// whose code reaches everything in its process (Python).
+    Separate {
+        /// The check's program.
+        harness: String,
+    },
 }
 
 impl Guard {
-    /// The prelude, keeping the names under `name`.
+    /// The program that runs `check` (completion statement included) beside
+    /// `answer`, `name` being the identifier a [`Guard::Rebind`] keeps the
+    /// names under.
     #[must_use]
-    pub fn prelude_for(&self, name: &str) -> String {
-        self.prelude.replace(NAME, name)
-    }
-
-    /// The rebinding, from what was kept under `name`.
-    #[must_use]
-    pub fn rebind_for(&self, name: &str) -> String {
-        self.rebind.replace(NAME, name)
+    pub fn program(&self, name: &str, answer: &str, check: &str) -> String {
+        match self {
+            Self::Rebind { prelude, rebind } => {
+                let mut program = prelude.replace(NAME, name);
+                for part in [answer, &rebind.replace(NAME, name), check] {
+                    if !program.is_empty() && !program.ends_with('\n') {
+                        program.push('\n');
+                    }
+                    program.push_str(part);
+                }
+                program
+            }
+            // JSON string literals are Python string literals: quotes,
+            // backslashes and control characters escaped, the rest as is.
+            Self::Separate { harness } => harness
+                .replace(ANSWER, &literal(answer))
+                .replace(CHECK, &literal(check)),
+        }
     }
 }
+
+/// `text` as a JSON string literal.
+fn literal(text: &str) -> String {
+    serde_json::Value::String(text.to_string()).to_string()
+}
+
+/// The check's program of Python's separate guard; see its documentation.
+const PYTHON_HARNESS: &str = include_str!("python_harness.py");
 
 /// Lua 5.1 keeps every base function and a copy of every standard library
 /// table in a closure, then takes the debug library and native code loading
@@ -255,7 +296,10 @@ impl RuntimeRegistry {
                 "py",
                 Some(&[EXE, "--version"]),
                 "print(\"{line}\", flush=True)",
-            ),
+            )
+            .guarded(Guard::Separate {
+                harness: PYTHON_HARNESS.to_string(),
+            }),
             // Lua 5.1 and no other: the families and tasks written for it are
             // not Lua 5.3 programs, and `lua` on a path can be either.
             RuntimeSpec::new(
@@ -266,7 +310,7 @@ impl RuntimeRegistry {
                 "io.write(\"{line}\\n\")",
             )
             .requiring_version(LUA_VERSION)
-            .guarded(Guard {
+            .guarded(Guard::Rebind {
                 prelude: LUA_PRELUDE.to_string(),
                 rebind: LUA_REBIND.to_string(),
             }),

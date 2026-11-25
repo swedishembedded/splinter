@@ -189,11 +189,11 @@ fn the_executable_verifier_conforms() {
         Some("def add(a, b):\n    print(4)\n    return 5\n"),
     );
 
-    // Known gaps (G-NEW-19): Python runs the answer and the check in one
-    // process, where nothing can be kept out of the answer's reach, so an
-    // answer can forge what a check observes: builtins.print rebound for a
-    // check of what is printed, an object equal to everything for a check of
-    // assertions, and both together for the task's two checks.
+    // The check runs apart from the answer (G-NEW-19): what the answer does
+    // to its own process (builtins.print rebound) or hands back (an object
+    // equal to everything, an int whose == is rewritten) never reaches the
+    // check, alone or together; and the answer's own use of a builtin name,
+    // a tuple it returns, an exception the check expects all still work.
     let alone = |index: usize| {
         task(
             "code",
@@ -207,7 +207,7 @@ fn the_executable_verifier_conforms() {
         &alone(1),
         &experience(&alone(1), Some(forged), "s"),
     );
-    table.gap(
+    table.case(
         Class::ConfigTampering,
         "print rebound, on a check of what is printed alone",
         Want::Fail,
@@ -219,7 +219,7 @@ fn the_executable_verifier_conforms() {
         &alone(0),
         &experience(&alone(0), Some(equal), "s"),
     );
-    table.gap(
+    table.case(
         Class::Incorrect,
         "an object equal to everything, on a check of assertions alone",
         Want::Fail,
@@ -228,10 +228,59 @@ fn the_executable_verifier_conforms() {
 
     let both = "import builtins\n_p = builtins.print\n\n\ndef print(*a, **k):\n    _p(*(a if k else ('4',)), **k)\n\n\nclass Any:\n    def __eq__(self, other):\n        return True\n\n\ndef add(a, b):\n    return Any()\n";
     let (outcome, _, _) = verdict(&verifier, &code, &experience(&code, Some(both), "s"));
-    table.gap(
+    table.case(
         Class::ConfigTampering,
         "print rebound and an object equal to everything, on both checks",
         Want::Fail,
+        outcome,
+    );
+    let rewritten = "class Int(int):\n    def __eq__(self, other):\n        return True\n\n\ndef add(a, b):\n    return Int(0)\n";
+    let (outcome, _, _) = verdict(&verifier, &code, &experience(&code, Some(rewritten), "s"));
+    table.case(
+        Class::Incorrect,
+        "an int whose == is rewritten",
+        Want::Fail,
+        outcome,
+    );
+    let own = "def sum(values):\n    total = 0\n    for v in values:\n        total += v\n    return total\n\n\ndef print(*args):\n    pass\n\n\ndef add(a, b):\n    print(a, b)\n    return sum([a, b])\n";
+    let (outcome, _, _) = verdict(&verifier, &code, &experience(&code, Some(own), "s"));
+    table.case(
+        Class::Equivalent,
+        "builtin names rebound for the answer's own use",
+        Want::Pass,
+        outcome,
+    );
+    let typed = |code: &str| {
+        task(
+            "code",
+            record(&env),
+            vec![ExecutableCheck {
+                code: code.into(),
+                stdin: None,
+                expect: Expectation::exit_code(0),
+                environment: None,
+            }
+            .as_check()
+            .unwrap()],
+        )
+    };
+    let pairs = typed("assert split(7) == (3, 4) and type(split(7)) is tuple\n");
+    let (outcome, _, _) = verdict(
+        &verifier,
+        &pairs,
+        &experience(
+            &pairs,
+            Some("def split(n):\n    return (n // 2, n - n // 2)\n"),
+            "s",
+        ),
+    );
+    table.case(Class::Correct, "a tuple returned", Want::Pass, outcome);
+    let raising = typed("try:\n    add(1, None)\nexcept TypeError:\n    pass\nelse:\n    raise AssertionError('no TypeError')\n");
+    let (outcome, _, _) = verdict(&verifier, &raising, &experience(&raising, Some(BARE), "s"));
+    table.case(
+        Class::Correct,
+        "the exception the check expects",
+        Want::Pass,
         outcome,
     );
 

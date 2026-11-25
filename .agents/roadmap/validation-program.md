@@ -235,6 +235,8 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   specified), replay's group-less records, the token meter's batch, the inline means and variances (each
   denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
   only through the source store).
+- Python checks apart from the answer (G-NEW-19, by decision): the check runs in its own process and calls the
+  answer's functions in another with plain data only; the three forgeries are cases now, none passes.
 - deterministic learning environments (12A): a finite contextual bandit (`contextual-bandit`), every action's reward
   known and paid exactly by its verifier (12D's enumeration), beside the tool-use (`db-workflow`), tiny-repository
   (`repository-bugs`, `repository-mutants`) and synthetic-language (`goal::synthetic`) generators; training on them,
@@ -253,11 +255,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 
 ## Open
 
-- Confirmed and open, each in `validation/gaps.yaml` with its proposal (4 of 114; 91 fixed, 19 rejected):
+- Confirmed and open, each in `validation/gaps.yaml` with its proposal (3 of 114; 92 fixed, 19 rejected):
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
-  header on plain conversations (G-NEW-03, brain's); a Python
-  answer can forge what its checks observe (G-NEW-19).
+  header on plain conversations (G-NEW-03, brain's).
 - Not built: the task-kind matrix of the
   kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), and the learning runs, negative controls and update checks of 12B-12E (brain).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
