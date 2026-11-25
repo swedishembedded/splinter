@@ -223,8 +223,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   runner (FAIL_TO_PASS exactly the symptoms, PASS_TO_PASS the rest, the reference patch restoring exactly the faulty
   files, the verifier agreeing); every fault of `repository-bugs` injected alone and shown as its report says by an
   independent reading of it (crates/knowledge/tests/it/repository_reference.rs), two mutants killed.
-- independent reference projectors of the retrieval view's triples and of self-distillation (which attempts are
-  distilled under each setting, and the teacher context) (6B, part of G-FS-17), five mutants killed.
+- independent reference projectors of the retrieval view's triples, of self-distillation (which attempts are
+  distilled under each setting, and the teacher context) and of recorded preferences (6B, part of G-FS-17), eight
+  mutants killed.
 - document plugin (4B, G-NEW-20 found): documents labelled by construction showed the fact reader cutting a value
   at its point (`3.6 bar` read as `3`), so a question was graded against a fact no document states; the reader now
   ends a sentence only at a full stop before whitespace (crates/knowledge/tests/it/document_reference.rs).
@@ -234,8 +235,8 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 113; 89 fixed, 19 rejected):
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
-  header on plain conversations (G-NEW-03, brain's); preference repairs and recorded preferences,
-  and the factory's product statistics have no second implementation yet (G-FS-17, 6B); a Python
+  header on plain conversations (G-NEW-03, brain's); preference repairs and the factory's product
+  statistics have no second implementation yet (G-FS-17, 6B); a Python
   answer can forge what its checks observe (G-NEW-19).
 - Not built: the task-kind matrix of the
   kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).

@@ -24,6 +24,7 @@ mod online_calls;
 mod pass_curation;
 mod policy_gradient;
 mod projection_refusal;
+mod recorded_preferences;
 mod retrieval_triples;
 mod session_dialogue;
 mod sft_admission;

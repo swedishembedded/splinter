@@ -108,3 +108,6 @@ retrieval-overlap-as-equality	views	crates/data/src/views/retrieval.rs	a.start <
 cliff-distils-all-pass	views	crates/data/src/views/policy_gradient.rs	Distill::Cliff => kind == GroupKind::AllFail,	Distill::Cliff => kind != GroupKind::Graded,	splinter-data	it	policy_gradient::self_distill
 teacher-misses-the-verifier-reason	views	crates/data/src/views/privileged.rs	.pointer("/verification/reason")	.pointer("/verification/why")	splinter-data	it	policy_gradient::self_distill
 teacher-told-the-wrong-outcome	views	crates/data/src/views/privileged.rs	    text.push_str(if passed {	    text.push_str(if !passed {	splinter-data	it	policy_gradient::self_distill
+critique-makes-another-task	views	crates/data/src/views/preference.rs	.same_apart_from_critiques(&rejected.experience.to_task())	.same_apart_from_critiques(&rejected.experience.to_task()) && false	splinter-data	it	recorded_preferences
+recorded-relation-paired-twice	views	crates/data/src/views/preference.rs	if !paired.insert((&chosen.id, &rejected.id)) {	if !paired.insert((&chosen.id, &rejected.id)) && false {	splinter-data	it	recorded_preferences
+recorded-replies-compared-without-calls	views	crates/data/src/views/preference.rs	if same_message(&better, &worse) {	if better.content == worse.content {	splinter-data	it	recorded_preferences
