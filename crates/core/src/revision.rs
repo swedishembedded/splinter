@@ -52,7 +52,7 @@ pub const RECORD_CONTRACT_VERSION: u32 = 2;
 /// of the set but its `README.md`, sorted by path, as brain computes it; a
 /// test holds it to the copy.
 pub const RECORD_CONTRACT_DIGEST: &str =
-    "sha256:fc3d95ec85ab3278fd93a04aab623ad1768038aea152178177d6901667b0ff75";
+    "sha256:4fb13e2f610fb2d3d4ede4731c5da509d2ccfae1071143c796015e824a4bc20b";
 
 /// A training-record contract: its name, version and the digest of its
 /// example set.
