@@ -42,12 +42,25 @@ pub struct HostModels;
 /// that sven never falls back to a key it keeps for another endpoint.
 const NO_CREDENTIAL: &str = "no-credential";
 
+/// The connection a recipe's `brain:` model role binds to: a brain server, asked through sven's brain driver, which
+/// switches the model's reasoning off for a caller that wants an answer (a generic OpenAI client leaves a reasoning
+/// model thinking until its output budget is spent, which is most of every reply).
+const BRAIN_CONNECTION: &str = "brain";
+
+/// The sven driver that speaks to the endpoint `binding` names.
+fn provider_of(binding: &ModelBinding) -> &'static str {
+    if binding.connection == BRAIN_CONNECTION && binding.protocol == Protocol::Openai {
+        return BRAIN_CONNECTION;
+    }
+    match binding.protocol {
+        Protocol::Openai => "openai",
+        Protocol::Anthropic => "anthropic",
+    }
+}
+
 impl Models for HostModels {
     fn model(&self, binding: &ModelBinding) -> Result<Model, String> {
-        let provider = match binding.protocol {
-            Protocol::Openai => "openai",
-            Protocol::Anthropic => "anthropic",
-        };
+        let provider = provider_of(binding);
         let api_key = match &binding.token_env {
             Some(name) => credential(name).ok_or_else(|| {
                 format!(
@@ -240,4 +253,34 @@ pub fn trainer(config: &Config) -> Option<BrainTrainer> {
         .brain
         .clone()
         .map(|endpoints| BrainTrainer::new(endpoints, config.model_store.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn binding(connection: &str, protocol: Protocol) -> ModelBinding {
+        ModelBinding {
+            connection: connection.into(),
+            model: "m".into(),
+            protocol,
+            url: Some("http://127.0.0.1:1/v1".into()),
+            token_env: None,
+            drop_headers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_brain_connection_is_asked_through_the_brain_driver_and_others_by_their_protocol() {
+        assert_eq!(provider_of(&binding("brain", Protocol::Openai)), "brain");
+        assert_eq!(provider_of(&binding("hosted", Protocol::Openai)), "openai");
+        assert_eq!(
+            provider_of(&binding("hosted", Protocol::Anthropic)),
+            "anthropic"
+        );
+        assert_eq!(
+            provider_of(&binding("brain", Protocol::Anthropic)),
+            "anthropic"
+        );
+    }
 }

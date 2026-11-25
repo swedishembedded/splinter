@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (a model role bound to a brain server reasoned through its whole output budget)
+- A recipe model role on the `brain` connection (`brain:Qwen/...`) is asked through sven's brain driver, which switches the model's reasoning off for a caller that wants an answer. The generic OpenAI client used before left a reasoning model thinking until its output budget was spent: an `agent` stage over 254 manual sections spent 10,000 tokens on each reply to produce 600.
+
 ### Changed (a fan-out's concurrency has no ceiling)
 - A fan-out stage's `concurrency` is only required to be at least 1 (it was at most 64): how many calls run at once is the recipe's to say, so it can keep a fleet of cards busy.
 
