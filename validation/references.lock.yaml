@@ -65,11 +65,18 @@ references:
     conventions: "CUSTOM_ORACLE_REQUIRED: no library splits text by Splinter's section rule; ground truth by construction, never by parsing, is the independent reference"
   reference-projector:
     package: null
-    repository: this repository (validation/oracles/data/sft_projection.py, validation/oracles/data/policy_gradient_groups.py, validation/oracles/data/attempt_pairs.py)
-    release: "written from the sft-step, sft-final, policy-gradient, preference and feedback documentation (crates/data/src/views, crates/data/src/trajectory.rs)"
-    functions: [sft_step, sft_final, policy_gradient_groups, attempt_pairs]
+    repository: this repository (validation/oracles/data/ sft_projection.py, policy_gradient_groups.py, attempt_pairs.py, retrieval_triples.py, self_distill.py, recorded_preferences.py, repair_pairs.py)
+    release: "written from the sft-step, sft-final, policy-gradient, self-distillation, preference, feedback and retrieval documentation (crates/data/src/views, crates/data/src/trajectory.rs)"
+    functions: [sft_step, sft_final, policy_gradient_groups, attempt_pairs, retrieval_triples, self_distill, recorded_preferences, repair_pairs]
     confidence: custom
     conventions: "CUSTOM_ORACLE_REQUIRED: no external framework renders an agent trajectory as Splinter's records do; a second implementation in plain loops, from the documented rules, is the independent oracle"
+  numpy-continual:
+    package: numpy
+    repository: https://github.com/numpy/numpy
+    release: "2.5.5 (the wheel pinned in packages)"
+    functions: [numpy.nanmax, numpy.mean, numpy.where, numpy.isnan]
+    confidence: high
+    conventions: "an unmeasured cell is NaN, never 0; a metric is the mean over units (in name order) of each unit's mean over its tasks"
   networkx:
     package: networkx
     repository: https://github.com/networkx/networkx

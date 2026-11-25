@@ -21,6 +21,7 @@ mod evidence_gate;
 mod executable_lua_conformance;
 mod executable_verifier;
 mod exposure_audit;
+mod external_continual;
 mod external_student;
 mod external_wilson;
 mod form_verifiers;

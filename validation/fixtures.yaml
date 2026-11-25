@@ -89,6 +89,13 @@ fixtures:
     oracle_sha256: "53c324dc7cba6f54e687989779dd9f5b0b58c51be0fc6124b7561d974fd972e0"
     references: ["rank-bm25"]
     test: "splinter-knowledge/it/external_bm25"
+  statistics/continual:
+    path: "validation/fixtures/statistics/continual.json"
+    sha256: "c5efbe16e4c21cb0609c7a647b51e62c8d79d0c2d87ecae52c5b3c3590db5aca"
+    oracle: "validation/oracles/statistics/continual.py"
+    oracle_sha256: "442c999f00f84a87b4d157a7f600f6efd1fa4f27ace326f39bd4f14ed0438d80"
+    references: ["numpy-continual"]
+    test: "splinter-eval/it/external_continual"
   statistics/paired-tests:
     path: "validation/fixtures/statistics/paired-tests.json"
     sha256: "4ca2a9db93bb2ee2fb3b865c2d4b90f092ccfe7b6329e15b900fbe2a06fb316e"

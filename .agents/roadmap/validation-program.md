@@ -235,6 +235,9 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   specified), replay's group-less records, the token meter's batch, the inline means and variances (each
   denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
   only through the source store).
+- continual-learning metrics (12E's comparison with an independent numpy implementation): ACC, backward and
+  forward transfer, forgetting, learning gain and the gain curve agree over 400 matrices with missing cells; the
+  rest of 12E (training A, B, C in sequence) needs brain.
 - crash injection beyond the product store (10B): the experience database ended after every storage call of a
   scenario that writes, compacts, retires refs and collects, in both layouts; nothing committed lost, no flush shown
   in part (crates/expdb/tests/it/crash.rs).
