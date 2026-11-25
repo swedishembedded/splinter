@@ -1,32 +1,43 @@
 \section{The task and its measurement}\label{sec:task}
 \paragraph{Agent and tool.} The agent receives the request and one tool, which runs Ex commands in a fresh headless
-Vim on the task's files and returns Vim's output, including its error messages. A run ends when the agent stops, at 60
-turns, at 16\,384 generated tokens, or after eight minutes of wall-clock time. A watchdog ends a run whose model
-repeats the same tool call six times or the same reasoning three times. The models answer without a reasoning block
-(thinking off) and each narrates in one or two sentences before every call. Sampling is temperature 0.7, top-p 0.8,
-top-k 20 for every model and arm.
+Vim on the task's files and returns Vim's output, including its error messages. An attempt ends when the agent stops,
+after 60 turns, after 16\,384 generated tokens, or after eight minutes of wall-clock time. A \emph{loop watchdog} also
+ends an attempt in which the model issues the same tool call six times or the same reasoning three times; we call such
+an attempt \emph{loop-stopped}. The models run with their reasoning block disabled and are instructed to state their
+intent in one or two sentences before every call. Sampling uses temperature 0.7, top-p 0.8 and top-k 20 for every model
+and arm.
 
-\paragraph{Tasks.} Three families, each a container with a request, starting files and a hidden grading script.
-\emph{Practice} tasks (168) each teach one idea (append a line, change inside braces, record a macro).
-\emph{Composite} tasks (60) combine ideas from several chapters on material of their own; they were written by an
-independent agent that never read the exams, and an audit found no identical request and a maximum token overlap of
-0.29 with any exam. The 100 \emph{exams} are outcome-only requests that combine several ideas on files no practice or
-composite task shows, in families by material (C source, configuration, logs, low-level code, markup, multi-file edits,
-prose, Python, Rust and Go, shell and build files, and others). Exam tasks and trajectories are never read for
-training, and exam results are not used to choose a checkpoint.
+\paragraph{Tasks.} There are three families of tasks, each task a container with a request, starting files and a hidden
+grading script. The 168 \emph{practice} tasks each teach one idea (append a line, change inside braces, record a macro).
+The 60 \emph{composite} tasks combine ideas from several chapters of the course on material of their own. Together
+these 228 are the \emph{training tasks}: everything that is trained on comes from them. The 100 \emph{exams} are
+outcome-only requests that combine several ideas on files that no training task shows, grouped by material (C source,
+configuration, logs, low-level code, markup, multi-file edits, prose, Python, Rust and Go, shell and build files, and
+others). The composite tasks were written by an independent agent that never read the exams, and an audit found no
+request identical to an exam's and a maximum token overlap of 0.29 with any exam. Exam tasks and exam trajectories are
+never read for training, and exam results are not used to choose a checkpoint.
 
-\paragraph{Measurement.} A model is attempted once on each of the 100 exams. The tasks it fails are attempted again,
-up to four more times, and a task counts as solved when any attempt passed. We report \emph{pass@1}, the tasks solved by
-the first attempt, and \emph{solved within five}, which counts a pass in any of up to five attempts; both arms of a
-comparison get the same chances. A slot is the attempt of one task by one arm; it counts when the attempt ended with a
-grade, and a slot that never counted after the infrastructure's retries is reported as uncounted and left out of the paired
-test. Intervals are 95\% Wilson intervals. A candidate is compared with the base model it was trained from by the exact one-sided
-paired sign test over tasks (wins and losses; ties are uninformative) at $\alpha=0.05$. A candidate's arm is valid only when every slot counts and at most 2\% of its attempts end by an infrastructure timeout
-(a run that hit the wall clock before its model ever answered); an arm that fails this is not reported as a result. The
-recipes are fixed before the exams are run; the one recipe change made after seeing an exam result is stated in
-\cref{sec:discussion}. The 27B model appears once more, as a student: an adapter trained on the published teacher records is
-measured like the others (attempts are its unit in the paired test).
+\paragraph{Protocol.} An \emph{arm} is one model, with or without an adapter, measured on the 100 exams. Every task is
+attempted once, and every task whose first attempt failed is attempted four more times. \emph{Pass@1} is the number of
+tasks solved by the first attempt; \emph{solved within $k$} is the number of tasks with a pass among their first $k$
+attempts, and \emph{solved within five} is the main figure. Both arms of a comparison get the same chances. A
+\emph{slot} is one scheduled attempt of one task by one arm. A slot \emph{counts} when its attempt ended with a grade;
+an attempt lost to an infrastructure failure is retried, and a slot that still has no grade after the retries is
+\emph{uncounted} and is not a pass.
 
-\paragraph{Models.} Qwen3-0.6B, Qwen3-4B and Qwen3-8B \citep{qwen3} are the students, each trained as a LoRA
-adapter \citep{lora} on a frozen base. Qwen3.8-27B-FP8 is the teacher. One GH200 (96\,GB) serves and trains each
-student; the teacher shares a card with the student whose failures it continues.
+\paragraph{Statistics.} Intervals on a count of solved tasks are 95\% Wilson score intervals \citep{wilson} for a
+proportion of 100 tasks. A candidate arm is compared with a reference arm by an exact one-sided sign test paired over
+tasks: among the tasks that counted in both arms, a task solved within five by the candidate alone is
+a win and one solved by the reference alone is a loss, ties are dropped, and $p$ is the probability of at least the
+observed number of wins under a fair coin. The reference of a round-one adapter is its base model; the reference of a
+later stage is the round-one adapter, measured again in the same run as the candidate. We test at $\alpha=0.05$ and do
+not correct for the number of comparisons. A candidate arm is valid only if every slot counts and at most 2\% of its
+attempts end in an infrastructure timeout (the wall clock expired before the model answered once). The recipes were
+fixed before their exams were run; \cref{sec:discussion} states the one recipe that was changed after an exam result
+and the one arm that misses the validity rule by one slot.
+
+\paragraph{Models.} The students are Qwen3-0.6B, Qwen3-4B and Qwen3-8B \citep{qwen3}, each trained as a LoRA adapter
+\citep{lora} on a frozen base. The teacher is Qwen3.8-27B-FP8. One GH200 GPU (96\,GB) serves and trains each student,
+and the teacher shares a card with the student whose failures it continues. The 27B model also appears once as a
+student: an adapter trained for it on the published teacher records is measured by the same protocol, with the attempt
+instead of the task as the unit of the paired test.

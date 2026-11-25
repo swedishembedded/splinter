@@ -1,29 +1,38 @@
 \section{Introduction}
-A small language model given a text editor as its only tool fails at editing tasks that a larger model solves reliably.
-It chooses a plausible command, the editor reports an error, and the model sends the same command again until its
-budget is gone. This paper is about taking such a model from that baseline to competence: which data, collected how,
-and trained with which signal, turn a model that solves none of 100 held-out editing tasks into one that solves a
-quarter to over a third of them.
+A small language model that is given a text editor as its only tool fails at editing tasks that a larger model solves.
+A typical failure is short: the model chooses a plausible command, the editor reports an error, and the model sends the
+same command again until its budget is gone or a watchdog stops it. This paper asks what it takes to move such a model
+from that baseline to competence: which data, collected how and trained with which signal, turn a model that solves
+none of 100 held-out editing tasks into one that solves roughly a quarter of them.
 
 The task is editing files with headless Vim. A request names an outcome (``make every status line in the log use the
-new field order''), the agent has one tool that runs Ex commands in a fresh Vim and returns what happened, and a
-hidden check grades the files it leaves behind. The tasks are small and fully verifiable, which is what makes the
-process below possible: every trajectory a model produces can be graded, so every trajectory is either a verified
-solution or a verified failure.
+new field order''), the agent has one tool that runs Ex commands in a fresh Vim and returns the editor's output, and a
+hidden check grades the files the agent leaves behind. The tasks are small and mechanically verifiable, and the process
+depends on this: every trajectory a model produces is graded, so it is either a verified solution or a verified failure.
 
-The paper's scope is the process, from baseline to competence for models of 0.6B, 4B and 8B parameters, and its
-measurement on held-out tasks. It contributes:
+\paragraph{Scope and contributions.} The scope of the paper is this process for Qwen3 students of 0.6B, 4B and 8B
+parameters, and its measurement on held-out tasks. It contributes:
 \begin{itemize}
-\item \textbf{A data process} that starts from verified teacher trajectories, adds the student's own verified
-  solutions, and adds recovery data: a teacher continues the student's failed attempts from the step where they went
-  wrong, so the student sees its own error followed by a correction. New records enter the training set only as new
-  solutions of their task, and every record names the model that made it.
-\item \textbf{A measurement} on 100 held-out exams under a fixed protocol: one attempt per task, then up to four
-  reruns of the tasks that failed, a paired test over tasks, and validity rules for infrastructure failures.
-\item \textbf{A loop penalty} in a policy-gradient reward, aimed at a common failure of small models, repeating a
-  failed call until the loop watchdog ends the run, and the finding that it does not by itself reduce looping.
-\item \textbf{A reproduction recipe} that rebuilds every number from released tasks and traces with one orchestrator
-  (\cref{app:repro}).
+\item \textbf{A data process} that starts from verified teacher trajectories and adds two kinds of records from the
+  student's own attempts: its verified solutions, and \emph{recovery data}, in which the teacher continues a failed
+  attempt from the step where it went wrong, so that the student sees its own error followed by a correction. A record
+  is admitted only as a new solution of its task, and every record names the model that made it (\cref{sec:method}).
+\item \textbf{A measurement protocol} on 100 held-out exams: one attempt per task, four reruns of every failed task, a
+  paired sign test over tasks, and validity rules for infrastructure failures (\cref{sec:task}).
+\item \textbf{Results by stage} (\cref{sec:results}): supervised training on the first set takes the 4B and 8B models
+  from no solved exam to \examFourFullFive{} and \examEightFullFive{} of 100 within five attempts, and the 0.6B model
+  to \examZeroFullFive{}; a second round of data and a policy-gradient stage give higher counts at 8B in single runs
+  and none at 4B.
+\item \textbf{A negative result}: the loop watchdog ends \behaviourFourFullExamLoopPct{}\% (4B) and
+  \behaviourEightFullExamLoopPct{}\% (8B) of the trained models' exam attempts, and a policy-gradient reward that
+  penalises looping did not reduce that share.
+\item \textbf{A reproduction recipe} that rebuilds every number from released tasks and traces (\cref{app:repro}).
 \end{itemize}
-\Cref{sec:task} defines the task and the measurement, \cref{sec:method} the process, \cref{sec:results} the results
-and \cref{sec:discussion} what they do and do not show.
+
+\paragraph{Related work.} The students are Qwen3 models \citep{qwen3} adapted with LoRA \citep{lora}. Training a
+student on a teacher's verified trajectories is imitation learning, and the recovery data addresses its known weakness
+that the student, once deployed, reaches states the teacher's demonstrations never visit: as in DAgger \citep{dagger},
+the teacher acts from states the student itself reached, here by continuing the student's failed attempt to a verified
+solution rather than by labelling single actions. The policy-gradient stage combines the clipped objective of PPO
+\citep{ppo} with the per-task group normalisation of GRPO \citep{grpo} and the asymmetric clipping and token-level loss
+of DAPO \citep{dapo}; our addition is a reward term for looping.

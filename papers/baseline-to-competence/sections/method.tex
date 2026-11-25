@@ -1,72 +1,110 @@
-\section{From verified trajectories to a competent small model}\label{sec:method}
+\section{From verified trajectories to a trained adapter}\label{sec:method}
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[fig]
-\node[data] (rec) {verified records\\{\scriptsize the training set}};
-\node[proc=okSky!25, right=of rec] (train) {train adapter\\{\scriptsize LoRA, SFT}};
-\node[proc=okGreen!15, right=of train] (att) {student attempts\\{\scriptsize train tasks}};
-\node[proc=okOrange!20, right=of att] (loc) {teacher locates\\the first failure};
-\node[proc=okOrange!20, below=of loc] (fork) {teacher continues\\from there};
-\node[proc=okGreen!15, below=of att] (ver) {verified solutions\\{\scriptsize only new ones}};
-\node[proc=okVermillion!15, below=of train] (pg) {policy gradient\\{\scriptsize loop penalty}};
-\node[data, below=of rec] (exam) {100 exams\\{\scriptsize held out}};
-\draw[flow] (rec) -- (train); \draw[flow] (train) -- (att); \draw[flow] (att) -- (loc);
-\draw[flow] (loc) -- (fork); \draw[flow] (fork) -- (ver); \draw[flow] (att) -- (ver);
-\draw[ctrl] (ver) -| ($(rec.south)+(0,-3mm)$) -- (rec.south);
-\draw[flow] (att.south) ++(-5mm,0) |- (pg.east);
-\draw[flow] (pg) -- (exam);
-\draw[ctrl] (train.south) ++(5mm,0) -- ++(0,-2mm) -| (exam.east);
+% row 1, left to right: the supervised path
+\node[data] (set) {training set\\{\scriptsize verified records}};
+\node[proc=okSky!25, right=of set] (sft) {train adapter\\{\scriptsize supervised, LoRA}};
+\node[data, right=of sft] (ad) {adapter};
+% row 0: where the first records come from
+\node[proc=okOrange!20, above=of set] (seed) {teacher solves\\{\scriptsize the training tasks}};
+% row 2, right to left: how the set grows; the policy-gradient stage on the right
+\node[proc=okGreen!15, below=of ad] (att) {student attempts\\{\scriptsize the training tasks}};
+\node[proc=okOrange!20, below=of sft] (cont) {teacher continues\\{\scriptsize at the failing step}};
+\node[proc, below=of set] (adm) {admission\\{\scriptsize new solutions only}};
+\node[proc=okVermillion!15, right=of att] (pg) {policy gradient\\{\scriptsize with a loop penalty}};
+% the exams, outside the training loop
+\coordinate (mid) at ($(ad.center)!0.5!(att.center)$);
+\node[data, text width=13mm, minimum height=28mm] (exam) at ($(mid -| pg.east)+(17mm,0)$) {100\\held-out\\exams};
+% the training loop
+\draw[flow] (seed) -- node[edge label, right] {pass} (set);
+\draw[flow] (set) -- (sft);
+\draw[flow] (sft) -- (ad);
+\draw[flow] (ad) -- (att);
+\draw[flow] (att) -- node[edge label, above] {fail} (cont);
+\draw[flow] (cont) -- node[edge label, above] {pass} (adm);
+\coordinate (low) at ($(att.south)+(0,-5mm)$);
+\draw[flow] (att.south) -- (low) -- node[edge label, above] {pass: the student's own verified solutions} (low -| adm.south) -- (adm.south);
+\draw[flow] (adm) -- node[edge label, right] {new records} (set);
+% the policy-gradient stage: starts from the adapter, learns from its graded attempts
+\draw[flow] ([yshift=-2mm]ad.east) -| node[edge label, right, pos=0.75] {starts from} (pg.north);
+\draw[flow] (att) -- (pg);
+% measurement
+\draw[measure] ([yshift=2mm]ad.east) -- ([yshift=2mm]ad.east -| exam.west);
+\draw[measure] (pg.east) -- (pg.east -| exam.west);
+\begin{scope}[on background layer]
+\node[draw=black!35, fill=black!4, rounded corners=3pt, inner sep=2.5mm, fit=(seed)(adm)(pg)(low)] (loop) {};
+\end{scope}
+\node[font=\scriptsize\itshape, text=black!70, anchor=north east] at ($(loop.north east)+(-1mm,-1mm)$) {training: uses only the 228 training tasks};
+\node[font=\scriptsize\itshape, text=black!70, anchor=south] at ($(exam.north)+(0,1mm)$) {measurement};
 \end{tikzpicture}
-\caption{The process. The set of verified records trains an adapter; the adapter attempts the practice tasks; its
-  verified solutions and a teacher's continuations of its failures, each admitted only as a new solution of its task,
-  grow the set; a policy-gradient stage that penalises looping starts from the trained adapter. Only the exams measure
-  the result.}\label{fig:pipeline}
+\caption{The process. Boxes with a bar on the left are stored artefacts and rounded boxes are steps (orange: the
+  teacher; green: the student); \emph{pass} and \emph{fail} are the grader's verdicts. Verified teacher solutions seed
+  the training set, which trains an adapter. The adapter attempts the training tasks; its passing attempts, and the
+  teacher's passing continuations of its failed ones, are admitted when they are new solutions of their task, and the
+  enlarged set trains the next adapter. A policy-gradient stage starts from an adapter and learns from that adapter's
+  graded attempts. Dashed arrows are measurement: the exams grade the base models and every adapter, and nothing flows
+  back from them into training.}\label{fig:pipeline}
 \end{figure}
 
-\paragraph{Records.} A record is one complete trajectory under the system prompt and tool schema the model is served,
-every assistant turn supervised, in the form the model's chat template renders. Only trajectories the grader passed
-become records. The first records are verified solutions of the practice tasks, almost all by the 27B teacher.
+\Cref{fig:pipeline} shows the process. A training set of verified records trains an adapter; the adapter's attempts
+at the training tasks yield new records, both from its passes and, through the teacher, from its failures; and the
+enlarged set trains the next adapter. A policy-gradient stage can follow the supervised one.
 
-\paragraph{The student's own solutions.} The trained adapter attempts every practice and composite task four times at
-the evaluation sampling settings (the 4B and 8B a second time at temperature 1.0 for variety). Each verified pass is a candidate record. These records are on-policy, so they teach
-the model what it can already do more reliably, and they reach tasks the teacher records cover with other tool-call
-sequences.
+\paragraph{Records.} A record is one complete trajectory, rendered by the model's chat template under the system prompt
+and tool schema the model is served with, in which every assistant turn is supervised. Only trajectories that the grader
+passed become records. The first records are verified solutions of the training tasks, almost all by the 27B teacher; the set also holds
+\dataExternalTrain{} solutions by a third model, deepseek-v4.1-flash, of tasks the teacher did not solve.
 
-\paragraph{Recovery data.} A failed attempt is the training signal a pass cannot give. For a task the adapter failed, the
-teacher reads the failed attempt and names the step after which it went wrong, keeping the failing call and its result so
-that the continuation sees the error the student did not recover from, and writes one or two sentences of guidance that
-state no solution. A fresh sandbox is seeded with the kept prefix and the teacher continues. A verified continuation is
-stored as one conversation in which the guidance turn is removed: the student sees its own mistake followed by the
-corrective call, as it would at inference. Tasks that the adapter solved in some attempts and failed in others are
-continued from their failed attempts too, so recovery data covers partial as well as total failures.
+\paragraph{The student's own solutions.} A trained adapter attempts every training task four times at the evaluation
+sampling settings, and the 4B and 8B adapters four more times at temperature 1.0 for variety. Each passing attempt is a
+candidate record. These records are sampled from the student's own policy, and those that are admitted are by
+construction tool-call sequences the set did not yet contain for their task.
 
-\paragraph{Integration and provenance.} A candidate record enters the set only as a new solution of its task. Its
-fingerprint is the sequence of tool calls (tool name and whitespace-normalised arguments, ignoring the free-text intent
-argument), and a record whose fingerprint the task already has is dropped; at most twelve records per task are kept (sixteen in the second round). The
-split is by whole task: roughly one tenth of tasks new to the set are held out for validation, and a task keeps its side.
-Every record carries the model that produced it (\cref{tab:data}). The set before the second round is the
-\emph{round-one set} (\integrationTrainBefore{} training records) and the adapter trained on it the \emph{round-one adapter}; the
-set after it (\integrationTrainAfter{}) and its adapter are \emph{round two}. Of \integrationAdmitted{} admitted records,
-976 went to training and 85 to validation.
+\paragraph{Recovery data.} A passing attempt cannot show how to continue after an error from which the student did not
+recover. For that, the teacher reads a failed attempt, names the step after which it went wrong, and writes one or two
+sentences of guidance that state no solution. The attempt is cut after the failing call and its result, a fresh sandbox
+is brought to the state that this prefix produced, and the teacher continues from there. A continuation that the grader
+passes is stored as one conversation with the guidance turn removed, so that the record shows the student's own mistake
+followed directly by the corrective call, as the student would meet it at inference. Failed attempts of tasks that the
+adapter solved in other attempts are continued as well, so that recovery data covers partial as well as total failures.
+
+\paragraph{Admission and provenance.} A candidate record enters the set only as a new solution of its task. The
+fingerprint of a record is its sequence of tool calls (tool name and whitespace-normalised arguments, without the
+free-text intent argument); a candidate whose fingerprint its task already has is dropped, and at most twelve records
+are kept per task (sixteen in the second round). The split into training and validation is by whole task: about one
+tenth of the tasks new to the set are held out for validation, and a task never changes side. Every record names the
+model that produced it (\cref{tab:data}). We call the set before the student's solutions and the recovery data are
+added the \emph{round-one set} (\integrationTrainBefore{} training records) and the set after their admission the
+\emph{integrated set} (\integrationTrainAfter{} training and \integrationValidationAfter{} validation records); the
+\emph{round-one adapter} and the \emph{round-two adapter} of a model are trained on the former and the latter.
 
 \begin{table}[t]
 \centering\small
 \input{data-table}
-\caption{The round-two training set. Teacher continuations of an
-  adapter's failures are attributed to the teacher; an adapter's row is its own verified attempts (\dataTeacherPct{}\% of the
-  training records are the teacher's); the DeepSeek records are 43 solutions of tasks the teacher never solved.}\label{tab:data}
+\caption{The integrated set by the model that made each record. A teacher continuation of an adapter's failed attempt
+  counts as the teacher's; an adapter's row holds its own passing attempts. The teacher made \dataTeacherPct{}\% of the
+  training records.}\label{tab:data}
 \end{table}
 
-\paragraph{Supervised training.} A LoRA adapter of rank 16 and alpha 32 is trained for up to 600 optimiser steps of four records each, learning
-rate $2\times10^{-4}$, on a bf16 base. The held-out loss is measured every 40 steps, training stops after four
-evaluations without improvement, and the step with the best held-out loss is kept.
+\paragraph{Supervised training.} A LoRA adapter \citep{lora} of rank 16 and alpha 32 is trained on a frozen bf16 base
+with a learning rate of $2\times10^{-4}$ for at most 600 optimiser steps of four records each on the round-one set; the runs on
+the integrated set ran to step 800 (\cref{fig:loss}). The loss on the validation records is evaluated every 40 steps, training stops after four evaluations without
+improvement, and the step with the lowest validation loss is kept. The 27B student arm of \cref{sec:task} is an adapter for the teacher model trained on the published teacher
+records.
 
-\paragraph{Policy gradient with a loop penalty.} Starting from the trained adapter, a clipped policy-gradient stage
-uses the adapter's own graded attempts at the practice tasks (eight per task, temperature 1.0), grouped by task. The reward of an
-attempt is one for a pass and zero for a failure, less a penalty for each of two behaviours read from the attempt's files:
-a full pass's reward when the loop watchdog ended it, and half of one scaled by the share of its calls after a Vim error that
-repeated the failed call. Advantages are normalised within the task's group \citep{grpo}, so a looping attempt is pushed down
-against its siblings whether or not either passed. The clip band is wider above than below and the loss is summed over
-tokens \citep{dapo}; the KL term is taken against the adapter the run starts from, which is also the policy that sampled
-the attempts, so the importance ratio needs no recorded log-probabilities. Training rows are bounded at 16\,384 tokens so that
-long attempts, which are the looping ones, stay in the data.
+\paragraph{Policy gradient with a loop penalty.} The second stage starts from a trained adapter and optimises a clipped
+policy-gradient objective \citep{ppo} on that adapter's own graded attempts at the training tasks, eight per task at
+temperature 1.0. The reward of an attempt is
+\begin{equation}
+r = \mathbf{1}[\text{pass}] - \lambda_{\text{loop}}\,\mathbf{1}[\text{loop-stopped}] - \lambda_{\text{rep}}\,\rho,
+\label{eq:reward}
+\end{equation}
+where an attempt is \emph{loop-stopped} when the watchdog ended it and $\rho$ is the share of its calls after a Vim
+error that repeated the failed call. We use $\lambda_{\text{loop}}=\optimiserFourLoopWeight$ and
+$\lambda_{\text{rep}}=\optimiserFourRepeatWeight$, and in one variant twice both. Advantages are normalised within the
+group of attempts at the same task \citep{grpo}, so a looping attempt is pushed down relative to the other attempts at
+its task whether or not any of them passed. As in DAPO \citep{dapo}, the clip band is wider above than below and the
+loss is summed over tokens. The attempts are sampled from the adapter the stage starts from, so the KL term is taken
+against that adapter and the importance ratio needs no recorded log-probabilities. Training rows are bounded at
+16\,384 tokens, which keeps the long attempts, and the looping attempts are among the longest.

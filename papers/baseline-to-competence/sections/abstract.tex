@@ -1,15 +1,20 @@
 \begin{abstract}
-A small language model that has a text editor as its only tool fails tasks a larger model solves: after an editor error it often
-repeats the failed command. We describe and measure a process that takes 0.6B, 4B and 8B models
-toward competence at editing files with headless Vim, graded on 100 held-out tasks. The process collects verified teacher
-trajectories, adds the student's own verified solutions and a teacher's continuations of the student's failures from the
-step where they went wrong, admits each record only as a new solution of its task, and trains a LoRA adapter. The base
-models solve none of the counted exam slots, even with four reruns of every failed task. The round-one 4B adapter solves
-\examFourFullFive{} and the 8B adapter \examEightFullFive{} within five attempts; the 0.6B adapter solves
-\examZeroFullFive{} of 100, so we treat that size as not reaching the exams with this tool and data. A second round of recovery
-data was followed by \examEightRtwoFive{} at the 8B (\pEightRtwo{} against the round-one adapter, not confirmed) and
-\examFourRtwoFive{} at the 4B, and a policy-gradient stage by \examEightPgFive{} at the 8B (one run). A reward that penalises
-looping did not reduce the share of attempts ended by the loop watchdog, which stays near 30\% on the exams. Every count is
-derived from released run records by the scripts of the appendix; rerunning the exams gives counts within the spread reported
-in the limits.
+Small language models that are given a text editor as their only tool fail file-editing tasks that a larger model of the
+same family solves, and after an editor error they frequently resend the command that failed. We describe and measure a
+process that takes Qwen3 models of 0.6B, 4B and 8B parameters from this baseline toward competence at editing files with
+headless Vim. The process starts from verified trajectories of a 27B teacher, adds the student's own verified solutions
+and the teacher's continuations of the student's failed attempts from the step where they went wrong, admits a record
+only as a new solution of its task, and trains a LoRA adapter on the result. The measurement is 100 held-out exam tasks,
+each attempted once and the failed ones four more times. The base models solve none in any attempt that counted. The adapters trained on the
+first set solve \examFourFullFive{} (4B) and \examEightFullFive{} (8B) tasks within five attempts (paired sign test over
+tasks, \ptestFourFull{} at both sizes); repeated measurements of this recipe range over \roundOneFourMin{} to
+\roundOneFourMax{} and \roundOneEightMin{} to \roundOneEightMax{} tasks. The 0.6B adapter solves \examZeroFullFive{}.
+Retraining on the set enlarged by the students' solutions and the continuations gives \examEightRtwoFive{} against
+\examEightRtworefFive{} tasks at 8B (\ptestEightRtwo{}, not significant) and \examFourRtwoFive{} against
+\examFourRtworefFive{} at 4B. A subsequent policy-gradient stage whose reward penalises looping gives \examEightPgFive{}
+against \examEightPgrefFive{} at 8B (\ptestEightPg{}, one run, uncorrected) and \examFourPgFive{} against
+\examFourPgrefFive{} at 4B, but it did not reduce looping: the loop watchdog still ends \behaviourFourPgExamLoopPct{}\%
+(4B) and \behaviourEightPgExamLoopPct{}\% (8B) of exam attempts, against \behaviourFourPgrefExamLoopPct{}\% and
+\behaviourEightPgrefExamLoopPct{}\% for the adapters it started from. Every number is derived from released run records by the scripts
+described in the appendix.
 \end{abstract}

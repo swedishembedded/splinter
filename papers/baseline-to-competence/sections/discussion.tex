@@ -1,26 +1,39 @@
 \section{Discussion and limits}\label{sec:discussion}
-\paragraph{What the process does.} A model that fails every exam learns, from a few thousand verified trajectories, to
-recover from an editor error and to finish a quarter to a third of tasks it has never seen. The largest single step is the
-first: on the exams the round-one adapters solve \examFourFullFive{} and \examEightFullFive{} tasks within five attempts against
-none for the bases. The teacher's continuations supply a correction after the student's own mistake, which the student's passing
-attempts never contain; \recoverySolvedPct{}\% of them verified, but no arm isolates their effect, and the second-round
-exam results are inconclusive.
+\paragraph{What the process achieves.} Supervised training on about two thousand verified trajectories accounts for
+the step that the evidence supports firmly: the 4B and 8B models go from no solved exam to \examFourFullFive{} and
+\examEightFullFive{} of 100 tasks they have never seen, and they resend a failed call less often than their base
+models (\behaviourFourFullExamRepeatPct{}\% against \behaviourFourBaseExamRepeatPct{}\% of calls after an error at 4B,
+\behaviourEightFullExamRepeatPct{}\% against \behaviourEightBaseExamRepeatPct{}\% at 8B). The later stages are less clear. The second round of data and the policy-gradient stage each gave a higher
+count at 8B in one run (\examEightRtwoFive{} and \examEightPgFive{}), one of them not significant and the other
+nominally so without correction, and neither gave a gain at 4B. The teacher's continuations do what they were built
+for as data, in that \recoverySolvedPct{}\% of them end in a verified solution that follows the student's own mistake,
+but their effect on the student was not isolated.
 
-\paragraph{Where it stops.} The 0.6B model learns the practice tasks (\trainZeroFullPct{}\% of attempts) and solves
-\examZeroFullFive{} of 100 exams, so a model of that size does not reach the exams with this tool and this data. At 4B and 8B about
-30\% of exam attempts still end in a loop. The penalty we tried is not the fix: with the looping attempts kept in the data
-and the optimiser moving the policy, it left the loop share near where it was (four points lower at the 8B, higher at the 4B). The practice tasks hold few looping attempts for
-the reward to act on, and the exams are harder than the tasks the policy trains on. At the 27B the base model solves \examBigBaseFive{} tasks within five attempts and an adapter trained on the published records
-\examBigRecordsFive{} (\winsBigRecords{} wins, \lossesBigRecords{} losses over attempts), so we found no benefit at that size.
+\paragraph{Where it stops.} The 0.6B model improves on the training tasks (\trainZeroFullPct{}\% of attempts pass) and
+solves \examZeroFullFive{} of 100 exams, so this tool and this data do not bring a model of that size to the exams.
+At 4B and 8B the watchdog still ends about a third of the exam attempts, and the penalty we tried did not change that,
+although the optimiser moved the policy and the long, looping attempts were in its data. One possible reason, which we
+did not test, is that the reward sees little of the behaviour it penalises: the adapters loop in
+\behaviourFourFullTrainLoopPct{}\% and \behaviourEightFullTrainLoopPct{}\% of their attempts at the training tasks,
+which is where the policy gradient gets its attempts, against \behaviourFourFullExamLoopPct{}\% and
+\behaviourEightFullExamLoopPct{}\% at the exams.
 
-\paragraph{Limits.} Each arm has one seed. The same full-set adapter was measured five times at the 4B and four times at the 8B across
-the runs of this paper, solving 20 to 24 and 25 to 29 tasks within five attempts: differences of a few tasks between rows of
-\cref{tab:stages} are within that spread. The 0.6B was not retrained on the integrated set. The first attempt of 100 tasks moved by up to eleven tasks between two measurements
-of the same recipe, which is why we compare solved-within-five and test over tasks, and the gains of the second round and of
-the policy gradient at the 8B are single measurements with inconclusive or marginal tests. The exams are 100 tasks of one
-domain and carry a wide interval (\examFourFullFiveLo--\examFourFullFiveHi{}\% at 4B). Base-model arms of the round-one
-measurements left 10 (4B) and 23 (8B) of the base slots uncounted after retries; the bases solved none of the counted
-slots, and the adapter arms counted every slot. The policy-gradient recipe was changed once after seeing an exam result: its first run, whose training rows were bounded at
-8\,192 tokens, ended more attempts in a loop than the adapter it started from, and the bound had removed the long, looping attempts
-from its data. The reported runs use the corrected bound, and a stronger variant is reported beside them. The teacher is a larger model of the same family, and the records are as
-good as its verified solutions: nothing here shows what happens when no stronger model exists.
+\paragraph{Limits.} Each arm has one seed. The round-one recipe, measured \roundOneFourRuns{} times at 4B and
+\roundOneEightRuns{} times at 8B, solved \roundOneFourMin{} to \roundOneFourMax{} and \roundOneEightMin{} to
+\roundOneEightMax{} tasks within five attempts, and pass@1 moved by up to \replicateEightOneDiff{} tasks between two
+adapters of the same recipe; the 8B gains of the later stages are single measurements and have to be read against that
+spread. The $p$ values are not corrected for the number of comparisons. The 0.6B was not retrained on the integrated set. No
+arm removes one kind of record, and no arm runs the policy gradient without the loop penalty, so neither the recovery
+data nor the penalty is isolated. The exams are 100 tasks of one domain, and a count on them carries a wide interval
+(\examFourFullFiveLo--\examFourFullFiveHi{}\% for the 4B round-one adapter). The repeat-after-error share is measured
+on first attempts only, and looping is measured through the watchdog's stopping rule.
+
+Three qualifications of the protocol of \cref{sec:task} apply. The base-model arms left \uncountedFourBase{} (4B) and
+\uncountedEightBase{} (8B) slots uncounted after retries; the base models solved nothing in the slots that counted.
+The 0.6B round-one adapter left \uncountedZeroFull{} slot uncounted and so misses the validity rule; its count could
+be higher by at most one task. Every other adapter arm counted every slot. The policy-gradient recipe
+was changed once after an exam result: with training rows bounded at 8\,192 tokens, the stage produced an adapter with
+more loop-stopped attempts than the adapter it started from, and that bound had removed the long, looping attempts from
+its data. The reported runs use the bound of 16\,384 tokens. Finally, the teacher is a larger model of the students'
+family and the records are only as good as its verified solutions: nothing here shows how the process behaves when no
+stronger model is available.

@@ -32,6 +32,52 @@ def cap(word):
     return word[0].upper() + word[1:]
 
 
+def number(value):
+    """An integer with a thin space between thousands."""
+    return f"{value:,}".replace(",", "\\,")
+
+
+# Arms that measure an adapter of the round-one recipe: the round-one adapter itself, its re-measurement as the
+# reference arm of each later comparison, and the replicate adapter trained separately by the same recipe.
+ROUND_ONE_ARMS = ("full", "first", "rtworef", "pgref", "pgdref")
+
+
+def derived(exams, comp, recovery, integration):
+    """Macros computed from more than one measured row, so the text never states a difference typed by hand."""
+    m = []
+    ex = {(r["model"], r["arm"]): r for r in exams}
+    for model in ("qwen3-4b", "qwen3-8b"):
+        key = NAMES[model]
+        full, first = ex[(model, "full")], ex[(model, "first")]
+        m.append(macro(f"replicate{key}OneDiff", abs(int(full["k1"]) - int(first["k1"]))))
+        m.append(macro(f"replicate{key}FiveDiff", abs(int(full["k5"]) - int(first["k5"]))))
+        fives = [int(ex[(model, arm)]["k5"]) for arm in ROUND_ONE_ARMS if (model, arm) in ex]
+        m += [macro(f"roundOne{key}Runs", len(fives)), macro(f"roundOne{key}Min", min(fives)),
+              macro(f"roundOne{key}Max", max(fives))]
+    added = integration["train_after"] - integration["train_before"]
+    m.append(macro("integrationTrainAdded", number(added)))
+    m.append(macro("integrationValidationAdded", number(integration["admitted"] - added)))
+    m.append(macro("recoveryFailed", number(recovery["attempts"] - recovery["passes"])))
+    m.append(macro("dataExternalTrain", sum(int(r["train"]) for r in comp if "Qwen" not in r["source"])))
+    return m
+
+
+def write_exam_bars(out, exams):
+    """The headline bar chart: base and round-one adapter per size, with the adapter's 95% Wilson interval."""
+    ex = {(r["model"], r["arm"]): r for r in exams}
+    cols = ["size"] + [f"{arm}{k}{part}" for k in ("one", "five") for arm, parts in (("base", [""]), ("full", ["", "minus", "plus"]))
+                       for part in parts]
+    lines = [" ".join(cols) + "\n"]
+    for model in ("qwen3-0.6b", "qwen3-4b", "qwen3-8b"):
+        cells = [SIZE[model]]
+        for k in ("k1", "k5"):
+            solved = int(ex[(model, "full")][k])
+            lo, hi = wilson(solved, 100)
+            cells += [ex[(model, "base")][k], str(solved), f"{solved - 100 * lo:.2f}", f"{100 * hi - solved:.2f}"]
+        lines.append(" ".join(cells) + "\n")
+    (out / "exam-bars.dat").write_text("".join(lines))
+
+
 def main(data, out):
     data, out = Path(data), Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -46,7 +92,10 @@ def main(data, out):
     for r in rows(data / "paired.csv"):
         w, l = int(r["wins"]), int(r["losses"])
         key = f"{NAMES[r['model']]}{cap(r['arm'])}"
-        m += [macro(f"wins{key}", w), macro(f"losses{key}", l), macro(f"p{key}", fmt_p(sign_p(w, l)))]
+        p = fmt_p(sign_p(w, l))
+        # ptest is the value as a relation ready for running text: "p<0.001" or "p=0.061"
+        m += [macro(f"wins{key}", w), macro(f"losses{key}", l), macro(f"p{key}", p),
+              macro(f"ptest{key}", "$p" + (p if p.startswith("<") else "=" + p) + "$")]
     comp = rows(data / "data.csv")
     m.append(macro("dataTrain", sum(int(r["train"]) for r in comp)))
     m.append(macro("dataValidation", sum(int(r["validation"]) for r in comp)))
@@ -67,7 +116,9 @@ def main(data, out):
     for r in rows(data / "optimiser.csv"):
         key = NAMES[r["model"]]
         m += [macro(f"optimiser{key}Kl", r["kl_median"]), macro(f"optimiser{key}Clip", f"{100 * float(r['clip_median']):.0f}"),
-              macro(f"optimiser{key}Loop", r["loop_percent"]), macro(f"optimiser{key}Repeat", r["repeat_percent"])]
+              macro(f"optimiser{key}Loop", r["loop_percent"]), macro(f"optimiser{key}Repeat", r["repeat_percent"]),
+              macro(f"optimiser{key}LoopWeight", f"{int(r['loop_percent']) / 100:g}"),
+              macro(f"optimiser{key}RepeatWeight", f"{int(r['repeat_percent']) / 100:g}")]
     for r in rows(data / "uncounted.csv"):
         m.append(macro(f"uncounted{NAMES[r['model']]}{cap(r['arm'])}", r["slots"]))
     for r in rows(data / "replication.csv"):
@@ -82,7 +133,11 @@ def main(data, out):
     m.append(macro("recoveryPassPct", f"{100 * tot['passes'] / tot['attempts']:.0f}"))
     for r in rows(data / "integration.csv"):
         m.append(macro("integration" + "".join(cap(w) for w in r["name"].split("_")), f"{int(r['value']):,}".replace(",", "\\,")))
+    m += derived(exams, comp, tot, {r["name"]: int(r["value"]) for r in rows(data / "integration.csv")})
+    for r in rows(data / "optimiser.csv"):
+        m.append(macro(f"optimiser{NAMES[r['model']]}Steps", r["steps"]))
     (out / "macros.tex").write_text("".join(m))
+    write_exam_bars(out, exams)
 
     # the exam table: one row per model and arm
     lines = []
@@ -91,12 +146,16 @@ def main(data, out):
         lines.append(f"{SIZE[r['model']]} & {r['arm']} & " + " & ".join(map(str, ks)) + " \\\\\n")
     (out / "exam-table.tex").write_text("".join(lines))
 
-    # the stage-by-stage exam table: pass@1, solved within five, loop-stopped share, repeated-call share
+    # the stage-by-stage exam table: pass@1, solved within five, the paired test against the reference arm,
+    # loop-stopped share, repeated-call share
     beh = {(r["model"], r["arm"]): r for r in rows(data / "behaviour.csv") if r["set"] == "exam"}
     ex = {(r["model"], r["arm"]): r for r in exams}
-    stages = [("base", "base model"), ("full", "round-one adapter"), ("rtworef", "round-one adapter$^{\\dagger}$"),
-              ("rtwo", "round-two adapter$^{\\dagger}$"), ("pgref", "round-one adapter$^{\\ddagger}$"),
-              ("pg", "round-one adapter + loop penalty$^{\\ddagger}$")]
+    pairs = {(r["model"], r["arm"]): (int(r["wins"]), int(r["losses"])) for r in rows(data / "paired.csv")}
+    marks = ("$^{\\dagger}$", "$^{\\ddagger}$", "$^{\\S}$")
+    stages = [("base", "base model"), ("full", "round-one adapter"),
+              ("rtworef", "round-one adapter" + marks[0]), ("rtwo", "round-two adapter" + marks[0]),
+              ("pgref", "round-one adapter" + marks[1]), ("pg", "policy gradient, loop penalty" + marks[1]),
+              ("pgdref", "round-one adapter" + marks[2]), ("pgd", "policy gradient, doubled penalty" + marks[2])]
     lines = []
     for model in ("qwen3-0.6b", "qwen3-4b", "qwen3-8b"):
         first = True
@@ -106,11 +165,17 @@ def main(data, out):
             e, b = ex[(model, arm)], beh.get((model, arm))
             loops = f"{100 * int(b['loop_trials']) / int(b['trials']):.0f}" if b else "--"
             rep = f"{100 * float(b['repeat_after_error']):.0f}" if b else "--"
-            lines.append(f"{SIZE[model] if first else ''} & {label} & {e['k1']} & {e['k5']} & {loops} & {rep} \\\\\n")
+            test = "& &"
+            if (model, arm) in pairs:
+                w, l = pairs[(model, arm)]
+                test = f"& {w}\\,:\\,{l} & ${fmt_p(sign_p(w, l))}$"
+            lines.append(f"{SIZE[model] if first else ''} & {label} & {e['k1']} & {e['k5']} {test} & {loops} & {rep} \\\\\n")
             first = False
         lines.append("\\addlinespace\n")
     (out / "stages-table.tex").write_text(
-        "\\begin{tabular}{llrrrr}\n\\toprule\nModel & Measured arm & pass@1 & within 5 & loop-stopped (\\%) & repeat after error (\\%) \\\\\n\\midrule\n"
+        "\\begin{tabular}{llrrrrrr}\n\\toprule\n"
+        " & & & solved & wins\\,: & & loop- & repeat after \\\\\n"
+        "Model & Measured arm & pass@1 & within five & losses & $p$ & stopped (\\%) & error (\\%) \\\\\n\\midrule\n"
         + "".join(lines[:-1]) + "\\bottomrule\n\\end{tabular}\n")
 
     # composition of the training set by the model that made the records

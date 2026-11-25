@@ -1,17 +1,19 @@
 \section{Reproducing the results}\label{app:repro}
 Everything below runs on one machine with four CUDA GPUs of 96\,GB (GH200) and rebuilds every number from released tasks
-and traces. Nothing depends on state kept between runs: the work directory may be lost and rebuilt, and rebuilding this
-study's work directory after a machine restart reproduced the 4B adapter's final training loss to four decimals (\replicationLossFirst{} and \replicationLossRebuilt{}).
+and traces. Nothing depends on state kept between runs: the work directory may be lost and rebuilt. Rebuilding this
+study's work directory and training the 4B round-one adapter again reproduced its final training loss to four decimals
+(\replicationLossFirst{} and \replicationLossRebuilt{}); the exam counts of the two adapters differ as reported in
+\cref{sec:results}.
 
 \paragraph{Artifacts.} Tasks: the compiled Harbor tasks of the Vim course, \path{swedishembedded/vim-headless-mastery}
 (168 practice and 100 exam tasks; the 60 composite tasks are the family \code{course-composite} of the task repository's
-\path{tasks/vim}). Training traces: the \code{full} and \code{full2} configurations of
+\path{tasks/vim}). Training traces: the \code{full} (round-one set) and \code{full2} (integrated set) configurations of
 \path{swedishembedded/vim-headless-mastery-sft-g2}; every record's \code{metadata.trial.model} names the model that made it
 and \code{lineage/} lists the parents and the left-out reasons. Adapters and the measured counts behind each table:
 \path{swedishembedded/vim-headless-mastery-sft-adapters}.
 
-\paragraph{Orchestrator.} Every step is a recipe of the Splinter learning-factory, which serves and trains through Brain's
-HTTP API and runs the agent (Sven) in Harbor sandboxes. A recipe is a graph of stages (\code{attempt.collect},
+\paragraph{Orchestrator.} Every step is a recipe of the task repository, run by the Splinter learning factory, which serves
+and trains through Brain's HTTP API and runs the agent (Sven) in Harbor sandboxes. A recipe is a graph of stages (\code{attempt.collect},
 \code{attempts.failures}, \code{agent}, \code{dataset.project}, \code{dataset.extend}, \code{model.train},
 \code{evaluation}, \code{promotion}); a stage whose inputs are unchanged is reused, so a fork of a run recomputes only what a
 change touches. The commands, for the 4B (the 0.6B and 8B differ in the size in the recipe names; \code{WS} is the work
@@ -21,13 +23,13 @@ directory and \code{gpuN} the card):
 # 1. workspace: freezes brain, sven and splinter, installs the sandbox worker, pins the records
 scripts/workspace-init.sh --dir WS \
     --records swedishembedded/vim-headless-mastery-sft-g2 --records-config full
-# 2. base-model baseline on the practice tasks (4 attempts each)
+# 2. base-model baseline on the training tasks (4 attempts each)
 WS/run.sh recipes/vim-base-train-qwen3-4b.yaml gpu0
 # 3. train the round-one adapter and promote it as the champion (the adapter later rounds
-#    start from and are compared with) on the practice tasks; measure it on the exams
+#    start from and are compared with) on the training tasks; measure it on the exams
 WS/run.sh recipes/vim-sft-qwen3-4b-champion.yaml gpu0
 WS/run.sh --fork vim-sft-qwen3-4b-champion recipes/vim-sft-qwen3-4b-full.yaml gpu0
-# 4. round two: the adapter attempts the practice tasks, the teacher continues its failures
+# 4. round two: the adapter attempts the training tasks, the teacher continues its failures
 WS/run.sh --fork vim-sft-qwen3-4b-champion --warm Qwen/Qwen3.8-27B-FP8 \
     recipes/vim-sft-qwen3-4b-r2-data.yaml gpu0
 # 5. integrate the three sizes' records (new solutions only, at most 16 per task)

@@ -19,12 +19,13 @@
 \usepackage{xcolor}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta,fit,calc,backgrounds}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,backgrounds,patterns}
 \usepackage{pgfplots}
 \usepgfplotslibrary{groupplots}
 \pgfplotsset{compat=1.17}
 
-% Okabe-Ito palette: distinguishable with colour-blindness; every pair used together also differs in marker or line style.
+% Okabe-Ito palette: distinguishable with colour-blindness; every pair of series used together also differs in
+% marker, line style or fill pattern.
 \definecolor{okBlue}{HTML}{0072B2}
 \definecolor{okOrange}{HTML}{E69F00}
 \definecolor{okGreen}{HTML}{009E73}
@@ -32,17 +33,28 @@
 \definecolor{okSky}{HTML}{56B4E9}
 \definecolor{okGrey}{HTML}{6E6E6E}
 \tikzset{
-  fig/.style={font=\footnotesize, node distance=5mm and 6mm, >={Stealth[length=2mm]}},
-  proc/.style={draw=black!75, rounded corners=2pt, fill=#1, align=center, inner sep=3pt, minimum height=8mm, text width=24mm, line width=0.5pt},
+  fig/.style={font=\footnotesize, node distance=7mm and 9mm, >={Stealth[length=2mm]}},
+  box/.style={draw=black!75, align=center, inner sep=3pt, minimum height=9.5mm, text width=25mm, line width=0.5pt,
+    execute at begin node={\hyphenpenalty 10000 \exhyphenpenalty 10000 }},
+  % a process: something that runs
+  proc/.style={box, rounded corners=2pt, fill=#1},
   proc/.default=white,
-  data/.style={draw=black!75, fill=white, align=center, inner sep=3pt, minimum height=8mm, text width=24mm, line width=0.5pt,
+  % an artefact: something that is stored (marked by the bar on its left edge)
+  data/.style={box, fill=white,
     path picture={\draw[line width=2pt,black!60] (path picture bounding box.north west) -- (path picture bounding box.south west);}},
-  flow/.style={->, line width=0.7pt, black!80},
-  ctrl/.style={->, line width=0.7pt, dashed, black!60},
+  flow/.style={->, line width=0.7pt, black!80, rounded corners=1.5pt},
+  measure/.style={->, line width=0.7pt, dashed, black!60, rounded corners=1.5pt},
+  edge label/.style={font=\scriptsize, text=black!80, inner sep=2.5pt},
 }
 \pgfplotsset{
   paper/.style={tick label style={font=\footnotesize}, label style={font=\footnotesize}, title style={font=\footnotesize\bfseries},
-    legend style={font=\footnotesize, draw=black!40}, grid=major, grid style={black!12}, axis line style={black!70}},
+    legend style={font=\scriptsize, draw=black!40}, legend cell align=left, ymajorgrids, grid style={black!12},
+    axis line style={black!70}, tick align=outside, xtick pos=bottom, ytick pos=left},
+  base bar/.style={draw=black!70, fill=okGrey!30, postaction={pattern=north east lines, pattern color=black!55}},
+  adapter bar/.style={draw=black!70, fill=okBlue!80},
+  base line/.style={okGrey, thick, densely dotted, mark=square*, mark size=1.6pt, mark options={solid}},
+  adapter line/.style={okBlue, thick, mark=*, mark size=1.6pt},
+  replicate line/.style={okOrange, thick, dashed, mark=triangle*, mark size=2pt, mark options={solid}},
 }
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{caption}
