@@ -1,17 +1,17 @@
 \section{Discussion and limits}\label{sec:discussion}
 \paragraph{What the process does.} A model that fails every exam learns, from a few thousand verified trajectories, to
 recover from an editor error and to finish a quarter to a third of tasks it has never seen. The largest single step is the
-first: the trained adapters pass \trainFourFullPct{}\% of attempts at the practice tasks against \trainFourBasePct{}\% for
-the bases. What the teacher's continuations add is a correction after the student's own mistake, which the student's passing
-attempts never contain; \recoverySolvedPct{}\% of the continuations verified.
+first: on the exams the round-one adapters solve \examFourFullFive{} and \examEightFullFive{} tasks within five attempts against
+none for the bases. The teacher's continuations supply a correction after the student's own mistake, which the student's passing
+attempts never contain; \recoverySolvedPct{}\% of them verified, but no arm isolates their effect, and the second-round
+exam results are inconclusive.
 
 \paragraph{Where it stops.} The 0.6B model learns the practice tasks (\trainZeroFullPct{}\% of attempts) and solves
 \examZeroFullFive{} of 100 exams, so a model of that size does not reach the exams with this tool and this data. At 4B and 8B about
 30\% of exam attempts still end in a loop. The penalty we tried is not the fix: with the looping attempts kept in the data
 and the optimiser moving the policy, it left the loop share near where it was (four points lower at the 8B, higher at the 4B). The practice tasks hold few looping attempts for
-the reward to act on, and the exams are harder than the tasks the policy trains on. A model that already solves half of the
-exams does not need the process: the 27B teacher's own adapter solves \examBigRecordsFive{} within five attempts against
-\examBigBaseFive{} for the base.
+the reward to act on, and the exams are harder than the tasks the policy trains on. At the 27B the base model solves \examBigBaseFive{} tasks within five attempts and an adapter trained on the published records
+\examBigRecordsFive{} (\winsBigRecords{} wins, \lossesBigRecords{} losses over attempts), so we found no benefit at that size.
 
 \paragraph{Limits.} Each arm has one seed. The same full-set adapter was measured five times at the 4B and four times at the 8B across
 the runs of this paper, solving 20 to 24 and 25 to 29 tasks within five attempts: differences of a few tasks between rows of

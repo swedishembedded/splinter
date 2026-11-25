@@ -1,7 +1,7 @@
 \section{Reproducing the results}\label{app:repro}
 Everything below runs on one machine with four CUDA GPUs of 96\,GB (GH200) and rebuilds every number from released tasks
 and traces. Nothing depends on state kept between runs: the work directory may be lost and rebuilt, and rebuilding this
-study's work directory after a machine restart reproduced the 4B adapter's final training loss (0.3117) exactly.
+study's work directory after a machine restart reproduced the 4B adapter's final training loss to four decimals (\replicationLossFirst{} and \replicationLossRebuilt{}).
 
 \paragraph{Artifacts.} Tasks: the compiled Harbor tasks of the Vim course, \path{swedishembedded/vim-headless-mastery}
 (168 practice and 100 exam tasks; the 60 composite tasks are the family \code{course-composite} of the task repository's
@@ -23,7 +23,8 @@ scripts/workspace-init.sh --dir WS \
     --records swedishembedded/vim-headless-mastery-sft-g2 --records-config full
 # 2. base-model baseline on the practice tasks (4 attempts each)
 WS/run.sh recipes/vim-base-train-qwen3-4b.yaml gpu0
-# 3. train on the records, promote on the practice tasks, measure on the exams
+# 3. train the round-one adapter and promote it as the champion (the adapter later rounds
+#    start from and are compared with) on the practice tasks; measure it on the exams
 WS/run.sh recipes/vim-sft-qwen3-4b-champion.yaml gpu0
 WS/run.sh --fork vim-sft-qwen3-4b-champion recipes/vim-sft-qwen3-4b-full.yaml gpu0
 # 4. round two: the adapter attempts the practice tasks, the teacher continues its failures

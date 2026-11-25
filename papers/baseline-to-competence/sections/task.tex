@@ -12,17 +12,20 @@ top-k 20 for every model and arm.
 independent agent that never read the exams, and an audit found no identical request and a maximum token overlap of
 0.29 with any exam. The 100 \emph{exams} are outcome-only requests that combine several ideas on files no practice or
 composite task shows, in families by material (C source, configuration, logs, low-level code, markup, multi-file edits,
-prose, Python, Rust and Go, shell and build files, and others). Exam tasks, trajectories and results are never read for
-training, for choosing a recipe or for choosing a checkpoint.
+prose, Python, Rust and Go, shell and build files, and others). Exam tasks and trajectories are never read for
+training, and exam results are not used to choose a checkpoint.
 
 \paragraph{Measurement.} A model is attempted once on each of the 100 exams. The tasks it fails are attempted again,
 up to four more times, and a task counts as solved when any attempt passed. We report \emph{pass@1}, the tasks solved by
 the first attempt, and \emph{solved within five}, which counts a pass in any of up to five attempts; both arms of a
-comparison get the same chances. A candidate is compared with the base model it was trained from by the exact one-sided
+comparison get the same chances. A slot is the attempt of one task by one arm; it counts when the attempt ended with a
+grade, and a slot that never counted after the infrastructure's retries is reported as uncounted and left out of the paired
+test. Intervals are 95\% Wilson intervals. A candidate is compared with the base model it was trained from by the exact one-sided
 paired sign test over tasks (wins and losses; ties are uninformative) at $\alpha=0.05$. A candidate's arm is valid only when every slot counts and at most 2\% of its attempts end by an infrastructure timeout
 (a run that hit the wall clock before its model ever answered); an arm that fails this is not reported as a result. The
-recipes are fixed before the exams are run. Exam results are not used to choose a checkpoint or a hyperparameter inside a
-recipe; the one recipe change made after seeing results is stated in \cref{sec:discussion}.
+recipes are fixed before the exams are run; the one recipe change made after seeing an exam result is stated in
+\cref{sec:discussion}. The 27B model appears once more, as a student: an adapter trained on the published teacher records is
+measured like the others (attempts are its unit in the paired test).
 
 \paragraph{Models.} Qwen3-0.6B, Qwen3-4B and Qwen3-8B \citep{qwen3} are the students, each trained as a LoRA
 adapter \citep{lora} on a frozen base. Qwen3.8-27B-FP8 is the teacher. One GH200 (96\,GB) serves and trains each

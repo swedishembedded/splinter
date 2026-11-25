@@ -1,4 +1,4 @@
-model,steps,kl_median,clip_median
-qwen3-4b,200,0.035,0.069
-qwen3-8b,200,0.027,0.066
-qwen3-4b-strong,400,0.056,0.126
+model,steps,kl_median,clip_median,loop_percent,repeat_percent
+qwen3-4b,200,0.035,0.069,100,50
+qwen3-8b,200,0.027,0.066,100,50
+qwen3-4b-strong,400,0.056,0.126,200,100

@@ -25,7 +25,7 @@
 
 \paragraph{Records.} A record is one complete trajectory under the system prompt and tool schema the model is served,
 every assistant turn supervised, in the form the model's chat template renders. Only trajectories the grader passed
-become records. The first records are a teacher's verified solutions of the practice tasks, almost all by the 27B model.
+become records. The first records are verified solutions of the practice tasks, almost all by the 27B teacher.
 
 \paragraph{The student's own solutions.} The trained adapter attempts every practice and composite task four times at
 the evaluation sampling settings (the 4B and 8B a second time at temperature 1.0 for variety). Each verified pass is a candidate record. These records are on-policy, so they teach
@@ -44,13 +44,17 @@ continued from their failed attempts too, so recovery data covers partial as wel
 fingerprint is the sequence of tool calls (tool name and whitespace-normalised arguments, ignoring the free-text intent
 argument), and a record whose fingerprint the task already has is dropped; at most twelve records per task are kept (sixteen in the second round). The
 split is by whole task: roughly one tenth of tasks new to the set are held out for validation, and a task keeps its side.
-Every record carries the model that produced it (\cref{tab:data}).
+Every record carries the model that produced it (\cref{tab:data}). The set before the second round is the
+\emph{round-one set} (\integrationTrainBefore{} training records) and the adapter trained on it the \emph{round-one adapter}; the
+set after it (\integrationTrainAfter{}) and its adapter are \emph{round two}. Of \integrationAdmitted{} admitted records,
+976 went to training and 85 to validation.
 
 \begin{table}[t]
 \centering\small
 \input{data-table}
-\caption{The training set by the model that produced each record. Teacher records are verified solutions, the
-  adapters' records are their own verified attempts.}\label{tab:data}
+\caption{The round-two training set. Teacher continuations of an
+  adapter's failures are attributed to the teacher; an adapter's row is its own verified attempts (\dataTeacherPct{}\% of the
+  training records are the teacher's); the DeepSeek records are 43 solutions of tasks the teacher never solved.}\label{tab:data}
 \end{table}
 
 \paragraph{Supervised training.} A LoRA adapter of rank 16 and alpha 32 is trained for up to 600 optimiser steps of four records each, learning

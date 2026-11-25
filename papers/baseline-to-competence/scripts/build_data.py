@@ -66,7 +66,14 @@ def main(data, out):
                 m.append(macro(f"train{key}Pct", f"{100 * int(r['passed']) / int(r['trials']):.0f}"))
     for r in rows(data / "optimiser.csv"):
         key = NAMES[r["model"]]
-        m += [macro(f"optimiser{key}Kl", r["kl_median"]), macro(f"optimiser{key}Clip", f"{100 * float(r['clip_median']):.0f}")]
+        m += [macro(f"optimiser{key}Kl", r["kl_median"]), macro(f"optimiser{key}Clip", f"{100 * float(r['clip_median']):.0f}"),
+              macro(f"optimiser{key}Loop", r["loop_percent"]), macro(f"optimiser{key}Repeat", r["repeat_percent"])]
+    for r in rows(data / "uncounted.csv"):
+        m.append(macro(f"uncounted{NAMES[r['model']]}{cap(r['arm'])}", r["slots"]))
+    for r in rows(data / "replication.csv"):
+        m.append(macro("replication" + "".join(cap(w) for w in r["name"].split("_")), r["value"]))
+    teacher = int(comp[0]["train"])
+    m.append(macro("dataTeacherPct", f"{100 * teacher / sum(int(r['train']) for r in comp):.0f}"))
     rec = rows(data / "recovery.csv")
     tot = {k: sum(int(r[k]) for r in rec) for k in ("attempts", "passes", "continued", "solved")}
     for k, v in tot.items():
@@ -87,9 +94,9 @@ def main(data, out):
     # the stage-by-stage exam table: pass@1, solved within five, loop-stopped share, repeated-call share
     beh = {(r["model"], r["arm"]): r for r in rows(data / "behaviour.csv") if r["set"] == "exam"}
     ex = {(r["model"], r["arm"]): r for r in exams}
-    stages = [("base", "base model"), ("full", "adapter, full set"), ("rtworef", "adapter, full set$^{\\dagger}$"),
-              ("rtwo", "adapter, integrated set$^{\\dagger}$"), ("pgref", "adapter, full set$^{\\ddagger}$"),
-              ("pg", "adapter + loop-penalised policy gradient$^{\\ddagger}$")]
+    stages = [("base", "base model"), ("full", "round-one adapter"), ("rtworef", "round-one adapter$^{\\dagger}$"),
+              ("rtwo", "round-two adapter$^{\\dagger}$"), ("pgref", "round-one adapter$^{\\ddagger}$"),
+              ("pg", "round-one adapter + loop penalty$^{\\ddagger}$")]
     lines = []
     for model in ("qwen3-0.6b", "qwen3-4b", "qwen3-8b"):
         first = True

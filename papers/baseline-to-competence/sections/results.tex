@@ -1,20 +1,20 @@
 \section{Results}\label{sec:results}
 \subsection{From baseline to competence}
-The base models solve none of the 100 exams, with four reruns of every failed task, at 0.6B, 4B and 8B
-(\cref{fig:exam}). After training on the verified set the 4B adapter solves \examFourFullOne{} tasks on the first
+The base models solve none of the counted slots of the 100 exams, with four reruns of every failed task, at 0.6B, 4B and 8B
+(\cref{fig:exam}); \uncountedFourBase{} base slots at 4B and \uncountedEightBase{} at 8B never counted. After training on the round-one set the 4B adapter solves \examFourFullOne{} tasks on the first
 attempt and \examFourFullFive{} within five attempts (95\% interval \examFourFullFiveLo--\examFourFullFiveHi{}\%), and
 the 8B adapter \examEightFullOne{} and \examEightFullFive{} (\examEightFullFiveLo--\examEightFullFiveHi{}\%). Over the
 tasks both arms counted, the paired sign test finds \winsFourFull{} wins and \lossesFourFull{} losses at 4B and
 \winsEightFull{} wins and \lossesEightFull{} losses at 8B (one-sided $p$ \pFourFull{} and \pEightFull{}). The 0.6B
-adapter solves \examZeroFullFive{} task within five attempts: it does not clear the capability floor of this task,
-although on the practice tasks it goes from \trainZeroBasePassed{} to \trainZeroFullPassed{} passes in
+adapter solves \examZeroFullFive{} task within five attempts, so we treat that size as not reaching the exams with this tool
+and data, although on the practice tasks it goes from \trainZeroBasePassed{} to \trainZeroFullPassed{} passes in
 \trainZeroBaseTrials{} attempts. On the practice tasks the 4B base passes \trainFourBasePassed{} of
 \trainFourBaseTrials{} attempts and its adapter \trainFourFullPassed{}; the 8B base \trainEightBasePassed{} and its
 adapter \trainEightFullPassed{} (\cref{fig:train}). \Cref{tab:stages} lists every stage and \cref{fig:loss} the held-out loss of training.
 
-An independent measurement of an adapter trained the same way on the same records, made before a machine restart,
-agrees on solved-within-five (4B \examFourFirstFive{}, 8B \examEightFirstFive{}) and differs on pass@1 (4B
-\examFourFirstOne{}, 8B \examEightFirstOne{}): the first attempt of 100 tasks moved by four tasks at 4B and eleven at 8B between
+A pre-restart measurement of an adapter trained the same way on the same records solved \examFourFirstFive{} (4B) and
+\examEightFirstFive{} (8B) within five attempts against \examFourFullFive{} and \examEightFullFive{}, and \examFourFirstOne{} and
+\examEightFirstOne{} on the first attempt against \examFourFullOne{} and \examEightFullOne{}: the first attempt of 100 tasks moved by four tasks at 4B and eleven at 8B between
 measurements, and we therefore treat solved-within-five as the measurement and pass@1 as a noisy companion.
 
 \begin{figure}[t]
@@ -33,7 +33,7 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \end{groupplot}
 \end{tikzpicture}
 \caption{Held-out exams, 100 tasks. The base models solve none, even with four reruns of every failed task. The adapters
-  were trained on the full set; pass@1 is the first attempt of each task.}\label{fig:exam}
+  were trained on the round-one set; pass@1 is the first attempt of each task.}\label{fig:exam}
 \end{figure}
 
 \begin{figure}[t]
@@ -45,16 +45,15 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \addplot[okGrey, thick, mark=square*, mark size=1.6pt] table[x=k,y=base] {withink-four.dat};
 \addplot[okBlue, thick, mark=*, mark size=1.6pt] table[x=k,y=full] {withink-four.dat};
 \addplot[okOrange, thick, dashed, mark=triangle*, mark size=2pt] table[x=k,y=first] {withink-four.dat};
-\legend{base, adapter, first measurement}
+\legend{base, adapter, pre-restart measurement}
 \nextgroupplot[title={8B}]
 \addplot[okGrey, thick, mark=square*, mark size=1.6pt] table[x=k,y=base] {withink-eight.dat};
 \addplot[okBlue, thick, mark=*, mark size=1.6pt] table[x=k,y=full] {withink-eight.dat};
 \addplot[okOrange, thick, dashed, mark=triangle*, mark size=2pt] table[x=k,y=first] {withink-eight.dat};
 \end{groupplot}
 \end{tikzpicture}
-\caption{Exam tasks solved as the number of allowed attempts grows (the first attempt, then reruns of the failed tasks). The dashed curve is an independent measurement of
-  an adapter trained the same way on the same records before a machine restart; the two agree on solved-within-five and
-  differ on pass@1.}\label{fig:withink}
+\caption{Exam tasks solved as the number of allowed attempts grows (the first attempt, then reruns of the failed tasks). The dashed curve is a pre-restart measurement of an adapter trained the same way on the same records: it differs by
+  four tasks at 4B and two at 8B within five attempts, and by four and eleven on pass@1.}\label{fig:withink}
 \end{figure}
 
 \begin{figure}[t]
@@ -84,7 +83,7 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \legend{0.6B, 4B, 8B, 4B integrated, 8B integrated}
 \end{axis}
 \end{tikzpicture}
-\caption{Held-out loss while training, step 0 the base model. Solid: the full set; dashed: the integrated set. The
+\caption{Held-out loss while training, step 0 the base model. Solid: the round-one set; dashed: the round-two set. The
   held-out records are whole tasks the training set does not contain.}\label{fig:loss}
 \end{figure}
 
@@ -98,45 +97,49 @@ measurements, and we therefore treat solved-within-five as the measurement and p
 \end{table}
 
 \subsection{What the data does}
-\paragraph{Recovery data is what a small model most lacks.} The adapters were sent back at the practice tasks
+\paragraph{The teacher solved \recoverySolvedPct{}\% of the continuations it attempted.} The adapters were sent back at the practice tasks
 (\recoveryAttempts{} attempts over three sizes, \recoveryPassPct{}\% passed). The teacher read each task whose attempt
-failed, continued \recoveryContinued{} of them from the step where they went wrong, and solved \recoverySolvedPct{}\% of
-those continuations. Each failure therefore becomes verified training data that shows the student its own mistake and the call that fixes it. Of the \integrationCandidates{} candidate records the round
+failed, continued \recoveryContinued{} of those attempts from the step where they went wrong, and \recoverySolved{} of the
+continuations verified; each is training data that shows the student its own mistake and the call that fixes it. No arm of this
+study removes the continuations, so their effect on the student is not isolated. Of the \integrationCandidates{} candidate records the round
 produced, \integrationAdmitted{} were new solutions of their task; \integrationDuplicate{} repeated a tool-call sequence the
 task already had and \integrationOvercap{} exceeded the per-task cap of sixteen (\cref{tab:data}).
 
-\paragraph{Growing the training set from \integrationTrainBefore{} to \integrationTrainAfter{} records helped the 8B and not the 4B.} Trained on
-the integrated set, the 8B adapter solves \examEightRtwoFive{} tasks within five attempts against \examEightRtworefFive{}
-for the previous adapter measured in the same run (\winsEightRtwo{} wins, \lossesEightRtwo{} losses, one-sided $p$
+\paragraph{The round-two set gave the 8B a larger count that the test does not confirm, and the 4B none.} Trained on
+the round-two set (\integrationTrainBefore{} to \integrationTrainAfter{} training records), the 8B adapter solves \examEightRtwoFive{} tasks within five attempts against \examEightRtworefFive{}
+for the round-one adapter measured in the same run (\winsEightRtwo{} wins, \lossesEightRtwo{} losses, one-sided $p$
 \pEightRtwo{}); the 4B adapter solves \examFourRtwoFive{} against \examFourRtworefFive{} (\winsFourRtwo{} wins,
-\lossesFourRtwo{} losses). The 8B gain is large and its test is inconclusive at the corrected level; the 4B shows no gain.
+\lossesFourRtwo{} losses). The 8B count is higher by nine tasks but the one-sided test does not reach significance; the 4B shows no gain.
 Both are single measurements, and pass@1 at the 8B moved the other way (\examEightRtwoOne{} against
 \examEightRtworefOne{}).
 
 \subsection{How the models fail}
-The most common failure of the base models that we measure is to repeat a failed call. After a Vim error, \behaviourFourBaseExamRepeatPct{}\%
+After a Vim error the base models most often repeat the failed call: \behaviourFourBaseExamRepeatPct{}\%
 of the 4B base's next calls and \behaviourEightBaseExamRepeatPct{}\% of the 8B base's repeat the call that just failed
 (\behaviourZeroBaseExamRepeatPct{}\% at 0.6B). Training cuts this to \behaviourFourFullExamRepeatPct{}\% at 4B and
 \behaviourEightFullExamRepeatPct{}\% at 8B, the 0.6B stays at \behaviourZeroFullExamRepeatPct{}\%. A run that repeats
-itself is ended by the loop watchdog after six identical calls: \behaviourFourFullExamLoopPct{}\% of the 4B adapter's exam
-attempts and \behaviourEightFullExamLoopPct{}\% of the 8B adapter's still end that way
-(\behaviourFourBaseExamLoopPct{}\% and \behaviourEightBaseExamLoopPct{}\% for the bases). Runs that never leave a loop are therefore a large share of the failures that remain; we did not classify the rest.
+itself is ended by the loop watchdog after six identical calls. That share did not fall with training:
+\behaviourFourFullExamLoopPct{}\% of the 4B adapter's exam attempts and \behaviourEightFullExamLoopPct{}\% of the 8B adapter's end
+that way, against \behaviourFourBaseExamLoopPct{}\% and \behaviourEightBaseExamLoopPct{}\% for the bases, although the share of
+repeated failed calls did. Runs that never leave a loop are therefore a large share of the failures that remain; we did not classify the rest.
 
 \subsection{A loop penalty in the policy gradient}
-Starting from the first adapter, a clipped policy gradient on its own graded attempts (eight attempts of every practice
+Starting from the round-one adapter, a clipped policy gradient on its own graded attempts (eight attempts of every practice
 task at temperature 1.0), with the penalties of \cref{sec:method} (a full pass's reward for a loop-stopped attempt, half a
 pass for repeating failed calls), moved the policy (median per-step KL to its starting adapter \optimiserFourKl{} at 4B and
-\optimiserEightKl{} at 8B, median clip fraction \optimiserFourClip{}\% and \optimiserEightClip{}\%). It did not reduce looping on the exams in any useful way. Against the adapter it started from, the share of exam attempts
+\optimiserEightKl{} at 8B, median clip fraction \optimiserFourClip{}\% and \optimiserEightClip{}\%). Against the adapter it started from, the share of exam attempts
 ended by the loop watchdog is \behaviourFourPgExamLoopPct{}\% against \behaviourFourPgrefExamLoopPct{}\% at 4B and
-\behaviourEightPgExamLoopPct{}\% against \behaviourEightPgrefExamLoopPct{}\% at 8B; the share of repeated failed calls is
-\behaviourFourPgExamRepeatPct{}\% against \behaviourFourPgrefExamRepeatPct{}\% and
+\behaviourEightPgExamLoopPct{}\% against \behaviourEightPgrefExamLoopPct{}\% at 8B; the share of repeated failed calls, which the penalty
+targets directly, rose at both sizes: \behaviourFourPgExamRepeatPct{}\% against \behaviourFourPgrefExamRepeatPct{}\% and
 \behaviourEightPgExamRepeatPct{}\% against \behaviourEightPgrefExamRepeatPct{}\%. The 4B solves \examFourPgFive{} tasks
-within five attempts against \examFourPgrefFive{} (no change). The 8B solves \examEightPgFive{} against
+within five attempts against \examFourPgrefFive{}. The 8B solves \examEightPgFive{} against
 \examEightPgrefFive{} (\winsEightPg{} wins, \lossesEightPg{} losses, $p$ \pEightPg{}), a gain that comes with a loop share only four points lower, so it is not evidence that the penalty works.
-A penalty twice as strong, trained for twice as many steps (median KL \optimiserFourStrongKl{}, clip fraction
+A penalty twice as strong (\optimiserFourStrongLoop{}\% and \optimiserFourStrongRepeat{}\% of a pass's reward instead of
+\optimiserFourLoop{}\% and \optimiserFourRepeat{}\%), trained for twice as many steps (median KL \optimiserFourStrongKl{}, clip fraction
 \optimiserFourStrongClip{}\%), raised the loop-stopped share of the 4B to \behaviourFourPgdExamLoopPct{}\% against
 \behaviourFourPgdrefExamLoopPct{}\% for the adapter it started from and solved \examFourPgdFive{} tasks within five attempts
-against \examFourPgdrefFive{} (\winsFourPgd{} wins, \lossesFourPgd{} losses).
+against \examFourPgdrefFive{} (\winsFourPgd{} wins, \lossesFourPgd{} losses); its first-attempt count fell from
+\examFourPgdrefOne{} to \examFourPgdOne{}.
 On the practice tasks looping is rare (\behaviourFourFullTrainLoopPct{}\% of the 4B adapter's attempts and
 \behaviourEightFullTrainLoopPct{}\% of the 8B's, against about 30\% on the exams), which leaves the penalty few
 examples of the behaviour it targets.

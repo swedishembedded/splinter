@@ -3,7 +3,7 @@ A small language model given a text editor as its only tool fails at editing tas
 It chooses a plausible command, the editor reports an error, and the model sends the same command again until its
 budget is gone. This paper is about taking such a model from that baseline to competence: which data, collected how,
 and trained with which signal, turn a model that solves none of 100 held-out editing tasks into one that solves a
-quarter to a third of them.
+quarter to over a third of them.
 
 The task is editing files with headless Vim. A request names an outcome (``make every status line in the log use the
 new field order''), the agent has one tool that runs Ex commands in a fresh Vim and returns what happened, and a

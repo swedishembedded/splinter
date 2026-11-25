@@ -1,0 +1,4 @@
+model,arm,slots
+qwen3-0.6b,full,1
+qwen3-4b,base,10
+qwen3-8b,base,23
