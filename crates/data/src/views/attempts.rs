@@ -27,7 +27,8 @@
 //!
 //! A verified attempt belongs to a group: one version of one task attempted by
 //! one policy, read from the deciding verdict's evidence (the trial, the task,
-//! its version and the model, as the bench intake records them) and otherwise
+//! its version (or, when it states none, the task's content digest, as the
+//! factory records it) and the model, as the bench intake records them) and otherwise
 //! from the experience itself (its task, its policy or solver). Its name in
 //! the group is its trial, else its attempt number, else its experience id.
 //! [`identify`] does this for every view, the policy-gradient view included,
@@ -58,7 +59,8 @@ const INFRASTRUCTURE_STATUSES: [&str; 3] = ["environment_error", "model_error", 
 pub(crate) struct Identity<'a> {
     /// The task.
     pub(crate) task: String,
-    /// The task's version; empty when the verdict names none.
+    /// The task's version: the verdict's, else its content digest; empty
+    /// when it names neither.
     pub(crate) version: String,
     /// The policy that made the attempt: the verdict's model, else the
     /// experience's policy, else its solver (a solver with no separate policy
@@ -128,7 +130,12 @@ pub(crate) fn identify(entry: &Entry, decision: Decision) -> Result<Identity<'_>
     };
     Ok(Identity {
         task,
-        version: text("/task/version").unwrap_or_default(),
+        // A task the verdict gives no version (the factory names its tasks by
+        // id and content digest) is versioned by its content: a revised task
+        // under the same id is another task, never compared with the old one.
+        version: text("/task/version")
+            .or_else(|| text("/task/digest"))
+            .unwrap_or_default(),
         policy: text("/model")
             .or_else(|| provenance.policy.clone())
             .unwrap_or_else(|| provenance.solver.clone()),

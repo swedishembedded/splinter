@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (a policy-gradient reward that discourages looping)
 - `dataset.project` with `objective: policy-gradient` takes `reward: { penalties_percent: {...} }`. Each attempt's verdict now also carries `loop` (the agent's loop watchdog ended it) and `repeat_after_error` (the share of calls after a failed call that repeated it), read from its files, and the named metrics lessen its reward whether or not it passed.
+### Fixed (a revised task is never compared with its old self)
+- The preference, feedback and policy-gradient views compare attempts within one version of one task by one policy, but the factory records its tasks by id and content digest with no version, so attempts at two revisions of one task id fell into one group. A verdict that states no version is now versioned by the task's content digest. The groups, and their digests, of factory datasets change accordingly.
+
 ### Fixed (a fact's value keeps the point in it)
 - The fact reader behind `document-questions` and claim quotes cut a sentence at every full stop, so `The relief setting of valve L1 is 3.6 bar.` was read as the value `3` and a firmware version `v1.2.7` as `v1`. The plugin then asked for, and graded against, a fact the document never states. A full stop now ends a sentence only when whitespace or the end of the line follows it. Questions compiled from such documents change, so the environments built from them should be generated again.
 

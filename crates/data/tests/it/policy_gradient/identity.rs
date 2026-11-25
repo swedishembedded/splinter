@@ -111,3 +111,46 @@ fn the_views_name_one_trial_by_one_group() {
         );
     }
 }
+
+/// The factory's verdict of a trial: its task by id and content digest,
+/// no version (`crates/factory/src/run/corpus.rs`).
+fn factory_evidence(trial: &Trial, digest: &str) -> Value {
+    json!({
+        "trial": trial.name,
+        "task": {"id": "cad/bracket", "digest": digest},
+        "model": trial.model,
+        "metrics": {},
+    })
+}
+
+#[test]
+fn attempts_at_two_revisions_of_one_task_are_never_compared() {
+    let pass = Trial::pass("t1");
+    let fail = Trial::fail("t2", &[]);
+    let revised = |digests: [&str; 2]| {
+        let mut corpus = Corpus::new();
+        add(
+            &mut corpus,
+            &pass,
+            Some(factory_evidence(&pass, digests[0])),
+        );
+        add(
+            &mut corpus,
+            &fail,
+            Some(factory_evidence(&fail, digests[1])),
+        );
+        view().project(&corpus).unwrap()
+    };
+    let same = revised(["blake3:aaaa", "blake3:aaaa"]);
+    assert_eq!(same.groups.len(), 1, "one revision: one group");
+    assert!(!same.records.is_empty());
+    let other = revised(["blake3:aaaa", "blake3:bbbb"]);
+    assert_eq!(
+        other.groups.len(),
+        2,
+        "two revisions are two tasks: {:?}",
+        other.groups
+    );
+    assert!(other.records.is_empty(), "nothing to compare within either");
+    assert_eq!(other.count(Exclusion::NoGroupSignal), 2);
+}

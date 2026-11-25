@@ -1393,3 +1393,15 @@ gaps:
   status: fixed
   resolution: a full stop ends a sentence only when whitespace or the end of the line follows it; specified by
     goal::facts::tests::a_value_with_a_point_in_it_is_read_whole and the labelled golden; mutant facts-cut-at-every-point
+- id: G-NEW-21
+  source_id: null
+  where: crates/data/src/views/attempts.rs:identify (the factory's evidence, crates/factory/src/run/corpus.rs)
+  what: 'Attempts are compared within a group, one version of one task by one policy, but the factory names its tasks by
+    id and content digest and states no version, so every factory trial grouped under the version "". Attempts at two
+    revisions of one task id were compared as one group: a pass of the old task and a fail of the edited one became a
+    preference pair and a policy-gradient advantage (found by the 16D audit).'
+  severity: medium
+  confidence: high (reproduced by policy_gradient::identity::attempts_at_two_revisions_of_one_task_are_never_compared)
+  status: fixed
+  resolution: a verdict that states no version is versioned by the task's content digest, for every view that groups
+    attempts; mutant task-revisions-share-a-group

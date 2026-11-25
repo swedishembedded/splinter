@@ -114,3 +114,4 @@ recorded-replies-compared-without-calls	views	crates/data/src/views/preference.r
 failed-repair-paired	views	crates/data/src/views/preference.rs	                p.attempt.passed\n            })\n            .collect();	                true\n            })\n            .collect();	splinter-data	it	attempt_pairs::repairs
 eval-decides-without-the-test	eval	crates/factory/src/run/eval.rs	} else if p < alpha && difference >= min_difference && difference > 0.0 {	} else if p <= 1.0 && difference >= min_difference && difference > 0.0 {	splinter-factory	it	golden_statistics
 eval-losses-uncounted	eval	crates/factory/src/run/eval.rs	losses += usize::from(b && !c);	losses += 0;	splinter-factory	it	golden_statistics
+task-revisions-share-a-group	views	crates/data/src/views/attempts.rs	            .or_else(|| text("/task/digest"))\n	\n	splinter-data	it	policy_gradient::identity
