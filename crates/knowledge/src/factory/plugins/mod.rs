@@ -16,7 +16,13 @@
 //! | [`REPOSITORY_MUTANTS`] | fix faults mutated into real projects with their own suites | the project's whole suite with hidden tests, with a canary |
 //! | [`FIRMWARE_EMULATOR`] | fix faults in a Cortex-M33 firmware library | the emulator's console output against a reference model, on hidden inputs |
 //! | [`DOCUMENT_QUESTIONS`] | answer questions a document grounds without it | a number computed from, or a value stated by, the document |
+//! | [`CONTEXTUAL_BANDIT`] | choose the action a context calls for, from rewards alone | a reward table known for every action |
+//!
+//! The contextual bandit is not among [`builtin`]'s: it validates learning
+//! methods against exact expectations, and admission rightly refuses it as a
+//! campaign environment, since its few answers are guessable by design.
 
+pub mod contextual_bandit;
 mod db_tools;
 pub mod db_workflow;
 pub mod document_questions;
@@ -44,6 +50,8 @@ pub const REPOSITORY_MUTANTS: &str = "repository-mutants";
 pub const FIRMWARE_EMULATOR: &str = "firmware-emulator";
 /// Questions about a document, graded against its text.
 pub const DOCUMENT_QUESTIONS: &str = "document-questions";
+/// A finite contextual bandit with a known reward for every action.
+pub const CONTEXTUAL_BANDIT: &str = "contextual-bandit";
 
 /// Where the plugins that read material from disk find it.
 #[derive(Clone, Debug, Default)]

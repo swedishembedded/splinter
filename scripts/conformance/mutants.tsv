@@ -119,3 +119,5 @@ ref-published-before-its-manifest	storage	crates/expdb/src/manifest/refs.rs	    
 forgetting-window-includes-last	statistics	crates/eval/src/continual.rs	let peak = (t.learned_at..last)	let peak = (t.learned_at..=last)	splinter-eval	it	external_continual
 forward-transfer-after-learning	statistics	crates/eval/src/continual.rs	Some((t.unit.as_str(), m.cell(t.learned_at - 1, i)? - t.base?))	Some((t.unit.as_str(), m.cell(t.learned_at, i)? - t.base?))	splinter-eval	it	external_continual
 continual-pooled-over-tasks	statistics	crates/eval/src/continual.rs	value: unit_values.iter().sum::<f64>() / unit_values.len() as f64,	value: per_task.iter().map(|(_, v)| v).sum::<f64>() / per_task.len() as f64,	splinter-eval	it	external_continual
+bandit-pays-the-first-of-many	plugins	crates/knowledge/src/factory/plugins/contextual_bandit/verify.py	if len(lines) == 1 else 0.0	if lines else 0.0	splinter-knowledge	it	contextual_bandit::
+bandit-one-sided-neighbour	plugins	crates/knowledge/src/factory/plugins/contextual_bandit.rs	} else if graded && (distance == 1 || distance == actions - 1) {	} else if graded && distance == 1 {	splinter-knowledge	it	contextual_bandit::

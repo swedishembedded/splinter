@@ -235,6 +235,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   specified), replay's group-less records, the token meter's batch, the inline means and variances (each
   denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
   only through the source store).
+- deterministic learning environments (12A): a finite contextual bandit (`contextual-bandit`), every action's reward
+  known and paid exactly by its verifier (12D's enumeration), beside the tool-use (`db-workflow`), tiny-repository
+  (`repository-bugs`, `repository-mutants`) and synthetic-language (`goal::synthetic`) generators; training on them,
+  and the update-direction checks of 12D, need brain.
 - continual-learning metrics (12E's comparison with an independent numpy implementation): ACC, backward and
   forward transfer, forgetting, learning gain and the gain curve agree over 400 matrices with missing cells; the
   rest of 12E (training A, B, C in sequence) needs brain.
@@ -255,5 +259,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   header on plain conversations (G-NEW-03, brain's); a Python
   answer can forge what its checks observe (G-NEW-19).
 - Not built: the task-kind matrix of the
-  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), deterministic learning environments and negative controls (12A-12E).
+  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), and the learning runs, negative controls and update checks of 12B-12E (brain).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

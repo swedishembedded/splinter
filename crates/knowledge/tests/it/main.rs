@@ -19,6 +19,7 @@ mod claim_forms;
 mod claim_gates;
 mod claim_supersession;
 mod claim_task;
+mod contextual_bandit;
 mod denoise_task;
 mod document_reference;
 mod external_bm25;
