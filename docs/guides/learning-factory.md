@@ -651,8 +651,20 @@ compiles its collection evaluates on the same compiled tasks:
   holds the online statistics, `versions` (every published version with the run-level identity
   brain names for it: `lineage {run, epoch, update, base_digest, adapter_digest}`) and the stage's
   `revisions` (below), and `experiences.jsonl` one line per committed group. The run
-  needs the agent runtime's online rollouts (the SDK's embedding gives them; the command
-  line does not yet).
+  runs from the command line against a running `brain serve --openai --training` that serves its
+  base with an adapter bank:
+  ```bash
+  splinter run online.yaml --out runs/online --brain-endpoint http://127.0.0.1:8813/v1 \
+    --brain-key-file brain.key --brain-artifact-store artifacts --brain-adapter-dir adapters
+  ```
+  Its rollouts run in this process as sven sessions against the version the job serves under the
+  id it publishes (asked through brain's driver, so every request returns its policy trace); a
+  recipe that executes no attempts needs no execution worker. The stage records its job beside the
+  run's state; a resumed run cancels the job its stopped controller left running (brain starts no
+  other job of a run while one runs), and a server that restarts under the run is the run's next
+  epoch, to which the groups it had not committed are sent again. `scripts/online/cpu-stack.sh`
+  (`make test/online`) runs this end to end on the CPU with a toy model over `tasks/toy-answers`,
+  killing the controller and brain mid-run and checking the products.
 - **Replay** (`model.train` with `replay`). A candidate trained on new chat records can rehearse
   earlier datasets' records beside them, `replay_share` of the draws (the plain union when
   unset), so what it learned before is kept: `inputs: { dataset: $stages.sft.dataset, replay:

@@ -137,10 +137,28 @@ re-sent until brain reports it committed (applied is not durable).
       resumed up to 8 times. Product: `candidate.json` (the newest published version a checkpoint holds,
       load-checked), `report.json` (online statistics, learner telemetry, tokens generated and trained,
       experience utilisation, useful tokens per second), `experiences.jsonl` (committed groups). Its candidate
-      goes to `evaluation` unchanged (the evaluation's base lookup now takes either training operation). Open:
-      the command line does not yet hand a factory run its online rollouts (`Services::online` is `None` there;
-      it needs a context and the served-id-to-model mapping for brain), and the candidate is the last committed
-      published version (a finish that commits steps past the last publication is not served yet).
+      goes to `evaluation` unchanged (the evaluation's base lookup now takes either training operation). `splinter
+      run` hands it its rollouts (`splinter_sdk::factory::online_rollouts`, sven sessions through brain's driver
+      against the id the job publishes). The stage records its job (`stream-job.json` beside the run's state) and a
+      resumed run cancels the job its stopped controller left (brain starts no other job of a run while one runs;
+      knowledge 221); a job is asked for again while the server is busy or out of reach, an offer the server does
+      not answer is made again (both for up to five minutes), and a job that continues the run counts the version it
+      publishes from its checkpoint as committed. Open: the candidate is the last committed published version (a
+      finish that commits steps past the last publication is not served yet); a continued job on a server that
+      still serves the run publishes nothing at its start, so a last epoch that trains no step finds no committed
+      version (brain naming the checkpoint's version in the `stream` frame would settle it); the report's learner
+      telemetry covers the last controller's leg only (the controller's own counters are rebuilt from the ledger).
+- [x] The real stack on the CPU (lane agrpo-e2e2, `make test/online`, `scripts/online/cpu-stack.sh`): a toy qwen3
+      base (`sample-models-qwen3 toy`), `brain serve --openai --training`, tasks.pin -> train.online over
+      `tasks/toy-answers` (answered in the reply, `[agent] answer_file`), the controller killed once a group is
+      committed and resumed, brain killed with groups in flight and started again (the in-stage restart takes the
+      run's next epoch and sends again what it had not committed). Checked by the script: versions published and a
+      reply naming the served version, applied and committed receipts, no group committed twice nor applied after
+      its commit, the experiences equal to the committed groups, the report's counters adding up. Both estimators
+      pass (clipped; score-centred with `top_logprobs: 2`). Findings fixed on the way: brain's step figures are
+      floats, which the learner read as no tokens (knowledge 220); brain held the CPU lane for the whole stream job
+      and refused a byte-level toy's records (brain knowledge 584, 585). Not covered: dataset.rlvr and evaluation
+      (they need a Harbor worker), a GPU.
 - [x] The GPU-free toy end to end (A31): `splinter-pipelines/it/online_factory`: dataset.rlvr -> train.online ->
       evaluation on a scripted brain streaming job and a scripted sven policy, the controller killed mid-stage and
       resumed, no group trained twice, the experience manifest equal to the committed groups, the candidate

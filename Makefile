@@ -16,6 +16,12 @@ BRAIN_DIR ?= ../brain
 
 # The binaries and model store `make test/e2e/...` runs against.
 BRAIN_BIN ?= $(BRAIN_DIR)/target/release/brain
+# brain's qwen3 sample (`qwen3 toy` writes the toy base `make test/online` trains).
+QWEN3_BIN ?= $(BRAIN_DIR)/target/release/sample-models-qwen3
+# Where and on which port `make test/online` runs (outside the shared servers' 8788-8791).
+ONLINE_WORK ?= $(CURDIR)/target/online-cpu
+ONLINE_PORT ?= 8813
+ESTIMATOR ?= clipped
 SVEN_BIN ?= $(SVEN_DIR)/target/release/sven
 SPLINTER_BIN ?= target/release/splinter
 MODELS_DIR ?= $(HOME)/.local/share/brain/models
@@ -121,6 +127,11 @@ test/families:
 ## test/methods - one falsifiable smoke per learning method (SFT, rejection sampling, DPO, GRPO, distillation, continued pretraining, test-time search, retrieval, self-play) on a toy model served by a built brain (BRAIN_BIN, with brain's qwen3 sample sample-models-qwen3 beside it) on the CPU, printed as a table of held-out scores before and after (no GPU, minutes; exit 3 means no brain binary or sample)
 test/methods:
 	bash scripts/methods/table.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
+
+## test/online - train.online end to end on the real stack on the CPU (a toy qwen3 base, brain serve with training, sven rollouts), the controller and brain each killed and resumed mid-run, the products checked (needs BRAIN_BIN, QWEN3_BIN; ONLINE_WORK, ONLINE_PORT; ESTIMATOR clipped or score-centred; minutes)
+test/online:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/cpu-stack.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)" "$(ONLINE_PORT)" "$(ESTIMATOR)"
 
 ## test/contract - lists the cross-project contract targets; runs nothing
 test/contract:
@@ -580,7 +591,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/contract test/contract/brain test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/contract test/contract/brain test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \
