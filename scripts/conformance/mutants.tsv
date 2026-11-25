@@ -103,3 +103,5 @@ fork-restitches-the-prefix	agent	crates/agent/src/correction.rs	for step in cont
 symptoms-name-one-failure	plugins	crates/knowledge/src/factory/plugins/repository_mutants.rs	for failure in &combined.failures {	for failure in combined.failures.iter().take(1) {	splinter-knowledge	it	repository_reference::
 catalogued-fault-injects-nothing	plugins	crates/knowledge/src/factory/plugins/repository_bugs.rs	replace: "        return lo\\n    return x",	replace: "        return hi\\n    return x",	splinter-knowledge	it	repository_reference::
 facts-cut-at-every-point	plugins	crates/knowledge/src/goal/facts.rs	let ends = byte == b'.' && bytes.get(at + 1).is_none_or(u8::is_ascii_whitespace);	let ends = byte == b'.';	splinter-knowledge	it	document_reference::
+retrieval-negative-is-the-positive	views	crates/data/src/views/retrieval.rs	if text != positive && !negatives.contains(&text) {	if !negatives.contains(&text) {	splinter-data	it	retrieval_triples
+retrieval-overlap-as-equality	views	crates/data/src/views/retrieval.rs	a.start < b.end && b.start < a.end	a.start == b.start && a.end == b.end	splinter-data	it	retrieval_triples
