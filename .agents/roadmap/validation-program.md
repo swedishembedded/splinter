@@ -207,8 +207,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   deadline ends kept as a timeout with its partial trajectory, two concurrent trials of one task each in their own
   tree, an eighty-call run kept whole, a command past its time limit stopped and the model told, and a crashed
   agent's report keeping its partial trajectory, its subagent's turns and Harbor's result
-  (workers/harbor/tests/test_evidence.py). Still without a spec: re-run tool calls of a continued session having no
-  duplicate effect.
+  (workers/harbor/tests/test_evidence.py), and an attempt continued from one of its steps (the fork) running the
+  student's calls into its tree once, recording each step once, and refusing a tree that already holds a replayed
+  effect (crates/agent/tests/it/fork_replay.rs). The Harbor worker's own fork is sven's `--rerun-toolcalls`, sven's
+  to specify.
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
@@ -227,5 +229,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B); a Python
   answer can forge what its checks observe (G-NEW-19).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
-  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), the rest of the scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

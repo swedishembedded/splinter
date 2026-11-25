@@ -17,6 +17,7 @@ mod chat;
 mod claims;
 mod converse;
 mod converse_tasks;
+mod fork_replay;
 mod guided_generation;
 mod harness_edit;
 mod harness_work;
