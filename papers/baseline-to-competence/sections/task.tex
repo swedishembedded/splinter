@@ -39,5 +39,6 @@ and the one arm that misses the validity rule by one slot.
 \paragraph{Models.} The students are Qwen3-0.6B, Qwen3-4B and Qwen3-8B \citep{qwen3}, each trained as a LoRA adapter
 \citep{lora} on a frozen base. The teacher is Qwen3.8-27B-FP8. One GH200 GPU (96\,GB) serves and trains each student,
 and the teacher shares a card with the student whose failures it continues. The 27B model also appears once as a
-student: an adapter trained for it on the published teacher records is measured by the same protocol, with the attempt
-instead of the task as the unit of the paired test.
+student: an adapter trained for it on the published teacher records is measured by the same protocol except that both arms
+attempt every task five times in all, with no rerun rule, and the paired test is over attempts: the attempt numbered $j$ of a task
+in one arm is paired with the attempt numbered $j$ of the same task in the other.

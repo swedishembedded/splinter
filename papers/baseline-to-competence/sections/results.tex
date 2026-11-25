@@ -59,7 +59,9 @@ same recipe moves between measurements. A replicate adapter, trained by the same
 separately built work directory and measured separately, solved \examFourFirstFive{} (4B) and \examEightFirstFive{}
 (8B) tasks within five attempts, \replicateFourFiveDiff{} and \replicateEightFiveDiff{} tasks away from the round-one
 adapter; at the first attempt it solved \examFourFirstOne{} and \examEightFirstOne{}, \replicateFourOneDiff{} and
-\replicateEightOneDiff{} tasks away (\cref{fig:withink}). Counting also the re-measurements of the round-one adapter
+\replicateEightOneDiff{} tasks away (\cref{fig:withink}). The two training runs agree: their held-out losses are equal at each
+of the \replicationCurvePoints{} evaluation points of both sizes (largest difference \replicationCurveMaxDiff{}), so the difference
+between the two exam measurements comes from the evaluation, not from the training. Counting also the re-measurements of the round-one adapter
 as the reference of later stages, the recipe was measured \roundOneFourRuns{} times at 4B and \roundOneEightRuns{}
 times at 8B and solved \roundOneFourMin{} to \roundOneFourMax{} and \roundOneEightMin{} to \roundOneEightMax{} tasks
 within five attempts. We therefore use solved within five as the main figure, report pass@1 as a noisier companion,
