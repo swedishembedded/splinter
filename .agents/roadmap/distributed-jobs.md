@@ -370,6 +370,14 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       `crates/model/tests/service.rs` (`fleet`: one step, a stand-in `srun`
       running a task per node, a failing node named, nothing left).
 
+- [x] **A server start retries a program that is still being written
+      (2026-11-25).** The one-off failure of the local-server test the open
+      list kept was `ETXTBSY`: a stand-in written by one test thread is busy
+      while a process another thread forked still holds its descriptor. It
+      failed 3 of 6 runs of `--test service` once a fleet test was added;
+      `server::spawn_when_written` retries it (50 x 10 ms), 8 of 8 passed
+      (knowledge 224).
+
 ## Decisions
 
 - The experience database and the artifact files stay the two authorities
@@ -390,16 +398,6 @@ Scope: Submitting work that runs outside the controller and reconciling it after
       scheduler programs. A real cluster run is still unproven; the adapter
       maps the scheduler's terminal states to distinct outcomes, and job
       accounting (exit codes from a scheduler) is not wired yet.
-- [ ] A local-server test failed once under load and never again:
-      `crates/model/tests/service.rs`
-      `the_server_a_run_owns_serves_the_store_..._as_wide_as_it_decodes`
-      failed in one `cargo test -p splinter-model --tests` run on n424
-      (2026-11-21, while other test binaries ran at once) and passed in 9
-      runs after, alone and with the other binaries; the panic text was not
-      kept. Suspects to rule out when it recurs: the stand-in writes its
-      arguments file with `echo > $0.args` after it is spawned, and the
-      test reads it right after `start` returns, so a slow shell could leave
-      it empty; keep the panic line.
 - [ ] `--job-launcher slurm` (sbatch) still registers a plan's ranks on
       the loopback: rank 0's node is not known at submission.
 - [ ] Artifact storage backends. Adapters and datasets are plain files at a

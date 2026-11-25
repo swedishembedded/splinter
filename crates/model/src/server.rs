@@ -232,14 +232,13 @@ pub fn start(launch: &Launch<'_>, cancel: &CancelToken) -> Result<Started, Failu
     }
     let mut command = Command::new(launch.binary);
     configure(&mut command, launch, &address, &keys, &ready);
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            Failure::Unmeasured(format!("{} could not start: {e}", launch.binary.display()))
-        })?;
+        .stderr(Stdio::piped());
+    let mut child = spawn_when_written(&mut command).map_err(|e| {
+        Failure::Unmeasured(format!("{} could not start: {e}", launch.binary.display()))
+    })?;
     let log = match launch.log {
         Some(path) => Some(
             std::fs::OpenOptions::new()
@@ -359,6 +358,27 @@ pub fn recent_output(lines: &Receiver<String>, kept: &mut Vec<String>) -> String
         remember(kept, line);
     }
     kept.join(" | ")
+}
+
+/// How many times a start that the kernel refuses with `ETXTBSY` is tried.
+const BUSY_TRIES: u32 = 50;
+
+/// `command` started, tried again while the kernel says its program is
+/// being written (`ETXTBSY`): a program written by this process (a launch
+/// script, a test's stand-in) is busy for as long as any process forked
+/// meanwhile still holds the descriptor it was written through, which lasts
+/// only until that process execs. Any other error is returned at once.
+pub(crate) fn spawn_when_written(command: &mut Command) -> std::io::Result<Child> {
+    let mut tries = 1;
+    loop {
+        match command.spawn() {
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < BUSY_TRIES => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            other => return other,
+        }
+    }
 }
 
 /// Every line the child writes, from stdout and stderr alike, each also

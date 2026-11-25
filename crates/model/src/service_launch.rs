@@ -226,11 +226,11 @@ pub fn spawn_service(launch: &ServiceLaunch<'_>) -> Result<Pending, Failure> {
     die_with_caller(&mut command, libc::SIGINT);
     let origin = format!("http://{address}");
     let program = command.get_program().to_string_lossy().into_owned();
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    let mut child = crate::server::spawn_when_written(&mut command)
         .map_err(|e| Failure::Unmeasured(format!("{program} could not start: {e}")))?;
     let log = match launch.log {
         Some(path) => Some(

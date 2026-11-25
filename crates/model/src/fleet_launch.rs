@@ -229,11 +229,11 @@ pub fn spawn_fleet(launch: &FleetLaunch<'_>) -> Result<PendingFleet, Failure> {
     // print the step's status.
     die_with_caller(&mut command, libc::SIGTERM);
     let program = command.get_program().to_string_lossy().into_owned();
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    let mut child = crate::server::spawn_when_written(&mut command)
         .map_err(|e| unmeasured(format!("{program} could not start: {e}")))?;
     let log = match launch.log {
         Some(path) => Some(
