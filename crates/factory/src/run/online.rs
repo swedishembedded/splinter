@@ -130,7 +130,8 @@ pub struct OnlineParams {
     pub max_failures: u32,
     /// The seed every rollout's draws derive from.
     pub seed: u64,
-    /// The learner's other policy-gradient settings, as brain names them.
+    /// The learner's other policy-gradient settings, as brain names them (not `thinking`: the rollouts are drawn
+    /// with thinking off, and the learner always trains that mode).
     #[serde(default)]
     pub params: Map<String, Value>,
 }
@@ -176,6 +177,11 @@ impl OnlineParams {
                 ))
             }
         }
+        if p.params.contains_key("thinking") {
+            return Err("params.thinking: the rollouts are drawn with thinking off and the learner trains that mode; \
+                 it is not a setting of an online run"
+                .into());
+        }
         if p.groups == 0 || p.publish_every == 0 {
             return Err("groups and publish_every are at least 1".into());
         }
@@ -202,6 +208,9 @@ impl OnlineParams {
     fn learner_params(&self) -> Map<String, Value> {
         let mut params = self.params.clone();
         params.insert("estimator".into(), json!(self.estimator));
+        // The rollouts ask the policy for no reasoning block, so each answer was sampled after the template's closed
+        // think block; the learner renders the prompts it scores them in the same mode.
+        params.insert("thinking".into(), json!(false));
         params
     }
 }
@@ -640,6 +649,7 @@ mod tests {
             (json!({"group_size": 1}), "group_size"),
             (json!({"temperature": 0.0}), "temperature"),
             (json!({"surprise": 1}), "unknown field"),
+            (json!({"params": {"thinking": true}}), "thinking"),
         ] {
             let refused = Online.check(&params(bad.clone())).unwrap_err();
             assert!(refused.contains(why), "{bad}: {refused}");
@@ -650,5 +660,17 @@ mod tests {
             ))
             .is_ok());
         assert_eq!(Online.model_roles(&params(json!({}))), ["policy"]);
+    }
+
+    #[test]
+    fn the_learner_trains_the_mode_the_rollouts_are_drawn_in() {
+        // The rollouts ask a local server for no reasoning block, so the policy was sampled after the template's
+        // closed think block: the learner must render each answer's prompt the same way (no-think mode), or every
+        // record's prompt ids disagree with the context it would be scored in.
+        let p = OnlineParams::of(&params(json!({"params": {"rank": 16}}))).unwrap();
+        let learner = p.learner_params();
+        assert_eq!(learner["thinking"], json!(false));
+        assert_eq!(learner["rank"], json!(16));
+        assert_eq!(learner["estimator"], json!("clipped"));
     }
 }
