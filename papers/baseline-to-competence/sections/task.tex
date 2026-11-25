@@ -1,0 +1,29 @@
+\section{The task and its measurement}\label{sec:task}
+\paragraph{Agent and tool.} The agent receives the request and one tool, which runs Ex commands in a fresh headless
+Vim on the task's files and returns Vim's output, including its error messages. A run ends when the agent stops, at 60
+turns, at 16\,384 generated tokens, or after eight minutes of wall-clock time. A watchdog ends a run whose model
+repeats the same tool call six times or the same reasoning three times. The models answer without a reasoning block
+(thinking off) and each narrates in one or two sentences before every call. Sampling is temperature 0.7, top-p 0.8,
+top-k 20 for every model and arm.
+
+\paragraph{Tasks.} Three families, each a container with a request, starting files and a hidden grading script.
+\emph{Practice} tasks (168) each teach one idea (append a line, change inside braces, record a macro).
+\emph{Composite} tasks (60) combine ideas from several chapters on material of their own; they were written by an
+independent agent that never read the exams, and an audit found no identical request and a maximum token overlap of
+0.29 with any exam. The 100 \emph{exams} are outcome-only requests that combine several ideas on files no practice or
+composite task shows, in families by material (C source, configuration, logs, low-level code, markup, multi-file edits,
+prose, Python, Rust and Go, shell and build files, and others). Exam tasks, trajectories and results are never read for
+training, for choosing a recipe or for choosing a checkpoint.
+
+\paragraph{Measurement.} A model is attempted once on each of the 100 exams. The tasks it fails are attempted again,
+up to four more times, and a task counts as solved when any attempt passed. We report \emph{pass@1}, the tasks solved by
+the first attempt, and \emph{solved within five}, which counts a pass in any of up to five attempts; both arms of a
+comparison get the same chances. A candidate is compared with the base model it was trained from by the exact one-sided
+paired sign test over tasks (wins and losses; ties are uninformative) at $\alpha=0.05$. A measurement is valid only when
+every slot counts and at most 2\% of attempts end by an infrastructure timeout (a run that hit the wall clock before
+its model ever answered); otherwise the arm is rerun at a lower concurrency before it is reported. A candidate is
+chosen by held-out loss and practice-task results and is measured on the exams once.
+
+\paragraph{Models.} Qwen3-0.6B, Qwen3-4B and Qwen3-8B \citep{qwen3} are the students, each trained as a LoRA
+adapter \citep{lora} on a frozen base. Qwen3.8-27B-FP8 is the teacher. One GH200 (96\,GB) serves and trains each
+student; the teacher shares a card with the student whose failures it continues.

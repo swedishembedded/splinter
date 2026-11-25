@@ -1,0 +1,8 @@
+name,value
+candidates,2721
+admitted,1061
+duplicate,504
+overcap,1156
+train_before,2165
+train_after,3141
+validation_after,279

@@ -1,0 +1,7 @@
+model,arm,passed,trials
+qwen3-0.6b,base,0,912
+qwen3-0.6b,full,282,912
+qwen3-4b,base,136,912
+qwen3-4b,full,559,912
+qwen3-8b,base,136,912
+qwen3-8b,full,552,912

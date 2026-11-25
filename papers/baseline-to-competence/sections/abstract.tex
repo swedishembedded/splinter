@@ -1,0 +1,13 @@
+\begin{abstract}
+A small language model that has a text editor as its only tool fails tasks a larger model solves: after an editor error it
+repeats the failed command until its budget is gone. We describe and measure a process that takes 0.6B, 4B and 8B models
+toward competence at editing files with headless Vim, graded on 100 held-out tasks. The process collects verified teacher
+trajectories, adds the student's own verified solutions and a teacher's continuations of the student's failures from the
+step where they went wrong, admits each record only as a new solution of its task, and trains a LoRA adapter. The base
+models solve none of the exams, even with four reruns of every failed task. The 4B adapter solves \examFourFullFive{} and
+the 8B adapter \examEightFullFive{} within five attempts; the 0.6B adapter solves \examZeroFullFive{}, below the capability
+floor of the task. A second round of recovery data raised the 8B to \examEightRtwoFive{} and left the 4B at
+\examFourRtwoFive{}, and a policy-gradient stage reached \examEightPgFive{} at the 8B. A reward that penalises looping did not
+reduce the share of attempts ended by the loop watchdog, which stays near 30\% on the exams. Every count in the paper is
+rebuilt from released tasks and traces by the recipes of the appendix.
+\end{abstract}

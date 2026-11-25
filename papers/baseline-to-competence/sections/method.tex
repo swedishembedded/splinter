@@ -1,0 +1,68 @@
+\section{From verified trajectories to a competent small model}\label{sec:method}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[fig]
+\node[data] (rec) {verified records\\{\scriptsize the training set}};
+\node[proc=okSky!25, right=of rec] (train) {train adapter\\{\scriptsize LoRA, SFT}};
+\node[proc=okGreen!15, right=of train] (att) {student attempts\\{\scriptsize train tasks}};
+\node[proc=okOrange!20, right=of att] (loc) {teacher locates\\the first failure};
+\node[proc=okOrange!20, below=of loc] (fork) {teacher continues\\from there};
+\node[proc=okGreen!15, below=of att] (ver) {verified solutions\\{\scriptsize only new ones}};
+\node[proc=okVermillion!15, below=of train] (pg) {policy gradient\\{\scriptsize loop penalty}};
+\node[data, below=of rec] (exam) {100 exams\\{\scriptsize held out}};
+\draw[flow] (rec) -- (train); \draw[flow] (train) -- (att); \draw[flow] (att) -- (loc);
+\draw[flow] (loc) -- (fork); \draw[flow] (fork) -- (ver); \draw[flow] (att) -- (ver);
+\draw[ctrl] (ver) -| ($(rec.south)+(0,-3mm)$) -- (rec.south);
+\draw[flow] (att.south) ++(-5mm,0) |- (pg.east);
+\draw[flow] (pg) -- (exam);
+\draw[ctrl] (train.south) ++(5mm,0) -- ++(0,-2mm) -| (exam.east);
+\end{tikzpicture}
+\caption{The process. The set of verified records trains an adapter; the adapter attempts the practice tasks; its
+  verified solutions and a teacher's continuations of its failures, each admitted only as a new solution of its task,
+  grow the set; a policy-gradient stage that penalises looping starts from the trained adapter. Only the exams measure
+  the result.}\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Records.} A record is one complete trajectory under the system prompt and tool schema the model is served,
+every assistant turn supervised, in the form the model's chat template renders. Only trajectories the grader passed
+become records. The first records are a teacher's verified solutions of the practice tasks.
+
+\paragraph{The student's own solutions.} The trained adapter attempts every practice and composite task four times at
+the evaluation sampling settings. Each verified pass is a candidate record. These records are on-policy, so they teach
+the model what it can already do more reliably, and they reach tasks the teacher records cover with other tool-call
+sequences.
+
+\paragraph{Recovery data.} A failed attempt is the training signal a pass cannot give. For a task the adapter failed, the
+teacher reads the failed attempt and names the step after which it went wrong, keeping the failing call and its result so
+that the continuation sees the error the student did not recover from, and writes one or two sentences of guidance that
+state no solution. A fresh sandbox is seeded with the kept prefix and the teacher continues. A verified continuation is
+stored as one conversation in which the guidance turn is removed: the student sees its own mistake followed by the
+corrective call, as it would at inference. Tasks that the adapter solved in some attempts and failed in others are
+continued from their failed attempts too, so recovery data covers partial as well as total failures.
+
+\paragraph{Integration and provenance.} A candidate record enters the set only as a new solution of its task. Its
+fingerprint is the sequence of tool calls (tool name and whitespace-normalised arguments, ignoring the free-text intent
+argument), and a record whose fingerprint the task already has is dropped; at most twelve records per task are kept. The
+split is by whole task: roughly one tenth of tasks new to the set are held out for validation, and a task keeps its side.
+Every record carries the model that produced it (\cref{tab:data}).
+
+\begin{table}[t]
+\centering\small
+\input{data-table}
+\caption{The training set by the model that produced each record. Teacher records are verified solutions, the
+  adapters' records are their own verified attempts.}\label{tab:data}
+\end{table}
+
+\paragraph{Supervised training.} A LoRA adapter of rank 16 and alpha 32 is trained for up to 600 optimiser steps of four records each, learning
+rate $2\times10^{-4}$, on a bf16 base. The held-out loss is measured every 40 steps, training stops after four
+evaluations without improvement, and the step with the best held-out loss is kept.
+
+\paragraph{Policy gradient with a loop penalty.} Starting from the trained adapter, a clipped policy-gradient stage
+uses the adapter's own graded attempts at the practice tasks (eight per task, temperature 1.0), grouped by task. The reward of an
+attempt is one for a pass and zero for a failure, less a penalty for each of two behaviours read from the attempt's files:
+a full pass's reward when the loop watchdog ended it, and half of one scaled by the share of its calls after a Vim error that
+repeated the failed call. Advantages are normalised within the task's group \citep{grpo}, so a looping attempt is pushed down
+against its siblings whether or not either passed. The clip band is wider above than below and the loss is summed over
+tokens \citep{dapo}; the KL term is taken against the adapter the run starts from, which is also the policy that sampled
+the attempts, so the importance ratio needs no recorded log-probabilities. Training rows are bounded at 16\,384 tokens so that
+long attempts, which are the looping ones, stay in the data.

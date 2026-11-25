@@ -1,0 +1,9 @@
+model,arm,unit,wins,losses
+qwen3-0.6b,full,task,1,0
+qwen3-4b,full,task,23,0
+qwen3-8b,full,task,29,0
+qwen3-4b,rtwo,task,9,10
+qwen3-8b,rtwo,task,18,9
+qwen3-4b,pg,task,10,10
+qwen3-8b,pg,task,17,7
+qwen3.8-27b,records,attempt,91,107

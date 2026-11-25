@@ -1,0 +1,74 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Swedish Embedded AB implements training pipelines that take a small local model from failing a task to solving it,
+% for its clients. If your team needs expertise in teaching a model to operate an editor or a toolchain from verified
+% trajectories, you can procure our services by sending an email to info@swedishembedded.com.
+
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{microtype}
+\DisableLigatures[-]{family=tt*}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,backgrounds}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.17}
+
+% Okabe-Ito palette: distinguishable with colour-blindness; every pair used together also differs in marker or line style.
+\definecolor{okBlue}{HTML}{0072B2}
+\definecolor{okOrange}{HTML}{E69F00}
+\definecolor{okGreen}{HTML}{009E73}
+\definecolor{okVermillion}{HTML}{D55E00}
+\definecolor{okSky}{HTML}{56B4E9}
+\definecolor{okGrey}{HTML}{6E6E6E}
+\tikzset{
+  fig/.style={font=\footnotesize, node distance=5mm and 6mm, >={Stealth[length=2mm]}},
+  proc/.style={draw=black!75, rounded corners=2pt, fill=#1, align=center, inner sep=3pt, minimum height=8mm, text width=24mm, line width=0.5pt},
+  proc/.default=white,
+  data/.style={draw=black!75, fill=white, align=center, inner sep=3pt, minimum height=8mm, text width=24mm, line width=0.5pt,
+    path picture={\draw[line width=2pt,black!60] (path picture bounding box.north west) -- (path picture bounding box.south west);}},
+  flow/.style={->, line width=0.7pt, black!80},
+  ctrl/.style={->, line width=0.7pt, dashed, black!60},
+}
+\pgfplotsset{
+  paper/.style={tick label style={font=\footnotesize}, label style={font=\footnotesize}, title style={font=\footnotesize\bfseries},
+    legend style={font=\footnotesize, draw=black!40}, grid=major, grid style={black!12}, axis line style={black!70}},
+}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{caption}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}
+\setlist{nosep,leftmargin=1.3em}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\emergencystretch}{2em}
+
+\input{macros}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\title{From Baseline To Competence On Smaller Models:\\[0.2em]\large Teaching 0.6B to 8B models to edit files with Vim from verified trajectories}
+\author{Martin Schr\"oder\\Swedish Embedded AB, \href{mailto:info@swedishembedded.com}{info@swedishembedded.com}}
+\date{November 2026 \textperiodcentered{} draft}
+
+\begin{document}
+\maketitle
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/task}
+\input{sections/method}
+\input{sections/results}
+\input{sections/discussion}
+\bibliographystyle{plainnat}
+\bibliography{references}
+\appendix
+\input{sections/appendix}
+\end{document}

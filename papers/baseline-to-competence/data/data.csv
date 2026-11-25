@@ -1,0 +1,6 @@
+source,train,validation
+Qwen3.8-27B-FP8 (teacher),1818,179
+Qwen3-8B (base and adapters),420,31
+Qwen3-4B adapters,662,61
+Qwen3-0.6B adapters,198,8
+deepseek-v4.1-flash,43,0

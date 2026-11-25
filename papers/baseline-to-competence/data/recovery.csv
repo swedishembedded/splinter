@@ -1,0 +1,6 @@
+model,sample,attempts,passes,continued,solved
+qwen3-0.6b,main,912,282,197,126
+qwen3-4b,main,912,559,140,88
+qwen3-4b,hot,912,607,133,85
+qwen3-8b,main,912,552,146,95
+qwen3-8b,hot,912,578,151,94

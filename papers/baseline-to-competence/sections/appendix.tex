@@ -1,0 +1,42 @@
+\section{Reproducing the results}\label{app:repro}
+Everything below runs on one machine with four CUDA GPUs of 96\,GB (GH200) and rebuilds every number from released tasks
+and traces. Nothing depends on state kept between runs: the work directory may be lost and rebuilt, and rebuilding this
+study's work directory after a machine restart reproduced the first training run's final loss to four digits.
+
+\paragraph{Artifacts.} Tasks: the compiled Harbor tasks of the Vim course, \path{swedishembedded/vim-headless-mastery}
+(168 practice and 100 exam tasks; the 60 composite tasks are the family \code{course-composite} of the task repository's
+\path{tasks/vim}). Training traces: the \code{full} and \code{full2} configurations of
+\path{swedishembedded/vim-headless-mastery-sft-g2}; every record's \code{metadata.trial.model} names the model that made it
+and \code{lineage/} lists the parents and the left-out reasons. Adapters and the measured counts behind each table:
+\path{swedishembedded/vim-headless-mastery-sft-adapters}.
+
+\paragraph{Orchestrator.} Every step is a recipe of the Splinter learning-factory, which serves and trains through Brain's
+HTTP API and runs the agent (Sven) in Harbor sandboxes. A recipe is a graph of stages (\code{attempt.collect},
+\code{attempts.failures}, \code{agent}, \code{dataset.project}, \code{dataset.extend}, \code{model.train},
+\code{evaluation}, \code{promotion}); a stage whose inputs are unchanged is reused, so a fork of a run recomputes only what a
+change touches. The commands, for the 4B (the 0.6B and 8B differ in the size in the recipe names; \code{WS} is the work
+directory and \code{gpuN} the card):
+{\small
+\begin{verbatim}
+# 1. workspace: freezes brain, sven and splinter, installs the sandbox worker, pins the records
+scripts/workspace-init.sh --dir WS \
+    --records swedishembedded/vim-headless-mastery-sft-g2 --records-config full
+# 2. base-model baseline on the practice tasks (4 attempts each)
+WS/run.sh recipes/vim-base-train-qwen3-4b.yaml gpu0
+# 3. train on the records, promote on the practice tasks, measure on the exams
+WS/run.sh recipes/vim-sft-qwen3-4b-champion.yaml gpu0
+WS/run.sh --fork vim-sft-qwen3-4b-champion recipes/vim-sft-qwen3-4b-full.yaml gpu0
+# 4. round two: the adapter attempts the practice tasks, the teacher continues its failures
+WS/run.sh --fork vim-sft-qwen3-4b-champion --warm Qwen/Qwen3.8-27B-FP8 \
+    recipes/vim-sft-qwen3-4b-r2-data.yaml gpu0
+# 5. integrate the three sizes' records (new solutions only, at most 16 per task)
+WS/run.sh recipes/vim-sft-integrate.yaml gpu0
+# 6. retrain on the integrated set (records config full2), measure against the champion
+WS/run.sh recipes/vim-sft-qwen3-4b-r2-champion.yaml gpu0
+# 7. policy gradient with the loop penalty, starting from the champion
+WS/run.sh recipes/vim-sft-qwen3-4b-pg-c.yaml gpu0
+# 8. tables and figures
+python3 scripts/collect.py SPEC.json data && make papers/baseline-to-competence/pdf
+\end{verbatim}}
+\noindent Counts come from \code{scripts/run-metrics.py} of Splinter run on each run directory; \code{scripts/collect.py}
+writes \code{data/*.csv} from them and \code{scripts/build_data.py} derives every statistic, table and figure of the paper.
