@@ -734,4 +734,5 @@ fn the_records_the_view_writes_keep_brains_training_record_contract() {
 mod exact_tokens;
 mod external;
 mod identity;
+mod self_distill;
 mod shaping;

@@ -26,6 +26,13 @@ fixtures:
     oracle_sha256: "beea809071ad2b580d89b9e2fe214c959232aa3258db053d1fc704fed3e89eea"
     references: ["reference-projector"]
     test: "splinter-data/it/retrieval_triples"
+  data/self-distill:
+    path: "validation/fixtures/data/self-distill.json"
+    sha256: "e985142a6776d0eb117499b9ed9e8590d964fe2cbd3f2c99ed3868e504f95dfb"
+    oracle: "validation/oracles/data/self_distill.py"
+    oracle_sha256: "4472643dc149627d32b00dcf2e5a05284a141e03c6463d89f305c080eb51c81e"
+    references: ["reference-projector"]
+    test: "splinter-data/it/policy_gradient::self_distill"
   data/sft-projection:
     path: "validation/fixtures/data/sft-projection.json"
     sha256: "a714903b5391a3dc4eb42690acb66565ba122695bb2f82b5edb82c9920b374b7"

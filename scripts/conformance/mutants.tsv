@@ -105,3 +105,6 @@ catalogued-fault-injects-nothing	plugins	crates/knowledge/src/factory/plugins/re
 facts-cut-at-every-point	plugins	crates/knowledge/src/goal/facts.rs	let ends = byte == b'.' && bytes.get(at + 1).is_none_or(u8::is_ascii_whitespace);	let ends = byte == b'.';	splinter-knowledge	it	document_reference::
 retrieval-negative-is-the-positive	views	crates/data/src/views/retrieval.rs	if text != positive && !negatives.contains(&text) {	if !negatives.contains(&text) {	splinter-data	it	retrieval_triples
 retrieval-overlap-as-equality	views	crates/data/src/views/retrieval.rs	a.start < b.end && b.start < a.end	a.start == b.start && a.end == b.end	splinter-data	it	retrieval_triples
+cliff-distils-all-pass	views	crates/data/src/views/policy_gradient.rs	Distill::Cliff => kind == GroupKind::AllFail,	Distill::Cliff => kind != GroupKind::Graded,	splinter-data	it	policy_gradient::self_distill
+teacher-misses-the-verifier-reason	views	crates/data/src/views/privileged.rs	.pointer("/verification/reason")	.pointer("/verification/why")	splinter-data	it	policy_gradient::self_distill
+teacher-told-the-wrong-outcome	views	crates/data/src/views/privileged.rs	    text.push_str(if passed {	    text.push_str(if !passed {	splinter-data	it	policy_gradient::self_distill
