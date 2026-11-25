@@ -165,6 +165,7 @@ struct Live {
     queued: bool,
 }
 
+mod allowance;
 mod restore;
 mod rules;
 
@@ -292,43 +293,6 @@ impl Controller {
             task: group.task.clone(),
             index,
         }]
-    }
-
-    fn unblock(&mut self, now: u64) {
-        if let Some(since) = self.blocked_since.take() {
-            self.stats.backpressure_ms += now.saturating_sub(since);
-        }
-    }
-
-    /// Tokens consumed per optimiser step, as estimated now.
-    fn tokens_per_step(&self) -> u64 {
-        let budget = self.settings.tokens_per_step;
-        if self.step_tokens.is_empty() {
-            return budget;
-        }
-        let window = self.step_tokens.len() as u64;
-        (self.step_tokens.iter().sum::<u64>() / window).max(budget)
-    }
-
-    /// The token allowance in force.
-    fn allowance(&self) -> u64 {
-        self.settings
-            .max_staleness
-            .max(1)
-            .saturating_mul(self.tokens_per_step())
-    }
-
-    /// Whether a new group fits in the allowance.
-    fn fits(&self) -> bool {
-        let admitted = self.stats.in_flight + self.ready.len() as u64;
-        let finished = self.stats.rollouts_finished;
-        let per_rollout = if finished == 0 {
-            self.settings.rollout_tokens
-        } else {
-            self.stats.tokens_generated.div_ceil(finished)
-        };
-        let expected = self.stats.queue_tokens + admitted.saturating_mul(per_rollout);
-        expected < self.allowance()
     }
 
     fn count_finished(&mut self, outcome: &RolloutOutcome) {
@@ -661,6 +625,7 @@ impl Controller {
             }
             LearnerEvent::Published { version } => {
                 self.learner_version = self.learner_version.max(version);
+                self.release_stale_held(version);
                 let waiting: Vec<u64> = self
                     .send_queue
                     .iter()

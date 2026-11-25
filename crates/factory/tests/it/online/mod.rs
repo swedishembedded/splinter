@@ -242,6 +242,66 @@ fn a_group_more_than_max_staleness_behind_the_learner_is_dropped_not_sent() {
 }
 
 #[test]
+fn a_sent_group_a_publication_makes_stale_leaves_the_allowance_at_once() {
+    // A synchronous run (max_staleness 0): its allowance is one step. The learner drops a group it holds once a
+    // publication makes it stale, but reports the drop only with its next step, which waits for records: had the
+    // group kept its tokens in the allowance, no new group would start and the run would wait for ever (a
+    // Qwen3-0.6B run stopped so after 2 steps, 4 stale groups held, 1216 tokens over a 1024-token allowance).
+    let mut selector = RoundRobin::new(tasks(3), 10).unwrap();
+    let mut control = Controller::new(
+        Settings {
+            max_staleness: 0,
+            ..settings()
+        },
+        1,
+    )
+    .unwrap();
+    admit_all(&mut control, 0, &mut selector);
+    for (seq, index) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+        let reward = f64::from(index);
+        control
+            .rollout_ended(
+                finished(seq, index, outcome(Some(reward), 50, 1, true)),
+                &mut selector,
+            )
+            .unwrap();
+    }
+    for _ in 0..2 {
+        let draft = control.next_send(0).unwrap();
+        control.sent(0, &draft.key, &SendOutcome::Accepted).unwrap();
+    }
+    assert!(control.admit(0, &mut selector).is_none(), "100 tokens held");
+
+    let published = control.learner_event(LearnerEvent::Published { version: 2 });
+    assert!(
+        states(&published).is_empty(),
+        "both stay sent until the learner says"
+    );
+    assert_eq!(
+        control.stats(0).queue_tokens,
+        0,
+        "both were drawn at version 1"
+    );
+    assert!(
+        control.admit(0, &mut selector).is_some(),
+        "a new group starts"
+    );
+    let dropped = control.learner_event(LearnerEvent::Dropped {
+        groups: vec![key(0), key(1)],
+    });
+    assert_eq!(
+        states(&dropped),
+        [
+            (GroupState::Stale, Some(reasons::STALE_AT_LEARNER)),
+            (GroupState::Stale, Some(reasons::STALE_AT_LEARNER))
+        ]
+    );
+    assert_eq!(control.stats(0).queue_tokens, 0, "released once");
+    let stats = control.stats(0);
+    assert_eq!((stats.dropped_by_learner, stats.stray_acks), (2, 0));
+}
+
+#[test]
 fn the_token_allowance_holds_new_groups_back_until_the_learner_applies_and_never_stops_a_running_rollout(
 ) {
     // max_staleness 1, step budget 100: the allowance is 100 tokens; a
