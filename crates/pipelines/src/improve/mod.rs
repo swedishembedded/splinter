@@ -86,6 +86,7 @@ impl From<ProtocolSpec> for WorkProtocol {
             max_repeated_results: spec.max_repeated_results,
             prompt: CodingPrompt::default(),
             compaction: true,
+            answer_file: None,
         }
     }
 }

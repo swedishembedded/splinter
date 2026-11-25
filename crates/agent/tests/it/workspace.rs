@@ -738,3 +738,47 @@ async fn where_the_sandbox_is_the_process_sandbox_the_worker_reaches_nothing_out
     let extra = solved.solution.trajectory.agent.extra.unwrap();
     assert!(extra["workspace_tree"].as_str().unwrap().ends_with("/tree"));
 }
+
+#[tokio::test]
+async fn a_task_answered_in_the_reply_offers_no_tool_and_its_answer_is_the_file_it_names() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let model = Scripted::new(|_| text("yes"));
+    let answered = WorkProtocol {
+        answer_file: Some("answers/reply.txt".into()),
+        ..protocol(2)
+    };
+
+    let solved = solve(&fixture, &environment, &[], model.clone(), &answered)
+        .await
+        .unwrap();
+
+    let seen = model.seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "one reply and no follow-up");
+    assert!(
+        seen[0].tools.is_empty(),
+        "no tool is offered: {:?}",
+        seen[0].tools
+    );
+    assert_eq!(solved.patch.files, vec![PathBuf::from("answers/reply.txt")]);
+    let diff = String::from_utf8(solved.patch.diff.clone()).unwrap();
+    assert!(
+        diff.contains("+yes"),
+        "the reply is the file's content: {diff}"
+    );
+}
+
+#[tokio::test]
+async fn an_answer_file_outside_the_tree_is_refused() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    for path in ["../escape.txt", "/escape.txt", ""] {
+        let model = Scripted::new(|_| text("yes"));
+        let answered = WorkProtocol {
+            answer_file: Some(path.into()),
+            ..protocol(0)
+        };
+        let refused = solve(&fixture, &environment, &[], model, &answered).await;
+        assert!(refused.is_err(), "{path:?} is refused");
+    }
+}

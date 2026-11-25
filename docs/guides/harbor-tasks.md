@@ -26,6 +26,11 @@ marked `[metadata].bench_sealed = true`, one in a held-out tier (`[metadata].ben
 `b` or `c`), and one whose `[metadata].bench_family` is in the `eval` set of the
 `split.toml` beside it; an unreadable `split.toml` refuses the folder rather than clearing
 it.
+A task answered in the agent's reply rather than by a change it makes names, under `[agent]`,
+the file of its tree the reply is written to: `answer_file = "answer.txt"`. A practice episode of
+it offers the agent no tool and sends no follow-up; the reply of a run that concluded is written to
+that file before the change is read back, so the task's own `test.sh` grades it like any file the
+agent wrote. A path that is not relative and inside the tree is refused when the task is read.
 The task is held to the bar of every workspace task: its check fails on the tree the
 solver is given on every run, and with `--oracle require` the change `solve.sh` makes
 (run on the host with `/solution` and the working directory mapped to the tree) must

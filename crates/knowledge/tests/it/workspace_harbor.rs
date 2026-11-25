@@ -482,3 +482,34 @@ fn exam_material_is_named_sealed_and_practice_material_is_not() {
     write(&root.join("split.toml"), "[sets\n");
     assert!(HarborTask::read(&practice).unwrap().sealed().is_err());
 }
+
+/// A task answered in the agent's reply names, under `[agent]`, the file of its tree the reply is written to; a
+/// path that would leave the tree is refused when the task is read.
+#[test]
+fn a_task_answered_in_the_reply_names_its_answer_file_and_one_outside_the_tree_is_refused() {
+    let rig = rig("harbor-answer-file");
+    let root = rig.repo.scratch.0.join("tasks");
+    let with_agent = |name: &str, agent: &str| {
+        let dir = shipped(&root, name, SHIPPED_REWARD, "");
+        let toml = fs::read_to_string(dir.join("task.toml")).unwrap();
+        write(&dir.join("task.toml"), &format!("{toml}[agent]\n{agent}\n"));
+        dir
+    };
+    let answered = with_agent("answered", "answer_file = \"answer.txt\"");
+    assert_eq!(
+        HarborTask::read(&answered).unwrap().answer_file.as_deref(),
+        Some("answer.txt")
+    );
+    let plain = shipped(&root, "plain", SHIPPED_REWARD, "");
+    assert_eq!(HarborTask::read(&plain).unwrap().answer_file, None);
+    for (name, agent) in [
+        ("up", "answer_file = \"../a.txt\""),
+        ("absolute", "answer_file = \"/a.txt\""),
+        ("number", "answer_file = 3"),
+    ] {
+        let refused = HarborTask::read(&with_agent(name, agent))
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("answer_file"), "{name}: {refused}");
+    }
+}

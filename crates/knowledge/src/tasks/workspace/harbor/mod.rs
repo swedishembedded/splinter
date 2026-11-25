@@ -120,6 +120,10 @@ pub struct HarborTask {
     pub instruction: String,
     /// The working directory its environment copies the repository into.
     pub workdir: String,
+    /// The file of its tree the agent's reply is written to (`[agent]
+    /// answer_file`), for a task answered in the reply rather than by a
+    /// change the agent makes with tools; a relative path inside the tree.
+    pub answer_file: Option<String>,
     config: toml::Table,
     layout: Layout,
 }
@@ -215,11 +219,31 @@ impl HarborTask {
             .map(str::to_string)
             .or_else(|| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
+        let answer_file = match table("agent").and_then(|agent| agent.get("answer_file")) {
+            None => None,
+            Some(toml::Value::String(path))
+                if !path.is_empty()
+                    && Path::new(path)
+                        .components()
+                        .all(|c| matches!(c, std::path::Component::Normal(_))) =>
+            {
+                Some(path.clone())
+            }
+            Some(other) => {
+                return refuse(
+                    dir,
+                    format!(
+                        "[agent] answer_file {other} is not a relative path inside the task's tree"
+                    ),
+                )
+            }
+        };
         Ok(Self {
             dir: dir.to_path_buf(),
             name,
             instruction,
             workdir,
+            answer_file,
             config,
             layout,
         })

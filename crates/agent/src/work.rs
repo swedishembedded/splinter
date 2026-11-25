@@ -79,6 +79,7 @@ pub const WITHHELD_TOOLS: &[&str] = &[
     "skill",
 ];
 
+mod answer;
 mod guard;
 mod profile;
 mod watch;
@@ -133,6 +134,8 @@ pub struct WorkOptions {
     /// frozen when the episode starts. A worker started directly gets it from
     /// [`Worker::start_with_knowledge`].
     pub knowledge: Option<Knowledge>,
+    /// Offer the worker no tool at all: it answers in its reply.
+    pub toolless: bool,
 }
 
 impl WorkOptions {
@@ -146,6 +149,7 @@ impl WorkOptions {
             observer: None,
             tree_observer: None,
             knowledge: None,
+            toolless: false,
         }
     }
 }
@@ -223,7 +227,11 @@ pub(crate) fn engine(
             options.solve.provider(model),
             options.solve.system_prompt(),
         ))
-        .toolset(Toolset::coding())
+        .toolset(if options.toolless {
+            Toolset::none()
+        } else {
+            Toolset::coding()
+        })
         .project_root(workspace)
         .approvals(ApprovalPolicy::Auto);
     if let Some(log) = &options.solve.audit_log {
@@ -411,7 +419,7 @@ const FEEDBACK_LINES: usize = 40;
 const FEEDBACK_CHARS: usize = 4_000;
 
 /// How one episode on a workspace is run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkProtocol {
     /// How many follow-up user turns the worker may be sent after the
     /// visible checks stay red; `0` sends none and runs no check.
@@ -433,6 +441,12 @@ pub struct WorkProtocol {
     /// transcript replaces the messages a correction would continue and so
     /// cannot be forked at all. The episode then ends at the budget gate.
     pub compaction: bool,
+    /// A task answered in the reply: the worker is offered no tool, sends one
+    /// reply and is sent no follow-up, and the reply (when its run concluded)
+    /// is written to this path of its tree before the change is read back, so
+    /// the task's check grades it as it would a file the worker wrote. A path
+    /// that is not relative and inside the tree is refused.
+    pub answer_file: Option<String>,
 }
 
 impl Default for WorkProtocol {
@@ -443,6 +457,7 @@ impl Default for WorkProtocol {
             max_repeated_results: None,
             prompt: CodingPrompt::default(),
             compaction: true,
+            answer_file: None,
         }
     }
 }
@@ -514,6 +529,12 @@ pub async fn solve_in_workspace(
     mut options: WorkOptions,
     protocol: &WorkProtocol,
 ) -> Result<WorkspaceSolution, SolveError> {
+    let answer_file = protocol
+        .answer_file
+        .as_deref()
+        .map(answer::answer_path)
+        .transpose()?;
+    options.toolless |= answer_file.is_some();
     let offered = ResolvedEnvironment::Workspace(env.clone()).record()?;
     if offered != task.environment {
         return Err(SolveError::EnvironmentMismatch {
@@ -545,11 +566,15 @@ pub async fn solve_in_workspace(
     // The model's commands always go through the sandbox: a container, or
     // the process sandbox's filesystem confinement. sven's own shell would
     // run them with the whole filesystem.
-    let confined: Vec<Arc<dyn Tool>> = vec![Arc::new(SandboxShell::for_episode(
-        env.clone(),
-        tree.clone(),
-        scratch.path(),
-    )?)];
+    let confined: Vec<Arc<dyn Tool>> = if options.toolless {
+        Vec::new()
+    } else {
+        vec![Arc::new(SandboxShell::for_episode(
+            env.clone(),
+            tree.clone(),
+            scratch.path(),
+        )?)]
+    };
     let episode = options.solve.deadline;
     options.max_repeated_results = protocol.max_repeated_results;
     let mut worker = match options.knowledge.take() {
@@ -575,7 +600,7 @@ pub async fn solve_in_workspace(
         let ended_itself = report.solution.conclusion == RunConclusion::Success
             && !report.stopped_by_tool_cap
             && !report.stopped_by_repetition;
-        if !ended_itself || feedback_rounds >= protocol.follow_ups {
+        if !ended_itself || feedback_rounds >= protocol.follow_ups || answer_file.is_some() {
             break report;
         }
         let failures = failing(env, &tree, visible).await?;
@@ -598,6 +623,9 @@ pub async fn solve_in_workspace(
         feedback_rounds += 1;
     };
 
+    if let (Some(path), Some(reply)) = (&answer_file, &last.solution.final_output) {
+        answer::write_answer(&tree, path, reply)?;
+    }
     let patch = {
         let (env, tree) = (env.clone(), tree.clone());
         blocking("reading the change back", move || {

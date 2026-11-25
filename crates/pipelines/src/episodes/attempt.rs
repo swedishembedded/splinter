@@ -17,6 +17,7 @@ use splinter_core::experience::Provenance;
 use splinter_core::model_ref::ModelRef;
 use splinter_eval::verifiers::verify_and_annotate;
 use splinter_factory::run::corpus::file_calls;
+use splinter_knowledge::tasks::workspace::HarborTask;
 use splinter_orchestrator::context::Context;
 use splinter_orchestrator::error::OrchestratorError;
 use splinter_sandbox::ResolvedEnvironment;
@@ -271,9 +272,15 @@ impl Run<'_> {
             None => None,
         };
         let options = model.solving(options);
+        // A task answered in the reply names the file of its tree the reply is written to.
+        let answer_file = match HarborTask::read(&planned.task.directory) {
+            Ok(folder) => folder.answer_file,
+            Err(e) => return infrastructure(record, e.to_string()),
+        };
         let protocol = WorkProtocol {
             max_tool_calls: self.settings.max_tool_calls,
             prompt: ctx.config().coding_prompt,
+            answer_file,
             ..harness_protocol()
         };
         let solved = ctx.block_on(solve_attempt(

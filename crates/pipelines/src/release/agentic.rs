@@ -186,6 +186,7 @@ fn attempt_at(
         max_repeated_results: config.max_repeated_results,
         prompt: ctx.config().coding_prompt,
         compaction: true,
+        answer_file: None,
     };
     let solved = ctx.block_on(solve_attempt(
         task, &env, &inputs, &model, options, &protocol,

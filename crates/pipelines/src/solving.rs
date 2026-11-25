@@ -169,6 +169,7 @@ pub fn harness_protocol() -> WorkProtocol {
         max_repeated_results: config.max_repeated_results,
         prompt: CodingPrompt::default(),
         compaction: true,
+        answer_file: None,
     }
 }
 
@@ -335,7 +336,7 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
     // The run's coding-agent prompt applies to every episode in a workspace.
     let work = WorkProtocol {
         prompt: ctx.config().coding_prompt,
-        ..request.work
+        ..request.work.clone()
     };
     let total = plans.len() * request.attempts;
     let mut finished = 0usize;
@@ -344,9 +345,9 @@ pub fn solve_tasks(ctx: &Context, request: &SolveRequest<'_>) -> Result<Solved, 
         items,
         ctx.concurrency_for(request.solver),
         |(plan, attempt, model)| {
-            let (plans, store, label) = (&plans, &store, &label);
+            let (plans, store, label, work) = (&plans, &store, &label, &work);
             async move {
-                let outcome = attempt_once(&plans[plan], &model, request, &work, task_wall).await;
+                let outcome = attempt_once(&plans[plan], &model, request, work, task_wall).await;
                 let recorded = record_attempt(
                     outcome,
                     &Recording {

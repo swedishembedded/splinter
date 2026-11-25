@@ -340,6 +340,9 @@ pub enum SolveError {
     /// The knowledge the attempt was to read could not be frozen.
     #[error("the knowledge could not be frozen: {0}")]
     Knowledge(#[from] sven_sdk::memory::MemoryError),
+    /// The file a task's answer is written to is not a path inside its tree.
+    #[error("the answer file {0:?} is not a relative path inside the task's tree")]
+    AnswerFile(String),
 }
 
 /// A model and the identity experiences record it by (the string an

@@ -60,6 +60,7 @@ pub(crate) fn corrections_command(
                     prompt: CodingPrompt::default(),
                     // The continuation is recorded, so it keeps its transcript.
                     compaction: false,
+                    answer_file: None,
                 },
                 deadline,
                 cancel: run.cancel_token(),
