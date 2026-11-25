@@ -43,6 +43,7 @@ mod hub_bundle;
 mod improve;
 mod judging;
 mod lineage;
+mod live_model;
 mod model_refs;
 mod monitoring;
 mod online_episodes;

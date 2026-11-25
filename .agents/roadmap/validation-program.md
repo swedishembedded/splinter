@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of every view and the factory's product statistics recomputed from the trials (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), every environment plugin against its tools or labelled fixtures (4B), the executable verifier's Python and Lua tables (4A); the judged kinds' matrix not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of every view and the factory's product statistics recomputed from the trials (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), every environment plugin against its tools or labelled fixtures (4B), the executable verifier's Python and Lua tables and the judged kinds on a live calibrated judge (4A) |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed, the exam seal's gaps fixed (G-DC-11, G-NEW-01), the factory's evaluation statistics recomputed from its trials; losses and gradients are brain's (not certified here) |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store and of the experience database (10B), the run state against a reference model with the 10C properties (10A, 10C), TLC model-checking the run state, product commit, collection beside a pin and compaction with a mutation of each property (10C, `make test/conformance/tla`) |
 | M5 CPU learning certification | 12 | partly: the four deterministic environments (12A) with the bandit's rewards enumerated (12D), the continual-learning metrics against numpy (12E); the learning runs, negative controls and update checks blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract) |
@@ -235,6 +235,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   specified), replay's group-less records, the token meter's batch, the inline means and variances (each
   denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
   only through the source store).
+- on a live model (`make test/conformance/live`, `deepseek/deepseek-v4-flash` through the hosted sven endpoint):
+  the judged kinds (4A) graded only through a calibrated judge, the raw judge's false passes measured (one in one
+  run, none in the next) and none left standing; model-assisted claim extraction (3B) against labelled sessions with
+  planted and corrected traps, 6 of 6 teachings recovered and nothing admitted outside the labels.
 - Python checks apart from the answer (G-NEW-19, by decision): the check runs in its own process and calls the
   answer's functions in another with plain data only; the three forgeries are cases now, none passes.
 - deterministic learning environments (12A): a finite contextual bandit (`contextual-bandit`), every action's reward
@@ -259,6 +263,5 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
   header on plain conversations (G-NEW-03, brain's).
-- Not built: the task-kind matrix of the
-  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), and the learning runs, negative controls and update checks of 12B-12E (brain).
+- Not built: the learning runs, negative controls and update checks of 12B-12E (brain).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).
