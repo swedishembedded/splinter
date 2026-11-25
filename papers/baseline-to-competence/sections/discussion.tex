@@ -4,14 +4,14 @@ the step that the evidence supports firmly: the 4B and 8B models go from no solv
 \examEightFullFive{} of 100 tasks they have never seen, and they resend a failed call less often than their base
 models (\behaviourFourFullExamRepeatPct{}\% against \behaviourFourBaseExamRepeatPct{}\% of calls after an error at 4B,
 \behaviourEightFullExamRepeatPct{}\% against \behaviourEightBaseExamRepeatPct{}\% at 8B). The later stages are less clear. The second round of data and the policy-gradient stage each gave a higher
-count at 8B in one run (\examEightRtwoFive{} and \examEightPgFive{}), one of them not significant and the other
-nominally so without correction, and neither gave a gain at 4B. The teacher's continuations do what they were built
+count at 8B in one run (\examEightRtwoFive{} and \examEightPgFive{}); the first is not significant (\ptestEightRtwo{}) and the
+second is significant only before any correction for the number of comparisons (\ptestEightPg{}), and neither gave a gain at 4B. The teacher's continuations do what they were built
 for as data, in that \recoverySolvedPct{}\% of them end in a verified solution that follows the student's own mistake,
 but their effect on the student was not isolated.
 
 \paragraph{Where it stops.} The 0.6B model improves on the training tasks (\trainZeroFullPct{}\% of attempts pass) and
 solves \examZeroFullFive{} of 100 exams, so this tool and this data do not bring a model of that size to the exams.
-At 4B and 8B the watchdog still ends about a third of the exam attempts, and the penalty we tried did not change that,
+At 4B and 8B the watchdog still ends \behaviourFourFullExamLoopPct{}\% and \behaviourEightFullExamLoopPct{}\% of the exam attempts, and the penalty we tried did not change that,
 although the optimiser moved the policy and the long, looping attempts were in its data. One possible reason, which we
 did not test, is that the reward sees little of the behaviour it penalises: the adapters loop in
 \behaviourFourFullTrainLoopPct{}\% and \behaviourEightFullTrainLoopPct{}\% of their attempts at the training tasks,
