@@ -62,7 +62,7 @@ scripts/validation/
 |---|---|---|
 | M0 Baseline | 0 | done: baseline at `aaaebd4d`, inventory, gap register |
 | M1 Golden infrastructure | 1-2 | Phase 1 done; Phase 2 partly: the Splinter-to-brain record contract, strict machine configuration, ATIF validation of captured traces |
-| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step, sft-final and policy-gradient groups (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), the program-output, db-workflow and firmware plugins against their tools (4B); the reference projector of the other views, the repository and document plugins against external references (4B) and the runtime, evidence and judged kinds' matrices not built |
+| M2 Trustworthy learning data | 3-6 | partly: data-admission defects fixed, BM25 and skill-graph oracles, the supervision mask enumerated exhaustively (6D), an independent reference projector of sft-step, sft-final and policy-gradient groups (6B), the metamorphic relations (6F), the task-kind matrix of the kinds graded from the answer alone (4A), the program-output, db-workflow, firmware and repository plugins against their tools (4B), the executable verifier's Python and Lua tables (4A); the reference projector of the other views, the document plugin against labelled fixtures (4B) and the judged kinds' matrix not built |
 | M3 Correct mathematics and decisions | 7-8 | partly: Splinter's statistics proven against scipy and statsmodels, release and search decisions fixed; losses and gradients are brain's (not certified here); seal gaps open |
 | M4 Reliable factory | 9-11 | partly: controller faults, product integrity, every template run end to end, operator and sandbox confinement, the recompute enumeration (9C), crash injection at every durability boundary of the product store (10B), the run state against a reference model with the 10C properties (10A, 10C); TLA+ models not run (a downloaded JRE was not allowed to execute here) |
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
@@ -219,6 +219,10 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   `lua` runtime now carries a guard that keeps the interpreter's own names before the answer and binds them again
   for the check, three mutants killed. The same table for Python found that one process can forge what any check
   observes (G-NEW-19, open: it needs the check out of the answer's process, a decision for the check protocol).
+- repository plugins (4B): `repository-mutants` checked as SWE-smith admits a task, by the project's own `unittest`
+  runner (FAIL_TO_PASS exactly the symptoms, PASS_TO_PASS the rest, the reference patch restoring exactly the faulty
+  files, the verifier agreeing); every fault of `repository-bugs` injected alone and shown as its report says by an
+  independent reading of it (crates/knowledge/tests/it/repository_reference.rs), two mutants killed.
 
 ## Open
 
@@ -228,6 +232,6 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   header on plain conversations (G-NEW-03, brain's); the preference, feedback, distill and retrieval
   projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B); a Python
   answer can forge what its checks observe (G-NEW-19).
-- Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
+- Not built: the document plugin against independently labelled fixtures (4B) and the task-kind matrix of the
   kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

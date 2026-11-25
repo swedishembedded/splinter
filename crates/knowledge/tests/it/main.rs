@@ -35,6 +35,7 @@ mod generation_calls;
 mod history_tasks;
 mod plugin_matrix;
 mod redact;
+mod repository_reference;
 mod retrieve;
 mod sections;
 mod session_import;
