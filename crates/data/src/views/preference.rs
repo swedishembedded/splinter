@@ -286,12 +286,6 @@ impl Preference {
             // One is the other's beginning: nothing the other did instead.
             None => return Err(Exclusion::NoDivergence),
         };
-        // The model's own part of the chosen side must start after what both
-        // were shown: for attempts, the prompt before the first action; for a
-        // repair, the copied prefix.
-        if parted < chosen.own_start {
-            return Err(prompt_mismatch);
-        }
         // A candidate opens with the model's own turn. Runs that part at a turn
         // they were shown (a result, or a notice the harness inserted) part
         // from the action before it, which both took.
@@ -310,6 +304,9 @@ impl Preference {
         while start > 0 && won.messages[start - 1].role == "assistant" {
             start -= 1;
         }
+        // The model's own part of the chosen side must start after what both
+        // were shown: for attempts, the prompt before the first action; for a
+        // repair, the copied prefix.
         if start < chosen.own_start {
             return Err(prompt_mismatch);
         }
