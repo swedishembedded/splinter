@@ -171,7 +171,9 @@ if [ ! -x "$tasks/.venv/bin/harbor" ]; then
   (cd "$tasks" && make bench/sync) >"$dir/tmp/bench-sync.log" 2>&1 \
     || { tail -n 20 "$dir/tmp/bench-sync.log" >&2; die "bench/sync failed (network, uv?)"; }
 fi
-if [ ! -d "$tasks/build/collections" ]; then
+if [ ! -f "$tasks/collections/vim-headless-mastery.yaml" ]; then
+  say "this bench revision has no collections/ to generate: its recipes compile their tasks themselves (collection.compile)"
+elif [ ! -d "$tasks/build/collections" ]; then
   say "generating the collections"
   (cd "$tasks" && "$dir/bin/splinter" generate collections/vim-headless-mastery.yaml) >"$dir/tmp/generate.log" 2>&1 \
     || { tail -n 20 "$dir/tmp/generate.log" >&2; die "collection generation failed"; }
