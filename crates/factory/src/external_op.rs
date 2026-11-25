@@ -177,21 +177,32 @@ impl External {
     /// It cannot be read, is not an operator file, or names code that is
     /// not there.
     pub fn load(repository: &Path, relative: &str, grants: &Grants) -> Result<Self, String> {
+        Self::load_granted(repository, relative, grants).map_err(|refusal| match refusal {
+            Refusal::Invalid(why) | Refusal::Ungranted { why, .. } => why,
+        })
+    }
+
+    /// As [`Self::load`], telling an operator the machine does not grant what it needs from one that is broken.
+    fn load_granted(repository: &Path, relative: &str, grants: &Grants) -> Result<Self, Refusal> {
         let path = repository.join(relative);
-        let text = std::fs::read_to_string(&path).map_err(|e| format!("{relative}: {e}"))?;
-        let file: OperatorFile =
-            serde_yaml::from_str(&text).map_err(|e| format!("{relative}: {e}"))?;
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| Refusal::Invalid(format!("{relative}: {e}")))?;
+        let file: OperatorFile = serde_yaml::from_str(&text)
+            .map_err(|e| Refusal::Invalid(format!("{relative}: {e}")))?;
         if file.schema != OPERATOR_SCHEMA {
-            return Err(format!("{relative}: not a {OPERATOR_SCHEMA} file"));
+            return Err(Refusal::Invalid(format!(
+                "{relative}: not a {OPERATOR_SCHEMA} file"
+            )));
         }
         if file.command.is_empty() {
-            return Err(format!("{relative}: names no command"));
+            return Err(Refusal::Invalid(format!("{relative}: names no command")));
         }
         file.resources
             .check()
-            .map_err(|e| format!("{relative}: {e}"))?;
-        let validator = jsonschema::validator_for(&file.parameters)
-            .map_err(|e| format!("{relative}: parameters are not a JSON Schema: {e}"))?;
+            .map_err(|e| Refusal::Invalid(format!("{relative}: {e}")))?;
+        let validator = jsonschema::validator_for(&file.parameters).map_err(|e| {
+            Refusal::Invalid(format!("{relative}: parameters are not a JSON Schema: {e}"))
+        })?;
         let mut pinned = vec![(
             relative.to_owned(),
             splinter_core::digest::Digest::of(text.as_bytes()),
@@ -212,10 +223,12 @@ impl External {
         });
         for code in &file.code {
             if code.starts_with('/') || code.split('/').any(|p| p == "..") {
-                return Err(format!("{relative}: code {code:?} leaves the repository"));
+                return Err(Refusal::Invalid(format!(
+                    "{relative}: code {code:?} leaves the repository"
+                )));
             }
             let digest = code_digest(&repository.join(code))
-                .map_err(|e| format!("{relative}: code {code}: {e}"))?;
+                .map_err(|e| Refusal::Invalid(format!("{relative}: code {code}: {e}")))?;
             pinned.push((code.clone(), digest));
         }
         let grant = grants.of(&file.name);
@@ -229,11 +242,14 @@ impl External {
             ungranted.push("the network".into());
         }
         if !ungranted.is_empty() {
-            return Err(format!(
-                "{relative}: {} needs {}, which this machine does not grant it (see `splinter config`, the operators section)",
-                file.name,
-                ungranted.join(", ")
-            ));
+            return Err(Refusal::Ungranted {
+                name: file.name.clone(),
+                why: format!(
+                    "{relative}: {} needs {}, which this machine does not grant it (see `splinter config`, the operators section)",
+                    file.name,
+                    ungranted.join(", ")
+                ),
+            });
         }
         let pinned_paths: Vec<PathBuf> = pinned
             .iter()
@@ -260,7 +276,10 @@ impl External {
         if problems.is_empty() {
             Ok(external)
         } else {
-            Err(format!("{relative}: {}", problems.join("; ")))
+            Err(Refusal::Invalid(format!(
+                "{relative}: {}",
+                problems.join("; ")
+            )))
         }
     }
 
@@ -284,8 +303,19 @@ impl External {
     }
 }
 
+/// Why an operator file was not loaded.
+enum Refusal {
+    /// It needs what this machine does not grant it. That matters only to a
+    /// recipe that uses it, so it is withheld from the registry, not an error.
+    Ungranted { name: String, why: String },
+    /// It is not a usable operator file.
+    Invalid(String),
+}
+
 /// Every operator of the repository at `repository` (`operators/*.yaml`),
-/// added to `registry`.
+/// added to `registry`. One this machine does not grant what it needs is
+/// withheld: a recipe that uses it is refused with that reason, and a recipe
+/// that does not is not affected by it.
 ///
 /// # Errors
 /// Every operator file that cannot be loaded, each with why.
@@ -306,13 +336,14 @@ pub fn with_operators(
     names.sort();
     let (mut registry, mut problems) = (registry, Vec::new());
     for name in names {
-        match External::load(repository, &format!("{OPERATORS_DIR}/{name}"), grants) {
+        match External::load_granted(repository, &format!("{OPERATORS_DIR}/{name}"), grants) {
             Ok(external) if registry.get(external.name()).is_some() => problems.push(format!(
                 "{OPERATORS_DIR}/{name}: {} is an operation already",
                 external.name()
             )),
             Ok(external) => registry = registry.with(external),
-            Err(why) => problems.push(why),
+            Err(Refusal::Ungranted { name, why }) => registry = registry.withholding(name, why),
+            Err(Refusal::Invalid(why)) => problems.push(why),
         }
     }
     if problems.is_empty() {

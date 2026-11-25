@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (an operator the machine does not grant stopped every recipe)
+- An operator the machine does not grant what it needs (a variable, the network) no longer fails every recipe of its repository: it is withheld from the registry, a recipe that does not use it resolves as before, and one that does is refused naming the operator and what it lacks. `workspace-init.sh` skips the collection step for a bench revision that has no `collections/`.
+
 ### Fixed (an agent that never asked its model was graded a failure)
 - A trial whose agent made no model request and completed no turn (a refused sampling setting, a missing binary) was a graded failure of the model. It is now an `agent_error`, which is never counted, so an arm whose agent could not start no longer reads as a model that solves nothing and cannot satisfy a promotion gate as the baseline it was beaten against.
 

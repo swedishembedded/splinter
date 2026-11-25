@@ -58,6 +58,8 @@ pub trait OperationSpec: Send + Sync {
 #[derive(Default)]
 pub struct Registry {
     operations: BTreeMap<String, Box<dyn OperationSpec>>,
+    /// Operations that exist but may not be used, by name, with why.
+    withheld: BTreeMap<String, String>,
 }
 
 impl std::fmt::Debug for Registry {
@@ -73,6 +75,20 @@ impl Registry {
         self.operations
             .insert(operation.descriptor().name, Box::new(operation));
         self
+    }
+
+    /// Note that the operation `name` exists but may not be used here, for `why`: a stage that names it is refused with that
+    /// reason instead of as an unknown operation.
+    #[must_use]
+    pub fn withholding(mut self, name: String, why: String) -> Self {
+        self.withheld.insert(name, why);
+        self
+    }
+
+    /// Why the operation `name` may not be used, when it exists but is withheld.
+    #[must_use]
+    pub fn withheld(&self, name: &str) -> Option<&str> {
+        self.withheld.get(name).map(String::as_str)
     }
 
     /// The operation named `name`.

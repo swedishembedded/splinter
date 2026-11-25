@@ -541,6 +541,10 @@ Granted variables are passed from the controller's environment by name (a
 grant never holds a value), credentials included, and the grant is part of the
 operator's pinned identity.
 
+An operator the machine does not grant what it needs is withheld, not an error: a recipe that
+does not use it resolves as if the file were absent, and one that does is refused, naming the operator and
+what it lacks.
+
 A collection an operator compiles is pinned like a collection file: bind the
 pin's `collection` to the operator's output, and its tasks (every directory
 holding a `task.toml`, of the pin's split) are read when the pin runs:

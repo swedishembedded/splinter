@@ -349,6 +349,13 @@ impl Compiler<'_> {
         // written below.
         let registry = self.registry;
         let Some(operation) = registry.get(&stage.uses) else {
+            if let Some(why) = registry.withheld(&stage.uses) {
+                self.problems.push(format!(
+                    "stage {id}: operation {:?} cannot be used: {why}",
+                    stage.uses
+                ));
+                return;
+            }
             self.problems.push(format!(
                 "stage {id}: no operation {:?}; there are: {}",
                 stage.uses,

@@ -309,6 +309,14 @@ fn an_operator_gets_only_the_variables_its_machine_grants() {
         "{refused}"
     );
 
+    // An operator the machine does not grant is no obstacle to a recipe that does not use it.
+    let unrelated = "schema: splinter.recipe/v2\nname: unrelated\ninputs:\n  notes: { kind: files, path: notes }\nstages:\n  - { id: pin, uses: tasks.pin, inputs: { collection: $inputs.notes } }\n";
+    let refused = resolve_in(&repo.root, unrelated, connections(), &Grants::default())
+        .err()
+        .map(|e| e.0.join("\n"))
+        .unwrap_or_default();
+    assert!(!refused.contains("does not grant"), "{refused}");
+
     let grants = Grants::parse(
         "schema: splinter.operator-grants/v1\ngrants:\n  text.sign: { env: [SIGNING_KEY] }\n",
     )
