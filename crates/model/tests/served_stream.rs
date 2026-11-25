@@ -202,3 +202,91 @@ fn a_run_the_server_lost_is_a_restart_and_continues_in_the_next_epoch() {
     assert_eq!(duplicates, ["a", "b"], "committed before the restart");
     assert_eq!(accepted, ["c"], "lost with the restart, taken again");
 }
+
+#[test]
+fn a_run_is_ready_once_its_server_serves_its_policy_and_one_that_never_does_is_refused_by_name() {
+    // A real server lists the run's policy only once its base has loaded and its first version is published:
+    // rollouts drawn before then are answered "model not found".
+    let rig = rig();
+    let withheld = |after: Duration| {
+        ScriptedEndpoint::start(vec![]).with_training(JobScript {
+            stream: StreamScript {
+                withhold_policy: Some(after),
+                ..StreamScript::default()
+            },
+            ..JobScript::over(rig.store.clone())
+        })
+    };
+    let service = withheld(Duration::from_millis(600));
+    let brain = endpoints(&service, &rig);
+    let mut job = StreamJob::start(&brain, &spec(10, 20)).unwrap();
+    let started = Instant::now();
+    job.await_served(Duration::from_secs(30)).unwrap();
+    assert!(
+        started.elapsed() >= Duration::from_millis(300),
+        "ready after {:?}, before the policy was served",
+        started.elapsed()
+    );
+    // What the run reported while it was awaited is still reported.
+    job.offer(&group("g0")).unwrap();
+    let seen = events_until(&mut job, |e| {
+        e.iter().any(|e| matches!(e, StreamEvent::Applied { .. }))
+    });
+    assert!(!seen.is_empty());
+
+    let never = withheld(Duration::MAX);
+    let brain = endpoints(&never, &rig);
+    let mut job = StreamJob::start(&brain, &spec(10, 20)).unwrap();
+    let refused = job.await_served(Duration::from_millis(500)).unwrap_err();
+    assert!(
+        refused.to_string().contains("local/toy:splinter:online:v"),
+        "{refused}"
+    );
+}
+
+#[test]
+fn a_finished_runs_result_is_read_once_its_job_has_ended() {
+    // brain answers 409 ("the job has not finished") while a finished run still writes its outputs: the receipts
+    // of its last step can arrive before its result exists.
+    let rig = rig();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        stream: StreamScript {
+            result_pending: 3,
+            ..StreamScript::default()
+        },
+        ..JobScript::over(rig.store.clone())
+    });
+    let brain = endpoints(&service, &rig);
+    let mut job = StreamJob::start(&brain, &spec(10, 20)).unwrap();
+    job.offer(&group("g0")).unwrap();
+    job.finish().unwrap();
+    let outputs = job.result().unwrap();
+    assert!(outputs["adapter_digest"].is_string(), "{outputs}");
+}
+
+#[test]
+fn a_finish_the_server_does_not_answer_is_made_again() {
+    // A connection the server closes as the finish is sent (an idle keep-alive it dropped) is no answer: the run
+    // still holds its groups and ends only when it is told again.
+    let rig = rig();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        stream: StreamScript {
+            unanswered_finishes: 2,
+            ..StreamScript::default()
+        },
+        ..JobScript::over(rig.store.clone())
+    });
+    let brain = endpoints(&service, &rig);
+    let mut job = StreamJob::start(&brain, &spec(10, 20)).unwrap();
+    job.offer(&group("g0")).unwrap();
+    job.finish().unwrap();
+    let seen = events_until(&mut job, |e| {
+        e.iter().any(|e| matches!(e, StreamEvent::Done { .. }))
+    });
+    assert_eq!(committed(&seen), ["g0"], "{seen:?}");
+    assert_eq!(
+        service.jobs().stream_runs.finishes(),
+        1,
+        "the run was finished once"
+    );
+}

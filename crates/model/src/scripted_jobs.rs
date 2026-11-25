@@ -323,7 +323,7 @@ fn create(stream: &mut TcpStream, jobs: &Jobs, script: &JobScript, body: &[u8]) 
     }
     let params = call["params"].clone();
     if action == "train" && params["stream"].is_string() {
-        match crate::scripted_stream::create(&jobs.stream_runs, &params) {
+        match crate::scripted_stream::create(&jobs.stream_runs, &script.stream, &params) {
             Ok(_) => {
                 jobs.created.lock().unwrap().push(params);
                 jobs.actions.lock().unwrap().push(action);

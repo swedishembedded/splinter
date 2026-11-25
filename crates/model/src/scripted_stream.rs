@@ -28,7 +28,9 @@
 //! never while an offer is answered, so a test can fill the queue between
 //! two reads. What a script can make it do ([`StreamScript`]): restart once a number of
 //! steps is reached (the job is then unknown, 404, and a new create of the
-//! same run continues it in the next epoch, losing what was not committed).
+//! same run continues it in the next epoch, losing what was not committed),
+//! and list the run's policy (`GET /v1/models`) only some time after the job
+//! was created, as brain does while it loads the base.
 
 // Test support: a poisoned lock or a socket that cannot be written is the
 // failure report.
@@ -51,6 +53,18 @@ pub struct StreamScript {
     pub restart_at_step: Option<u64>,
     /// While set, the run takes no step: a test fills its queue.
     pub paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The run's policy is listed this long after the job was created
+    /// (`Duration::MAX`: never); `None` lists it from the start. brain lists
+    /// it once the base is loaded and the first version published.
+    pub withhold_policy: Option<std::time::Duration>,
+    /// The first this many `result` reads are answered 409 ("the job has
+    /// not finished"), as brain answers while a finished run writes its
+    /// outputs.
+    pub result_pending: u32,
+    /// The first this many `finish` calls are dropped unanswered (the
+    /// connection closed), as a server that dropped an idle connection the
+    /// client reused does.
+    pub unanswered_finishes: u32,
 }
 
 /// One group waiting in the queue.
@@ -87,6 +101,8 @@ struct Live {
     done: bool,
     gone: bool,
     dropped_stale: u64,
+    /// When the run's policy is listed (`None`: never).
+    served_from: Option<std::time::Instant>,
 }
 
 /// The streaming runs of the scripted service.
@@ -97,6 +113,8 @@ pub struct Streams {
     offered: Mutex<Vec<String>>,
     trained: Mutex<Vec<String>>,
     finished: Mutex<usize>,
+    results_pending: Mutex<u32>,
+    finishes_dropped: Mutex<u32>,
 }
 
 impl Streams {
@@ -123,6 +141,16 @@ impl Streams {
     /// kind was created.
     pub(crate) fn clear(&self) {
         *self.live.lock().unwrap() = None;
+    }
+
+    /// The policy id the live run serves now, as `GET /v1/models` lists it.
+    pub(crate) fn served_policy(&self) -> Option<String> {
+        let live = self.live.lock().unwrap();
+        let run = live.as_ref().filter(|run| !run.gone)?;
+        run.served_from
+            .is_some_and(|from| std::time::Instant::now() >= from)
+            .then(|| run.doc["publish_adapter"].as_str().map(str::to_string))
+            .flatten()
     }
 
     /// Every group key offered, in order, each time it was offered.
@@ -176,7 +204,11 @@ pub(crate) enum NotCreated {
     Busy(String),
 }
 
-pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, NotCreated> {
+pub(crate) fn create(
+    streams: &Streams,
+    script: &StreamScript,
+    params: &Value,
+) -> Result<u64, NotCreated> {
     let doc: Value = serde_json::from_str(params["stream"].as_str().unwrap_or("{}"))
         .map_err(|e| NotCreated::Invalid(format!("stream: {e}")))?;
     for field in [
@@ -245,6 +277,10 @@ pub(crate) fn create(streams: &Streams, params: &Value) -> Result<u64, NotCreate
         done: false,
         gone: false,
         dropped_stale: 0,
+        served_from: match script.withhold_policy {
+            None => Some(std::time::Instant::now()),
+            Some(after) => std::time::Instant::now().checked_add(after),
+        },
     });
     Ok(epoch)
 }
@@ -526,6 +562,17 @@ pub(crate) fn route(
         let Some(run) = live.as_ref() else {
             return false;
         };
+        let mut pending = streams.results_pending.lock().unwrap();
+        if *pending < script.result_pending {
+            *pending += 1;
+            refuse(
+                stream,
+                "409 Conflict",
+                "the job has not finished",
+                Value::Null,
+            );
+            return true;
+        }
         let durable = durable_map
             .get(&run.resume_key)
             .cloned()
@@ -543,6 +590,14 @@ pub(crate) fn route(
     let finish = request_line.contains("/finish");
     if !finish && !request_line.contains("/records") {
         return false;
+    }
+    if finish {
+        let mut dropped = streams.finishes_dropped.lock().unwrap();
+        if *dropped < script.unanswered_finishes {
+            *dropped += 1;
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return true;
+        }
     }
     let Some(run) = addressed(stream, &mut live, &durable_map, request_line) else {
         return true;

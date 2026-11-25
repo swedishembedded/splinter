@@ -45,6 +45,7 @@ use serde_json::{json, Map, Value};
 use super::job::{message_of, EventParser};
 
 mod place;
+mod waits;
 use crate::endpoint::BrainEndpoints;
 use place::with_sources;
 pub use place::JobPlace;
@@ -257,6 +258,8 @@ pub struct StreamJob {
     publish_adapter: String,
     tokenizer_digest: Option<String>,
     frames: Receiver<Value>,
+    /// Frames read while the policy was awaited, reported first by `events`.
+    held: std::collections::VecDeque<Value>,
     stop: Arc<AtomicBool>,
     reader: Option<std::thread::JoinHandle<()>>,
     /// Since when the endpoint could not be reached, while it cannot.
@@ -426,6 +429,7 @@ impl StreamJob {
             publish_adapter: String::new(),
             tokenizer_digest: None,
             frames,
+            held: std::collections::VecDeque::new(),
             stop,
             reader: Some(reader),
             unreachable_since: None,
@@ -572,7 +576,8 @@ impl StreamJob {
     /// The run restarted (a `stream` frame of another epoch).
     pub fn events(&mut self) -> Result<Vec<StreamEvent>, StreamError> {
         let mut events = Vec::new();
-        for frame in self.frames.try_iter() {
+        let held: Vec<Value> = self.held.drain(..).collect();
+        for frame in held.into_iter().chain(self.frames.try_iter()) {
             let groups = || keys(&frame["groups"]);
             let number = |key: &str| frame[key].as_u64().unwrap_or(0);
             match frame["type"].as_str().unwrap_or_default() {
@@ -627,58 +632,6 @@ impl StreamJob {
             }
         }
         Ok(events)
-    }
-
-    /// The ended run's outputs (`GET /jobs/{id}/result`): its final adapter
-    /// in the artifact store (`adapter_digest`, a BLAKE3 hex name) among
-    /// them. The versions it published are named by their adapter files'
-    /// SHA-256, which the artifact store does not name.
-    ///
-    /// # Errors
-    /// The run has not ended, restarted, or the endpoint failed.
-    pub fn result(&mut self) -> Result<Value, StreamError> {
-        let url = format!("{}/jobs/{}/result", self.url, self.id);
-        let sent = self.runtime.block_on(async {
-            self.client
-                .get(url)
-                .bearer_auth(&self.key)
-                .timeout(CALL)
-                .send()
-                .await
-        });
-        let response = sent.map_err(|e| StreamError::Transport(format!("{}: {e}", self.url)))?;
-        let status = response.status().as_u16();
-        let text = self.runtime.block_on(response.text()).unwrap_or_default();
-        if status != 200 {
-            return Err(self.refusal(status, &text));
-        }
-        let body: Value = serde_json::from_str(&text).map_err(|e| {
-            StreamError::Transport(format!("{}: a result that is not JSON: {e}", self.url))
-        })?;
-        Ok(body["outputs"].clone())
-    }
-
-    /// No more groups: the run trains what it holds, commits and ends.
-    ///
-    /// # Errors
-    /// The run restarted or the endpoint failed.
-    pub fn finish(&mut self) -> Result<(), StreamError> {
-        let url = format!("{}/jobs/{}/finish?epoch={}", self.url, self.id, self.epoch);
-        let sent = self.runtime.block_on(async {
-            self.client
-                .post(url)
-                .bearer_auth(&self.key)
-                .timeout(CALL)
-                .send()
-                .await
-        });
-        let response = sent.map_err(|e| StreamError::Transport(format!("{}: {e}", self.url)))?;
-        let status = response.status().as_u16();
-        let text = self.runtime.block_on(response.text()).unwrap_or_default();
-        if (200..300).contains(&status) {
-            return Ok(());
-        }
-        Err(self.refusal(status, &text))
     }
 }
 

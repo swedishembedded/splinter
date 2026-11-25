@@ -262,10 +262,18 @@ impl Drop for ScriptedEndpoint {
     }
 }
 
+/// The digest a streaming run's served policy is listed with (the double
+/// lists the id, not a version's bytes).
+const SERVED_POLICY_DIGEST: &str =
+    "sha256:5e00000000000000000000000000000000000000000000000000000000000000";
+
 /// The cards the endpoint lists now: its models, and the adapter its
-/// manifest names.
+/// manifest names, and the policy a streaming run serves.
 fn listed(shared: &Shared) -> Vec<Card> {
     let mut cards = shared.models.lock().unwrap().clone();
+    if let Some(policy) = shared.jobs.stream_runs.served_policy() {
+        cards.push(Card::adapter(&policy, SERVED_POLICY_DIGEST));
+    }
     if let Some((path, id)) = shared.manifest.lock().unwrap().as_ref() {
         if let Ok(text) = std::fs::read_to_string(path) {
             if let Some(digest) = serde_json::from_str::<serde_json::Value>(&text)

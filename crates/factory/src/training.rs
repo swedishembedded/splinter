@@ -33,6 +33,10 @@ use splinter_model::LocalWeights;
 
 use crate::recipe::ModelRef;
 
+/// How long a new online run may take to serve its first version: brain loads the base (minutes for a large one
+/// read from a network disk) before it publishes the policy rollouts are drawn from.
+const POLICY_SERVED_WAIT: std::time::Duration = std::time::Duration::from_secs(900);
+
 /// Why a trainer refused or failed.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -633,12 +637,14 @@ impl Trainer for BrainTrainer {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(TrainError(format!("{}: {e}", request.job_place.display()))),
         }
-        let job = StreamJob::start(&self.endpoints, &spec).map_err(error)?;
+        let mut job = StreamJob::start(&self.endpoints, &spec).map_err(error)?;
         let kept = request.job_place.with_extension("tmp");
         serde_json::to_vec(&job.job_place())
             .map_err(error)
             .and_then(|bytes| std::fs::write(&kept, bytes).map_err(error))
             .and_then(|()| std::fs::rename(&kept, request.job_place).map_err(error))?;
+        // Rollouts are drawn from the published policy: none starts before the server serves it.
+        job.await_served(POLICY_SERVED_WAIT).map_err(error)?;
         Ok(Box::new(crate::online::brain::BrainLearner::new(
             job, store,
         )))
