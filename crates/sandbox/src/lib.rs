@@ -68,6 +68,6 @@ pub use container::{ContainerSandbox, ImageRef, ImageRefError};
 pub use environment::{ResolvedEnvironment, RuntimeEnvironment};
 pub use host::ProcessSandbox;
 pub use limits::Limits;
-pub use runtime::{ResolvedRuntime, RuntimeError, RuntimeRegistry, RuntimeSpec};
+pub use runtime::{Guard, ResolvedRuntime, RuntimeError, RuntimeRegistry, RuntimeSpec};
 pub use workspace::{Baseline, Patch, TreeSnapshot, WorkspaceEnvironment};
 pub use workspace_host::WorkspaceHost;

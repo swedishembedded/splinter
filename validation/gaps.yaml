@@ -1348,3 +1348,32 @@ gaps:
   resolution: a fact or correction that cites tool observations is refused (Refusal::Procedure, as one citing tool calls
     already was), so its terms can only come from the person's words; specified for the planted instruction cited as a quote,
     as an observation, and with the person's question alone; mutant observation-backs-a-fact
+- id: G-NEW-18
+  source_id: null
+  where: crates/eval/src/verifiers/executable.rs:run_check with the lua runtime (crates/sandbox/src/runtime.rs)
+  what: 'A Lua answer and its checks ran as one chunk, and every name a check calls is a global in Lua: an answer that
+    replaced assert with a function doing nothing and print with one writing the expected line passed every check of
+    construct-lua and debug-lua while computing the wrong result (found by the Lua conformance table).'
+  severity: high
+  confidence: high (reproduced by executable_lua_conformance::the_executable_verifier_conforms_for_lua)
+  status: fixed
+  resolution: the lua runtime carries a guard that keeps the interpreter's own functions and libraries before the answer,
+    out of its reach (under a digest-derived name, the debug library and native loading taken away), and binds them again
+    for the check after it, print rebuilt from the kept tostring; mutants lua-checks-unguarded, lua-print-calls-global-tostring
+    and lua-debug-left-to-the-answer. What remains is for the check to see. A value the answer returns prints as its own
+    __tostring says, so a check of what is printed alone is shown 4 by a table; a check that asserts the kept type sees
+    through it (both asserted in the table)
+- id: G-NEW-19
+  source_id: null
+  where: crates/eval/src/verifiers/executable.rs (Python checks run in the answer's process)
+  what: 'Python runs the answer and the check in one process, where nothing can be kept out of the answer''s reach (globals(),
+    sys._getframe, gc, the builtins module), so an answer can forge what a check observes: rebinding builtins.print to
+    write the expected line passes a check of what is printed, returning an object equal to everything passes a check
+    of assertions, and the two together pass a task that has both. A guard like Lua''s would be one scan of globals() away
+    from defeat.'
+  severity: high
+  confidence: high (asserted as known gaps in verifier_conformance::the_executable_verifier_conforms)
+  status: confirmed
+  resolution: open; closing it needs the check never to run the answer's code in its own process, e.g. the answer served
+    by a separate interpreter and called with plain data (JSON arguments and results) so no answer object reaches the
+    check; that changes what a Python check may do and is a decision for the check protocol

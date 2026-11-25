@@ -212,14 +212,20 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
 - the promotion decision rule, the canary check, the `tasks canaries` command and the graded-answer gate's
   improvement, retention and anchor checks had no production caller after the legacy removal and are deleted; the
   records stored releases carry stay readable. Every crate's documentation builds without a warning.
+- executable verifier under Lua (4A, G-NEW-18 found): `construct-lua` and `debug-lua` had no table; the Lua one
+  found that an answer rebinding the globals `assert` and `print` passed every check with a wrong function. The
+  `lua` runtime now carries a guard that keeps the interpreter's own names before the answer and binds them again
+  for the check, three mutants killed. The same table for Python found that one process can forge what any check
+  observes (G-NEW-19, open: it needs the check out of the answer's process, a decision for the check protocol).
 
 ## Open
 
-- Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 107; 84 fixed, 18 rejected):
+- Confirmed and open, each in `validation/gaps.yaml` with its proposal (5 of 112; 88 fixed, 19 rejected):
   the learning-method smokes cannot run against the current brain (G-NEW-06, a cross-project contract), so they
   also lack repeated seeds, negative controls and stored baselines (G-EK-14); brain supervises the assistant
   header on plain conversations (G-NEW-03, brain's); the preference, feedback, distill and retrieval
-  projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B).
+  projections and the factory's product statistics have no second implementation yet (G-FS-17, 6B); a Python
+  answer can forge what its checks observe (G-NEW-19).
 - Not built: the repository and document plugins against external references (4B) and the task-kind matrix of the
-  kinds needing a run's runtime, sources or judge (4A), the rest of the scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
+  kinds only a judge grades (4A; the code kinds have the executable verifier's Python and Lua tables), the rest of the scripted agent transcripts (5A), model-assisted extraction measured against labelled sessions (3B), crash injection beyond the product store, deterministic learning environments and negative controls (12A-12E).
 - Not possible here: phases 13-15 (GPU numerics, real-model integration, learning-performance campaigns).

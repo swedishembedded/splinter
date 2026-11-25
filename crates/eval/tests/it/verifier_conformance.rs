@@ -8,7 +8,8 @@
 // email to info@swedishembedded.com.
 
 //! Spec: one table per verifier (executable code, exact reference, stated
-//! reference; the workspace verifier's is in `workspace_conformance`) of what it must decide for the right answer,
+//! reference; the workspace verifier's is in `workspace_conformance`, the
+//! executable verifier's for Lua in `executable_lua_conformance`) of what it must decide for the right answer,
 //! wrong ones, the right answer written another way, boundaries, missing
 //! evidence, a process that ends early, attempts to reach the hidden tests,
 //! to change what the verifier runs, and output made to look like a success.
@@ -186,6 +187,52 @@ fn the_executable_verifier_conforms() {
         "prints the expected output without computing it",
         Want::Fail,
         Some("def add(a, b):\n    print(4)\n    return 5\n"),
+    );
+
+    // Known gaps (G-NEW-19): Python runs the answer and the check in one
+    // process, where nothing can be kept out of the answer's reach, so an
+    // answer can forge what a check observes: builtins.print rebound for a
+    // check of what is printed, an object equal to everything for a check of
+    // assertions, and both together for the task's two checks.
+    let alone = |index: usize| {
+        task(
+            "code",
+            record(&env),
+            vec![checks()[index].as_check().unwrap()],
+        )
+    };
+    let forged = "import builtins\n_p = builtins.print\n\n\ndef print(*a, **k):\n    _p(*(a if k else ('4',)), **k)\n\n\ndef add(a, b):\n    return a - b\n";
+    let (outcome, _, _) = verdict(
+        &verifier,
+        &alone(1),
+        &experience(&alone(1), Some(forged), "s"),
+    );
+    table.gap(
+        Class::ConfigTampering,
+        "print rebound, on a check of what is printed alone",
+        Want::Fail,
+        outcome,
+    );
+    let equal = "class Any:\n    def __eq__(self, other):\n        return True\n\n\ndef add(a, b):\n    return Any()\n";
+    let (outcome, _, _) = verdict(
+        &verifier,
+        &alone(0),
+        &experience(&alone(0), Some(equal), "s"),
+    );
+    table.gap(
+        Class::Incorrect,
+        "an object equal to everything, on a check of assertions alone",
+        Want::Fail,
+        outcome,
+    );
+
+    let both = "import builtins\n_p = builtins.print\n\n\ndef print(*a, **k):\n    _p(*(a if k else ('4',)), **k)\n\n\nclass Any:\n    def __eq__(self, other):\n        return True\n\n\ndef add(a, b):\n    return Any()\n";
+    let (outcome, _, _) = verdict(&verifier, &code, &experience(&code, Some(both), "s"));
+    table.gap(
+        Class::ConfigTampering,
+        "print rebound and an object equal to everything, on both checks",
+        Want::Fail,
+        outcome,
     );
 
     let no_checks = task("code", record(&env), vec![]);

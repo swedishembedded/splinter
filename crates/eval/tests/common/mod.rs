@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 
-//! Fixtures the verifier specs share: tasks, experiences, a python
-//! environment in the process sandbox, and reading a verdict back.
+//! Fixtures the verifier specs share: tasks, experiences, python and Lua
+//! environments in the process sandbox, and reading a verdict back.
 
 // Each spec binary uses a subset of these helpers.
 #![allow(dead_code, clippy::unwrap_used)]
@@ -46,8 +46,17 @@ impl Drop for Scratch {
 
 /// python3 in the process sandbox under `limits`.
 pub fn python(scratch: &Scratch, limits: Limits) -> RuntimeEnvironment {
+    runtime(scratch, "python3", limits)
+}
+
+/// Lua 5.1 in the process sandbox under `limits`.
+pub fn lua(scratch: &Scratch, limits: Limits) -> RuntimeEnvironment {
+    runtime(scratch, "lua", limits)
+}
+
+fn runtime(scratch: &Scratch, name: &str, limits: Limits) -> RuntimeEnvironment {
     let sandbox = ProcessSandbox::new(&scratch.0, BTreeMap::new(), &[], limits);
-    RuntimeEnvironment::new(&RuntimeRegistry::builtin(), "python3", Arc::new(sandbox)).unwrap()
+    RuntimeEnvironment::new(&RuntimeRegistry::builtin(), name, Arc::new(sandbox)).unwrap()
 }
 
 /// The record a task keeps of `env`.

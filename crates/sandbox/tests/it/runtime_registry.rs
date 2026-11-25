@@ -64,6 +64,7 @@ fn a_missing_executable_is_a_typed_error() {
         version_argv: Some(vec!["{exe}".into(), "--version".into()]),
         completion: "print('{line}')".into(),
         version_prefix: None,
+        guard: None,
     });
     let missing = RuntimeEnvironment::new(&registry, "ghost", sandbox(Limits::default()));
     assert!(

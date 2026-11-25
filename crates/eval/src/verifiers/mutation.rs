@@ -40,7 +40,7 @@ use splinter_sandbox::{CodeCall, RuntimeEnvironment};
 use splinter_core::kinds::GENERATED_TEST;
 
 use super::executable::{
-    assemble, parse_checks, program_text, run_check, run_evidence, ExecutableCheck, Offered,
+    parse_checks, program_text, run_check, run_evidence, ExecutableCheck, Offered,
 };
 use super::{single_reference, Finding, Verifier, VerifyError};
 
@@ -376,7 +376,7 @@ pub fn validate_oracle(
     runtime: &RuntimeEnvironment,
     policy: &MutationPolicy,
 ) -> Result<OracleValidation, VerifyError> {
-    let on_reference = run_check(runtime, assemble(reference, &test.code), test)?;
+    let on_reference = run_check(runtime, reference, test)?;
     let mut validation = OracleValidation {
         admitted: false,
         passes_reference: on_reference.passed(),
@@ -397,7 +397,7 @@ pub fn validate_oracle(
         })?;
         if alone.timed_out || alone.exit_code != Some(0) {
             validation.errored += 1;
-        } else if run_check(runtime, assemble(&mutant.text, &test.code), test)?.passed() {
+        } else if run_check(runtime, &mutant.text, test)?.passed() {
             validation.survived += 1;
         } else {
             validation.killed += 1;
@@ -474,10 +474,9 @@ impl Verifier for MutationValidatedVerifier {
             if validation.admitted {
                 admitted += 1;
                 if let Some(solution) = solution {
-                    let program = assemble(solution, &test.code);
-                    let result = run_check(env, program.clone(), test)?;
+                    let result = run_check(env, solution, test)?;
                     passed &= result.passed();
-                    run = run_evidence(digest, &program, env, environment, &result);
+                    run = run_evidence(digest, env, environment, &result);
                 }
             }
             reports.push(json!({ "test": digest, "validation": validation, "run": run }));

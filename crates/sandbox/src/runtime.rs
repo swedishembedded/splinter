@@ -12,7 +12,9 @@
 //! A [`RuntimeSpec`] says how to run a code file (an argv template), what
 //! extension the file gets, how to ask the runtime its version, and how a
 //! program in its language prints one line (the statement a verifier
-//! appends to see that the code before it ran to its end). A
+//! appends to see that the code before it ran to its end) and, where the
+//! language lets a solver's code rebind the names a verifier's code calls,
+//! how to keep them (a [`Guard`]). A
 //! sandbox resolves it to a [`ResolvedRuntime`]: the program it will run,
 //! the version string that program reports, and - where the sandbox can see
 //! the executable - the digest of its content. Those are what an
@@ -40,6 +42,10 @@ pub const FILE: &str = "{file}";
 
 /// The placeholder in a completion statement for the line it prints.
 pub const LINE: &str = "{line}";
+
+/// The placeholder in a [`Guard`] for the name it keeps the runtime's own
+/// names under.
+pub const NAME: &str = "{name}";
 
 /// What the version line of the `lua` runtime must begin with.
 pub const LUA_VERSION: &str = "Lua 5.1";
@@ -79,7 +85,82 @@ pub struct RuntimeSpec {
     /// in 5.4. `None` accepts any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_prefix: Option<String>,
+    /// How code a verifier appends after a solver's calls the language's
+    /// own functions whatever the solver's code rebound; `None` where it
+    /// cannot rebind what a check relies on (Python's `assert` is a
+    /// statement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guard: Option<Guard>,
 }
+
+/// Statements that keep a runtime's own names for the code after a
+/// solver's: [`Guard::prelude`] runs before the solver's code and keeps the
+/// names under [`NAME`], an identifier the solver cannot know (it is derived
+/// from a digest of the program that holds the check) and so cannot reach;
+/// [`Guard::rebind`] follows the solver's code and binds the names, for the
+/// code after it, to what was kept. The solver's own functions still see
+/// what the solver bound: only the appended code is held to the originals.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Guard {
+    /// Keeps the runtime's names under [`NAME`].
+    pub prelude: String,
+    /// Binds them again, for the code after it.
+    pub rebind: String,
+}
+
+impl Guard {
+    /// The prelude, keeping the names under `name`.
+    #[must_use]
+    pub fn prelude_for(&self, name: &str) -> String {
+        self.prelude.replace(NAME, name)
+    }
+
+    /// The rebinding, from what was kept under `name`.
+    #[must_use]
+    pub fn rebind_for(&self, name: &str) -> String {
+        self.rebind.replace(NAME, name)
+    }
+}
+
+/// Lua 5.1 keeps every base function and a copy of every standard library
+/// table in a closure, then takes the debug library and native code loading
+/// away from the solver's code: with them it could reach the closure or the
+/// appended code's locals. `print` is rebuilt from the kept `tostring` and
+/// `io.write`, since Lua's own `print` calls whatever `tostring` is global
+/// when it runs. The rebinding declares locals of the same names, so the
+/// appended code's `assert`, `print`, `string.format` and the rest are the
+/// kept ones. A method call on a string (`s:rep(2)`) still goes through
+/// the string metatable to the shared `string` table.
+const LUA_PRELUDE: &str = concat!(
+    "local {name} = (function(G, pairs, loaded, package) ",
+    "local names, libraries, kept = {\"assert\", \"collectgarbage\", \"dofile\", \"error\", ",
+    "\"gcinfo\", \"getfenv\", \"getmetatable\", \"ipairs\", \"load\", \"loadfile\", ",
+    "\"loadstring\", \"module\", \"newproxy\", \"next\", \"pairs\", \"pcall\", \"print\", ",
+    "\"rawequal\", \"rawget\", \"rawset\", \"require\", \"select\", \"setfenv\", ",
+    "\"setmetatable\", \"tonumber\", \"tostring\", \"type\", \"unpack\", \"xpcall\", \"_G\", ",
+    "\"_VERSION\"}, {\"coroutine\", \"debug\", \"io\", \"math\", \"os\", \"package\", ",
+    "\"string\", \"table\"}, {} ",
+    "for i = 1, #names do kept[names[i]] = G[names[i]] end ",
+    "for i = 1, #libraries do local c = {} for k, v in pairs(G[libraries[i]]) do c[k] = v end ",
+    "kept[libraries[i]] = c end ",
+    "local write, tostring, select = kept.io.write, kept.tostring, kept.select ",
+    "kept.print = function(...) for i = 1, select(\"#\", ...) do if i > 1 then write(\"\\t\") end ",
+    "write(tostring((select(i, ...)))) end write(\"\\n\") end ",
+    "G.debug, loaded.debug, package.loadlib, package.loaders[3], package.loaders[4] = ",
+    "nil, nil, nil, nil, nil ",
+    "return function() local out, n = {}, #names for i = 1, n do out[i] = kept[names[i]] end ",
+    "for i = 1, #libraries do local c = {} for k, v in pairs(kept[libraries[i]]) do c[k] = v end ",
+    "out[n + i] = c end return kept.unpack(out, 1, n + #libraries) end ",
+    "end)(_G, pairs, package.loaded, package)",
+);
+
+/// The rebinding for [`LUA_PRELUDE`]: its names, in its order.
+const LUA_REBIND: &str = concat!(
+    "local assert, collectgarbage, dofile, error, gcinfo, getfenv, getmetatable, ipairs, load, ",
+    "loadfile, loadstring, module, newproxy, next, pairs, pcall, print, rawequal, rawget, rawset, ",
+    "require, select, setfenv, setmetatable, tonumber, tostring, type, unpack, xpcall, _G, ",
+    "_VERSION, coroutine, debug, io, math, os, package, string, table = {name}()",
+);
 
 impl RuntimeSpec {
     fn new(
@@ -98,7 +179,15 @@ impl RuntimeSpec {
             version_argv: version_argv.map(owned),
             completion: completion.to_string(),
             version_prefix: None,
+            guard: None,
         }
+    }
+
+    /// This runtime, its appended code held to the names `guard` keeps.
+    #[must_use]
+    pub fn guarded(mut self, guard: Guard) -> Self {
+        self.guard = Some(guard);
+        self
     }
 
     /// This runtime, refused unless its version probe begins with `prefix`.
@@ -119,6 +208,7 @@ impl RuntimeSpec {
             version_argv: Some(vec![EXE.to_string(), "--version".to_string()]),
             completion: String::new(),
             version_prefix: None,
+            guard: None,
         }
     }
 
@@ -175,7 +265,11 @@ impl RuntimeRegistry {
                 Some(&[EXE, "-v"]),
                 "io.write(\"{line}\\n\")",
             )
-            .requiring_version(LUA_VERSION),
+            .requiring_version(LUA_VERSION)
+            .guarded(Guard {
+                prelude: LUA_PRELUDE.to_string(),
+                rebind: LUA_REBIND.to_string(),
+            }),
             RuntimeSpec::new(
                 "node",
                 &[EXE, FILE],

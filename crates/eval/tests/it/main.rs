@@ -18,6 +18,7 @@ mod consolidation_gate;
 mod denoise_verifier;
 mod diagnosis;
 mod evidence_gate;
+mod executable_lua_conformance;
 mod executable_verifier;
 mod exposure_audit;
 mod external_student;

@@ -34,6 +34,14 @@
 //! compared. A check that expects a failing exit status is exempt: ending
 //! the program early may be exactly what it tests. Completion is recorded
 //! as `check_completed` (`null` where it was not asked).
+//!
+//! A check must also call the language's own functions. Where a solution
+//! can rebind what a check relies on (in Lua, `assert` and `print` are
+//! globals: `function assert() end` would make every check pass), the
+//! runtime's [`Guard`] keeps the originals before the solution, under a
+//! name derived from the same digest, and binds them again for the check
+//! after it. The digests in the evidence are of the solution and the check
+//! alone, as before.
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -43,7 +51,7 @@ use splinter_core::evidence::EXECUTABLE_PRODUCER;
 use splinter_core::experience::{Environment, Experience, Privileged, PrivilegedKind, Task};
 use splinter_core::kinds::{EXECUTABLE_CHECK, GENERATED_TEST};
 use splinter_sandbox::{
-    CodeCall, CodeResult, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
+    CodeCall, CodeResult, Guard, ResolvedEnvironment, RuntimeEnvironment, SandboxError,
 };
 
 use super::normalise::Normalisation;
@@ -168,7 +176,7 @@ pub fn program_text(output: &str) -> &str {
 }
 
 /// `solution` followed by `check_code`, on a line of its own.
-pub(crate) fn assemble(solution: &str, check_code: &str) -> String {
+fn assemble(solution: &str, check_code: &str) -> String {
     let mut program = solution.to_string();
     if !program.is_empty() && !program.ends_with('\n') {
         program.push('\n');
@@ -238,6 +246,8 @@ impl Offered {
 
 /// One check run.
 pub(crate) struct CheckRun {
+    /// The solution followed by the check: what the evidence digests.
+    pub(crate) program: String,
     /// How the run ended, the completion line removed from its output.
     pub(crate) result: CodeResult,
     /// Whether the check was seen to finish; `None` when it was not asked.
@@ -252,23 +262,28 @@ impl CheckRun {
     }
 }
 
-/// Runs `program` as `check` says in `env`, followed by the completion
+/// Runs `solution` followed by `check` in `env` as the check says: inside
+/// the runtime's guard, if it has one, and followed by the completion
 /// statement when the check needs one (see the module documentation).
 pub(crate) fn run_check(
     env: &RuntimeEnvironment,
-    program: String,
+    solution: &str,
     check: &ExecutableCheck,
 ) -> Result<CheckRun, SandboxError> {
-    let line = check.expect.needs_completion().then(|| {
-        format!(
-            "splinter-check-completed-{}",
-            Digest::of(program.as_bytes())
-        )
-    });
-    let code = match &line {
-        Some(line) => assemble(&program, &env.runtime().spec.completion_for(line)),
-        None => program,
+    let program = assemble(solution, &check.code);
+    let digest = Digest::of(program.as_bytes());
+    let spec = &env.runtime().spec;
+    let line = check
+        .expect
+        .needs_completion()
+        .then(|| format!("splinter-check-completed-{digest}"));
+    let mut code = match &spec.guard {
+        Some(guard) => guarded(guard, &digest, solution, &check.code),
+        None => program.clone(),
     };
+    if let Some(line) = &line {
+        code = assemble(&code, &spec.completion_for(line));
+    }
     let mut result = env.run(&CodeCall {
         code,
         stdin: check.stdin.clone(),
@@ -276,10 +291,21 @@ pub(crate) fn run_check(
     let completed = line.map(|line| strip_completion(&mut result.stdout, &line));
     let unmet = check.expect.unmet(&result, completed);
     Ok(CheckRun {
+        program,
         result,
         completed,
         unmet,
     })
+}
+
+/// `solution` between `guard`'s prelude and its rebinding, then
+/// `check_code`; the kept names sit under an identifier derived from
+/// `digest`, which the solution cannot know.
+fn guarded(guard: &Guard, digest: &Digest, solution: &str, check_code: &str) -> String {
+    let name = format!("splinter_{}", digest.hex());
+    let before = assemble(&guard.prelude_for(&name), solution);
+    let after = assemble(&before, &guard.rebind_for(&name));
+    assemble(&after, check_code)
 }
 
 /// Removes `line` from the end of `stdout`, where the completion statement
@@ -300,7 +326,6 @@ fn strip_completion(stdout: &mut String, line: &str) -> bool {
 /// came back.
 pub(crate) fn run_evidence(
     check: &Digest,
-    program: &str,
     env: &RuntimeEnvironment,
     environment: &Environment,
     run: &CheckRun,
@@ -308,7 +333,7 @@ pub(crate) fn run_evidence(
     let runtime = env.runtime();
     json!({
         "check": check,
-        "program": Digest::of(program.as_bytes()),
+        "program": Digest::of(run.program.as_bytes()),
         "environment": environment.snapshot,
         "runtime": {
             "name": runtime.spec.name,
@@ -399,10 +424,9 @@ impl ExecutableVerifier {
         let mut runs = Vec::with_capacity(placed.len());
         let mut passed = true;
         for (digest, check, env, environment) in placed {
-            let program = assemble(solution, &check.code);
-            let run = run_check(env, program.clone(), check)?;
+            let run = run_check(env, solution, check)?;
             passed &= run.passed();
-            runs.push(run_evidence(digest, &program, env, environment, &run));
+            runs.push(run_evidence(digest, env, environment, &run));
         }
         Ok(Finding::decided(
             passed,
