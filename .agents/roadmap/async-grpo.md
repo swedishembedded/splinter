@@ -86,7 +86,11 @@ re-sent until brain reports it committed (applied is not durable).
       failures, unscored and inexact rollouts, controller kills, learner restarts and cancellations; no deadlock
       within the horizon, slots and the learner queue bounded, every group and rollout terminal and accounted, no
       group committed twice; it asserts every scenario occurred (interruptions, commits, filters, stale drops,
-      failures, abandonments, full answers, resends). It found two deadlocks the unit tests did not (knowledge 217).
+      failures, abandonments, full answers, resends). It found two deadlocks the unit tests did not (knowledge 217),
+      and later a third: a resent applied group answered `duplicate` stayed applied while the learner held it queued
+      and dropped it; any answer but `full` now makes it `sent`, and a group counts toward the allowance only once
+      the learner answered `accepted` (knowledge 219; the failing seeds pinned in `simulated_runs_that_once_failed_finish`).
+      A deadlock fails the test once nothing is recorded for 10^8 simulated ms (it used to hang until a horizon).
       Contracts it relies on, for the learner adapter lane and brain's streaming job: the learner accepts while it
       holds less than a step (a 429 only once it holds a step's worth); a learner that loses uncommitted work (a job
       restart) fails the run's learner calls, so the resumed controller sends again (an unreported restart would

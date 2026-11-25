@@ -372,6 +372,8 @@ impl Learner for ScriptedLearner {
 #[derive(Default)]
 pub struct MemoryLedger {
     pub groups: BTreeMap<u64, GroupEntry>,
+    /// Changes applied so far, readable while the run holds the ledger.
+    pub changes: Rc<Cell<u64>>,
     seq_of: HashMap<GroupKey, u64>,
     records: HashMap<(GroupKey, u32), String>,
 }
@@ -403,6 +405,7 @@ impl GroupLedger for MemoryLedger {
     }
 
     fn apply(&mut self, now_ms: u64, change: &Change) -> Result<(), LedgerError> {
+        self.changes.set(self.changes.get() + 1);
         let at = now_ms / 1000;
         match change {
             Change::Create {

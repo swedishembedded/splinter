@@ -36,10 +36,16 @@
 //!   (checked when it is scored and whenever the learner publishes).
 //! * **Tokens queued** are what the learner will hold: a group's finished
 //!   rollouts while it runs, its exact scored rollouts once it is queued to
-//!   send, nothing once it is applied, filtered or dropped.
+//!   send and once the learner accepted it, nothing once it is applied,
+//!   filtered or dropped, nor while the learner may already have applied it
+//!   (it answered `duplicate`, or a resumed controller has not yet heard
+//!   from it about a group recorded sent).
 //! * **Sending.** Scored groups go to the learner oldest first; a full queue
 //!   holds every send for `send_retry_ms` or until the learner applies
-//!   something, then the same group is sent again.
+//!   something, then the same group is sent again. Any other answer means the
+//!   learner holds the group: it is `sent` until the learner reports it
+//!   applied, dropped or committed (an applied group sent again after a
+//!   resume goes back to `sent`, since the learner may hold it queued again).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
@@ -610,18 +616,29 @@ impl Controller {
             .map(|(_, o)| o.span.staleness(learner_version))
             .max()
             .unwrap_or(0);
-        let resend_accepted =
-            group.state == GroupState::Applied && *answer == SendOutcome::Accepted;
-        if group.state != GroupState::Scored && !resend_accepted {
-            return Ok(Vec::new());
+        // Whatever the learner answered, it holds the group now. `accepted`
+        // means it queued the group on this send; `duplicate` that it held it
+        // already, queued or applied (a send whose answer was lost, or a
+        // resend after a restart that took it back): its tokens then leave the
+        // queue, since counting a group the learner may have applied could
+        // hold admission back until a step that never comes. Only the
+        // learner's report ends the group (applied, dropped or committed).
+        let queue = *answer == SendOutcome::Accepted;
+        if group.queued != queue {
+            group.queued = queue;
+            if queue {
+                self.stats.queue_tokens += group.tokens;
+            } else {
+                self.stats.queue_tokens -= group.tokens;
+            }
         }
-        if group.state == GroupState::Scored {
-            self.stats.groups_sent += 1;
-            *self.stats.staleness.entry(staleness).or_default() += 1;
-        } else if !group.queued {
-            // The learner lost the update and holds the group again.
-            group.queued = true;
-            self.stats.queue_tokens += group.tokens;
+        match group.state {
+            GroupState::Scored => {
+                self.stats.groups_sent += 1;
+                *self.stats.staleness.entry(staleness).or_default() += 1;
+            }
+            GroupState::Applied => {}
+            _ => return Ok(Vec::new()),
         }
         group.state = GroupState::Sent;
         Ok(vec![Change::State {

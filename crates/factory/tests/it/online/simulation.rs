@@ -10,8 +10,9 @@
 //! over slow and fast generation and training, heavy-tailed durations,
 //! groups whose rewards are all equal, frequent publication, verifier
 //! outages, worker failures, controller kills, learner restarts and
-//! cancellations. Every run must finish (no deadlock within a generous
-//! horizon), keep its queues bounded, commit no group twice, and leave every
+//! cancellations. Every run must finish (a run that records no change for
+//! far longer than any rollout or step takes is a deadlock), keep its queues
+//! bounded, commit no group twice, and leave every
 //! group and rollout in an accounted terminal state.
 
 use std::cell::Cell;
@@ -24,8 +25,9 @@ use splinter_factory::online::Settings;
 
 use super::doubles::{Clock, Executor, LearnerPlan, MemoryLedger, Plan, ScriptedLearner};
 
-/// Simulated time past which a run counts as deadlocked.
-const HORIZON_MS: u64 = 1 << 40;
+/// Simulated time without a recorded change after which a run counts as
+/// deadlocked: ten times the longest rollout, far past any training step.
+const STALL_MS: u64 = 100_000_000;
 
 /// Rollouts the simulation must finish at least.
 const EPISODES: usize = 100_000;
@@ -179,8 +181,18 @@ fn simulate(seed: u64, tally: &mut Tally) {
             2 => learner.die_after_accepts = Some(learner.accepts + rng.below(20) + 1),
             _ => learner.die_after_accepts = None,
         }
-        let clock_c = clock.clone();
-        let cancel = || clock_c.now() >= cancel_at.get() || clock_c.now() >= HORIZON_MS;
+        let (clock_c, changes) = (clock.clone(), ledger.changes.clone());
+        let last_change = Cell::new((changes.get(), clock.now()));
+        let stalled = Cell::new(false);
+        let cancel = || {
+            let now = clock_c.now();
+            if changes.get() != last_change.get().0 {
+                last_change.set((changes.get(), now));
+            } else if now - last_change.get().1 >= STALL_MS {
+                stalled.set(true);
+            }
+            now >= cancel_at.get() || stalled.get()
+        };
         let slots = w.settings.rollout_slots as usize;
         let result = run(
             w.settings.clone(),
@@ -208,8 +220,14 @@ fn simulate(seed: u64, tally: &mut Tally) {
             "seed {seed}: a start neither ended, was cancelled nor was running at a kill"
         );
         assert!(
-            clock.now() < HORIZON_MS,
-            "seed {seed}: no progress (deadlock)"
+            !stalled.get(),
+            "seed {seed}: no progress (deadlock): {:?}",
+            ledger
+                .groups
+                .values()
+                .filter(|e| !e.group.state.is_terminal())
+                .map(|e| (&e.group.key, e.group.state))
+                .collect::<Vec<_>>()
         );
         match result {
             Ok(report) if report.ended == Ended::Finished => {
@@ -344,4 +362,19 @@ fn simulated_runs_finish_bounded_with_every_group_and_rollout_accounted_for() {
     ] {
         assert!(n > 0, "the simulation never produced {what}: {tally:?}");
     }
+}
+
+/// Runs that once failed, by the seed each printed, kept so they keep
+/// passing.
+#[test]
+fn simulated_runs_that_once_failed_finish() {
+    // A restarted learner took a resent applied group back and dropped the
+    // connection before answering; the next resend was answered `duplicate`
+    // and the group stayed applied here while the learner dropped it as
+    // stale: a deadlock.
+    simulate(14_490_181_401_853_905_193, &mut Tally::default());
+    // Groups recorded sent that the learner had applied, counted as queued
+    // after a resume: the allowance held every new group back while the
+    // learner waited for a step's worth.
+    simulate(13_351_248_293_160_495_685, &mut Tally::default());
 }

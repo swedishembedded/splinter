@@ -13,14 +13,16 @@ mod brain;
 mod doubles;
 mod simulation;
 
-use splinter_core::factory::group::{GroupKey, GroupState, RolloutOutcome, VersionSpan};
+use splinter_core::factory::group::{
+    GroupKey, GroupState, RolloutOutcome, RolloutState, VersionSpan,
+};
 use splinter_factory::online::control::{reasons, Change, Controller};
 use splinter_factory::online::driver::{run, Ended, RunLedger, Seams};
 use splinter_factory::online::seams::{
-    FinishedRollout, LearnerEvent, RolloutEnd, RoundRobin, SendOutcome,
+    FinishedRollout, LearnerEvent, LearnerState, RolloutEnd, RoundRobin, SendOutcome,
 };
 use splinter_factory::online::Settings;
-use splinter_store::factory::runstate::RunState;
+use splinter_store::factory::runstate::{GroupEntry, GroupRecord, GroupRolloutRecord, RunState};
 
 use doubles::{Clock, Executor, LearnerPlan, MemoryLedger, Plan, ScriptedLearner};
 
@@ -573,4 +575,60 @@ fn a_resumed_controller_sends_again_what_a_restarted_learner_had_not_committed()
     }
     assert!(learner.commits.values().all(|n| *n == 1));
     assert_eq!(learner.commits.len(), 4);
+}
+
+#[test]
+fn a_resent_applied_group_the_learner_already_holds_is_followed_until_the_learner_ends_it() {
+    // The ledger has the group applied; the learner restarted, took it back
+    // on a resend whose answer was lost, and now answers `duplicate`: it
+    // holds the group again, applied or queued, so only its report ends it.
+    let entry = GroupEntry {
+        group: GroupRecord {
+            key: key(0),
+            seq: 0,
+            task: "task-0".into(),
+            size: 2,
+            state: GroupState::Applied,
+            reason: None,
+            staleness: Some(0),
+            updated_at: 0,
+        },
+        rollouts: (0..2)
+            .map(|index| GroupRolloutRecord {
+                index,
+                state: RolloutState::Finished,
+                failures: 0,
+                outcome: Some(outcome(Some(f64::from(index)), 30, 0, true)),
+                updated_at: 0,
+            })
+            .collect(),
+    };
+    let mut selector = RoundRobin::new(tasks(1), 1).unwrap();
+    let learner = LearnerState {
+        policy_version: 0,
+        committed: vec![],
+    };
+    let (mut control, _) =
+        Controller::restore(settings(), vec![entry], &learner, &mut selector).unwrap();
+    admit_all(&mut control, 0, &mut selector);
+    let draft = control.next_send(0).unwrap();
+    let sent = control
+        .sent(0, &draft.key, &SendOutcome::Duplicate)
+        .unwrap();
+    assert_eq!(states(&sent), [(GroupState::Sent, None)]);
+    assert_eq!(
+        control.stats(0).queue_tokens,
+        0,
+        "the learner may have applied it: it holds back no admission"
+    );
+    let dropped = control.learner_event(LearnerEvent::Dropped {
+        groups: vec![key(0)],
+    });
+    assert_eq!(
+        states(&dropped),
+        [(GroupState::Stale, Some(reasons::STALE_AT_LEARNER))]
+    );
+    assert!(control.done());
+    let stats = control.stats(0);
+    assert_eq!((stats.stray_acks, stats.dropped_by_learner), (0, 1));
 }

@@ -126,9 +126,11 @@ impl Controller {
         if matches!(state, GroupState::Sent | GroupState::Applied) {
             live.tokens = trainable(&live.rollouts).map(|(_, o)| o.tokens).sum();
         }
+        // A group recorded sent may be queued, applied or lost at the
+        // learner; its resend's answer decides whether it counts.
         let queued = matches!(
             state,
-            GroupState::Pending | GroupState::Running | GroupState::Scored | GroupState::Sent
+            GroupState::Pending | GroupState::Running | GroupState::Scored
         );
         if queued {
             live.queued = true;
