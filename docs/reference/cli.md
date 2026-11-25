@@ -23,6 +23,7 @@ Every command takes these.
 - `--brain-bin <BRAIN_BIN>`: The `brain` binary a server is started from (default: the first on `PATH`)
 - `--cluster <MODE>`: Whether a Slurm allocation this process runs inside is used: `auto` (default) serves models on every usable node of a multi-node allocation and spreads a distributed job's ranks over them; `off` keeps everything on this machine.
 - `--cluster-nodes <HOSTLIST>`: The nodes of the allocation this process may use, as a Slurm host list (`n[442,445]`); default: every node of the allocation. Naming nodes uses them even when only one is named.
+- `--cluster-node-cards <NODE=CARDS>...`: `NODE=CARDS`: the node's brain server serves, and a training job's ranks there train on, only these of its cards, by index (`n80=0,1`), for a node that brings fewer cards than the others; the other nodes serve every card. Repeat for more nodes.
 - `--cluster-exec-prefix <WORDS>`: The words a program started on a node runs under, split at spaces: a step starts on the node's host, so a container this process runs in is entered again there (`apptainer exec --nv IMAGE`, or a wrapper script that also sets the node's environment)
 - `--cluster-rank-exec-prefix <WORDS>`: The words a distributed job's ranks are started under instead of --cluster-exec-prefix, split at spaces; `{local_rank}` in them is a rank's place on its node, the card a wrapper pins it to.
 - `--slurm-srun <PATH>`: The `srun` program steps on the allocation's nodes are started with (default: the first on `PATH`)

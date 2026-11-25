@@ -215,6 +215,7 @@ exec sleep 600
             },
             nodes: nodes.iter().map(|n| (*n).to_string()).collect(),
             gpus_per_node: 4,
+            node_cards: std::collections::BTreeMap::new(),
             insecure_plaintext: false,
             stage_models: None,
         }
@@ -347,6 +348,60 @@ exec sleep 600
             );
         }
         assert!(!work.exists(), "the key does not outlive the fleet");
+    }
+
+    #[test]
+    fn a_node_restricted_to_named_cards_serves_only_those_and_the_others_every_card() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = fleet(dir.path(), &["localhost", "127.0.0.1"]);
+        settings.service.device = None;
+        settings.node_cards.insert("localhost".into(), vec![0, 1]);
+        assert_eq!(
+            settings.server_cards(),
+            [2, 4],
+            "the cards each server trains on"
+        );
+        let brain = ManagedBrain::start_fleet(&settings, &CancelToken::default()).unwrap();
+        let args =
+            |node: &str| std::fs::read_to_string(brain.work_dir().join(node).join("args")).unwrap();
+        assert!(
+            args("localhost").contains("--device gpu0,gpu1 "),
+            "{}",
+            args("localhost")
+        );
+        assert!(
+            args("127.0.0.1").contains("--device gpu0,gpu1,gpu2,gpu3 "),
+            "{}",
+            args("127.0.0.1")
+        );
+        let srun_args = std::fs::read_to_string(dir.path().join("srun.args")).unwrap();
+        assert!(
+            srun_args.contains("--gpus-per-node=4"),
+            "the step takes the most any node serves: {srun_args}"
+        );
+        drop(brain);
+
+        // A device list given for every server counts as its cards.
+        let mut listed = fleet(dir.path(), &["localhost", "127.0.0.1"]);
+        listed.service.device = Some("gpu1,gpu3".into());
+        assert_eq!(listed.server_cards(), [2, 2]);
+        listed.node_cards.insert("127.0.0.1".into(), vec![2]);
+        assert_eq!(listed.server_cards(), [2, 1], "a node's own cards win");
+
+        // A card the node does not have, a node the fleet does not use, none at all.
+        for (node, cards) in [
+            ("localhost", vec![4]),
+            ("elsewhere", vec![0]),
+            ("localhost", vec![]),
+        ] {
+            let mut wrong = fleet(dir.path(), &["localhost", "127.0.0.1"]);
+            wrong.node_cards.insert(node.into(), cards.clone());
+            let refused = ManagedBrain::start_fleet(&wrong, &CancelToken::default())
+                .err()
+                .unwrap_or_else(|| panic!("{node} {cards:?} is refused"))
+                .to_string();
+            assert!(refused.contains(node), "{refused}");
+        }
     }
 
     #[test]

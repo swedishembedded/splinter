@@ -16,6 +16,7 @@
 //! training jobs share its cards. [`BrainConnection`] is that choice, and
 //! [`BrainConnection::endpoints`] is what every request is made against.
 
+use std::collections::BTreeMap;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
@@ -105,12 +106,13 @@ impl TrainJob {
         })
     }
 
-    /// How a data-parallel training run is spread over the fleet: one job
-    /// over every card of every server when there are several, every card of
-    /// the one server when it has several, one card otherwise; and one card
-    /// whenever the servers' `brain/train` does not take `cards` and `job`.
-    fn span(&self, endpoints: &BrainEndpoints, servers: usize, cards: u32) -> TrainSpan {
-        if servers <= 1 && cards <= 1 {
+    /// How a data-parallel training run is spread over the fleet whose
+    /// servers train on `cards` each: one job over every card of every
+    /// server when there are several, every card of the one server when it
+    /// has several, one card otherwise; and one card whenever the servers'
+    /// `brain/train` does not take `cards` and `job`.
+    fn span(&self, endpoints: &BrainEndpoints, cards: Vec<u32>) -> TrainSpan {
+        if cards.len() <= 1 && cards.first().is_none_or(|c| *c <= 1) {
             return TrainSpan::OneCard;
         }
         match trains_across_cards(endpoints) {
@@ -130,11 +132,11 @@ impl TrainJob {
                 return TrainSpan::OneCard;
             }
         }
-        if servers <= 1 {
-            return TrainSpan::Cards(cards);
+        if let [one] = cards.as_slice() {
+            return TrainSpan::Cards(*one);
         }
         TrainSpan::Servers(ServersJob {
-            cards: vec![cards.max(1); servers],
+            cards,
             coordinator: self.coordinator.clone(),
             secret_sha256: self.secret_sha256.clone(),
         })
@@ -209,8 +211,14 @@ pub struct FleetSettings {
     /// The nodes, by name; each must resolve to the address it is reached
     /// at.
     pub nodes: Vec<String>,
-    /// The GPUs each node gives its server.
+    /// The GPUs each node gives its server: the step takes this many on
+    /// every node.
     pub gpus_per_node: u32,
+    /// Nodes whose server serves only these cards (by index, `0` for
+    /// `gpu0`), for a node that brings fewer cards than the others: its
+    /// server's `--device` and its ranks of a training job. A node not named
+    /// serves `service.device`, or every card.
+    pub node_cards: BTreeMap<String, Vec<u32>>,
     /// Serve plaintext HTTP between the nodes instead of TLS: only where the
     /// cluster's network is trusted, since the key crosses it readable. By
     /// default the fleet makes a certificate authority of its own, serves
@@ -221,6 +229,93 @@ pub struct FleetSettings {
     /// entry there, verified, and the node's others read the copy instead of
     /// the shared filesystem. `None` reads the shared store.
     pub stage_models: Option<PathBuf>,
+}
+
+impl FleetSettings {
+    /// The `--device` of each node's server, in node order: the node's own
+    /// cards, else `service.device`, else every card of the node.
+    fn server_devices(&self) -> Vec<Option<String>> {
+        let every_card = (self.gpus_per_node > 0).then(|| gpu_list(0..self.gpus_per_node));
+        self.nodes
+            .iter()
+            .map(|node| match self.node_cards.get(node) {
+                Some(cards) => Some(gpu_list(cards.iter().copied())),
+                None => self.service.device.clone().or_else(|| every_card.clone()),
+            })
+            .collect()
+    }
+
+    /// The cards each node's server trains on, in node order: as many as its
+    /// `--device` names, or the node's GPUs when the device is not a list of
+    /// cards (`gpu`).
+    #[must_use]
+    pub fn server_cards(&self) -> Vec<u32> {
+        self.server_devices()
+            .iter()
+            .map(|device| {
+                device
+                    .as_deref()
+                    .and_then(named_cards)
+                    .unwrap_or(self.gpus_per_node)
+                    .max(1)
+            })
+            .collect()
+    }
+
+    /// Refuses a node's cards that name no node of the fleet, no card, or
+    /// a card the node's step does not take.
+    fn check_cards(&self) -> Result<(), PolicyError> {
+        for (node, cards) in &self.node_cards {
+            if !self.nodes.contains(node) {
+                return Err(refused(
+                    node,
+                    format!(
+                        "cards are named for {node}, which the fleet does not use (it uses {})",
+                        self.nodes.join(",")
+                    ),
+                ));
+            }
+            if cards.is_empty() {
+                return Err(refused(node, format!("no card is named for {node}")));
+            }
+            if let Some(card) = cards.iter().find(|c| **c >= self.gpus_per_node) {
+                return Err(refused(
+                    node,
+                    format!(
+                        "{node} has no card {card}: its step takes {} GPUs (0-{})",
+                        self.gpus_per_node,
+                        self.gpus_per_node.saturating_sub(1)
+                    ),
+                ));
+            }
+            let mut unique = cards.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            if unique.len() != cards.len() {
+                return Err(refused(node, format!("a card is named twice for {node}")));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `gpu<i>,...` for `cards`, in brain's `--device` grammar.
+fn gpu_list(cards: impl Iterator<Item = u32>) -> String {
+    cards
+        .map(|i| format!("gpu{i}"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// How many cards a `--device` names when it is a list of cards
+/// (`gpu0,gpu2`); `None` for anything else (`gpu`, `cpu0-7`).
+fn named_cards(device: &str) -> Option<u32> {
+    let entries: Vec<&str> = device.split(',').map(str::trim).collect();
+    let cards = entries.iter().all(|e| {
+        e.strip_prefix("gpu")
+            .is_some_and(|i| !i.is_empty() && i.bytes().all(|b| b.is_ascii_digit()))
+    });
+    cards.then(|| u32::try_from(entries.len()).unwrap_or(u32::MAX))
 }
 
 /// The directory, under a service's state, adapters are served from.
@@ -337,6 +432,7 @@ impl ManagedBrain {
         if settings.nodes.is_empty() {
             return Err(refused("fleet", "a fleet needs at least one node".into()));
         }
+        settings.check_cards()?;
         let work = service.state.join(format!("fleet-{}", std::process::id()));
         let (adapters, artifacts) = prepare(&service.state, &work)?;
         let started = Self::start_steps(settings, &work, &adapters, &artifacts, cancel);
@@ -364,7 +460,7 @@ impl ManagedBrain {
             .with_attempt_concurrency(slots)
             .with_adapter_directory(adapters)
             .with_artifact_store(ArtifactStore::open(&artifacts)?);
-        let span = train_job.span(&endpoints, settings.nodes.len(), settings.gpus_per_node);
+        let span = train_job.span(&endpoints, settings.server_cards());
         let endpoints = endpoints.with_train_span(span);
         let Fleet {
             process,
@@ -392,13 +488,7 @@ impl ManagedBrain {
             path: key_file.clone(),
             source,
         })?;
-        let every_card = (settings.gpus_per_node > 0).then(|| {
-            (0..settings.gpus_per_node)
-                .map(|i| format!("gpu{i}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        });
-        let device = settings.service.device.clone().or(every_card);
+        let devices = settings.server_devices();
         let addresses = settings
             .nodes
             .iter()
@@ -410,8 +500,13 @@ impl ManagedBrain {
             Some(Self::trust_fleet(work, &addresses)?)
         };
         let train_job = TrainJob::prepare(work, addresses[0].1)?;
-        let mut service = settings.service.clone();
-        service.device.clone_from(&device);
+        let services: Vec<ServiceSettings> = devices
+            .into_iter()
+            .map(|device| ServiceSettings {
+                device,
+                ..settings.service.clone()
+            })
+            .collect();
         let mut node_dirs = Vec::with_capacity(addresses.len());
         for (index, (node, _)) in addresses.iter().enumerate() {
             let node_work = work.join(node);
@@ -437,19 +532,22 @@ impl ManagedBrain {
         let servers = addresses
             .iter()
             .zip(&node_dirs)
+            .zip(&services)
             .enumerate()
-            .map(|(index, ((node, address), (node_work, tls)))| NodeServer {
-                launch: service.launch(node_work, adapters, artifacts, None),
-                node,
-                address: *address,
-                key_file: &key_file,
-                tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
-                stage: settings.stage_models.as_deref(),
-                train_job: Some((
-                    train_job.secret.as_path(),
-                    (index == 0).then_some(train_job.coordinator.as_str()),
-                )),
-            })
+            .map(
+                |(index, (((node, address), (node_work, tls)), service))| NodeServer {
+                    launch: service.launch(node_work, adapters, artifacts, None),
+                    node,
+                    address: *address,
+                    key_file: &key_file,
+                    tls: tls.as_ref().map(|(c, k)| (c.as_path(), k.as_path())),
+                    stage: settings.stage_models.as_deref(),
+                    train_job: Some((
+                        train_job.secret.as_path(),
+                        (index == 0).then_some(train_job.coordinator.as_str()),
+                    )),
+                },
+            )
             .collect();
         let log = work.join("fleet.log");
         let launch = FleetLaunch {
@@ -684,9 +782,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let job = TrainJob::prepare(dir.path(), "10.0.0.7".parse().unwrap()).unwrap();
         let unreachable = BrainEndpoints::new(vec!["http://127.0.0.1:1/v1".into()], "k").unwrap();
-        assert_eq!(job.span(&unreachable, 1, 1), TrainSpan::OneCard);
+        assert_eq!(job.span(&unreachable, vec![1]), TrainSpan::OneCard);
         assert_eq!(
-            job.span(&unreachable, 2, 4),
+            job.span(&unreachable, vec![4, 4]),
             TrainSpan::OneCard,
             "capabilities that cannot be read train on one card, and say so"
         );

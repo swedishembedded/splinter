@@ -311,6 +311,19 @@ pub fn cluster_check(cluster: &ClusterSettings) -> Check {
                 ),
                 None => format!("{using}; a training run uses one card"),
             };
+            let using = if cluster.node_cards.is_empty() {
+                using
+            } else {
+                let named: Vec<String> = cluster
+                    .node_cards
+                    .iter()
+                    .map(|(node, cards)| {
+                        let list: Vec<String> = cards.iter().map(u32::to_string).collect();
+                        format!("{node} serves and trains on cards {}", list.join(","))
+                    })
+                    .collect();
+                format!("{using}; by --cluster-node-cards {}", named.join(", "))
+            };
             let staging = cluster.staging();
             let using = match &staging.dir {
                 Some(dir) => format!(

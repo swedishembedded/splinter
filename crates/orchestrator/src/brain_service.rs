@@ -66,6 +66,7 @@ pub fn start_brain(config: &Config, cancel: &CancelToken) -> Result<BrainConnect
         steps,
         nodes: cluster.nodes,
         gpus_per_node: cluster.allocation.gpus_per_node,
+        node_cards: config.cluster.node_cards.clone(),
         insecure_plaintext: config.cluster.insecure_plaintext,
         stage_models,
     };
@@ -79,10 +80,15 @@ pub fn start_brain(config: &Config, cancel: &CancelToken) -> Result<BrainConnect
             work.join(splinter_model::service::AUTHORITY_FILE).display()
         )
     };
+    let cards: Vec<String> = fleet
+        .nodes
+        .iter()
+        .zip(fleet.server_cards())
+        .map(|(node, cards)| format!("{node} {cards} card(s)"))
+        .collect();
     eprintln!(
-        "brain: serving on {} ({} GPUs each, {transport}); endpoints listed in {}",
-        fleet.nodes.join(","),
-        fleet.gpus_per_node,
+        "brain: serving on {} ({transport}); endpoints listed in {}",
+        cards.join(", "),
         work.join(splinter_model::service::ENDPOINTS_FILE).display()
     );
     Ok(BrainConnection::Owned(managed))

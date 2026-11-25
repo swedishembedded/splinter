@@ -171,6 +171,10 @@ pub struct ClusterSettings {
     /// `--cluster-nodes`: the nodes this process may use, as a host list;
     /// every node of the allocation when `None`.
     pub nodes: Option<String>,
+    /// `--cluster-node-cards NODE=CARDS`: nodes whose brain server serves,
+    /// and trains on, only these cards (by index); every card of a node not
+    /// named.
+    pub node_cards: std::collections::BTreeMap<String, Vec<u32>>,
     /// `--cluster-exec-prefix`: the words a step's program is started under.
     pub exec_prefix: Vec<String>,
     /// `--cluster-rank-exec-prefix`: the words a job's ranks are started
@@ -264,6 +268,7 @@ impl Default for ClusterSettings {
             mode: ClusterMode::Auto,
             detected: Ok(None),
             nodes: None,
+            node_cards: std::collections::BTreeMap::new(),
             exec_prefix: Vec::new(),
             rank_exec_prefix: None,
             srun: None,

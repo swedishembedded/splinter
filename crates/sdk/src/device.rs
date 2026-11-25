@@ -85,6 +85,13 @@ pub struct DeviceFlags {
     /// nodes uses them even when only one is named.
     #[arg(long, global = true, value_name = "HOSTLIST")]
     pub cluster_nodes: Option<String>,
+    /// `NODE=CARDS`: the node's brain server serves, and a training job's
+    /// ranks there train on, only these of its cards, by index
+    /// (`n80=0,1`), for a node that brings fewer cards than the others; the
+    /// other nodes serve every card. Repeat for more nodes.
+    #[arg(long = "cluster-node-cards", global = true, value_name = "NODE=CARDS",
+        value_parser = node_cards)]
+    pub cluster_node_cards: Vec<(String, Vec<u32>)>,
     /// The words a program started on a node runs under, split at spaces: a
     /// step starts on the node's host, so a container this process runs in
     /// is entered again there (`apptainer exec --nv IMAGE`, or a wrapper
@@ -147,6 +154,20 @@ fn take_flag(args: &mut Vec<String>, name: &str) -> bool {
 
 fn stage_models(text: &str) -> Result<StageModels, String> {
     StageModels::parse(text).map_err(|e| e.to_string())
+}
+
+/// `NODE=CARDS`: a node and the indices of its cards (`n80=0,1`).
+fn node_cards(text: &str) -> Result<(String, Vec<u32>), String> {
+    let usage = || format!("{text:?} is not NODE=CARDS (n80=0,1)");
+    let (node, cards) = text.split_once('=').ok_or_else(usage)?;
+    if node.is_empty() || cards.is_empty() {
+        return Err(usage());
+    }
+    let cards = cards
+        .split(',')
+        .map(|card| card.trim().parse::<u32>().map_err(|_| usage()))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((node.to_string(), cards))
 }
 
 fn cluster_mode(text: &str) -> Result<ClusterMode, String> {
@@ -219,6 +240,10 @@ impl DeviceFlags {
             brain_bin,
             cluster,
             cluster_nodes: take_all("--cluster-nodes")?.pop(),
+            cluster_node_cards: take_all("--cluster-node-cards")?
+                .iter()
+                .map(|text| node_cards(text))
+                .collect::<Result<_, _>>()?,
             cluster_exec_prefix: take_all("--cluster-exec-prefix")?.pop(),
             cluster_rank_exec_prefix: take_all("--cluster-rank-exec-prefix")?.pop(),
             slurm_srun: take_all("--slurm-srun")?.pop().map(PathBuf::from),
@@ -241,6 +266,7 @@ impl DeviceFlags {
             cluster.mode = mode;
         }
         cluster.nodes.clone_from(&self.cluster_nodes);
+        cluster.node_cards = self.cluster_node_cards.iter().cloned().collect();
         if let Some(prefix) = &self.cluster_exec_prefix {
             cluster.exec_prefix = prefix.split_whitespace().map(String::from).collect();
         }
@@ -420,6 +446,20 @@ mod tests {
         assert_eq!(flags.device.as_deref(), Some("gpu1"));
         assert_eq!(flags.backend.as_deref(), Some("cuda"));
         assert_eq!(args, words("train --out dir"));
+    }
+
+    #[test]
+    fn a_nodes_cards_are_named_by_index_and_reach_the_cluster_settings() {
+        let mut args = words("serve --cluster-node-cards n80=0,1 --cluster-node-cards n105=3");
+        let flags = DeviceFlags::take(&mut args).unwrap();
+        assert_eq!(args, words("serve"));
+        let cluster = flags.cluster_settings(ClusterSettings::default());
+        assert_eq!(cluster.node_cards["n80"], [0, 1]);
+        assert_eq!(cluster.node_cards["n105"], [3]);
+        for bad in ["n80", "=0", "n80=", "n80=gpu0", "n80=0,,1"] {
+            let mut args = words(&format!("serve --cluster-node-cards {bad}"));
+            assert!(DeviceFlags::take(&mut args).is_err(), "{bad}");
+        }
     }
 
     #[test]
