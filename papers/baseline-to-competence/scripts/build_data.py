@@ -163,6 +163,9 @@ def main(data, out):
             if (model, arm) not in ex:
                 continue
             e, b = ex[(model, arm)], beh.get((model, arm))
+            if (model, arm) == ("qwen3-0.6b", "rtwo"):
+                # measured with five attempts of every task, against the base model of its own run
+                label = "round-two adapter (five attempts)"
             loops = f"{100 * int(b['loop_trials']) / int(b['trials']):.0f}" if b else "--"
             rep = f"{100 * float(b['repeat_after_error']):.0f}" if b else "--"
             test = "& &"

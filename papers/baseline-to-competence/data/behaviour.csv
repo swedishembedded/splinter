@@ -21,3 +21,4 @@ qwen3-8b,pgref,exam,151,460,0.47
 qwen3-8b,pg,exam,132,448,0.526
 qwen3-8b,base,train,93,912,0.682
 qwen3-8b,full,train,74,912,0.465
+qwen3-0.6b,rtwo,exam,215,500,0.607

@@ -22,7 +22,7 @@ which is where the policy gradient gets its attempts, against \behaviourFourFull
 \roundOneEightRuns{} times at 8B, solved \roundOneFourMin{} to \roundOneFourMax{} and \roundOneEightMin{} to
 \roundOneEightMax{} tasks within five attempts, and pass@1 moved by up to \replicateEightOneDiff{} tasks between two
 adapters of the same recipe; the 8B gains of the later stages are single measurements and have to be read against that
-spread. The $p$ values are not corrected for the number of comparisons. The 0.6B was not retrained on the integrated set. No
+spread. The $p$ values are not corrected for the number of comparisons. The 0.6B round-two adapter was measured with five attempts of every task, against the base model of its own run, instead of reruns of the failed tasks. No
 arm removes one kind of record, and no arm runs the policy gradient without the loop penalty, so neither the recovery
 data nor the penalty is isolated. The exams are 100 tasks of one domain, and a count on them carries a wide interval
 (\examFourFullFiveLo--\examFourFullFiveHi{}\% for the 4B round-one adapter). The repeat-after-error share is measured

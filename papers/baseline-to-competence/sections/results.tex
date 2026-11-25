@@ -140,7 +140,9 @@ of sixteen records per task. The training set grew from \integrationTrainBefore{
 against \examEightRtworefFive{} for the round-one adapter measured in the same run (\winsEightRtwo{} wins,
 \lossesEightRtwo{} losses, \ptestEightRtwo{}). The count is higher, but the test does not reach significance, and
 pass@1 moved the other way (\examEightRtwoOne{} against \examEightRtworefOne{}). At 4B the round-two adapter solves
-\examFourRtwoFive{} against \examFourRtworefFive{} (\winsFourRtwo{} wins, \lossesFourRtwo{} losses), which is no gain.
+\examFourRtwoFive{} against \examFourRtworefFive{} (\winsFourRtwo{} wins, \lossesFourRtwo{} losses), which is no gain. The 0.6B round-two adapter solved \examZeroRtwoFive{} of the 100 exams in any
+of five attempts, and \behaviourZeroRtwoExamLoopPct{}\% of its attempts were loop-stopped (\behaviourZeroBaseExamLoopPct{}\% for the
+base model).
 The second round is therefore not shown to help at either size. No arm trains on the students' own solutions without
 the continuations or the reverse, so the two kinds of record are not separated either.
 

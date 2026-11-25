@@ -21,3 +21,4 @@ qwen3-4b,records,0,2,5,7,7
 qwen3-8b,grown,4,11,14,21,22
 qwen3.8-27b,base,51,63,72,79,86
 qwen3.8-27b,records,56,66,72,78,81
+qwen3-0.6b,rtwo,0,0,0,0,0
