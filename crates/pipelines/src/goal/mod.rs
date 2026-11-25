@@ -90,6 +90,8 @@ pub enum Stop {
     BudgetSpent,
     /// The rounds are spent.
     RoundsSpent,
+    /// The goal has no probes: nothing shows whether it is met.
+    NoProbes,
 }
 
 /// One round: what the probes showed and what was chosen.
@@ -110,8 +112,9 @@ pub struct Round {
 pub struct Report {
     /// The rounds, in order.
     pub rounds: Vec<Round>,
-    /// The dev pass rate after the last round's learning.
-    pub final_pass_rate: f64,
+    /// The dev pass rate after the last round's learning; `None` for a goal
+    /// with no probes.
+    pub final_pass_rate: Option<f64>,
     /// Every section learned, in order.
     pub learned: Vec<SectionId>,
     /// The words learned.
@@ -184,7 +187,10 @@ pub fn learn_goal(
             asked: Cell::new(0),
         };
         let results = probe(goal, &counter);
-        let rate = pass_rate(&results).unwrap_or(1.0);
+        let Some(rate) = pass_rate(&results) else {
+            stop = Stop::NoProbes;
+            break;
+        };
         for r in results.iter().filter(|r| !r.passed()) {
             failed
                 .entry(r.probe.id.clone())
@@ -267,7 +273,7 @@ pub fn learn_goal(
         inner: &*participant,
         asked: Cell::new(0),
     };
-    let final_pass_rate = pass_rate(&probe(goal, &counter)).unwrap_or(1.0);
+    let final_pass_rate = pass_rate(&probe(goal, &counter));
     questions += counter.asked.get();
     Report {
         rounds,

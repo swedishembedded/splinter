@@ -33,7 +33,9 @@ use splinter_knowledge::goal::source::PackSource;
 use splinter_knowledge::goal::synthetic::{generate, Corpus, Spec};
 use splinter_pipelines::goal::compare::{compare, Arm, Inputs};
 use splinter_pipelines::goal::report::{summarise, Summary};
-use splinter_pipelines::goal::{Checks, InContext, Participant, Plan, ScriptedReader, Stop};
+use splinter_pipelines::goal::{
+    learn_goal, Checks, Evidence, InContext, Participant, Plan, ScriptedReader, Stop,
+};
 
 const PLAN: Plan = Plan {
     checks: Checks::ALL,
@@ -158,8 +160,25 @@ fn the_loop_stops_when_the_goal_is_met_or_nothing_is_left_to_learn() {
         "{:?}",
         report.stop
     );
-    assert!(report.final_pass_rate > report.rounds[0].pass_rate);
+    assert!(report.final_pass_rate.unwrap() > report.rounds[0].pass_rate);
     assert!(report.words <= PLAN.total_words);
+}
+
+#[test]
+fn a_goal_with_no_probes_is_neither_met_nor_scored() {
+    let mut corpus = generate(&Spec::new(2, Form::Property)); // seed: any corpus
+    corpus.goal.probes.clear();
+    let cands = candidates(&corpus.documents);
+    let source = source_of(&corpus);
+    let evidence = Evidence {
+        candidates: &cands,
+        source: &source,
+        semantic: None,
+    };
+    let report = learn_goal(&evidence, &corpus.goal, &mut *fresh(&corpus), &PLAN);
+    assert!(matches!(report.stop, Stop::NoProbes), "{:?}", report.stop);
+    assert_eq!(report.final_pass_rate, None, "no probe passed or failed");
+    assert!(report.rounds.is_empty() && report.learned.is_empty());
 }
 
 #[test]
