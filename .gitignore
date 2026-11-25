@@ -52,3 +52,8 @@ __pycache__/
 /workers/harbor/*.egg-info/
 .pytest_cache/
 /workers/harbor/build/
+
+# Generated task families: a pure function of their generator and its frozen seed
+# (scripts/tasks/integer-arithmetic.py writes them; --check verifies what is on disk).
+/tasks/integer-arithmetic/train/
+/tasks/integer-arithmetic/held-out/

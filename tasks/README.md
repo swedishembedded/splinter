@@ -61,6 +61,26 @@ model draws its first byte from a nearly flat distribution, so some of its repli
 letter and a group of its rollouts often has rewards that differ: what online training on the CPU
 (`make test/online`) needs to have anything to train. They are not repository families and are not in `catalog.toml`.
 
+`integer-arithmetic` holds 180 Harbor task folders answered in the reply: one sum, difference or product of
+multi-digit operands (ten shapes, from `4+4` digits to `4x4`-digit products), rewarded 1 by its own `tests/test.sh`
+when the last integer of the reply (after any `<think>` block, digit-group commas removed) is the answer. A small
+real model solves some shapes sometimes, so a group of its rollouts often has rewards that differ: the family the
+first real-model online runs (Qwen3-0.6B, Qwen3-4B) train on. Split `train` (12 per shape) is practised; split
+`held-out` (6 per shape, other operands) is frozen for evaluation. The tree is a pure function of
+`scripts/tasks/integer-arithmetic.py` (fixed seed) and is not committed: `python3 scripts/tasks/integer-arithmetic.py`
+writes it, `--check` verifies a tree on disk.
+Base pass rates (16 draws per task at temperature 1.0, untruncated, thinking off, under the coding-agent system prompt
+the online rollouts use; brain 760c04d3b, its default int8 KV cache), the share of each shape solved:
+
+| shape | add 4+4 | add 6+6 | add 8+8 | sub 5-5 | sub 7-7 | mul 2x2 | mul 3x2 | mul 3x3 | mul 4x3 | mul 4x4 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Qwen3-0.6B | 0.82 | 0.43 | 0.46 | 0.75 | 0.43 | 0.68 | 0.30 | 0.12 | 0.05 | 0.00 |
+| Qwen3-4B | 0.74 | 0.76 | 0.65 | 0.48 | 0.18 | 0.89 | 0.52 | 0.20 | 0.06 | 0.01 |
+
+Tasks with a pass rate in (0.1, 0.9): Qwen3-0.6B 59 train, 28 held-out; Qwen3-4B 10 train, 10 held-out (its answers
+are mostly all right or all wrong per task). Many of Qwen3-0.6B's failed sums are a right number followed by chatter,
+which the grader scores as wrong: what an online run learns first.
+
 ## Repository families
 
 Eight small original projects, each learned from its own

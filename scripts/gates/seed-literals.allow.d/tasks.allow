@@ -1,0 +1,2 @@
+# path<TAB>symbol<TAB>reason; format and reason prefixes in scripts/gates/seed-literals.py
+scripts/tasks/integer-arithmetic.py	SEED	frozen: the integer-arithmetic task family is a pure function of this seed and committed; changing it is a new family, verified by --check
