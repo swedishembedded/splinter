@@ -325,11 +325,11 @@ impl Execute for Qualify {
         };
         let built = view("environments")?;
         let trials = trials_of(view("attempts")?).map_err(|e| e.to_string())?;
-        let mut paths: Vec<_> = std::fs::read_dir(built.join(ADMISSION_DIR))
-            .map_err(|e| format!("not a built environments product: {e}"))?
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .collect();
+        let unreadable = |e: std::io::Error| format!("not a built environments product: {e}");
+        let mut paths = std::fs::read_dir(built.join(ADMISSION_DIR))
+            .map_err(unreadable)?
+            .map(|e| e.map(|e| e.path()).map_err(unreadable))
+            .collect::<Result<Vec<_>, _>>()?;
         paths.sort();
         let mut judged = Vec::new();
         for path in paths {

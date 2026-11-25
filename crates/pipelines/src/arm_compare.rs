@@ -183,12 +183,14 @@ pub fn read_trials_jsonl(path: &Path) -> Result<Vec<Trial>, OrchestratorError> {
 /// The directory cannot be read, a result cannot be parsed, or the job holds
 /// no trial.
 pub fn read_harbor_job(arm: &str, job: &Path) -> Result<Vec<Trial>, OrchestratorError> {
-    let entries = std::fs::read_dir(job).map_err(|e| refused(format!("{}: {e}", job.display())))?;
-    let mut dirs: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.join("result.json").is_file())
-        .collect();
+    let unreadable = |e: std::io::Error| refused(format!("{}: {e}", job.display()));
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(job).map_err(unreadable)? {
+        let path = entry.map_err(unreadable)?.path();
+        if path.join("result.json").is_file() {
+            dirs.push(path);
+        }
+    }
     dirs.sort();
     let mut trials = Vec::new();
     for dir in dirs {

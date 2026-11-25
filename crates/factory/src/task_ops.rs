@@ -198,11 +198,11 @@ impl OperationSpec for Generate {
 
 /// Every text document below `dir`, by its path relative to `root`.
 fn texts(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) -> Result<(), String> {
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .collect();
+    let unreadable = |e: std::io::Error| format!("{}: {e}", dir.display());
+    let mut entries = std::fs::read_dir(dir)
+        .map_err(unreadable)?
+        .map(|e| e.map(|e| e.path()).map_err(unreadable))
+        .collect::<Result<Vec<_>, _>>()?;
     entries.sort();
     for path in entries {
         let name = path

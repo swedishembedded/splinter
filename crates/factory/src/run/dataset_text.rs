@@ -100,12 +100,14 @@ pub(crate) fn identity(
 /// Every file under `dir`, by its path relative to `root`, in order;
 /// hidden entries left out.
 fn files(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) -> Result<(), String> {
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(Result::ok)
-        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
-        .map(|e| e.path())
-        .collect();
+    let unreadable = |e: std::io::Error| format!("{}: {e}", dir.display());
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(unreadable)? {
+        let entry = entry.map_err(unreadable)?;
+        if !entry.file_name().to_string_lossy().starts_with('.') {
+            entries.push(entry.path());
+        }
+    }
     entries.sort();
     for path in entries {
         if path.is_dir() {

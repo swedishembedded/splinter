@@ -197,14 +197,22 @@ fn split_files(root: &Path, config: Option<&str>) -> Result<BTreeMap<String, Pat
     }
     let mut files = BTreeMap::new();
     for place in places {
-        let Ok(entries) = std::fs::read_dir(&place) else {
+        // A place that is not a directory holds no split; one that is, and
+        // cannot be read, is an error, never an empty dataset.
+        if !place.is_dir() {
             continue;
+        }
+        let unreadable = |e: std::io::Error| LoadError::Read {
+            path: place.display().to_string(),
+            message: e.to_string(),
         };
-        let mut found: Vec<PathBuf> = entries
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "jsonl"))
-            .collect();
+        let mut found: Vec<PathBuf> = Vec::new();
+        for entry in std::fs::read_dir(&place).map_err(unreadable)? {
+            let path = entry.map_err(unreadable)?.path();
+            if path.is_file() && path.extension().is_some_and(|x| x == "jsonl") {
+                found.push(path);
+            }
+        }
         found.sort();
         for path in found {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {

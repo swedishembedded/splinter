@@ -158,11 +158,11 @@ fn documents(
     dir: &Path,
     out: &mut Vec<(String, std::path::PathBuf)>,
 ) -> Result<(), String> {
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .collect();
+    let unreadable = |e: std::io::Error| format!("{}: {e}", dir.display());
+    let mut entries = std::fs::read_dir(dir)
+        .map_err(unreadable)?
+        .map(|e| e.map(|e| e.path()).map_err(unreadable))
+        .collect::<Result<Vec<_>, _>>()?;
     entries.sort();
     for path in entries {
         let name = path
