@@ -124,12 +124,24 @@ impl SchemaCall {
         };
         let reply = match measured.result {
             Ok(value) => SchemaReply::Answered(value),
-            Err(e @ (CallError::Invalid { .. } | CallError::Postcondition { .. })) => {
-                SchemaReply::Unanswered(e.to_string())
-            }
+            Err(e) if unanswerable(&e) => SchemaReply::Unanswered(e.to_string()),
             Err(e) => return Err(e.to_string()),
         };
         Ok((reply, measured.spent))
+    }
+}
+
+/// Whether the call's failure is this input's alone: the model's answer was malformed or broke the schema, or it spent
+/// the call's tokens or time without one. The item is rejected with the reason and the others go on. A cancellation or
+/// an outage is the run's, not the item's.
+fn unanswerable(error: &CallError) -> bool {
+    match error {
+        CallError::Invalid { .. } | CallError::Postcondition { .. } => true,
+        CallError::Stopped { conclusion } => matches!(
+            conclusion,
+            sven_sdk::RunConclusion::BudgetExhausted | sven_sdk::RunConclusion::Timeout
+        ),
+        _ => false,
     }
 }
 
@@ -212,5 +224,17 @@ mod tests {
         let (reply, _) = call.run(&model, &json!({"input": "x"})).unwrap();
         assert_eq!(reply, SchemaReply::Answered(json!({"keep_through": 2})));
         assert_eq!(provider.0.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn an_item_that_spends_its_budget_is_rejected_and_a_cancellation_stops_the_run() {
+        use sven_sdk::RunConclusion::{BudgetExhausted, Cancelled, Timeout};
+        let stopped = |conclusion| CallError::Stopped { conclusion };
+        assert!(unanswerable(&stopped(BudgetExhausted)));
+        assert!(unanswerable(&stopped(Timeout)));
+        assert!(!unanswerable(&stopped(Cancelled)));
+        assert!(!unanswerable(&CallError::Infrastructure(anyhow::anyhow!(
+            "outage"
+        ))));
     }
 }
