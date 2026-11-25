@@ -176,8 +176,12 @@ fn groups_reach_the_streaming_job_and_a_restart_is_resumed_from_its_checkpoint()
     let telemetry = learner.telemetry();
     let (version, digest) = telemetry.committed_version().unwrap();
     assert_eq!(version, 2);
+    assert!(
+        digest.starts_with("sha256:"),
+        "a version is named by its file's SHA-256: {digest}"
+    );
     let adapter = dir.path().join("adapter.safetensors");
-    learner.adapter(digest, &adapter).unwrap();
+    learner.final_adapter(&adapter).unwrap();
     assert!(adapter.is_file());
 
     // The third step takes the service down before its checkpoint.

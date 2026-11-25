@@ -22,6 +22,10 @@
 //! restarts under the stage is started again under the same resume key and
 //! the controller sends it everything not committed.
 //!
+//! A stage may start from a candidate (`start`, an adapter of its base,
+//! such as a `model.train` stage's): the learner's run continues it and
+//! publishes from it.
+//!
 //! The product holds the candidate (`candidate.json`, the adapter of the
 //! newest version a durable checkpoint holds, load-checked by serving it),
 //! `report.json` (the online statistics: reward over every scored group,
@@ -209,7 +213,13 @@ impl OperationSpec for Online {
             revision: 1,
             summary: "a candidate trained online on its own rollouts of an executable collection"
                 .into(),
-            inputs: vec![port("tasks", ArtifactKind::Tasks)],
+            inputs: vec![
+                port("tasks", ArtifactKind::Tasks),
+                Port {
+                    optional: true,
+                    ..port("start", ArtifactKind::Model)
+                },
+            ],
             outputs: vec![port("model", ArtifactKind::Model)],
             parameters: serde_json::to_value(schema_for!(OnlineParams)).unwrap_or(Value::Null),
             reproducibility: Reproducibility::Nondeterministic,
@@ -226,6 +236,48 @@ impl OperationSpec for Online {
             .map(|p| vec![p.base])
             .unwrap_or_default()
     }
+}
+
+/// The stage's inputs by content: its tasks, and the candidate it starts
+/// from when it starts from one.
+fn inputs_of(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+) -> Result<Vec<(String, splinter_core::digest::Digest)>, RunError> {
+    let mut inputs = Vec::new();
+    for key in std::iter::once(tasks_key(stage)?).chain(stage.source("start").map(str::to_owned)) {
+        inputs.push((key.clone(), factory.product(&key)?.1.digest()));
+    }
+    Ok(inputs)
+}
+
+/// The adapter the stage's policy starts from: the `start` candidate's,
+/// which must be an adapter of the stage's own base.
+fn start_adapter(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    base: &crate::recipe::ModelRef,
+) -> Result<Option<std::path::PathBuf>, RunError> {
+    let Some(key) = stage.source("start") else {
+        return Ok(None);
+    };
+    let view = factory.view(key);
+    let candidate = super::training::candidate_of(&view)?;
+    if candidate.base != base.to_string() || candidate.kind != CandidateKind::Adapter {
+        return Err(stage_error(
+            &stage.key,
+            format!(
+                "start {key} is a {:?} candidate of {}, not an adapter of the base {base}",
+                candidate.kind, candidate.base
+            ),
+        ));
+    }
+    let adapter = candidate
+        .artifacts
+        .iter()
+        .find(|a| a.path.ends_with(".safetensors"))
+        .ok_or_else(|| stage_error(&stage.key, format!("start {key} holds no adapter file")))?;
+    Ok(Some(view.join(&adapter.path)))
 }
 
 fn tasks_key(stage: &PlannedStage) -> Result<String, RunError> {
@@ -259,7 +311,6 @@ pub(crate) fn identity(
     stage: &PlannedStage,
 ) -> Result<StageIdentity, RunError> {
     let (params, engines) = identity_parts(factory, stage)?;
-    let key = tasks_key(stage)?;
     let base = factory.resolved.model(&params.base).ok_or_else(|| {
         stage_error(
             &stage.key,
@@ -271,7 +322,7 @@ pub(crate) fn identity(
         &stage.versioned_operation(),
         &stage.key,
         parameters,
-        vec![(key.clone(), factory.product(&key)?.1.digest())],
+        inputs_of(factory, stage)?,
         &engines,
         Some(params.seed),
     ))
@@ -318,6 +369,7 @@ pub(crate) fn produce(
     let scratch = factory.work(&stage.key).join("rollouts");
     std::fs::create_dir_all(&scratch).map_err(io(&scratch))?;
     let learner_params = params.learner_params();
+    let start = start_adapter(factory, stage, &base)?;
     let mut restarts = 0;
     let trained = loop {
         let mut learner = trainer
@@ -335,7 +387,7 @@ pub(crate) fn produce(
                 top_k: params
                     .top_logprobs
                     .filter(|_| params.estimator == "score-centred"),
-                start: None,
+                start: start.as_deref(),
             })
             .map_err(|e| fail(e.to_string()))?;
         let served = learner.served_as();
@@ -405,7 +457,8 @@ pub(crate) fn produce(
             None => return Err(fail("the rollouts never ran".into())),
         }
     };
-    let candidate = candidate(factory, stage, &params, &base, &trained, staging)?;
+    let mut trained = trained;
+    let candidate = candidate(factory, stage, &params, &base, &mut trained, staging)?;
     write_json(
         &staging.path().join("report.json"),
         &report(&trained, started),
@@ -420,11 +473,11 @@ fn candidate(
     stage: &PlannedStage,
     params: &OnlineParams,
     base: &crate::recipe::ModelRef,
-    trained: &Trained,
+    trained: &mut Trained,
     staging: &Staging,
 ) -> Result<ModelCandidate, RunError> {
     let fail = |e: String| stage_error(&stage.key, e);
-    let (version, digest) = trained
+    let (version, _) = trained
         .telemetry
         .committed_version()
         .ok_or_else(|| fail("the learner committed no published version".into()))?;
@@ -432,7 +485,7 @@ fn candidate(
     let adapter = staging.path().join(name);
     trained
         .learner
-        .adapter(digest, &adapter)
+        .final_adapter(&adapter)
         .map_err(|e| fail(e.to_string()))?;
     let trainer = factory
         .services

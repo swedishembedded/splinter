@@ -140,7 +140,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `harness` | `input` (files, any number) | `output` |
 | `attempts.failures` | `tasks`, `attempts` (one or more) | `failures` |
 | `dataset.rlvr` | `tasks`, `attempts` (one or more) | `tasks` |
-| `train.online` | `tasks` | `model` |
+| `train.online` | `tasks`, `start` (a model, optional) | `model` |
 | `source.ingest` | `documents` (files) | `sections` |
 | `knowledge.admit` | `sections`, `proposals` | `knowledge` |
 | `knowledge.query` | `sections` | `passages` |
@@ -645,7 +645,9 @@ compiles its collection evaluates on the same compiled tasks:
   to sample until one has finished. Every group is recorded in the run state, so a controller
   killed mid-stage resumes without repeating a finished rollout or training a group twice,
   and a restarted job is started again under the same key and sent what it had not
-  committed. The candidate is the newest version a durable checkpoint holds; `report.json`
+  committed. A stage may start from a candidate (`inputs: { start: $stages.sft.model }`, an
+  adapter of its base): the job serves it as its first version, which the first rollouts are
+  drawn from. The candidate is the adapter the ended job leaves (its last, committed version); `report.json`
   holds the online statistics and `experiences.jsonl` one line per committed group. The run
   needs the agent runtime's online rollouts (the SDK's embedding gives them; the command
   line does not yet).

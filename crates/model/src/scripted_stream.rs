@@ -70,6 +70,7 @@ struct Durable {
     committed: HashSet<String>,
     committed_step: u64,
     restarted: bool,
+    last_adapter: Option<String>,
 }
 
 /// The run being streamed now.
@@ -377,10 +378,14 @@ fn advance(
             let bytes =
                 format!("scripted streamed adapter, version {}", durable.version).into_bytes();
             let digest = Digest::of(&bytes);
+            // In the store by its BLAKE3 name (the run's result names the
+            // last); the frame names the file's SHA-256, as brain's does.
             let _ = std::fs::write(store.join(digest.hex()), &bytes);
+            durable.last_adapter = Some(digest.hex().to_string());
+            let sha = format!("sha256:{}", Digest::sha256_of(&bytes).hex());
             push(
                 run,
-                json!({"type": "published", "version": durable.version, "digest": digest.hex(), "step": step}),
+                json!({"type": "published", "version": durable.version, "digest": sha, "step": step}),
             );
         }
         if step.is_multiple_of(run.checkpoint_every) {
@@ -464,7 +469,7 @@ pub(crate) fn route(
             .cloned()
             .unwrap_or_default();
         let outputs = json!({"status": "completed", "version": durable.version, "steps": durable.step,
-                             "committed": durable.committed.len()});
+                             "committed": durable.committed.len(), "adapter_digest": durable.last_adapter});
         let _ = respond(
             stream,
             "200 OK",

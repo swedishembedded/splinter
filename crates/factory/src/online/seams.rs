@@ -345,11 +345,12 @@ pub trait StreamLearner: Learner {
     /// What it measured so far.
     fn telemetry(&self) -> LearnerTelemetry;
 
-    /// The adapter it published as `digest`, copied to `to`.
+    /// The adapter the ended run left (its final, committed version),
+    /// copied to `to`.
     ///
     /// # Errors
-    /// It holds no such adapter, or it cannot be copied.
-    fn adapter(&self, digest: &str, to: &std::path::Path) -> Result<(), LearnerError>;
+    /// The run has not ended, left no adapter, or it cannot be copied.
+    fn final_adapter(&mut self, to: &std::path::Path) -> Result<(), LearnerError>;
 
     /// The id every published version is served under.
     fn served_as(&self) -> String;

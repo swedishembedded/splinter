@@ -232,9 +232,13 @@ impl StreamLearner for BrainLearner {
         self.telemetry.clone()
     }
 
-    fn adapter(&self, digest: &str, to: &Path) -> Result<(), LearnerError> {
-        let digest = Digest::from_content_hex(digest)
-            .map_err(|e| LearnerError::new(format!("adapter digest {digest}: {e}")))?;
+    fn final_adapter(&mut self, to: &Path) -> Result<(), LearnerError> {
+        let outputs = self.job.result().map_err(error)?;
+        let hex = outputs["adapter_digest"].as_str().ok_or_else(|| {
+            LearnerError::new(format!("the ended run names no adapter: {outputs}"))
+        })?;
+        let digest = Digest::from_content_hex(hex)
+            .map_err(|e| LearnerError::new(format!("adapter digest {hex}: {e}")))?;
         self.store
             .fetch(&digest, to)
             .map_err(|e| LearnerError::new(e.to_string()))

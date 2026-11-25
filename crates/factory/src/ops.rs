@@ -26,7 +26,7 @@
 //! | `attempts.failures` | `tasks`, `attempts` (many) | `failures` ([`crate::failures_op`]) |
 //! | `harness` | `input` (files, many, optional) | `output` ([`crate::harness_op`]) |
 //! | `dataset.rlvr` | `tasks`, `attempts` (many) | `tasks` ([`crate::rlvr_op`]) |
-//! | `train.online` | `tasks` | `model` ([`crate::run::online`]) |
+//! | `train.online` | `tasks`, `start` (model, optional) | `model` ([`crate::run::online`]) |
 //! | `source.ingest` | `documents` (files) | `sections` ([`crate::knowledge_ops`]) |
 //! | `knowledge.admit` | `sections`, `proposals` | `knowledge` ([`crate::knowledge_ops`]) |
 //! | `knowledge.query` | `sections` | `passages` ([`crate::knowledge_ops`]) |
