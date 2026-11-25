@@ -68,7 +68,7 @@ scripts/validation/
 | M5 CPU learning certification | 12 | blocked: the methods smokes cannot run against the current brain (G-NEW-06, a cross-project contract); deterministic environments and negative controls not built |
 | M6 GPU certification | 13-14 | not possible here: no GPU |
 | M7 Learning-performance evidence | 15 | not possible here: GPU campaigns |
-| M8 Permanent quality system | 16 | partly: 107 source mutants, each killed by its named tests when added, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C), the CPU targets of 16A (`test/conformance/external`, `test/storage/faults`, `test/factory/faults`); the Phase 16 consolidations, and the GPU and learning targets, not done |
+| M8 Permanent quality system | 16 | partly: 107 source mutants, each killed by its named tests when added, evidence with fixture provenance, gates widened, property and fuzz tests over every untrusted reader (16C), the CPU targets of 16A (`test/conformance/external`, `test/storage/faults`, `test/factory/faults`), the 16D consolidations (legacy pipelines, one sign test, the audit's fallbacks and identifiers); the GPU and learning targets not done |
 
 Priority inside the CPU work: phases 1, 2, 6, 7, 8, then 12.
 
@@ -228,6 +228,13 @@ was seen to fail first, or rejected with its evidence (`validation/gaps.yaml` ho
   G-FS-17), nine mutants killed; the repairs' showed a dead check of where a pair parts, deleted.
 - consolidation (16D, an audit of fallbacks, objectives, identifiers and duplicated statistics): factory trials of
   two revisions of one task were compared as one group (G-NEW-21), now versioned by the task's content digest.
+  Also from that audit: a goal with no probes was reported met at a pass rate of 1 (now `Stop::NoProbes`, rate
+  `None`); a served grade without a reward was scored 0 (now an infrastructure error); five directory listings and
+  the dataset loader dropped entries they could not read (now errors). Judged sound on reading: the release
+  ranking's missing difference (an eligible target always has one), classification trained as SFT (documented and
+  specified), replay's group-less records, the token meter's batch, the inline means and variances (each
+  denominator is its formula's), ExpDB (out of run-state, release and admission decisions; reached by the factory
+  only through the source store).
 - the factory's product statistics recomputed from the trials (6B, closing G-FS-17): every evaluation's sign test
   and decision and the dataset waterfall, on the reference run (its pinned golden held to them) and a mixed one.
 - document plugin (4B, G-NEW-20 found): documents labelled by construction showed the fact reader cutting a value
