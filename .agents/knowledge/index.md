@@ -210,3 +210,4 @@ in the same commit.
 | [222](222-a-synchronous-run-deadlocks-on-groups-its-learner-dropped-silently.md) | A synchronous run deadlocks on groups its learner dropped silently |
 | [223](223-a-no-think-rollout-must-be-trained-in-no-think-mode.md) | A no-think rollout must be trained in no-think mode |
 | [224](224-a-program-this-process-just-wrote-is-busy-while-a-sibling-forks.md) | A program this process just wrote is busy while a sibling thread forks |
+| [225](225-sandbox-image-copies-in-memory-exhaust-a-node.md) | Sandbox image copies in memory exhaust a node; an interrupted batch could not resume |

@@ -213,7 +213,9 @@ async def run_job(specs, tasks_root, files_root, out, concurrency, image_cache, 
 
 def reconcile(out: Path) -> int:
     """Write the missing reports for every trial Harbor already finished in ``out``, running nothing, and say which
-    attempts have no finished trial. Idempotent. Exit 0 when every attempt has a report afterwards, else 1."""
+    attempts have no finished trial. Idempotent. Exit 0 whenever that worked: an attempt with no finished trial is
+    what an interrupted run leaves, and the caller runs it again (it is listed under ``missing``); a failure to read
+    ``out`` is an error with its own exit code."""
     out = out.resolve()
     copy = out / SPECS_COPY
     if not copy.is_file():
@@ -223,4 +225,4 @@ def reconcile(out: Path) -> int:
     outcome = sweep(out, specs, events, "reconciled")
     missing = [{"slot": s.slot.as_json(), "attempt": s.attempt} for s in outcome.unreported]
     print(json.dumps({"reported": len(outcome.reported), "missing": missing}, sort_keys=True))
-    return 0 if not missing else 1
+    return 0

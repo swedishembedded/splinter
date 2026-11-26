@@ -123,7 +123,8 @@ def test_reconcile_names_the_slots_whose_trial_never_finished(finished, capsys) 
     (trial / "result.json").unlink()
     (out / "attempts" / "local" / "train__001-write-answer" / "1-0.json").unlink()
     try:
-        assert main(["reconcile", "--out", str(out)]) == 1
+        # Not an error: the caller runs the attempts listed as missing again.
+        assert main(["reconcile", "--out", str(out)]) == 0
         summary = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
         assert summary["missing"] == [{"slot": spec["slot"], "attempt": 0}]
     finally:
