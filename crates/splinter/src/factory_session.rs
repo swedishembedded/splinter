@@ -338,9 +338,26 @@ pub fn cancel(dir: &Path) -> Result<Exit, Error> {
 /// `fork`.
 pub fn fork(config: &Config, json: bool, args: &ForkArgs) -> Result<Exit, Error> {
     let resolved = resolve_recipe(config, &args.recipe).map_err(refused)?;
-    let reused = run::fork(&args.run, &args.out).map_err(refused)?;
-    eprintln!("reusing {reused} products of {}", args.run.display());
+    let forked = run::fork(&args.run, &args.out).map_err(refused)?;
+    report_fork(&forked, &args.run);
     execute(config, json, &resolved, &args.out)
+}
+
+/// Says what a fork brought over; copying is said, as it is the slow path.
+fn report_fork(forked: &run::Forked, source: &Path) {
+    eprintln!(
+        "reusing {} products of {} ({} blobs linked)",
+        forked.products,
+        source.display(),
+        forked.blobs_linked
+    );
+    if forked.blobs_copied > 0 {
+        eprintln!(
+            "warning: {} blobs could not be linked and were copied (is the output on another file system than {}?)",
+            forked.blobs_copied,
+            source.display()
+        );
+    }
 }
 
 /// `eval RUN --plan PLAN --out DIR`: the run's recipe with its evaluation
@@ -354,8 +371,8 @@ pub fn eval(
 ) -> Result<Exit, Error> {
     let resolved =
         splinter_sdk::factory::resolve_run_under_plan(config, dir, plan).map_err(refused)?;
-    let reused = run::fork(dir, out).map_err(refused)?;
-    eprintln!("reusing {reused} products of {}", dir.display());
+    let forked = run::fork(dir, out).map_err(refused)?;
+    report_fork(&forked, dir);
     execute(config, json, &resolved, out)
 }
 

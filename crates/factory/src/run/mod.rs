@@ -66,7 +66,7 @@ use crate::resolve::{Lock, Resolved};
 use crate::training::Trainer;
 use crate::tree::TreeError;
 
-pub use directory::{fork, report_of, status, verify, StageStatus};
+pub use directory::{fork, report_of, status, verify, Forked, StageStatus};
 
 /// The file a run's lock is kept in.
 pub const LOCK_FILE: &str = "recipe.lock.json";

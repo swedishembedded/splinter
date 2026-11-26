@@ -31,6 +31,13 @@ pub(super) fn sync_dir(dir: &Path) -> io::Result<()> {
     File::open(dir)?.sync_all()
 }
 
+/// Whether two open files are one inode (a file and its hard link).
+pub(super) fn same_file(a: &File, b: &File) -> io::Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let (a, b) = (a.metadata()?, b.metadata()?);
+    Ok((a.dev(), a.ino()) == (b.dev(), b.ino()))
+}
+
 /// Writes `bytes` to `path` only when nothing is there: the bytes go to a
 /// temporary sibling, are synced, and are linked into place, which fails
 /// when `path` exists, so a reader sees the whole file or none and a file

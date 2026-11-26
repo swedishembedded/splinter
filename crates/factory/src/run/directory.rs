@@ -20,24 +20,38 @@ use splinter_store::factory::runstate::RunState;
 
 use super::{io, require_run, RunError, RunManifest};
 
+/// What [`fork`] brought over.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Forked {
+    /// Products now committed in the new run.
+    pub products: usize,
+    /// Blobs shared with the source run as hard links (no bytes moved).
+    pub blobs_linked: usize,
+    /// Blobs copied because linking was not possible (another file system):
+    /// non-zero means the fork moved bytes.
+    pub blobs_copied: usize,
+}
+
 /// Reuse every product committed in the run `source` in the run `run`
 /// (normally a new directory), so the stages a changed recipe leaves
-/// unchanged are not computed again. Returns how many products were
-/// brought over.
+/// unchanged are not computed again. Products are immutable, so their
+/// blobs are linked, not copied, wherever the file system allows.
 ///
 /// # Errors
 /// A product cannot be imported.
-pub fn fork(source: &Path, run: &Path) -> Result<usize, RunError> {
+pub fn fork(source: &Path, run: &Path) -> Result<Forked, RunError> {
     require_run(source)?;
     std::fs::create_dir_all(run).map_err(io(run))?;
     let from = ProductStore::new(source, Box::new(SystemClock));
     let into = ProductStore::new(run, Box::new(SystemClock));
-    let mut imported = 0;
+    let mut forked = Forked::default();
     for manifest in from.list()? {
-        into.import(&from, &manifest.stage, &run.join(&manifest.name))?;
-        imported += 1;
+        let imported = into.import(&from, &manifest.stage, &run.join(&manifest.name))?;
+        forked.products += 1;
+        forked.blobs_linked += imported.blobs_linked;
+        forked.blobs_copied += imported.blobs_copied;
     }
-    Ok(imported)
+    Ok(forked)
 }
 
 /// Check every committed product of the run in `run` against its blobs and

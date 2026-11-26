@@ -170,6 +170,17 @@ and classified as a model error.
 - **`ReplayPolicy::{FailureTargeted, LearningProgress}`** in `splinter-data` are
   unreachable from the CLI since `generation run` went; kept so recorded ledgers
   still read.
+- **Fork cost (2026-11-26, a parent of 10817 products and 5.2 GB took about
+  15 minutes per fork, four at once).** Blobs were already hard-linked; the
+  import re-hashed every linked blob, copied silently when linking failed and
+  `verify_product` hashed a linked view file twice. Fixed (knowledge 229): a
+  link is no longer re-read, a copy is verified while it is written and
+  counted, `splinter fork` prints the counts and warns on copies. Measured
+  5000 products, 464 MB, warm cache: 5.7 s before, 4.7 s after. Open: what
+  remains is three fsyncs and a directory sync per product; batching a fork's
+  commit-point syncs (a crashed fork is re-run idempotently) would cut the
+  rest. Reflink: not done, no gain for read-only blobs. The cold-cache,
+  four-forks-at-once figure was not re-measured.
 - **Throughput of attempt stages (measured on the 2026-11-26 vim transfer
   run, 512 concurrent Qwen3-4B attempts then 384 Qwen3.8-27B ones on 16
   GH200).** Fixed: the worker's per-command host-runtime scan, one httpx

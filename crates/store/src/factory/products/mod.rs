@@ -37,9 +37,10 @@ use serde::{Deserialize, Serialize};
 use splinter_core::clock::Clock;
 use splinter_core::digest::{digest_of, Digest};
 
-use super::fsutil::{sync_dir, temp_sibling, write_atomic};
+use super::fsutil::{same_file, sync_dir, temp_sibling, write_atomic};
 
 mod transfer;
+pub use transfer::Imported;
 
 /// The schema tag of a product manifest.
 pub const MANIFEST_SCHEMA: &str = "splinter.product/1";
@@ -644,13 +645,15 @@ impl ProductStore {
             self.verify(&file.digest)?;
             let path = view.join(&file.path);
             let handle = File::open(&path).map_err(|e| mismatch(format!("{}: {e}", file.path)))?;
-            let actual = Digest::sha256_of_reader(handle)
-                .map_err(io_error(format!("read {}", path.display())))?;
-            if actual != file.digest {
-                return Err(mismatch(format!(
-                    "{} no longer hashes to {}",
-                    file.path, file.digest
-                )));
+            // A view file that is the blob itself (a link) was hashed above.
+            let linked = same_file(&handle, &self.open(&file.digest)?);
+            if !linked.map_err(io_error("stat a product file"))? {
+                let actual = Digest::sha256_of_reader(handle)
+                    .map_err(io_error(format!("read {}", path.display())))?;
+                if actual != file.digest {
+                    let reason = format!("{} no longer hashes to {}", file.path, file.digest);
+                    return Err(mismatch(reason));
+                }
             }
             let executable = is_executable(&path)?;
             if executable != file.executable {

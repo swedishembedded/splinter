@@ -214,3 +214,4 @@ in the same commit.
 | [226](226-a-tool-results-error-status-is-in-the-request-not-the-trajectory.md) | A tool result's error status is in the request, not the trajectory, and the marker alone is no evidence |
 | [227](227-an-unprivileged-overlay-needs-userxattr-and-volatile.md) | An unprivileged overlay needs userxattr and volatile, and sandboxes unpacking one image to disk are disk-bound |
 | [228](228-the-workers-own-interpreter-was-the-attempt-stages-bottleneck.md) | The worker's own interpreter, not the model servers, was the attempt stage's bottleneck |
+| [229](229-a-fork-already-linked-its-products-and-still-reread-and-silently-copied-them.md) | A fork linked its products but re-read every byte of them, and fell back to copying without saying so |

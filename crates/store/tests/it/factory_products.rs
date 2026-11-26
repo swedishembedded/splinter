@@ -16,7 +16,7 @@ use std::path::Path;
 
 use splinter_core::clock::FixedClock;
 use splinter_core::digest::Digest;
-use splinter_store::factory::products::{ProductError, ProductStore, Staging};
+use splinter_store::factory::products::{ProductError, ProductManifest, ProductStore, Staging};
 
 fn store(root: &Path) -> ProductStore {
     ProductStore::new(root, Box::new(FixedClock::new("2026-01-01T00:00:00.000Z")))
@@ -170,7 +170,7 @@ fn a_product_imported_into_another_run_is_the_same_product_and_is_listed() {
 
     let target = store(target_dir.path());
     let view = target_dir.path().join("rollouts/local");
-    let imported = target.import(&source, &id, &view).unwrap();
+    let imported = target.import(&source, &id, &view).unwrap().manifest;
     assert_eq!(imported, published);
     assert_eq!(
         fs::read_to_string(view.join("batches/0/x.txt")).unwrap(),
@@ -179,7 +179,89 @@ fn a_product_imported_into_another_run_is_the_same_product_and_is_listed() {
     target.verify_product(&id, &view).unwrap();
     assert_eq!(target.list().unwrap(), vec![published.clone()]);
     // Importing again changes nothing.
-    assert_eq!(target.import(&source, &id, &view).unwrap(), published);
+    assert_eq!(
+        target.import(&source, &id, &view).unwrap().manifest,
+        published
+    );
+}
+
+fn publish_two_files(source: &ProductStore, root: &Path, id: &Digest) -> ProductManifest {
+    let staging = stage_output(source, &[("a.txt", "alpha"), ("b/c.txt", "gamma")]);
+    source.publish(id, "p", staging, &root.join("p")).unwrap()
+}
+
+/// A fork shares the immutable bytes of a product with its parent: the
+/// imported blobs are the parent's files, not copies, and are reported so.
+#[test]
+fn an_imported_product_shares_its_blobs_with_the_source_run() {
+    use std::os::unix::fs::MetadataExt;
+    let (source_dir, target_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let source = store(source_dir.path());
+    let id = stage("p");
+    let published = publish_two_files(&source, source_dir.path(), &id);
+    let target = store(target_dir.path());
+    let view = target_dir.path().join("p");
+    let imported = target.import(&source, &id, &view).unwrap();
+    assert_eq!((imported.blobs_linked, imported.blobs_copied), (2, 0));
+    for file in &published.files {
+        let blob = |root: &Path| root.join("blobs/sha256").join(file.digest.hex());
+        let (theirs, ours) = (
+            fs::metadata(blob(source_dir.path())).unwrap(),
+            fs::metadata(blob(target_dir.path())).unwrap(),
+        );
+        assert_eq!(theirs.ino(), ours.ino(), "{} is linked", file.path);
+        assert!(ours.nlink() >= 3, "source blob, source view, fork blob");
+    }
+    target.verify_product(&id, &view).unwrap();
+}
+
+/// Where linking is impossible (another device, a file system without
+/// links) the bytes are copied and verified, and the copies are counted.
+#[test]
+fn an_import_that_cannot_link_copies_verified_blobs_and_counts_them() {
+    use std::os::unix::fs::MetadataExt;
+    let (source_dir, target_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let source = store(source_dir.path());
+    let id = stage("p");
+    let published = publish_two_files(&source, source_dir.path(), &id);
+    let target = store(target_dir.path());
+    let view = target_dir.path().join("p");
+    let cross_device = |_: &Path, _: &Path| Err(std::io::Error::from_raw_os_error(libc::EXDEV));
+    let imported = target
+        .import_linking_with(&source, &id, &view, &cross_device)
+        .unwrap();
+    assert_eq!((imported.blobs_linked, imported.blobs_copied), (0, 2));
+    assert_eq!(imported.manifest, published);
+    let blob = |root: &Path| {
+        root.join("blobs/sha256")
+            .join(published.files[0].digest.hex())
+    };
+    assert_ne!(
+        fs::metadata(blob(source_dir.path())).unwrap().ino(),
+        fs::metadata(blob(target_dir.path())).unwrap().ino()
+    );
+    target.verify_product(&id, &view).unwrap();
+}
+
+/// A copy that does not hash to its address is refused, never imported.
+#[test]
+fn an_import_refuses_a_rotted_source_blob_it_had_to_copy() {
+    let (source_dir, target_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let source = store(source_dir.path());
+    let id = stage("p");
+    let published = publish_two_files(&source, source_dir.path(), &id);
+    let blob = source_dir
+        .path()
+        .join("blobs/sha256")
+        .join(published.files[0].digest.hex());
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&blob, fs::Permissions::from_mode(0o644)).unwrap();
+    fs::write(&blob, "rotted").unwrap();
+    let target = store(target_dir.path());
+    let view = target_dir.path().join("p");
+    let cross_device = |_: &Path, _: &Path| Err(std::io::Error::from_raw_os_error(libc::EXDEV));
+    let refused = target.import_linking_with(&source, &id, &view, &cross_device);
+    assert!(matches!(refused, Err(ProductError::BlobCorrupt { .. })));
 }
 
 #[test]

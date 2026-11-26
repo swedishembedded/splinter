@@ -294,7 +294,7 @@ fn a_changed_variant_retrains_only_itself_and_reuses_the_rollouts_and_the_datase
 
     let changed = RECIPE.replace("params: { rank: 16 }", "params: { rank: 32 }");
     let second = tempfile::tempdir().unwrap();
-    assert!(fork(first.path(), second.path()).unwrap() > 0);
+    assert!(fork(first.path(), second.path()).unwrap().products > 0);
     let stages = run(
         &resolved(&repo, &changed),
         second.path(),

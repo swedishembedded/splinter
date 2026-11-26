@@ -10,6 +10,7 @@
 //! run's store, in the order publishing keeps.
 
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use splinter_core::digest::Digest;
@@ -19,6 +20,18 @@ use super::{
     io_error, malformed, pretty, read_dir_if_exists, PendingPublish, ProductError, ProductManifest,
     ProductStore, PRODUCT_DIR,
 };
+
+/// A product brought over from another run's store.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Imported {
+    /// The product's committed manifest.
+    pub manifest: ProductManifest,
+    /// Blobs now shared with the source store as hard links.
+    pub blobs_linked: usize,
+    /// Blobs copied (and verified) because linking was not possible, as
+    /// across file systems; zero when every blob was linked or already held.
+    pub blobs_copied: usize,
+}
 
 impl ProductStore {
     /// Every committed product's manifest, by stage.
@@ -42,24 +55,50 @@ impl ProductStore {
     }
 
     /// Brings `source`'s committed product of `stage_id` into this store:
-    /// its blobs (hard-linked where the filesystem allows, verified either
-    /// way), its view at `view`, then its commit point. A product this
-    /// store already holds is left as it is.
+    /// its blobs (hard-linked where the filesystem allows, copied and
+    /// verified where it does not), its view at `view`, then its commit
+    /// point. A product this store already holds is left as it is.
+    ///
+    /// Blobs are immutable and read-only, so a linked blob is the source's
+    /// own file and costs no I/O; it is verified when the product is reused
+    /// ([`Self::ensure_view`]) or checked ([`Self::verify_product`]), like
+    /// every committed blob. The result counts linked and copied blobs so a
+    /// caller can show when linking was not possible.
     ///
     /// # Errors
-    /// `source` holds no such product, a blob does not verify, or a file
-    /// cannot be written.
+    /// `source` holds no such product, a copied blob does not verify, or a
+    /// file cannot be written.
     pub fn import(
         &self,
         source: &Self,
         stage_id: &Digest,
         view: &Path,
-    ) -> Result<ProductManifest, ProductError> {
-        if let Some(existing) = self.committed(stage_id)? {
-            return Ok(existing);
+    ) -> Result<Imported, ProductError> {
+        self.import_linking_with(source, stage_id, view, &|from, to| fs::hard_link(from, to))
+    }
+
+    /// [`Self::import`] with the way a blob is linked supplied, so a file
+    /// system that cannot link can be exercised.
+    ///
+    /// # Errors
+    /// As [`Self::import`].
+    pub fn import_linking_with(
+        &self,
+        source: &Self,
+        stage_id: &Digest,
+        view: &Path,
+        link: &dyn Fn(&Path, &Path) -> io::Result<()>,
+    ) -> Result<Imported, ProductError> {
+        if let Some(manifest) = self.committed(stage_id)? {
+            return Ok(Imported {
+                manifest,
+                blobs_linked: 0,
+                blobs_copied: 0,
+            });
         }
         let manifest = source.manifest(stage_id)?;
         let relative_view = self.relative_view(view)?;
+        let (mut blobs_linked, mut blobs_copied) = (0, 0);
         for file in &manifest.files {
             let target = self.blob_path(&file.digest)?;
             if target.exists() {
@@ -69,10 +108,20 @@ impl ProductStore {
             if let Some(dir) = target.parent() {
                 fs::create_dir_all(dir).map_err(io_error(format!("create {}", dir.display())))?;
             }
-            if fs::hard_link(&from, &target).is_err() {
-                self.put_file(&from)?;
+            if link(&from, &target).is_ok() {
+                blobs_linked += 1;
+            } else {
+                // The copy is hashed as it is written, so it is verified
+                // without a second read.
+                let actual = self.put_file(&from)?;
+                if actual != file.digest {
+                    return Err(ProductError::BlobCorrupt {
+                        digest: file.digest.clone(),
+                        actual,
+                    });
+                }
+                blobs_copied += 1;
             }
-            self.verify(&file.digest)?;
         }
         let intent = serde_json::to_vec(&PendingPublish {
             view: relative_view,
@@ -86,7 +135,11 @@ impl ProductStore {
         write_atomic(&path, &pretty(&manifest)?)
             .map_err(io_error(format!("commit {}", path.display())))?;
         let _ = fs::remove_file(pending);
-        Ok(manifest)
+        Ok(Imported {
+            manifest,
+            blobs_linked,
+            blobs_copied,
+        })
     }
 
     /// Makes the view at `view` show the committed product of `stage_id`,
