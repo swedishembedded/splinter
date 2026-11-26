@@ -219,5 +219,19 @@
    ],
    "p_two_sided": 0.109375
   }
+ },
+ "exploratory": {
+  "f-vs-base": {
+   "tasks": 100,
+   "wins": 0,
+   "losses": 0,
+   "p": 1.0,
+   "diff": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "p_two_sided": 1.0
+  }
  }
 }

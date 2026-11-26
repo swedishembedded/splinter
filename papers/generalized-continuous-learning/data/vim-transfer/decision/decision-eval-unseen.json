@@ -1,0 +1,140 @@
+{
+ "eval": "eval-unseen",
+ "arms": {
+  "c": {
+   "seeds": 3,
+   "attempts": 1128,
+   "passes": 642,
+   "pass_rate": 0.5691489361702128,
+   "tasks_solved": 84,
+   "base_attempts": 1126,
+   "base_passes": 113,
+   "infrastructure_slots": [
+    0,
+    0,
+    2
+   ]
+  },
+  "d": {
+   "seeds": 3,
+   "attempts": 1128,
+   "passes": 723,
+   "pass_rate": 0.6409574468085106,
+   "tasks_solved": 87,
+   "base_attempts": 1128,
+   "base_passes": 119,
+   "infrastructure_slots": [
+    0,
+    0,
+    0
+   ]
+  },
+  "f": {
+   "seeds": 3,
+   "attempts": 1128,
+   "passes": 9,
+   "pass_rate": 0.007978723404255319,
+   "tasks_solved": 7,
+   "base_attempts": 1128,
+   "base_passes": 133,
+   "infrastructure_slots": [
+    0,
+    0,
+    0
+   ]
+  },
+  "g": {
+   "seeds": 3,
+   "attempts": 612,
+   "passes": 127,
+   "pass_rate": 0.20751633986928106,
+   "tasks_solved": 26,
+   "base_attempts": 612,
+   "base_passes": 22,
+   "infrastructure_slots": [
+    0,
+    0,
+    0
+   ]
+  }
+ },
+ "primary": {
+  "c": {
+   "tasks": 94,
+   "wins": 79,
+   "losses": 3,
+   "p": 1.901770946320666e-20,
+   "diff": 0.4698046181172291,
+   "ci95": [
+    0.3969804618117229,
+    0.5426287744227354
+   ],
+   "holm_alpha": 0.025,
+   "significant_holm": true
+  },
+  "d": {
+   "tasks": 94,
+   "wins": 84,
+   "losses": 1,
+   "p": 2.223047896236262e-24,
+   "diff": 0.5354609929078015,
+   "ci95": [
+    0.4645390070921986,
+    0.6054964539007093
+   ],
+   "holm_alpha": 0.016666666666666666,
+   "significant_holm": true
+  },
+  "g": {
+   "tasks": 51,
+   "wins": 25,
+   "losses": 0,
+   "p": 2.9802322387695312e-08,
+   "diff": 0.1715686274509804,
+   "ci95": [
+    0.11274509803921569,
+    0.2369281045751634
+   ],
+   "holm_alpha": 0.05,
+   "significant_holm": true
+  }
+ },
+ "vs_control": {
+  "c": {
+   "tasks": 94,
+   "wins": 84,
+   "losses": 0,
+   "p": 5.169878828456423e-26,
+   "diff": 0.5611702127659575,
+   "ci95": [
+    0.48847517730496454,
+    0.6312056737588653
+   ],
+   "significant": true
+  },
+  "d": {
+   "tasks": 94,
+   "wins": 87,
+   "losses": 0,
+   "p": 6.462348535570529e-27,
+   "diff": 0.6329787234042553,
+   "ci95": [
+    0.5638297872340425,
+    0.699468085106383
+   ],
+   "significant": true
+  },
+  "g": {
+   "tasks": 0,
+   "wins": 0,
+   "losses": 0,
+   "p": 1.0,
+   "diff": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "significant": false
+  }
+ }
+}

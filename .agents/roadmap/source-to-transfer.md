@@ -146,9 +146,13 @@ Teacher and student records (train split, by each record's `model`): B, D, F 269
 G 1014 / 86. The arms do not separate the teacher's contribution; a student-only arm S (B's rule on the 4B's own
 verified successes, 3 seeds) was started on 2026-11-27 to do so.
 
-T1 (held-out authored tasks, secondary): C on the 94 held-out forward tasks 642 / 1128 attempts (0.569) against its
-paired base's 113 / 1126 (0.100), 79 tasks won, 3 lost, p 1.9e-20, +0.470 [+0.397, +0.543]. B, D, F and G open while
-their evaluations finish; G's held-out tasks are backward tasks, a different set.
+T1 (held-out authored tasks, secondary; `decide.py results eval-unseen`, arms with all three seeds measured):
+C on the 94 held-out forward tasks 642 / 1128 (0.569) against its base's 113 / 1126, 79 / 3, p 1.9e-20, +0.470
+[+0.397, +0.543]; D 723 / 1128 (0.641) against 119 / 1128, 84 / 1, p 2.2e-24, +0.535 [+0.465, +0.605]; G on its 51
+held-out backward tasks 127 / 612 (0.208) against 22 / 612, 25 / 0, p 3.0e-8, +0.172 [+0.113, +0.237]. F 9 / 1128
+against its base's 133 / 1128: 2 tasks won, 26 lost (exploratory, two-sided p 3.0e-6, -0.110 [-0.162, -0.062]):
+training on actions paired with other tasks' requests made the model worse than the base at following a request. B's
+T1 is open (seeds 1 and 2 still being measured).
 
 Recomputed 2026-11-27 from the per-task outcomes with `decide.py results eval-exam` and `secondary.py results
 eval-exam`: every number above matches.
@@ -167,7 +171,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 
 - Paper: `papers/generalized-continuous-learning`, section "A second task family: editing files with Vim, taught from
   its user manual" (pipeline, funnel, registered design, deviations, results, per-seed figure, generations, verdict).
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 5346ca84): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit bf8a5b70): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
@@ -179,7 +183,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 Not claimed: anything about other tools or domains (T3), retention on non-Vim tasks (no anchor was run), or stability
 under another authoring seed of the material.
 
-Open: T1 for B, D, F, G; arm S; generation 2; a forgetting gate; an unattended restart from the recipe.
+Open: T1 for B; arm S; generation 2; a forgetting gate; an unattended restart from the recipe.
 
 ## Transfer experiment support (2026-11-26)
 

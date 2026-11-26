@@ -1,0 +1,164 @@
+{
+ "eval": "eval-unseen",
+ "per_seed": {
+  "arm-c-s1": {
+   "candidate": {
+    "passes": 219,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 38,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-c-s2": {
+   "candidate": {
+    "passes": 208,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 35,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-c-s3": {
+   "candidate": {
+    "passes": 215,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 40,
+    "attempts": 374,
+    "infrastructure": 2
+   }
+  },
+  "arm-d-s1": {
+   "candidate": {
+    "passes": 234,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 35,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-d-s2": {
+   "candidate": {
+    "passes": 242,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 40,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-d-s3": {
+   "candidate": {
+    "passes": 247,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 44,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-f-s1": {
+   "candidate": {
+    "passes": 2,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 46,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-f-s2": {
+   "candidate": {
+    "passes": 1,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 43,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-f-s3": {
+   "candidate": {
+    "passes": 6,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 44,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-g-s1": {
+   "candidate": {
+    "passes": 44,
+    "attempts": 204,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 7,
+    "attempts": 204,
+    "infrastructure": 0
+   }
+  },
+  "arm-g-s2": {
+   "candidate": {
+    "passes": 41,
+    "attempts": 204,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 9,
+    "attempts": 204,
+    "infrastructure": 0
+   }
+  },
+  "arm-g-s3": {
+   "candidate": {
+    "passes": 42,
+    "attempts": 204,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 6,
+    "attempts": 204,
+    "infrastructure": 0
+   }
+  }
+ },
+ "secondary": {},
+ "exploratory": {
+  "f-vs-base": {
+   "tasks": 94,
+   "wins": 2,
+   "losses": 26,
+   "p": 0.9999998919665813,
+   "diff": -0.1099290780141844,
+   "ci95": [
+    -0.1622340425531915,
+    -0.06205673758865248
+   ],
+   "p_two_sided": 3.032386302947998e-06
+  }
+ }
+}

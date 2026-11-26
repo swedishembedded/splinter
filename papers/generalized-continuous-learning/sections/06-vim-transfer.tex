@@ -232,11 +232,24 @@ separate what the teacher's trajectories teach from what the student's own verif
 (B's rule restricted to the 4B's own verified successes, 3 seeds) was started after these results to separate them; its
 result is open.
 
-\paragraph{T1, held-out authored tasks} (secondary). Arm C on the 94 held-out forward tasks: 642 of 1128 attempts (0.569)
-against its paired base's 113 of 1126 (0.100); 79 tasks won, 3 lost (one-sided $p=1.9\times10^{-20}$), difference $+0.470$
-$[+0.397, +0.543]$. In-distribution, the gain is an order of magnitude larger than on the exams. T1 for B, D, F and G was still
-being measured when this was written and is open. G's T1 tasks are the held-out backward tasks, a different set from the
-others'.
+\paragraph{T1, held-out authored tasks} (secondary). Each arm on the 10\% of its own family's tasks that no arm trained on
+(94 forward tasks; 51 backward tasks for G, a different set), against its paired base runs:
+
+\begin{center}\footnotesize
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrlrlll}
+\toprule
+Arm & Tasks & Passes (rate) & Base & vs base: W/L, $p$ & Difference [95\%] & vs F: W/L, $p$ \\
+\midrule
+\inputrows{generated/vim-transfer-t1.tex}
+\bottomrule
+\end{tabular}}
+\end{center}
+
+In-distribution, the gain is an order of magnitude larger than on the exams: D passes 64\% of held-out forward attempts
+against the base's 11\%. The control F does worse than the base on these tasks (2 tasks won, 26 lost; an exploratory
+comparison outside the registration): training on actions paired with other tasks' requests taught the model to act without
+regard to the request. B's T1 was still being measured on two seeds when this was written and is open.
 
 \subsection{Generations, retention, and the operational definition}\label{sec:vim-verdict}
 

@@ -16,7 +16,7 @@ SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex)
 # as generated/* through TEXINPUTS, so a build writes nothing into this directory.
 GENERATED := $(BUILD)/generated
 VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decision/secondary-eval-exam.json \
-	material/funnel.json
+	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json material/funnel.json
 export TEXINPUTS := $(BUILD):
 
 $(GENERATED)/.stamp: scripts/vim_transfer_data.py $(addprefix data/vim-transfer/,$(VIM_FILES))
