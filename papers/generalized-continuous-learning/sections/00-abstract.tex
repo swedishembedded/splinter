@@ -6,5 +6,13 @@ an executable environment, with every generation judged by a separate examiner o
 pool of interpreter-labelled programs doubling at each generation), generation 4 answers 13.2\% of a fresh sealed exam of 2040
 items against the base's 5.1\% (+8.2 points, 95\% interval [+5.1, +11.5]), and gains +3.3 points [+0.7, +7.1] on program
 families never used in any exam; but only the first two generations improve on their predecessors, so the registered
-criterion that every generation improves is not met. The paper is a draft.
+criterion that every generation improves is not met.
+In a second task family, editing files with Vim, the loop's first step is measured under a registered design: tasks authored by
+a 27B model from Vim's user manual alone, solved by teacher and student, and their verified trajectories trained into Qwen3-4B
+adapters (five arms, three seeds each). On 100 hand-written exams that no stage read, each of the four arms in the registered family beats the
+base, which passes none of its paired attempts, and each beats a control trained on the same records with shuffled requests, which also
+passes none; tasks authored outcome first pass 42 of 1200 exam attempts (3.5\%, 25 exams solved at least once) against 22 for
+section-by-section tasks on three times as many records. Against the paper's operational definition of continuous
+self-improvement, the held-out gain and the control hold for this one generation; three generations, retention and an
+unattended restart are not shown. The paper is a draft.
 \end{abstract}

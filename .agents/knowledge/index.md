@@ -215,3 +215,5 @@ in the same commit.
 | [227](227-an-unprivileged-overlay-needs-userxattr-and-volatile.md) | An unprivileged overlay needs userxattr and volatile, and sandboxes unpacking one image to disk are disk-bound |
 | [228](228-the-workers-own-interpreter-was-the-attempt-stages-bottleneck.md) | The worker's own interpreter, not the model servers, was the attempt stage's bottleneck |
 | [229](229-a-fork-already-linked-its-products-and-still-reread-and-silently-copied-them.md) | A fork linked its products but re-read every byte of them, and fell back to copying without saying so |
+| [230](230-outcome-first-tasks-transferred-more-to-the-vim-exams-at-a-third-of-the-records.md) | Outcome-first tasks transferred more to the Vim exams than section-by-section tasks, at a third of the records |
+| [231](231-a-shuffled-request-control-separates-trajectory-content-from-tool-format-exposure.md) | A shuffled-request control separates what trajectories teach from exposure to the tool's format |

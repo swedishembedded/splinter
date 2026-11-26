@@ -1,0 +1,223 @@
+{
+ "eval": "eval-exam",
+ "per_seed": {
+  "arm-b-s1": {
+   "candidate": {
+    "passes": 6,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 393,
+    "infrastructure": 7
+   }
+  },
+  "arm-b-s2": {
+   "candidate": {
+    "passes": 6,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 389,
+    "infrastructure": 11
+   }
+  },
+  "arm-b-s3": {
+   "candidate": {
+    "passes": 10,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 392,
+    "infrastructure": 8
+   }
+  },
+  "arm-c-s1": {
+   "candidate": {
+    "passes": 5,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 397,
+    "infrastructure": 3
+   }
+  },
+  "arm-c-s2": {
+   "candidate": {
+    "passes": 2,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 394,
+    "infrastructure": 6
+   }
+  },
+  "arm-c-s3": {
+   "candidate": {
+    "passes": 3,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 397,
+    "infrastructure": 3
+   }
+  },
+  "arm-d-s1": {
+   "candidate": {
+    "passes": 10,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 396,
+    "infrastructure": 4
+   }
+  },
+  "arm-d-s2": {
+   "candidate": {
+    "passes": 4,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 396,
+    "infrastructure": 4
+   }
+  },
+  "arm-d-s3": {
+   "candidate": {
+    "passes": 8,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 395,
+    "infrastructure": 5
+   }
+  },
+  "arm-f-s1": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 389,
+    "infrastructure": 11
+   }
+  },
+  "arm-f-s2": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 391,
+    "infrastructure": 9
+   }
+  },
+  "arm-f-s3": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 397,
+    "infrastructure": 3
+   }
+  },
+  "arm-g-s1": {
+   "candidate": {
+    "passes": 14,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 390,
+    "infrastructure": 10
+   }
+  },
+  "arm-g-s2": {
+   "candidate": {
+    "passes": 11,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 392,
+    "infrastructure": 8
+   }
+  },
+  "arm-g-s3": {
+   "candidate": {
+    "passes": 17,
+    "attempts": 400,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 393,
+    "infrastructure": 7
+   }
+  }
+ },
+ "secondary": {
+  "g-vs-b": {
+   "tasks": 100,
+   "wins": 21,
+   "losses": 5,
+   "p": 0.0012469589710235596,
+   "diff": 0.016666666666666666,
+   "ci95": [
+    0.0025,
+    0.030833333333333334
+   ],
+   "p_two_sided": 0.002493917942047119
+  },
+  "d-vs-b": {
+   "tasks": 100,
+   "wins": 7,
+   "losses": 5,
+   "p": 0.38720703125,
+   "diff": 0.0,
+   "ci95": [
+    -0.008333333333333333,
+    0.008333333333333333
+   ],
+   "p_two_sided": 0.7744140625
+  },
+  "c-vs-b": {
+   "tasks": 100,
+   "wins": 2,
+   "losses": 8,
+   "p": 0.9892578125,
+   "diff": -0.01,
+   "ci95": [
+    -0.019166666666666665,
+    -0.0016666666666666668
+   ],
+   "p_two_sided": 0.109375
+  }
+ }
+}

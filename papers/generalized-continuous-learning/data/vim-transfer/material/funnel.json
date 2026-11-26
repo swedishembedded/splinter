@@ -1,0 +1,190 @@
+{
+ "schema": "source-to-transfer.funnel/1",
+ "forward": {
+  "stages": {
+   "sections": {
+    "items": 263,
+    "rejected": 0
+   },
+   "proposed": {
+    "items": 257,
+    "rejected": 6
+   },
+   "proposed-b": {
+    "items": 255,
+    "rejected": 8
+   },
+   "proposed-c": {
+    "items": 255,
+    "rejected": 8
+   },
+   "refused": {
+    "items": 2341,
+    "rejected": 0
+   },
+   "repaired": {
+    "items": 2336,
+    "rejected": 5
+   },
+   "to-review": {
+    "items": 4434,
+    "rejected": 0
+   },
+   "reviewed": {
+    "items": 4385,
+    "rejected": 49
+   },
+   "fixes": {
+    "items": 1140,
+    "rejected": 0
+   },
+   "fixed": {
+    "items": 1139,
+    "rejected": 1
+   },
+   "to-review-fixed": {
+    "items": 2092,
+    "rejected": 0
+   },
+   "reviewed-fixed": {
+    "items": 2074,
+    "rejected": 18
+   }
+  },
+  "admission": {
+   "candidates": 6705,
+   "malformed": 349,
+   "refused": 5675,
+   "admitted": 1030,
+   "tiers": {
+    "1": 682,
+    "2": 252,
+    "3": 71,
+    "4": 25,
+    "5": 0,
+    "6": 0
+   }
+  },
+  "refusal_reasons": {
+   "step # changes nothing": 1822,
+   "the review found the result does not match the request": 1209,
+   "step #: Vim reported an error: E#: No write since last change (add ! to override": 500,
+   "a task with the same commands or the same request and files exists": 454,
+   "a command is empty, over-long or spans lines": 219,
+   "file name \u2026 is not a plain name": 95,
+   "the request contains one of the reference's own commands": 61,
+   "step #: Vim reported an error: E#: No range allowed": 39,
+   "step #: Vim reported an error: E#: No previous substitute regular expression": 34,
+   "step #: Vim reported an error: E#: There is only one file to edit": 30,
+   "step #: Vim reported an error: E#: Shell commands and some functionality not all": 28,
+   "step #: Vim reported an error: E#: Nothing in register \"": 24
+  },
+  "attempts": {
+   "oracle": {
+    "counted": 1030,
+    "passed": 1026,
+    "pass_rate": 0.996116504854369,
+    "tasks": 1030,
+    "tasks_solved": 1026
+   },
+   "student-attempts": {
+    "counted": 8204,
+    "passed": 824,
+    "pass_rate": 0.10043881033642126,
+    "tasks": 1026,
+    "tasks_solved": 231
+   },
+   "teacher-attempts": {
+    "counted": 4095,
+    "passed": 3319,
+    "pass_rate": 0.8105006105006105,
+    "tasks": 1026,
+    "tasks_solved": 944
+   }
+  }
+ },
+ "backward": {
+  "stages": {
+   "sections": {
+    "items": 263,
+    "rejected": 0
+   },
+   "proposed": {
+    "items": 259,
+    "rejected": 4
+   },
+   "describe-items": {
+    "items": 523,
+    "rejected": 182
+   },
+   "described": {
+    "items": 523,
+    "rejected": 0
+   }
+  },
+  "proposals": {
+   "proposed": 771,
+   "refused": 66,
+   "admitted": 705
+  },
+  "proposal_refusal_reasons": {
+   "start file name \u2026 is not a plain name": 45,
+   "start file \u2026 has a carriage return; files end lines with a newline alone": 10,
+   "a task with the same start and target exists": 8,
+   "the target removes \u2026; the vim tool cannot delete a file, keep every start file": 2,
+   "the target changes nothing": 1
+  },
+  "not_described": {
+   "no attempt reproduced the target": 143,
+   "the solution does not reproduce the target when Vim replays it": 30,
+   "the solution types the files again instead of editing them": 9
+  },
+  "admission": {
+   "refused": 56,
+   "admitted": 467
+  },
+  "refusal_reasons": {
+   "the request quotes most of the target's new lines": 42,
+   "the request quotes the target \u2026 whole": 5,
+   "the request contains the solution\u2026Solution: use :noremap for gQ.'": 1,
+   "the request contains the solution\u2026def IsBoolean(val: any): boolean'": 1,
+   "the request contains the solution\u2026:amenu <silent> Nav.Goto\\\\ Buffer  :call GotoB": 1,
+   "the request contains the solution\u2026/stuff_too'": 1,
+   "the request contains the solution\u2026:set display=uhex'": 1,
+   "the request contains the solution\u2026#. Execute rollback if necessary.'": 1,
+   "the request contains the solution\u2026## [#.#.#] - #-#-#'": 1,
+   "the request contains the solution\u2026syntax keyword rustStatement pub pub(crate) cr": 1,
+   "the request contains the solution\u2026The value \u2026 doesn\\\u2026": 1
+  },
+  "attempts": {
+   "reproduce-attempts": {
+    "counted": 2805,
+    "passed": 1387,
+    "pass_rate": 0.4944741532976827,
+    "tasks": 705,
+    "tasks_solved": 562
+   },
+   "oracle": {
+    "counted": 467,
+    "passed": 467,
+    "pass_rate": 1.0,
+    "tasks": 467,
+    "tasks_solved": 467
+   },
+   "student-attempts": {
+    "counted": 3688,
+    "passed": 116,
+    "pass_rate": 0.031453362255965296,
+    "tasks": 467,
+    "tasks_solved": 36
+   },
+   "teacher-attempts": {
+    "counted": 1868,
+    "passed": 1348,
+    "pass_rate": 0.721627408993576,
+    "tasks": 467,
+    "tasks_solved": 410
+   }
+  }
+ }
+}

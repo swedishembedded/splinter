@@ -1,0 +1,179 @@
+{
+ "eval": "eval-exam",
+ "arms": {
+  "b": {
+   "seeds": 3,
+   "attempts": 1200,
+   "passes": 22,
+   "pass_rate": 0.018333333333333333,
+   "tasks_solved": 10,
+   "base_attempts": 1174,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    7,
+    11,
+    8
+   ]
+  },
+  "c": {
+   "seeds": 3,
+   "attempts": 1200,
+   "passes": 10,
+   "pass_rate": 0.008333333333333333,
+   "tasks_solved": 6,
+   "base_attempts": 1188,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    3,
+    6,
+    3
+   ]
+  },
+  "d": {
+   "seeds": 3,
+   "attempts": 1200,
+   "passes": 22,
+   "pass_rate": 0.018333333333333333,
+   "tasks_solved": 11,
+   "base_attempts": 1187,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    4,
+    4,
+    5
+   ]
+  },
+  "f": {
+   "seeds": 3,
+   "attempts": 1200,
+   "passes": 0,
+   "pass_rate": 0.0,
+   "tasks_solved": 0,
+   "base_attempts": 1177,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    11,
+    9,
+    3
+   ]
+  },
+  "g": {
+   "seeds": 3,
+   "attempts": 1200,
+   "passes": 42,
+   "pass_rate": 0.035,
+   "tasks_solved": 25,
+   "base_attempts": 1175,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    10,
+    8,
+    7
+   ]
+  }
+ },
+ "primary": {
+  "b": {
+   "tasks": 100,
+   "wins": 10,
+   "losses": 0,
+   "p": 0.0009765625,
+   "diff": 0.018739352640545145,
+   "ci95": [
+    0.007640067911714771,
+    0.031879194630872486
+   ],
+   "holm_alpha": 0.025,
+   "significant_holm": true
+  },
+  "c": {
+   "tasks": 100,
+   "wins": 6,
+   "losses": 0,
+   "p": 0.015625,
+   "diff": 0.008417508417508417,
+   "ci95": [
+    0.002506265664160401,
+    0.01669449081803005
+   ],
+   "holm_alpha": 0.05,
+   "significant_holm": true
+  },
+  "d": {
+   "tasks": 100,
+   "wins": 11,
+   "losses": 0,
+   "p": 0.00048828125,
+   "diff": 0.018534119629317607,
+   "ci95": [
+    0.007531380753138075,
+    0.03204047217537943
+   ],
+   "holm_alpha": 0.016666666666666666,
+   "significant_holm": true
+  },
+  "g": {
+   "tasks": 100,
+   "wins": 24,
+   "losses": 0,
+   "p": 5.960464477539063e-08,
+   "diff": 0.03489361702127659,
+   "ci95": [
+    0.02079722703639515,
+    0.050761421319796954
+   ],
+   "holm_alpha": 0.0125,
+   "significant_holm": true
+  }
+ },
+ "vs_control": {
+  "b": {
+   "tasks": 100,
+   "wins": 10,
+   "losses": 0,
+   "p": 0.0009765625,
+   "diff": 0.018333333333333333,
+   "ci95": [
+    0.0075,
+    0.03166666666666667
+   ],
+   "significant": true
+  },
+  "c": {
+   "tasks": 100,
+   "wins": 6,
+   "losses": 0,
+   "p": 0.015625,
+   "diff": 0.008333333333333333,
+   "ci95": [
+    0.0025,
+    0.016666666666666666
+   ],
+   "significant": true
+  },
+  "d": {
+   "tasks": 100,
+   "wins": 11,
+   "losses": 0,
+   "p": 0.00048828125,
+   "diff": 0.018333333333333333,
+   "ci95": [
+    0.0075,
+    0.03166666666666667
+   ],
+   "significant": true
+  },
+  "g": {
+   "tasks": 100,
+   "wins": 25,
+   "losses": 0,
+   "p": 2.9802322387695312e-08,
+   "diff": 0.035,
+   "ci95": [
+    0.021666666666666667,
+    0.050833333333333335
+   ],
+   "significant": true
+  }
+ }
+}

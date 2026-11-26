@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements training pipelines whose every reported number is regenerated from published evidence,
+# for its clients. If your team needs expertise in measuring what a model learned from generated practice tasks, you
+# can procure our services by sending an email to info@swedishembedded.com.
+"""The tables and figure data of the Vim source-to-transfer section, made from a snapshot of the private evidence
+repository swedishembedded/source-to-transfer-evidence (evaluation/aggregates.json, decision/*.json,
+material/funnel.json). Writes CSV files and table rows into OUT (the paper's data/ directory).
+
+usage: vim_transfer_data.py EVIDENCE_DIR OUT_DIR
+  EVIDENCE_DIR is e.g. `hf download swedishembedded/source-to-transfer-evidence --repo-type dataset --local-dir DIR`."""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+import os
+import sys
+
+ARMS = ["b", "c", "d", "f", "g"]
+LABEL = {"b": "B", "c": "C", "d": "D", "f": "F", "g": "G", "s": "S"}
+Z = 1.959963984540054
+
+
+def wilson(k: int, n: int) -> tuple[float, float]:
+    """95% Wilson score interval of a binomial proportion k/n."""
+    if n == 0:
+        return (math.nan, math.nan)
+    p = k / n
+    d = 1 + Z * Z / n
+    c = (p + Z * Z / (2 * n)) / d
+    h = Z * math.sqrt(p * (1 - p) / n + Z * Z / (4 * n * n)) / d
+    return (0.0 if k == 0 else max(0.0, c - h), min(1.0, c + h))
+
+
+def write_csv(path: str, header: list[str], rows: list[list]) -> None:
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(header)
+        for r in rows:
+            w.writerow([f"{v:.6g}" if isinstance(v, float) else v for v in r])
+
+
+def fmt_p(p: float) -> str:
+    if p < 1e-4:
+        m, e = f"{p:.1e}".split("e")
+        return f"${m}\\times 10^{{{int(e)}}}$"
+    return f"{p:.2g}" if p < 0.01 else f"{p:.3f}".rstrip("0")
+
+
+def main(ev: str, out: str) -> None:
+    agg = json.load(open(os.path.join(ev, "evaluation", "aggregates.json")))["arm_seeds"]
+    dec = json.load(open(os.path.join(ev, "decision", "decision-eval-exam.json")))
+    sec = json.load(open(os.path.join(ev, "decision", "secondary-eval-exam.json")))
+    funnel = json.load(open(os.path.join(ev, "material", "funnel.json")))
+    os.makedirs(out, exist_ok=True)
+
+    # (b) per arm and seed: exam passes with a 95% Wilson interval (attempts treated as independent; the registered
+    # test is over exams, see the arms table), and the pooled arm rate with the task-bootstrap interval of the
+    # difference from its paired base runs.
+    seeds = []
+    for r in sorted(agg, key=lambda r: (r["arm"], r["seed"])):
+        c = r["eval-exam"]["candidate"]
+        lo, hi = wilson(c["passed"], c["counted"])
+        x = ARMS.index(r["arm"]) + 1 + (r["seed"] - 2) * 0.18
+        seeds.append([LABEL[r["arm"]], r["seed"], x, c["passed"], c["counted"], c["passed"] / c["counted"], lo, hi])
+    write_csv(os.path.join(out, "vim-transfer-seeds.csv"),
+              ["arm", "seed", "x", "passes", "attempts", "rate", "lo", "hi"], seeds)
+
+    arms, table = [], []
+    for a in ARMS:
+        s = dec["arms"][a]
+        pr = dec["primary"].get(a)
+        vf = dec["vs_control"].get(a)
+        rows = [r for r in agg if r["arm"] == a]
+        comp = rows[0]["composition"]
+        bym = rows[0]["records_by_model"]
+        student = bym.get("train:Qwen/Qwen3-4B", 0)
+        teacher = bym.get("train:Qwen/Qwen3.8-27B-FP8", 0)
+        steps = sorted({r["training"]["selected_step"] for r in rows})
+        per_seed = ", ".join(str(r["eval-exam"]["candidate"]["passed"]) for r in sorted(rows, key=lambda r: r["seed"]))
+        lo, hi = (pr["ci95"] if pr else [0.0, 0.0])
+        arms.append([LABEL[a], ARMS.index(a) + 1, s["passes"], s["attempts"], s["pass_rate"], s["tasks_solved"],
+                     s["base_passes"], s["base_attempts"], pr["diff"] if pr else 0.0, lo, hi,
+                     comp["train_records"], student, teacher, comp["tasks"], "/".join(map(str, steps))])
+        cell = lambda r, holm: (f"{r['wins']}/{r['losses']}, {fmt_p(r['p'])}" + ("" if not holm else
+                                ("" if r["significant_holm"] else " (n.s.)"))) if r else "--"
+        table.append(f"{LABEL[a]} & {comp['train_records']} & {teacher} / {student} & {s['passes']} ({per_seed}) & "
+                     f"{s['tasks_solved']} & {s['base_passes']}/{s['base_attempts']} & {cell(pr, True)} & "
+                     f"{cell(vf, False)} \\\\")
+    write_csv(os.path.join(out, "vim-transfer-arms.csv"),
+              ["arm", "x", "passes", "attempts", "rate", "solved", "base_passes", "base_attempts", "diff", "lo", "hi",
+               "train_records", "student_records", "teacher_records", "tasks", "selected_steps"], arms)
+    open(os.path.join(out, "vim-transfer-table.tex"), "w").write(
+        "% Generated by scripts/vim_transfer_data.py from the evidence repository; do not edit.\n" + "\n".join(table) + "\n")
+
+    sec_rows = []
+    for k, r in sec["secondary"].items():
+        x, y = k.split("-vs-")
+        sec_rows.append(f"{LABEL[x]} vs {LABEL[y]} & {r['wins']}/{r['losses']} & {fmt_p(r['p_two_sided'])} & "
+                        f"${r['diff']:+.3f}$ [${r['ci95'][0]:+.3f}$, ${r['ci95'][1]:+.3f}$] \\\\")
+    open(os.path.join(out, "vim-transfer-secondary.tex"), "w").write(
+        "% Generated by scripts/vim_transfer_data.py from the evidence repository; do not edit.\n" + "\n".join(sec_rows) + "\n")
+
+    # (c) generations: generation 0 is the base (its paired runs), generation 1 the arm; later generations are added
+    # here when they are measured.
+    gens = []
+    for a in ARMS:
+        s = dec["arms"][a]
+        for g, (k, n) in enumerate([(s["base_passes"], s["base_attempts"]), (s["passes"], s["attempts"])]):
+            lo, hi = wilson(k, n)
+            gens.append([LABEL[a], g, k, n, k / n, lo, hi])
+    write_csv(os.path.join(out, "vim-transfer-generations.csv"),
+              ["arm", "generation", "passes", "attempts", "rate", "lo", "hi"], gens)
+
+    # (e) the authoring funnel.
+    fw, bw = funnel["forward"], funnel["backward"]
+    st = fw["stages"]
+    fwd = [["sections", st["sections"]["items"]],
+           ["proposal sets", st["proposed"]["items"] + st["proposed-b"]["items"] + st["proposed-c"]["items"]],
+           ["candidate tasks", fw["admission"]["candidates"]],
+           ["admitted", fw["admission"]["admitted"]],
+           ["oracle solved", fw["attempts"]["oracle"]["tasks_solved"]],
+           ["teacher solved", fw["attempts"]["teacher-attempts"]["tasks_solved"]],
+           ["student solved", fw["attempts"]["student-attempts"]["tasks_solved"]]]
+    bst = bw["stages"]
+    bwd = [["sections", bst["sections"]["items"]],
+           ["proposal sets", bst["proposed"]["items"]],
+           ["candidate tasks", bw["proposals"]["proposed"]],
+           ["to reproduce", bw["proposals"]["admitted"]],
+           ["reached", bw["attempts"]["reproduce-attempts"]["tasks_solved"]],
+           ["replayable", bst["describe-items"]["items"]],
+           ["admitted", bw["admission"]["admitted"]],
+           ["oracle solved", bw["attempts"]["oracle"]["tasks_solved"]],
+           ["teacher solved", bw["attempts"]["teacher-attempts"]["tasks_solved"]],
+           ["student solved", bw["attempts"]["student-attempts"]["tasks_solved"]]]
+    for name, rows in (("forward", fwd), ("backward", bwd)):
+        write_csv(os.path.join(out, f"vim-transfer-funnel-{name}.csv"), ["step", "y", "count"],
+                  [[s, len(rows) - i, c] for i, (s, c) in enumerate(rows)])
+    rates = []
+    for name, f, stages in (("forward", fw, ("student-attempts", "teacher-attempts")),
+                            ("backward", bw, ("student-attempts", "teacher-attempts"))):
+        for s in stages:
+            a = f["attempts"][s]
+            rates.append([name, s.split("-")[0], a["counted"], a["passed"], a["pass_rate"], a["tasks"], a["tasks_solved"]])
+    write_csv(os.path.join(out, "vim-transfer-attempts.csv"),
+              ["material", "model", "counted", "passed", "pass_rate", "tasks", "tasks_solved"], rates)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1], sys.argv[2])

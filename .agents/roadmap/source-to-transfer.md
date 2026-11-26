@@ -134,15 +134,52 @@ skills it applies to exams it never saw, and the gain is the trajectories' conte
 format (F stays at the base's 0).**
 
 Secondary (two-sided, intervals by task bootstrap, not claims of the registered family): G against B 21 / 5,
-p 0.0025, pass-rate difference +0.017 [+0.003, +0.031], although G trained on fewer records (1,059 against 3,002):
-outcome-first tasks teach more transfer per record than section-by-section tasks. D against B 7 / 5, p 0.77, no
-difference measured. C against B 2 / 8, p 0.11, -0.010 [-0.019, -0.002]: one solution per task teaches less than all
-verified solutions. Absolute level stays low (G 3.5% of attempts, 25 of 100 exams solved at least once): the
-exams combine several ideas on unseen material and the base 4B solves none of them.
+p 0.0025, pass-rate difference +0.017 [+0.003, +0.031], although G trained on a third of B's records (1100 train
+records of 348 tasks against 3359 of 857; recomputed from the arm datasets' `composition.json`, correcting the 1,059
+and 3,002 first written here). Not isolated: G kept step 520 (about 1.9 passes over its records) where B ran all 800
+(about 0.95), and G's tasks are harder (knowledge 230). D against B 7 / 5, p 0.77, no difference measured. C against
+B 2 / 8, p 0.11, -0.010 [-0.019, -0.002]: one solution per task taught less than all verified solutions, on fewer
+records (771). Absolute level stays low (G 3.5% of attempts, 25 of 100 exams solved at least once; the teacher's pass@1
+is 0.63): the exams combine several ideas on unseen material and the base 4B solves none of them.
+
+Teacher and student records (train split, by each record's `model`): B, D, F 2699 teacher / 660 student; C 629 / 142;
+G 1014 / 86. The arms do not separate the teacher's contribution; a student-only arm S (B's rule on the 4B's own
+verified successes, 3 seeds) was started on 2026-11-27 to do so.
+
+T1 (held-out authored tasks, secondary): C on the 94 held-out forward tasks 642 / 1128 attempts (0.569) against its
+paired base's 113 / 1126 (0.100), 79 tasks won, 3 lost, p 1.9e-20, +0.470 [+0.397, +0.543]. B, D, F and G open while
+their evaluations finish; G's held-out tasks are backward tasks, a different set.
+
+Recomputed 2026-11-27 from the per-task outcomes with `decide.py results eval-exam` and `secondary.py results
+eval-exam`: every number above matches.
+
+## Verdict against the operational definition (2026-11-27, generation 1)
+
+1. Held-out gain: holds for generation 1 against the base; the three-generation requirement is unmet (one generation).
+2. No forgetting: unmet, not measured (no forgetting gate was run).
+3. Robust and content-borne: holds for generation 1 (every seed of B, C, D, G passes exams; every arm beats F).
+4. Restartable: unmet; the material run was forked by hand after a node ran out of memory and the fleet hung, and
+   pipeline defects were fixed during the run.
+
+Claim as supported: one step of the loop in a second task family, not continuous self-improvement.
+
+## Evidence and paper
+
+- Paper: `papers/generalized-continuous-learning`, section "A second task family: editing files with Vim, taught from
+  its user manual" (pipeline, funnel, registered design, deviations, results, per-seed figure, generations, verdict).
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 5346ca84): arm datasets with lineage, arm
+  recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
+  authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
+  analyse.py, aggregates.py, funnel.py, gen-arms.py).
+- Private HF model `swedishembedded/vim-manual-transfer-adapters` (commit 96e33e51): the 15 adapters with their
+  candidate and training records.
+- Tasks and trajectories: private `swedishembedded/vim-headless-mastery-manual`, `vim-headless-mastery-sft-manual`.
+- Per-task exam outcomes (item level) stay in `~/project/shared/bench-private/evidence/source-to-transfer-2026-11-27/`.
 
 Not claimed: anything about other tools or domains (T3), retention on non-Vim tasks (no anchor was run), or stability
-under another authoring seed of the material. Evidence: per-task outcomes and the decision in
-`~/project/shared/tmp/t2s/results/` (decide.py, export-results.py), arm runs on the nodes' local disks.
+under another authoring seed of the material.
+
+Open: T1 for B, D, F, G; arm S; generation 2; a forgetting gate; an unattended restart from the recipe.
 
 ## Transfer experiment support (2026-11-26)
 

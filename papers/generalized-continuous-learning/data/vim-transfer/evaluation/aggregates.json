@@ -1,0 +1,1477 @@
+{
+ "schema": "source-to-transfer.aggregates/1",
+ "arm_seeds": [
+  {
+   "fork": "arm-b-s1",
+   "arm": "b",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.4885404109954834,
+     0.5952378511428833
+    ],
+    "token_accuracy": [
+     0.7425356792949473,
+     0.8302789779987088
+    ],
+    "adapter_sha256": "sha256:eb972efe30356a811ffebe0753e4d8133323884590549e28c89b1eaee10f6419"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 393,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:839c78594d64783170b91f5a92c5369373b0beccbf6123df5f78c8ef1ab5a941"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-e536218b4dfc",
+     "trials": 400,
+     "counted": 400,
+     "passed": 6,
+     "pass_rate": 0.015,
+     "pass_rate_of_trials": 0.015,
+     "trials_product": "blake3:50afcdf7d285a8f0fbaa1793870eee9a197ebb62c3a42c937fd1a7caff04b8f4"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.015267175572519083,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.015625000000000007,
+     "pairs": 393,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 7,
+     "wins": 6
+    }
+   }
+  },
+  {
+   "fork": "arm-b-s2",
+   "arm": "b",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.4885404109954834,
+     0.5955277681350708
+    ],
+    "token_accuracy": [
+     0.7425356792949473,
+     0.8298319991692514
+    ],
+    "adapter_sha256": "sha256:fa49b482beba880374f896744e8409858b76a8e9fb81451ecb4cfa5dfc93fa8e"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 389,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:1209d5d298c47b520f1c1769ebde6b2cc863d7e314ddada6e5e5d7af2b4c557e"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-70027e53c1e0",
+     "trials": 400,
+     "counted": 400,
+     "passed": 6,
+     "pass_rate": 0.015,
+     "pass_rate_of_trials": 0.015,
+     "trials_product": "blake3:0fbc5ec91e4d3fb661f61ec5882c50f38617435dcd57ef22ba4fa994e5614c36"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.015424164524421594,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.015625000000000007,
+     "pairs": 389,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 11,
+     "wins": 6
+    }
+   }
+  },
+  {
+   "fork": "arm-b-s3",
+   "arm": "b",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.4885404109954834,
+     0.5942683815956116
+    ],
+    "token_accuracy": [
+     0.7425356792949473,
+     0.8301344999932276
+    ],
+    "adapter_sha256": "sha256:f9340f501ace7aec50def80c900fbfb88eee63bdf1ef0c8f4fba4de2c5b97971"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 392,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:958f2b81d59729abfa9f4361fc78bae1b2d3356cfb3a6b879c9acd2978ff2748"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-ff2feaecfa61",
+     "trials": 400,
+     "counted": 400,
+     "passed": 10,
+     "pass_rate": 0.025,
+     "pass_rate_of_trials": 0.025,
+     "trials_product": "blake3:183a274d53f9ebf000d90c6e2385462ae8f06c372cc4d1c09da99de341a80b2f"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.025510204081632654,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.0009765625000000009,
+     "pairs": 392,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 8,
+     "wins": 10
+    }
+   }
+  },
+  {
+   "fork": "arm-c-s1",
+   "arm": "c",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 857,
+    "train_records": 771,
+    "validation_records": 86,
+    "trials": 857,
+    "tasks": 857,
+    "action_sequences": 857,
+    "supervised_messages": 3518,
+    "masked_messages": 0,
+    "supervised_characters": 1154407,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": 1,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 142,
+    "train:Qwen/Qwen3.8-27B-FP8": 629,
+    "validation:Qwen/Qwen3-4B": 16,
+    "validation:Qwen/Qwen3.8-27B-FP8": 70
+   },
+   "training": {
+    "selected_step": 360,
+    "steps_completed": 600,
+    "stopped_early": true,
+    "validation_records": 86,
+    "validation_loss": [
+     2.5076510906219482,
+     0.6222418546676636
+    ],
+    "token_accuracy": [
+     0.7463531571967765,
+     0.8278843211261858
+    ],
+    "adapter_sha256": "sha256:e722844cb7dd371d49dc45b2b6e9066417e3302c7fc85a8fcad2e16de5b97f2f"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 397,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:bcbfc1b97ab67082636e03b90d0b78d549b20dd2c8a8d420510595e9d2f3920f"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-f4a246dfa919",
+     "trials": 400,
+     "counted": 400,
+     "passed": 5,
+     "pass_rate": 0.0125,
+     "pass_rate_of_trials": 0.0125,
+     "trials_product": "blake3:13b2307e6ac98071e9bc99c32e9de137f41bb53dce43daacee856fc908d2f383"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.012594458438287154,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.031249999999999986,
+     "pairs": 397,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 3,
+     "wins": 5
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 376,
+     "passed": 38,
+     "pass_rate": 0.10106382978723404,
+     "pass_rate_of_trials": 0.10106382978723404,
+     "trials_product": "blake3:6995331a65565271415b4b77622fc1e131c54025c71a201aee1172fec6a7175a"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-f4a246dfa919",
+     "trials": 376,
+     "counted": 376,
+     "passed": 219,
+     "pass_rate": 0.5824468085106383,
+     "pass_rate_of_trials": 0.5824468085106383,
+     "trials_product": "blake3:4135166cb762bd236667a6735b87be97773867383cbbf01a5979f0ed654624f9"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.48138297872340424,
+     "incomplete": false,
+     "losses": 5,
+     "min_difference": 0.0,
+     "p": 6.577212245462641e-49,
+     "pairs": 376,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 186
+    }
+   }
+  },
+  {
+   "fork": "arm-c-s2",
+   "arm": "c",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 857,
+    "train_records": 771,
+    "validation_records": 86,
+    "trials": 857,
+    "tasks": 857,
+    "action_sequences": 857,
+    "supervised_messages": 3518,
+    "masked_messages": 0,
+    "supervised_characters": 1154407,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": 1,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 142,
+    "train:Qwen/Qwen3.8-27B-FP8": 629,
+    "validation:Qwen/Qwen3-4B": 16,
+    "validation:Qwen/Qwen3.8-27B-FP8": 70
+   },
+   "training": {
+    "selected_step": 320,
+    "steps_completed": 560,
+    "stopped_early": true,
+    "validation_records": 86,
+    "validation_loss": [
+     2.5076510906219482,
+     0.6293766498565674
+    ],
+    "token_accuracy": [
+     0.7463531571967765,
+     0.8253340814036519
+    ],
+    "adapter_sha256": "sha256:8fa83858b49e0b8b5a243ad6a9863b4b25dfa04f1e4101012858c1bd11d12278"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 394,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:83c647cb903ada38cf08901baef43821e4a2f53ef3cab6306644cc847c0e59b1"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-bb728d74823c",
+     "trials": 400,
+     "counted": 400,
+     "passed": 2,
+     "pass_rate": 0.005,
+     "pass_rate_of_trials": 0.005,
+     "trials_product": "blake3:f7a32f990bb98f91da555cc90588d1e142ecb1a702c123b579a76abe5fa8ae92"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.005076142131979695,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.25,
+     "pairs": 394,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 6,
+     "wins": 2
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 376,
+     "passed": 35,
+     "pass_rate": 0.09308510638297872,
+     "pass_rate_of_trials": 0.09308510638297872,
+     "trials_product": "blake3:a5a179f93b0ea94fce4948cdc755bc606f1cc11304a77e6b622c7d0d2f380a08"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-bb728d74823c",
+     "trials": 376,
+     "counted": 376,
+     "passed": 208,
+     "pass_rate": 0.5531914893617021,
+     "pass_rate_of_trials": 0.5531914893617021,
+     "trials_product": "blake3:a7016f97ce1932071291efeea8b6a36a1e16e56b1fc96aaae2d5654024a22a4b"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.4601063829787234,
+     "incomplete": false,
+     "losses": 6,
+     "min_difference": 0.0,
+     "p": 1.0819752415890388e-45,
+     "pairs": 376,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 179
+    }
+   }
+  },
+  {
+   "fork": "arm-c-s3",
+   "arm": "c",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 857,
+    "train_records": 771,
+    "validation_records": 86,
+    "trials": 857,
+    "tasks": 857,
+    "action_sequences": 857,
+    "supervised_messages": 3518,
+    "masked_messages": 0,
+    "supervised_characters": 1154407,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": 1,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 142,
+    "train:Qwen/Qwen3.8-27B-FP8": 629,
+    "validation:Qwen/Qwen3-4B": 16,
+    "validation:Qwen/Qwen3.8-27B-FP8": 70
+   },
+   "training": {
+    "selected_step": 360,
+    "steps_completed": 600,
+    "stopped_early": true,
+    "validation_records": 86,
+    "validation_loss": [
+     2.5076510906219482,
+     0.622255802154541
+    ],
+    "token_accuracy": [
+     0.7463531571967765,
+     0.8256911149648067
+    ],
+    "adapter_sha256": "sha256:7323419f441e1dff3c47bbe68cb2e98d08b936cfb67cd56242bece160bb33e44"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 397,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:ea0a59aef20bec0137c91cccc1e17356de59269868a4f000eb07082804eccec2"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-0598fbc132c2",
+     "trials": 400,
+     "counted": 400,
+     "passed": 3,
+     "pass_rate": 0.0075,
+     "pass_rate_of_trials": 0.0075,
+     "trials_product": "blake3:67166d61e92e92120b6d34e38bc87d73005bfc4aff4530d437c1f2ff2af85a4e"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.007556675062972292,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.12500000000000003,
+     "pairs": 397,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 3,
+     "wins": 3
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 374,
+     "passed": 40,
+     "pass_rate": 0.10695187165775401,
+     "pass_rate_of_trials": 0.10638297872340426,
+     "trials_product": "blake3:0f210152a65bec4bd86d7079c26259754cbbe62c22610f51d183d5e5750f28e7"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-0598fbc132c2",
+     "trials": 376,
+     "counted": 376,
+     "passed": 215,
+     "pass_rate": 0.5718085106382979,
+     "pass_rate_of_trials": 0.5718085106382979,
+     "trials_product": "blake3:93b060a2886fcb57b28e2156dddb43c98570e5b8e1c3eebb768ab9d11e33df07"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.4679144385026738,
+     "incomplete": true,
+     "losses": 6,
+     "min_difference": 0.0,
+     "p": 2.8866773986870546e-46,
+     "pairs": 374,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 2,
+     "wins": 181
+    }
+   }
+  },
+  {
+   "fork": "arm-d-s1",
+   "arm": "d",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3384,
+    "supervised_messages": 14275,
+    "masked_messages": 5936,
+    "supervised_characters": 4828473,
+    "failed_actions_masked": 5936,
+    "supervise": "productive",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.3479130268096924,
+     0.5762780904769897
+    ],
+    "token_accuracy": [
+     0.7465736032749726,
+     0.8341952225532152
+    ],
+    "adapter_sha256": "sha256:e6e2fe811d636b422898bfe64d52be2b622b70c1c66121ec3ef5d45284eca83b"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 396,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:b4f675200599c9a07b79ae7234f996f58a1fea948b487c6467b75c91a1da5e7c"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-33c9aa5b8c43",
+     "trials": 400,
+     "counted": 400,
+     "passed": 10,
+     "pass_rate": 0.025,
+     "pass_rate_of_trials": 0.025,
+     "trials_product": "blake3:aaef45603d9effce6a9bf7e7353cd2001e1cc13c0c21addfa5b0409784694f02"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.025252525252525252,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.0009765625000000009,
+     "pairs": 396,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 4,
+     "wins": 10
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 376,
+     "passed": 35,
+     "pass_rate": 0.09308510638297872,
+     "pass_rate_of_trials": 0.09308510638297872,
+     "trials_product": "blake3:a9a0d177d08d7f0870b31699e8e8ff8195646829ca7d6580aee1de0ce2b099af"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-33c9aa5b8c43",
+     "trials": 376,
+     "counted": 376,
+     "passed": 234,
+     "pass_rate": 0.6223404255319149,
+     "pass_rate_of_trials": 0.6223404255319149,
+     "trials_product": "blake3:fbbadaecd230f7a0976380a85bb61df9e7d6f77e3ec737c221c9583b319b500a"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.5292553191489362,
+     "incomplete": false,
+     "losses": 1,
+     "min_difference": 0.0,
+     "p": 6.285245430639638e-59,
+     "pairs": 376,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 200
+    }
+   }
+  },
+  {
+   "fork": "arm-d-s2",
+   "arm": "d",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3384,
+    "supervised_messages": 14275,
+    "masked_messages": 5936,
+    "supervised_characters": 4828473,
+    "failed_actions_masked": 5936,
+    "supervise": "productive",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.3479130268096924,
+     0.5761678814888
+    ],
+    "token_accuracy": [
+     0.7465736032749726,
+     0.833061864034137
+    ],
+    "adapter_sha256": "sha256:b36fccf2ac4e759c6e444875eb22a758f7c419fc7dffa17716c6d26f2b833823"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 396,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:d16ff7498cdc9e56eb24827f8e39fa9ab0183f3a40cb7dc618ce2f817b9ee7f8"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-036777546963",
+     "trials": 400,
+     "counted": 400,
+     "passed": 4,
+     "pass_rate": 0.01,
+     "pass_rate_of_trials": 0.01,
+     "trials_product": "blake3:f91af2719be1c4f6334b6adaad12b3473eeb245c974c6be9924fe4ec647581a2"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.010101010101010102,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.0625,
+     "pairs": 396,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 4,
+     "wins": 4
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 376,
+     "passed": 40,
+     "pass_rate": 0.10638297872340426,
+     "pass_rate_of_trials": 0.10638297872340426,
+     "trials_product": "blake3:24a3a56581430db235bb1d20fd666751cd0b203eaf9484057492468fd189132d"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-036777546963",
+     "trials": 376,
+     "counted": 376,
+     "passed": 242,
+     "pass_rate": 0.6436170212765957,
+     "pass_rate_of_trials": 0.6436170212765957,
+     "trials_product": "blake3:3115299dbe39e53279c564532af7c06cd706063238e0faf888f59a6a511f6b58"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.5372340425531915,
+     "incomplete": false,
+     "losses": 5,
+     "min_difference": 0.0,
+     "p": 5.296891249082517e-55,
+     "pairs": 376,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 207
+    }
+   }
+  },
+  {
+   "fork": "arm-d-s3",
+   "arm": "d",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3384,
+    "supervised_messages": 14275,
+    "masked_messages": 5936,
+    "supervised_characters": 4828473,
+    "failed_actions_masked": 5936,
+    "supervise": "productive",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.3479130268096924,
+     0.5737829804420471
+    ],
+    "token_accuracy": [
+     0.7465736032749726,
+     0.8341456768256053
+    ],
+    "adapter_sha256": "sha256:fff7da7555c83c2e976870a27f766f9b8e2ae91d50d4521e2fe7927dbeb84219"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 395,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:a6b99cf7ed4a451fa00e839c5fb9cae63c34cad3f678f958969395a3d4a31ea5"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-b19a5406c9ee",
+     "trials": 400,
+     "counted": 400,
+     "passed": 8,
+     "pass_rate": 0.02,
+     "pass_rate_of_trials": 0.02,
+     "trials_product": "blake3:7b774fb17323df72693baf3595709416629da8fbda355a081ca95bbcc4543791"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.020253164556962026,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.0039062499999999974,
+     "pairs": 395,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 5,
+     "wins": 8
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 376,
+     "counted": 376,
+     "passed": 44,
+     "pass_rate": 0.11702127659574468,
+     "pass_rate_of_trials": 0.11702127659574468,
+     "trials_product": "blake3:d2e29845601012b440d2d32b9aa870991b76a8200f63911e18f294235be07031"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-b19a5406c9ee",
+     "trials": 376,
+     "counted": 376,
+     "passed": 247,
+     "pass_rate": 0.6569148936170213,
+     "pass_rate_of_trials": 0.6569148936170213,
+     "trials_product": "blake3:baac7465d835a1162f49b83da1d3b19816509e357bbc3361f77f6f89d29c5d6b"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.5398936170212766,
+     "incomplete": false,
+     "losses": 5,
+     "min_difference": 0.0,
+     "p": 2.7117938568728996e-55,
+     "pairs": 376,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 208
+    }
+   }
+  },
+  {
+   "fork": "arm-f-s1",
+   "arm": "f",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": "shuffled-requests"
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.8059701919555664,
+     0.6771936416625977
+    ],
+    "token_accuracy": [
+     0.7180015079891822,
+     0.8135691936772813
+    ],
+    "adapter_sha256": "sha256:d4215ec91d8911eed3f22e35edfd707289c669c850a126179b971e94fba58e08"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 389,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:8186953ddf727cd7f1e9adc72fb455af6fb50ae8d6c38b0e2c2aa477607cc378"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-f7d110604016",
+     "trials": 400,
+     "counted": 400,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:7572a9686a343bb99e983a350576afcf563896d69a6ef7aa35de60417fce2762"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 389,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 11,
+     "wins": 0
+    }
+   }
+  },
+  {
+   "fork": "arm-f-s2",
+   "arm": "f",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": "shuffled-requests"
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.8059701919555664,
+     0.6781225204467773
+    ],
+    "token_accuracy": [
+     0.7180015079891822,
+     0.8135556488642675
+    ],
+    "adapter_sha256": "sha256:c5f4df6e4335cc53ec77c336cbbc7342af3039e5cba63b8a982bcfb1a524b571"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 391,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:204e4027dc94b4a4bbb1a7483492dbac94ae2d2b90284c56a8505c990949ea4d"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-81a64017f32d",
+     "trials": 400,
+     "counted": 400,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:7de3d13507dc38255e631ea5f19a4cfcc47ac84cf441fa5fc2079f3305bc34cc"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 391,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 9,
+     "wins": 0
+    }
+   }
+  },
+  {
+   "fork": "arm-f-s3",
+   "arm": "f",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 3739,
+    "train_records": 3359,
+    "validation_records": 380,
+    "trials": 3739,
+    "tasks": 857,
+    "action_sequences": 3411,
+    "supervised_messages": 20211,
+    "masked_messages": 0,
+    "supervised_characters": 6454922,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": "shuffled-requests"
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "train:Qwen/Qwen3.8-27B-FP8": 2699,
+    "validation:Qwen/Qwen3-4B": 67,
+    "validation:Qwen/Qwen3.8-27B-FP8": 313
+   },
+   "training": {
+    "selected_step": 800,
+    "steps_completed": 800,
+    "stopped_early": false,
+    "validation_records": 380,
+    "validation_loss": [
+     2.8059701919555664,
+     0.6766390800476074
+    ],
+    "token_accuracy": [
+     0.7180015079891822,
+     0.8136143430539942
+    ],
+    "adapter_sha256": "sha256:8247021660db7cddbdf8609c41c621a16194fcd1927178bfbac5e2db006c06cd"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 397,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:5a47a0310534c6ddd973f8d092cb395141b25bb4da4ab689c13e923efc975bfb"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-77cec37e1585",
+     "trials": 400,
+     "counted": 400,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:4689b19e13e16de7c07fbf5032bc832dcbe7097e1ca501a4e8396d0fd480f093"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 397,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 3,
+     "wins": 0
+    }
+   }
+  },
+  {
+   "fork": "arm-g-s1",
+   "arm": "g",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 1230,
+    "train_records": 1100,
+    "validation_records": 130,
+    "trials": 1230,
+    "tasks": 348,
+    "action_sequences": 1193,
+    "supervised_messages": 7584,
+    "masked_messages": 0,
+    "supervised_characters": 3116155,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 86,
+    "train:Qwen/Qwen3.8-27B-FP8": 1014,
+    "validation:Qwen/Qwen3-4B": 12,
+    "validation:Qwen/Qwen3.8-27B-FP8": 118
+   },
+   "training": {
+    "selected_step": 520,
+    "steps_completed": 760,
+    "stopped_early": true,
+    "validation_records": 130,
+    "validation_loss": [
+     2.4159793853759766,
+     0.668827474117279
+    ],
+    "token_accuracy": [
+     0.7383404270668014,
+     0.814772399365171
+    ],
+    "adapter_sha256": "sha256:43f527107e519b523bf6d527780f786065852fd531673b68264e8720a0062c60"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 390,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:a7bc56fe4fce32577b29e1bdac6da1031c2d6fbb87bc6d7fb69663b13169e674"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-505896f2f038",
+     "trials": 400,
+     "counted": 400,
+     "passed": 14,
+     "pass_rate": 0.035,
+     "pass_rate_of_trials": 0.035,
+     "trials_product": "blake3:9ce892e669aa9795126541b7369f231a3eca609d1bc9c38e614739e11f66ea4d"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.035897435897435895,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 6.1035156249999925e-05,
+     "pairs": 390,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 10,
+     "wins": 14
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 204,
+     "counted": 204,
+     "passed": 7,
+     "pass_rate": 0.03431372549019608,
+     "pass_rate_of_trials": 0.03431372549019608,
+     "trials_product": "blake3:0b592e65f9041f14a36f9079f106868ea1395e667c95ede7787e747bb0711c81"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-505896f2f038",
+     "trials": 204,
+     "counted": 204,
+     "passed": 44,
+     "pass_rate": 0.21568627450980393,
+     "pass_rate_of_trials": 0.21568627450980393,
+     "trials_product": "blake3:712eb7981484d69e44138ad78f75e7ab8edfd42083e9691fe41ef970f0e24b09"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.18137254901960784,
+     "incomplete": false,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 7.27595761418344e-12,
+     "pairs": 204,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 37
+    }
+   }
+  },
+  {
+   "fork": "arm-g-s2",
+   "arm": "g",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 1230,
+    "train_records": 1100,
+    "validation_records": 130,
+    "trials": 1230,
+    "tasks": 348,
+    "action_sequences": 1193,
+    "supervised_messages": 7584,
+    "masked_messages": 0,
+    "supervised_characters": 3116155,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 86,
+    "train:Qwen/Qwen3.8-27B-FP8": 1014,
+    "validation:Qwen/Qwen3-4B": 12,
+    "validation:Qwen/Qwen3.8-27B-FP8": 118
+   },
+   "training": {
+    "selected_step": 520,
+    "steps_completed": 760,
+    "stopped_early": true,
+    "validation_records": 130,
+    "validation_loss": [
+     2.4159793853759766,
+     0.6718396544456482
+    ],
+    "token_accuracy": [
+     0.7383404270668014,
+     0.8143756312220459
+    ],
+    "adapter_sha256": "sha256:af214a832a4f0475218d888f9a139a3cabb565995d1c67cc73bfa0ef7db650ae"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 392,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:997fae5bf6aa2c07f8b822a086f7487c67125110cf6cacbc2173e83d7e5ef199"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-b9970974483f",
+     "trials": 400,
+     "counted": 400,
+     "passed": 11,
+     "pass_rate": 0.0275,
+     "pass_rate_of_trials": 0.0275,
+     "trials_product": "blake3:f28645a127c4dbae6ca9d9139d79714b592b703f57b1370ca837dcd617a3c47a"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.02806122448979592,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 0.00048828124999999995,
+     "pairs": 392,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 8,
+     "wins": 11
+    }
+   }
+  },
+  {
+   "fork": "arm-g-s3",
+   "arm": "g",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 1230,
+    "train_records": 1100,
+    "validation_records": 130,
+    "trials": 1230,
+    "tasks": 348,
+    "action_sequences": 1193,
+    "supervised_messages": 7584,
+    "masked_messages": 0,
+    "supervised_characters": 3116155,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 86,
+    "train:Qwen/Qwen3.8-27B-FP8": 1014,
+    "validation:Qwen/Qwen3-4B": 12,
+    "validation:Qwen/Qwen3.8-27B-FP8": 118
+   },
+   "training": {
+    "selected_step": 520,
+    "steps_completed": 760,
+    "stopped_early": true,
+    "validation_records": 130,
+    "validation_loss": [
+     2.4159793853759766,
+     0.668435275554657
+    ],
+    "token_accuracy": [
+     0.7383404270668014,
+     0.8149617659789352
+    ],
+    "adapter_sha256": "sha256:838f3db878dbc46c88ac3d233e8ad50a9cb28f253a4afac6f01e9a3764acb5e3"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 393,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:537b70e1381af142833b095c7428233a60405a5ec83f9bf2f9cee3ca068e2958"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-5fca6581bb93",
+     "trials": 400,
+     "counted": 400,
+     "passed": 17,
+     "pass_rate": 0.0425,
+     "pass_rate_of_trials": 0.0425,
+     "trials_product": "blake3:9c592c41416d495c164624a2e8053d83e93f8d8c2dac06560575404306efb43e"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.043256997455470736,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 7.629394531249989e-06,
+     "pairs": 393,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 7,
+     "wins": 17
+    }
+   },
+   "eval-unseen": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 204,
+     "counted": 204,
+     "passed": 6,
+     "pass_rate": 0.029411764705882353,
+     "pass_rate_of_trials": 0.029411764705882353,
+     "trials_product": "blake3:d52c367dcfda7c7ae16c6005031f63e3c0cd5bf1da2b114e0451fb2da8d8e2ea"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-5fca6581bb93",
+     "trials": 204,
+     "counted": 204,
+     "passed": 42,
+     "pass_rate": 0.20588235294117646,
+     "pass_rate_of_trials": 0.20588235294117646,
+     "trials_product": "blake3:7704484a274f0a6ff7405af59d4041fe7e1213de3f94ed95cbc060a2075a695a"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.17647058823529413,
+     "incomplete": false,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.4551915228366858e-11,
+     "pairs": 204,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 0,
+     "wins": 36
+    }
+   }
+  }
+ ]
+}
