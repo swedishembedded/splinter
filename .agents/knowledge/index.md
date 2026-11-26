@@ -213,3 +213,4 @@ in the same commit.
 | [225](225-sandbox-image-copies-in-memory-exhaust-a-node.md) | Sandbox image copies in memory exhaust a node; an interrupted batch could not resume |
 | [226](226-a-tool-results-error-status-is-in-the-request-not-the-trajectory.md) | A tool result's error status is in the request, not the trajectory, and the marker alone is no evidence |
 | [227](227-an-unprivileged-overlay-needs-userxattr-and-volatile.md) | An unprivileged overlay needs userxattr and volatile, and sandboxes unpacking one image to disk are disk-bound |
+| [228](228-the-workers-own-interpreter-was-the-attempt-stages-bottleneck.md) | The worker's own interpreter, not the model servers, was the attempt stage's bottleneck |

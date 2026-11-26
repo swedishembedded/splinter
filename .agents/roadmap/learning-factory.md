@@ -170,3 +170,33 @@ and classified as a model error.
 - **`ReplayPolicy::{FailureTargeted, LearningProgress}`** in `splinter-data` are
   unreachable from the CLI since `generation run` went; kept so recorded ledgers
   still read.
+- **Throughput of attempt stages (measured on the 2026-11-26 vim transfer
+  run, 512 concurrent Qwen3-4B attempts then 384 Qwen3.8-27B ones on 16
+  GH200).** Fixed: the worker's per-command host-runtime scan, one httpx
+  pool for every trial, the gateway on the job's interpreter, Harbor's job
+  lock held across the progress write (`workers/harbor`); a committed
+  read-only experience database opened for writing (`expdb`); snapshot
+  builds that named no commit. Open, by cost:
+  - *Retry tails.* Retries of attempts the infrastructure decided run as
+    their own batch only after the whole batch ends, and each is as long as
+    its slowest trial: the student stage's 8208 attempts took 46.1 min, then
+    retries of 308 (8.5 min) and 17 (8.0 min) and the commit (1.5 min) left
+    the cards nearly idle for 18.8 of its 64.9 min. Grading attempts as the
+    worker reports them and starting their retries while the batch still
+    runs would overlap the two.
+  - *Stages run one after another.* `run::Run::run` walks the plan in order,
+    so independent stages (the student and teacher attempts of one task set,
+    several evaluations) never share the cards; the tail of one is idle time
+    the other could fill.
+  - *Sandbox commands before the agent starts.* The sven adapter runs six
+    sandbox commands (certificate probe, version probe, `mkdir`s, the token
+    file) before Sven; each is an `nsenter` and a Python launcher. Agent
+    setup took 3.7 s and the start before the first model call 5.2 s at the
+    median on the old worker; measure again on the fixed one before merging
+    them.
+  - *Stalls graded as timeouts.* A trial whose model request stalled for
+    minutes mid-run and that then ran out of time is graded as a timeout
+    (about 50 of the 183 on that stage); only a stall at the end (the last
+    request unanswered, 504) is the infrastructure's. Telling them apart
+    needs request times in the attempt report, which keeps only status and
+    tokens.
