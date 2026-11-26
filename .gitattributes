@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# `git archive` writes the commit into the build's revision file.
+crates/splinter/REVISION export-subst

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The commit this tree is: `git archive` writes it in place of the placeholder
+# below (export-subst, see .gitattributes), so a build of an archive (a
+# workspace source snapshot, which has no .git) names its commit. In a
+# checkout the placeholder stays and the build asks git instead.
+$Format:%H$

@@ -7,8 +7,12 @@
 // procure our services by sending an email to info@swedishembedded.com.
 
 //! Embeds the commit the binary is built from and whether its tree was dirty,
-//! so a run can name them without running git. Outside a git checkout nothing
-//! is embedded and the binary reports the commit as unknown.
+//! so a run can name them without running git. A tree made by `git archive`
+//! (a workspace's source snapshot, which has no `.git`) names its commit in
+//! `REVISION`, which the archive fills in; whether such a tree was changed
+//! after it was archived is not known, so it embeds no dirty flag. Anywhere
+//! else outside a git checkout nothing is embedded and the binary reports the
+//! commit as unknown.
 //!
 //! A build against local sven and brain checkouts (`make deps/local`, which
 //! writes the workspace's `.cargo/config.toml`) builds their working trees,
@@ -16,6 +20,8 @@
 //! too, and they, not the lock, name what the binary was built from.
 
 use std::process::Command;
+
+include!("archived_revision.rs");
 
 fn git(args: &[&str]) -> Option<String> {
     let out = Command::new("git").args(args).output().ok()?;
@@ -101,6 +107,12 @@ fn main() {
         if let Some(path) = git(&["rev-parse", "--git-path", &name]) {
             println!("cargo:rerun-if-changed={path}");
         }
+    }
+    println!("cargo:rerun-if-changed=REVISION");
+    let revision = std::fs::read_to_string("REVISION").unwrap_or_default();
+    if let Some(rev) = archived_revision(&revision) {
+        println!("cargo:rustc-env=SPLINTER_GIT_REV={rev}");
+        return;
     }
     let Some(rev) = git(&["rev-parse", "HEAD"]) else {
         return;
