@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +41,8 @@ from splinter_harbor_worker.plan import (
 )
 from splinter_harbor_worker.spec import ExecutionSpec, load_specs
 
+_log = logging.getLogger(__name__)
+
 SPECS_COPY = "specs.jsonl"
 DEFAULT_CONCURRENCY = 4
 
@@ -48,12 +52,69 @@ def default_image_cache() -> Path:
     return base / "splinter-harbor-worker" / "images"
 
 
+class NewestText:
+    """A file a thread of its own keeps at the newest text ``put`` gave it: a text superseded before the thread reached
+    it is never written, and ``put`` never waits. ``flush`` returns once the newest text is written."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._changed = threading.Condition()
+        self._pending: str | None = None
+        self._writing = False
+
+    def put(self, text: str) -> None:
+        with self._changed:
+            self._pending = text
+            if not self._writing:
+                self._writing = True
+                threading.Thread(target=self._drain, name="job-progress", daemon=True).start()
+
+    def flush(self) -> None:
+        with self._changed:
+            self._changed.wait_for(lambda: not self._writing)
+
+    def _drain(self) -> None:
+        while True:
+            with self._changed:
+                text, self._pending = self._pending, None
+                if text is None:
+                    self._writing = False
+                    self._changed.notify_all()
+                    return
+            try:
+                self._write(text)
+            except OSError as exc:  # progress only: the job's final write still reports its own failure
+                _log.warning("the job's progress could not be written to %s: %s", self._path, exc)
+
+    def _write(self, text: str) -> None:
+        self._path.write_text(text)
+
+
 def _planned_job(trial_configs):
     class PlannedJob(Job):
-        """A Harbor job whose trials are the given ones, not the cross product of its tasks and agents."""
+        """A Harbor job whose trials are the given ones, not the cross product of its tasks and agents.
+
+        Harbor rewrites the job's progress file on every trial's start and end while holding the one lock all of them
+        take, and waits for a thread to write it: every trial's start then queued behind every other trial's
+        bookkeeping, one turn of a busy event loop each. Here the progress is serialized at once and handed to a
+        writer of its own (``NewestText``), so the lock is never held across a wait; the job's final write waits for
+        that writer and then writes as Harbor does."""
 
         def _init_trial_configs(self) -> None:
             self._trial_configs = [c.model_copy(update={"job_id": self._id}, deep=True) for c in trial_configs]
+
+        def _progress_file(self) -> NewestText:
+            if not hasattr(self, "_progress"):
+                self._progress = NewestText(self._job_result_path)
+            return self._progress
+
+        def _write_job_result(self, *, exclude_trial_results: bool = False) -> None:
+            self._progress_file().flush()
+            super()._write_job_result(exclude_trial_results=exclude_trial_results)
+
+        async def _write_job_result_async(self, *, exclude_trial_results: bool = False) -> None:
+            exclude = {"trial_results"} if exclude_trial_results else None
+            self._progress_file().put(self._job_result.model_dump_json(indent=4, exclude=exclude))
 
     return PlannedJob
 
