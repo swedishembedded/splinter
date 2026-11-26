@@ -12,8 +12,9 @@ For hosts without a container daemon that allow unprivileged user namespaces. Th
 ``[environment].docker_image``) runs here, and the run must give an image cache (``images=DIR``): the image is
 pulled, or its Dockerfile built once, into that cache as archives.
 
-Each sandbox has a keeper (``userns_keeper.py``) holding a private, writable tmpfs copy of the image in its own user,
-mount and PID namespaces; every exec enters them (``nsenter``) and builds its own mount namespace with
+Each sandbox has a keeper (``userns_keeper.py``) holding a private, writable copy of the image in its own user,
+mount and PID namespaces: a directory of the sandbox on the local disk its trial directory is on, removed when the
+sandbox stops, or a tmpfs when that directory is on a network filesystem (``copy_in_memory``); every exec enters them (``nsenter``) and builds its own mount namespace with
 ``userns_launch.py``, which binds the trial's writable state, pivots into the tree and drops every capability before the
 command runs. /logs/{agent,verifier,artifacts} are the trial's own directories, bind-mounted, so nothing needs
 downloading. /tests and /solution are filled by Harbor's uploads.
@@ -73,6 +74,46 @@ _HOST_CERTIFICATES = "/etc/ssl/certs"
 _OUTPUT_GRACE_SEC = 10
 # The storage of an image sandbox when the task states none (Harbor's own default task size).
 _DEFAULT_STORAGE_MB = 10240
+# Filesystems an unpacked image is not kept on: a lower layer there is refused by overlayfs, every one of an image's
+# files costs a metadata round trip, and their inode quotas cannot hold unpacked trees. A copy there is held in memory.
+_NETWORK_FILESYSTEMS = frozenset({"lustre", "nfs", "nfs4", "cifs", "smb3", "gpfs", "beegfs", "ceph", "glusterfs",
+                                  "9p", "virtiofs"})
+
+
+def copy_in_memory(path: Path, mountinfo: str | None = None) -> bool:
+    """Whether a sandbox's image copy at ``path`` is held in a tmpfs rather than as a directory on disk: only when the
+    filesystem ``path`` is on (the mount whose point is its longest leading run of whole components, from
+    ``/proc/self/mountinfo`` unless given) is a network filesystem. A local disk holds every concurrent sandbox's copy
+    where memory cannot: hundreds of copies of a few hundred megabytes each exhausted a node's memory limit."""
+    if mountinfo is None:
+        mountinfo = Path("/proc/self/mountinfo").read_text()
+    parts = Path(os.path.abspath(path)).parts
+    best, fstype = -1, ""
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        if " - " not in line or len(fields) < 5:
+            continue
+        point = Path(fields[4].replace("\\040", " ")).parts
+        kind = line.split(" - ", 1)[1].split()[0]
+        if parts[:len(point)] == point and len(point) > best:
+            best, fstype = len(point), kind
+    return fstype in _NETWORK_FILESYSTEMS or fstype.startswith("fuse.")
+
+
+def remove_tree(path: Path) -> None:
+    """Remove a sandbox's image copy on disk, including directories the image or its commands left without write
+    permission (the namespace's root owns them as this user on the host, so permissions are only restored, never
+    widened for anyone else)."""
+
+    def writable(function, failed, _exc) -> None:
+        parent = os.path.dirname(failed)
+        for target in (parent, failed):
+            with contextlib.suppress(OSError):
+                os.chmod(target, os.lstat(target).st_mode | stat.S_IRWXU, follow_symlinks=False)
+        function(failed)
+
+    if os.path.lexists(path):
+        shutil.rmtree(path, onexc=writable)
 # Harbor's template for a host variable in a task's environment tables (harbor.utils.env).
 _TEMPLATE = re.compile(r"\$\{([^}:]+)(?::-(.*))?\}")
 # The whole environment of the launcher process: the runner's own may hold the run's secrets.
@@ -176,6 +217,7 @@ class UserNamespaceEnvironment(BaseEnvironment):
         self._pulled: TaskImage | None = None  # the task's own image, resolved by start()
         self._keeper: asyncio.subprocess.Process | None = None
         self._keeper_pid: int | None = None  # the keeper itself: init of the sandbox's PID namespace
+        self._copy_in_memory = True  # decided by start() from the filesystem the copy is on
         self._tools = _parse_tools(tools)
         self._allow_ports = _parse_ports(allow_ports)
         super().__init__(*args, **kwargs)
@@ -414,6 +456,8 @@ class UserNamespaceEnvironment(BaseEnvironment):
         record.write_text(json.dumps({**self._pulled.provenance, "workdir": self._pulled.workdir}, indent=2,
                                      sort_keys=True) + "\n")
         self._image_root.mkdir(parents=True, exist_ok=True)
+        self._copy_in_memory = copy_in_memory(self._image_root)
+        self.logger.info(f"userns: image copy {'in memory' if self._copy_in_memory else 'on disk'} at {self._image_root}")
         size_mb = self.task_env_config.storage_mb or _DEFAULT_STORAGE_MB
         self._keeper = await asyncio.create_subprocess_exec(
             "unshare", "--user", "--map-root-user", "--mount", "--pid", "--fork", "--kill-child", "--",
@@ -422,7 +466,7 @@ class UserNamespaceEnvironment(BaseEnvironment):
             start_new_session=True, env=_LAUNCHER_ENV)
         shim = await asyncio.to_thread(ensure_shim, self._images)
         spec = {"mountpoint": str(self._image_root), "layers": [str(layer) for layer in self._pulled.layers],
-                "size_mb": size_mb, "preload": str(shim)}
+                "size_mb": size_mb, "preload": str(shim), "in_memory": self._copy_in_memory}
         self._keeper.stdin.write(json.dumps(spec).encode() + b"\n")
         await self._keeper.stdin.drain()
         line = await self._keeper.stdout.readline()
@@ -452,7 +496,9 @@ class UserNamespaceEnvironment(BaseEnvironment):
 
 
     async def stop(self, delete: bool) -> None:
-        await self._stop_keeper()  # the image copy is freed with the keeper's namespace
+        await self._stop_keeper()  # a copy in memory is freed with the keeper's namespace
+        if not self._copy_in_memory:
+            await asyncio.to_thread(remove_tree, self._image_root)  # a copy on disk goes with the sandbox too
         if delete:
             shutil.rmtree(self._sandbox, ignore_errors=True)
 

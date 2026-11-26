@@ -9,21 +9,23 @@
 
 Run as ``unshare --user --map-root-user --mount --pid --fork --kill-child -- python3 -I userns_keeper.py`` with one
 JSON line on standard
-input: ``{"mountpoint": DIR, "layers": [ARCHIVE, ...], "size_mb": N, "preload": SHIM}``. In its own mount namespace
-it mounts a tmpfs of at most ``size_mb`` at ``mountpoint`` (the task's storage limit), changes into it and unpacks the
-image's archives there in order (OCI layer semantics, ``rootfs/layers.py``), makes the tree usable in
+input: ``{"mountpoint": DIR, "layers": [ARCHIVE, ...], "size_mb": N, "preload": SHIM, "in_memory": BOOL}``. It changes
+into ``mountpoint`` (with ``in_memory``, first a tmpfs of at most ``size_mb`` mounted there in its own mount namespace,
+the task's storage limit) and unpacks the image's archives there in order (OCI layer semantics, ``rootfs/layers.py``), makes the tree usable in
 a namespace that maps one identity, prints ``ready`` and waits until its standard input closes. Every command of the
 sandbox enters this user, mount and PID namespace (``nsenter``) before building its own mount namespace
 (``userns_launch.py``), so the
 copy is the sandbox's root filesystem: writable like a container's, persistent across commands, invisible to every
-other process of the host, and freed with the namespace when the keeper exits (when the sandbox stops, or when the
-process that started it dies). The keeper is the init of the sandbox's PID namespace, as a container's init is: a
+other process of the host's commands that do not enter it, and gone when the sandbox stops (a tmpfs with the
+namespace when the keeper exits; a directory on disk removed by the environment, ``userns.remove_tree``). The keeper is the init of the sandbox's PID namespace, as a container's init is: a
 process a command leaves running keeps running after that command (a server the agent starts and the tests query),
 orphans are reaped here, and everything in the namespace ends with the keeper.
 
-Why a tree in memory: overlayfs over a shared unpacked tree is the usual answer, but a lower layer on this node's shared
-filesystem (Lustre) is refused, and that disk's inode quota cannot hold unpacked images anyway; the cache keeps only
-archives (``rootfs/images.py``).
+Why not overlayfs over a shared unpacked tree: a lower layer on a shared filesystem (Lustre) is refused, and that disk's
+inode quota cannot hold unpacked images anyway; the cache keeps only archives (``rootfs/images.py``). So each sandbox
+unpacks its own copy: on the local disk the trial directory is on, or in memory when that directory is on a network
+filesystem. Memory is the last choice: hundreds of concurrent copies of a few hundred megabytes exhausted a node's
+memory limit while its local disk had room for all of them. On disk ``size_mb`` is not enforced.
 
 Standard library and ``splinter_harbor_worker.rootfs.layers`` only.
 """
@@ -110,7 +112,8 @@ def main() -> int:
     spec = json.loads(sys.stdin.readline())
     libc.prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)
     root = spec["mountpoint"]
-    mount_tmpfs(root, spec["size_mb"])
+    if spec.get("in_memory", True):
+        mount_tmpfs(root, spec["size_mb"])
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     try:
         populate(root, spec["layers"], spec.get("preload"))
