@@ -128,7 +128,7 @@ outputs: { dataset: $stages.sft.dataset }
 | `attempt.collect` | `tasks`, `unsolved_by` (attempts, optional) | `attempts` |
 | `attempt.import` | `tasks`, `jobs` (Harbor job directories, recipe inputs) | `attempts` |
 | `dataset.import` | `records` (a recipe input) | `dataset` |
-| `dataset.project` | `attempts`, `answers` (one or more of either) | `dataset` |
+| `dataset.project` | `attempts`, `answers` (one or more of either), `tasks` (optional) | `dataset` |
 | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 | `dataset.text` | `documents` (a recipe input) | `dataset` |
 | `harness.search` | `tasks` | `harness` |

@@ -205,6 +205,12 @@ pub(crate) fn projection_problems(
             out.push("per_task: 0 keeps no trial; name at least 1".to_owned());
         }
     }
+    if stage.source("tasks").is_some() && (params.objective != "sft" || answers) {
+        out.push(
+            "tasks filters the attempts of an SFT dataset; another objective or answers take none"
+                .to_owned(),
+        );
+    }
     if params.control.is_some() && params.objective != "sft" {
         out.push(format!(
             "control is an SFT dataset's; a {} dataset is projected by its own view",

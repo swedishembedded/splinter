@@ -43,6 +43,7 @@
 
 mod composition;
 mod control;
+mod provenance;
 mod report;
 mod selection;
 mod supervision;
@@ -70,8 +71,7 @@ use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{
-    AttemptParams, Control, Hint, Prefer, PreferenceOptions, ProjectParams, RewardOptions,
-    Supervise, ValidationSplit,
+    Control, Prefer, PreferenceOptions, ProjectParams, RewardOptions, Supervise, ValidationSplit,
 };
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -127,6 +127,8 @@ struct Dataset {
     sources: Vec<String>,
     /// `answer.collect` products, projected by a view's objective.
     answers: Vec<String>,
+    /// The `tasks.pin` stage whose tasks alone are admitted, when bound.
+    tasks: Option<String>,
     objective: String,
     admission: String,
     projection: String,
@@ -180,6 +182,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
             .into_iter()
             .map(str::to_owned)
             .collect(),
+        tasks: stage.source("tasks").map(str::to_owned),
         answers: stage
             .sources("answers")
             .into_iter()
@@ -234,7 +237,14 @@ pub(crate) fn identity(
         ));
     }
     let mut inputs = Vec::new();
-    for source in dataset.sources.iter().chain(&dataset.answers) {
+    // An unbound `tasks` adds no input, so the identity is the one it had
+    // before the input existed.
+    for source in dataset
+        .sources
+        .iter()
+        .chain(&dataset.answers)
+        .chain(&dataset.tasks)
+    {
         inputs.push((source.clone(), factory.product(source)?.1.digest()));
     }
     let trainer = factory
@@ -338,48 +348,6 @@ fn tasks_offered(factory: &Factory<'_>, sources: &[String]) -> usize {
         .sum()
 }
 
-/// The view of the tasks the stage `source` attempted.
-fn pinned_view(factory: &Factory<'_>, source: &str) -> std::path::PathBuf {
-    let pin = factory
-        .resolved
-        .plan
-        .stage(source)
-        .and_then(|s| s.source("tasks"))
-        .unwrap_or_default();
-    factory.view(pin)
-}
-
-/// The hint the stage `source` showed, if it is a hinted pass.
-/// The briefs a fork correction `source` took its fork points from.
-fn fork_of(factory: &Factory<'_>, source: &str) -> Option<std::path::PathBuf> {
-    let stage = factory.resolved.plan.stage(source)?;
-    stage.source("continue_from")?;
-    stage.source("briefs").map(|b| factory.view(b))
-}
-
-/// What the attempt stage `source` showed its targets that a record of
-/// them leaves out: its hint, the guidance a fork added.
-fn withheld(factory: &Factory<'_>, source: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some((hint, _)) = hint_of(factory, source) {
-        out.push(match hint {
-            Hint::Solution => "hint:solution".to_owned(),
-            Hint::Brief => "hint:brief".to_owned(),
-        });
-    }
-    if fork_of(factory, source).is_some() {
-        out.push("continuation".to_owned());
-    }
-    out
-}
-
-/// The hint the attempt stage `source` showed, and the view of its briefs.
-fn hint_of(factory: &Factory<'_>, source: &str) -> Option<(Hint, Option<std::path::PathBuf>)> {
-    let stage = factory.resolved.plan.stage(source)?;
-    let hint = stage.params::<AttemptParams>().ok()?.hint?;
-    Some((hint, stage.source("briefs").map(|b| factory.view(b))))
-}
-
 pub(crate) fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunError> {
     let path = staging.path().join(name);
     let file = std::fs::File::open(&path).map_err(io(&path))?;
@@ -405,6 +373,17 @@ pub(crate) fn produce(
     let mut failed_masked = 0u64;
     let mut excluded: Vec<Excluded> = Vec::new();
     let mut sources = Vec::new();
+    let admitted_tasks: Option<BTreeSet<String>> = match &dataset.tasks {
+        Some(pin) => Some(
+            super::tasks::tasks_of(&factory.view(pin))?
+                .tasks
+                .into_iter()
+                .map(|t| t.id)
+                .collect(),
+        ),
+        None => None,
+    };
+    let mut in_tasks = 0u64;
     for source in &dataset.sources {
         sources.push(factory.product(source)?.1.digest());
         let view = factory.view(source);
@@ -417,6 +396,20 @@ pub(crate) fn produce(
                 reason,
                 detail,
             };
+            if let Some(tasks) = &admitted_tasks {
+                if !tasks.contains(&trial.task) {
+                    excluded.push(exclude(
+                        "not_in_tasks".into(),
+                        format!(
+                            "{} is not a task of {}",
+                            trial.task,
+                            dataset.tasks.as_deref().unwrap_or_default()
+                        ),
+                    ));
+                    continue;
+                }
+            }
+            in_tasks += 1;
             if !trial.verified_success() {
                 let status = serde_json::to_value(trial.grade.status)
                     .ok()
@@ -440,11 +433,11 @@ pub(crate) fn produce(
             }
             successes += 1;
             let learned = project(&view, &trial, &dataset.projection).and_then(|mut found| {
-                if let Some((hint, briefs)) = hint_of(factory, source) {
+                if let Some((hint, briefs)) = provenance::hint_of(factory, source) {
                     // Learned under the task's own instruction, from the
                     // tasks the run pinned.
                     let (instruction, shown) = crate::hint::material(
-                        &pinned_view(factory, source).join(&trial.task),
+                        &provenance::pinned_view(factory, source).join(&trial.task),
                         &trial.task,
                         hint,
                         briefs.as_deref(),
@@ -452,7 +445,7 @@ pub(crate) fn produce(
                     .map_err(|e| ("hint_not_found".to_owned(), e))?;
                     crate::hint::unhint(&mut found.0.body, &instruction, hint, &shown)?;
                 }
-                if let Some(briefs) = fork_of(factory, source) {
+                if let Some(briefs) = provenance::fork_of(factory, source) {
                     // A continuation is learned without the turn it added.
                     let point = super::fork::fork_point(&briefs, &trial.task)
                         .map_err(|e| ("continuation_not_found".to_owned(), e))?;
@@ -476,7 +469,7 @@ pub(crate) fn produce(
                         slot: trial.slot.to_string(),
                         agent: trial.agent.name.clone(),
                         model: trial.model.clone(),
-                        withheld: withheld(factory, source),
+                        withheld: provenance::withheld(factory, source),
                         guided: trial.guided,
                         imported: trial.imported.clone(),
                     });
@@ -618,7 +611,7 @@ pub(crate) fn produce(
         let mut line = json!({
             "split": split, "line": index, "pass": source, "slot": trial.slot.to_string(), "task": trial.task,
             "trace": trial.trace.as_ref().map(|t| &t.path), "supervised_messages": supervised,
-            "withheld": withheld(factory, source),
+            "withheld": provenance::withheld(factory, source),
         });
         if let Some(request_of) = &request_of {
             line["request_of"] = json!(request_of[at]);
@@ -695,11 +688,17 @@ pub(crate) fn produce(
     for e in &excluded {
         *exclusions.entry(e.reason.clone()).or_default() += 1;
     }
-    let mut waterfall = vec![
-        WaterfallStep {
-            step: "raw_trials".into(),
-            remaining: raw,
-        },
+    let mut waterfall = vec![WaterfallStep {
+        step: "raw_trials".into(),
+        remaining: raw,
+    }];
+    if dataset.tasks.is_some() {
+        waterfall.push(WaterfallStep {
+            step: "in_tasks".into(),
+            remaining: in_tasks,
+        });
+    }
+    waterfall.extend([
         WaterfallStep {
             step: "verified_successes".into(),
             remaining: successes,
@@ -708,7 +707,7 @@ pub(crate) fn produce(
             step: "projected".into(),
             remaining: eligible,
         },
-    ];
+    ]);
     if let Some(remaining) = waterfall_limited {
         waterfall.push(WaterfallStep {
             step: "per_task".into(),

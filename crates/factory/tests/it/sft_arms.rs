@@ -582,7 +582,7 @@ fn a_pins_holdout_splits_the_tasks_by_id_into_complementary_sides() {
         .map(|t| t.id.clone())
         .collect();
     assert_eq!(all.len(), 32);
-    // seed: any seed splits 32 tasks at 25% into two non-empty sides but for a negligible chance; one is enough.
+    // seed: both sides must hold tasks, which this seed gives for these 32 tasks.
     let split = resolved(&repo, &sides(25, 7));
     let (kept, held) = (pinned(&split, "practice"), pinned(&split, "exam"));
     assert!(!kept.is_empty() && !held.is_empty(), "{kept:?} {held:?}");
@@ -631,4 +631,65 @@ fn a_holdout_that_keeps_every_task_or_none_is_refused() {
         .unwrap_or_default();
         assert!(refused.contains("holdout"), "{percent}: {refused}");
     }
+}
+
+#[test]
+fn a_dataset_given_tasks_admits_only_trials_of_those_tasks() {
+    let repo = Repo::new();
+    more_tasks(&repo, 30);
+    // seed: both sides must hold tasks, which this seed gives for these 32 tasks.
+    let recipe = format!(
+        "{}  - id: arm\n    uses: dataset.project\n    inputs: {{ attempts: [$stages.local.attempts, $stages.exam-attempts.attempts], tasks: $stages.practice.tasks }}\n    \
+         with: {{ target: student, seed: 13 }}\n",
+        sides(25, 7)
+    );
+    let resolved = resolved(&repo, &recipe);
+    let practice = pinned(&resolved, "practice");
+    let held = pinned(&resolved, "exam");
+    let backend = FakeBackend::with(Outcome::Pass);
+    let dir = tempfile::tempdir().unwrap();
+    run(&resolved, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let tasks: std::collections::BTreeSet<String> = lines(&dir.path().join("arm/train.jsonl"))
+        .iter()
+        .map(|r| r["metadata"]["group"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(tasks, practice.iter().cloned().collect());
+    let excluded = lines(&dir.path().join("arm/excluded.jsonl"));
+    assert_eq!(excluded.len(), held.len(), "{excluded:#?}");
+    assert!(excluded
+        .iter()
+        .all(|e| e["reason"] == "not_in_tasks"
+            && held.contains(&e["task"].as_str().unwrap().to_owned())));
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("arm/dataset.json")).unwrap(),
+    )
+    .unwrap();
+    let steps: Vec<&str> = manifest["waterfall"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["step"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            "raw_trials",
+            "in_tasks",
+            "verified_successes",
+            "projected",
+            "accepted"
+        ]
+    );
+    let refused = splinter_factory::resolve::resolve(
+        &repo.root,
+        &recipe.replace(
+            "with: { target: student, seed: 13 }\n",
+            "with: { objective: feedback, target: student, seed: 13 }\n",
+        ),
+        crate::repo::connections(),
+    )
+    .err()
+    .map(|e| format!("{e:?}"))
+    .unwrap_or_default();
+    assert!(refused.contains("tasks"), "{refused}");
 }

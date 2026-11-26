@@ -14,7 +14,7 @@
 //! | `attempt.collect` | `tasks`, `unsolved_by`, `solved_by` (attempts, optional, many), `briefs` (optional) | `attempts` |
 //! | `attempt.import` | `tasks`, `jobs` (files, many) | `attempts` |
 //! | `dataset.import` | `records` (files) | `dataset` |
-//! | `dataset.project` | `attempts`, `answers` (many, optional) | `dataset` |
+//! | `dataset.project` | `attempts`, `answers` (many, optional), `tasks` (optional) | `dataset` |
 //! | `dataset.extend` | `base`, `candidates` (datasets) | `dataset` |
 //! | `dataset.text` | `documents` (files) | `dataset` |
 //! | `harness.search` | `tasks` | `harness` |
@@ -683,6 +683,10 @@ pub fn registry() -> Registry {
                     many: true,
                     optional: true,
                     ..port("answers", ArtifactKind::Files)
+                },
+                Port {
+                    optional: true,
+                    ..port("tasks", ArtifactKind::Tasks)
                 },
             ],
             output: port("dataset", ArtifactKind::Dataset),

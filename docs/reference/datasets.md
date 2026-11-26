@@ -21,7 +21,10 @@ using them is [Build datasets and train a candidate](../guides/training.md).
 ### dataset.project
 
 `dataset.project` takes the `attempts` of an `attempt.collect` or `answer.collect` stage (and, optionally,
-`answers`) and writes a dataset. Its parameters:
+`answers`) and writes a dataset. An `sft` dataset may also take `tasks`, a `tasks.pin` stage's tasks: only
+trials of those tasks are admitted, every other trial is excluded as `not_in_tasks` and the waterfall gains an
+`in_tasks` step. With a `tasks.pin` `holdout` (see [the tasks reference](tasks.md)) it keeps every trial of the
+held-out tasks out of a dataset built from attempts that cover all of them. Its parameters:
 
 - `target` (required): the model role the records are for.
 - `seed` (required): the seed of the validation split and of any draw the projection makes.
