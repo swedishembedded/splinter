@@ -25,6 +25,7 @@ mod harness_pass;
 mod harness_search;
 mod hinted;
 mod import;
+mod interrupted_runs;
 mod interventions;
 mod knowledge;
 mod machine_config;

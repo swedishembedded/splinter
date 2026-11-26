@@ -42,6 +42,7 @@ pub mod play;
 pub mod release;
 mod revisions;
 pub mod rollout;
+mod rollout_record;
 mod rollout_report;
 pub mod task_mutate;
 pub mod tasks;

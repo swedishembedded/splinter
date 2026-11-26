@@ -255,39 +255,6 @@ fn the_infrastructures_failures_are_retried_and_never_become_training_negatives(
 }
 
 #[test]
-fn a_controller_killed_mid_rollout_resumes_without_repeating_a_finished_attempt() {
-    let repo = Repo::new();
-    let resolved = resolved(&repo, RECIPE.split(DATASET).next().unwrap());
-    let backend = FakeBackend::with(Outcome::Pass);
-    *backend.crash_after.lock().unwrap() = Some(2);
-    let trainer = FakeTrainer::default();
-    let dir = tempfile::tempdir().unwrap();
-    let crashed = run(&resolved, dir.path(), &backend, &trainer);
-    assert!(matches!(crashed, Err(RunError::Backend(_))), "{crashed:?}");
-    assert_eq!(backend.executed().len(), 2);
-
-    run(&resolved, dir.path(), &backend, &trainer).unwrap();
-    let local: Vec<_> = backend
-        .executed()
-        .into_iter()
-        .filter(|s| s.slot.pass == "local")
-        .collect();
-    let mut slots: Vec<_> = local
-        .iter()
-        .map(|s| (s.task.id.clone(), s.slot.slot))
-        .collect();
-    slots.sort();
-    slots.dedup();
-    assert_eq!(slots.len(), 4);
-    assert_eq!(
-        local.len(),
-        4,
-        "the two attempts that reported before the kill were reconciled, not run again"
-    );
-    assert_eq!(trials_of(&dir.path().join("local")).unwrap().len(), 4);
-}
-
-#[test]
 fn a_corrupt_trace_keeps_its_evidence_and_is_quarantined_from_training() {
     let repo = Repo::new();
     let recipe = RECIPE.split(TRAINING).next().unwrap().to_owned();

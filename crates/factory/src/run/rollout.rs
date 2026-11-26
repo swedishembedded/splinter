@@ -21,8 +21,11 @@
 //! `retries` more times; the last one then finishes the slot as it is, so
 //! the trial is kept and counted as what it was. Every attempt's report is
 //! kept in the product, the failed ones too. A slot whose attempts all went
-//! without a report (the worker lost them) fails the stage once its retries
-//! are spent: nothing is invented for it.
+//! without a report from batches the worker ran to their end (the worker
+//! lost them) fails the stage once its retries are spent: nothing is
+//! invented for it. An attempt lost because the run itself was stopped
+//! before its batch reported (found when a restarted controller reconciles)
+//! says nothing about the task and spends no retry.
 //!
 //! **Crash recovery.** Each batch writes into its own directory under the
 //! stage's work directory, named in the attempt's backend handle. A
@@ -55,10 +58,11 @@ use splinter_core::factory::product::{AgentIdentity, TrialResult, TRIAL_SCHEMA};
 use splinter_core::factory::task::TaskRef;
 use splinter_core::factory::trial::{grade, GradingPolicy};
 use splinter_store::factory::products::Staging;
-use splinter_store::factory::runstate::{AttemptRecord, AttemptState, SlotState};
+use splinter_store::factory::runstate::{AttemptRecord, SlotState};
 
 use super::models::{binding_of, serve};
 use super::pass::{pass, pin, RolloutPass};
+use super::rollout_record::{record, Lost};
 use super::rollout_report::report;
 use super::{io, read_lines, stage_error, write_lines, Factory, RunError};
 use crate::backend::Batch;
@@ -496,74 +500,11 @@ pub(crate) fn guided(report: &AttemptReport) -> bool {
 /// Record what `reports` say about the attempts of one batch. An attempt
 /// with no report is lost (its slot goes back for another attempt, unless
 /// its retries are spent, which fails the stage).
-fn record(
-    factory: &Factory<'_>,
-    run: &Running<'_, '_>,
-    batch: u64,
-    attempts: &[AttemptRecord],
-    reports: &[AttemptReport],
-) -> Result<Vec<AttemptEntry>, RunError> {
-    let mut entries = Vec::new();
-    let allowed = run.arm.pass.retries as usize;
-    for attempt in attempts {
-        let number = attempt_number(factory, attempt)?;
-        let used = factory.state.attempts(&attempt.slot)?.len();
-        let Some(report) = reports
-            .iter()
-            .find(|r| r.slot == attempt.slot && r.attempt == number)
-        else {
-            factory.state.record_attempt(
-                &factory.fence,
-                attempt.id,
-                AttemptState::Lost,
-                None,
-                unix_now(),
-            )?;
-            if used > allowed {
-                return Err(stage_error(
-                    &run.arm.key,
-                    format!(
-                        "slot {} lost {used} attempts without a report",
-                        attempt.slot
-                    ),
-                ));
-            }
-            continue;
-        };
-        let trial = run.trial(report, batch)?;
-        let retry = trial.grade.status.is_retryable() && used <= allowed;
-        let digest = trial.digest();
-        if retry {
-            factory.state.record_attempt(
-                &factory.fence,
-                attempt.id,
-                AttemptState::Failed,
-                None,
-                unix_now(),
-            )?;
-        } else {
-            factory.state.record_attempt(
-                &factory.fence,
-                attempt.id,
-                AttemptState::Succeeded,
-                Some(digest.clone()),
-                unix_now(),
-            )?;
-            factory
-                .state
-                .finish_slot(&factory.fence, &attempt.slot, &digest, unix_now())?;
-        }
-        entries.push(AttemptEntry {
-            batch,
-            finished_slot: !retry,
-            trial,
-        });
-    }
-    Ok(entries)
-}
-
 /// An attempt's number among its slot's attempts, from 0.
-fn attempt_number(factory: &Factory<'_>, attempt: &AttemptRecord) -> Result<u32, RunError> {
+pub(super) fn attempt_number(
+    factory: &Factory<'_>,
+    attempt: &AttemptRecord,
+) -> Result<u32, RunError> {
     let all = factory.state.attempts(&attempt.slot)?;
     let index = all
         .iter()
@@ -631,7 +572,7 @@ pub(crate) fn run_arm(
     }
     for (batch, attempts) in &unfinished {
         let reports = factory.services.backend.reconcile(&run.batch_dir(*batch))?;
-        let entries = record(factory, &run, *batch, attempts, &reports)?;
+        let entries = record(factory, &run, *batch, attempts, &reports, Lost::Interrupted)?;
         append_entries(&run.work, &entries)?;
     }
 
@@ -662,7 +603,7 @@ pub(crate) fn run_arm(
             out: &run.batch_dir(batch),
             concurrency: arm.pass.concurrency,
         })?;
-        let entries = record(factory, &run, batch, &claimed, &reports)?;
+        let entries = record(factory, &run, batch, &claimed, &reports, Lost::Unreported)?;
         append_entries(&run.work, &entries)?;
         batch += 1;
     }
