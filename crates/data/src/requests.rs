@@ -77,6 +77,11 @@ pub struct NativeRecord {
     pub scrubbed: bool,
     /// The tools the supervised actions call, in order.
     pub tools: Vec<String>,
+    /// The calls (by their scoped ids) whose result the model was shown as
+    /// an error; empty when the record holds no request to tell it by
+    /// ([`crate::mask_failed_actions`] takes the actions made only of them
+    /// out of the loss).
+    pub failed_calls: std::collections::BTreeSet<String>,
 }
 
 /// The `native-sft` record of a trajectory whose model calls were recorded:
@@ -116,12 +121,16 @@ pub fn native_record(
                 .map(|c| c.function.name.clone())
         })
         .collect();
+    let failed_calls = calls.last().map_or_else(Default::default, |last| {
+        crate::tool_errors::failed_calls(trajectory, &last.messages, &conversation.messages)
+    });
     Ok(NativeRecord {
         record,
         actions: supervised.len(),
         copied,
         scrubbed: conversation.scrubbed,
         tools,
+        failed_calls,
     })
 }
 

@@ -41,6 +41,7 @@ mod repo;
 mod resolve;
 mod reuse;
 mod revisions;
+mod sft_arms;
 mod template_runs;
 mod templates;
 mod text_dataset;

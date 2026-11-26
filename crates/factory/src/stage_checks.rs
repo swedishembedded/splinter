@@ -193,6 +193,19 @@ pub(crate) fn projection_problems(
             }
         }
     }
+    if params.supervise != ops::Supervise::All {
+        if params.objective != "sft" {
+            out.push(format!(
+                "supervise is an SFT dataset's; a {} dataset is projected by its own view",
+                params.objective
+            ));
+        } else if params.projection != "native-sft" {
+            out.push(
+                "supervise: productive needs projection: native-sft: only the requests the model was sent show which results were errors"
+                    .to_owned(),
+            );
+        }
+    }
     if compiled
         .models
         .get(&params.target)

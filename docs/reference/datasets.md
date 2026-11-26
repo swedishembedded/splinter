@@ -40,6 +40,14 @@ using them is [Build datasets and train a candidate](../guides/training.md).
 - `validation`: `{group_by, percent}` holds out whole groups for validation, so that no group is in both files.
   `group_by` is `task` (the default) or `task_family`; `percent` is required and has no default, and 100 is
   refused. Without `validation` nothing is held out.
+- `supervise`: an `sft` dataset's only: which actions of a record are supervised. `all` (the default)
+  supervises every action of the agent. `productive` keeps an action whose tool calls were all answered with
+  an error in the record as context (`train: false`), so the target is not taught the failed attempt but still
+  sees it; the action that recovers after an error, any action with a call that succeeded, and the final answer
+  stay supervised. A record left supervising nothing is excluded as `nothing_supervised`. Whether a result was
+  an error is read from the requests the model was sent (the agent marks an error result) against the tool's
+  own output in the trajectory, so `productive` needs `projection: native-sft`. The report counts the actions
+  kept as context.
 
 A stage that projects a non-`sft` dataset is refused when a source attempt stage is hinted, continued or runs
 a harness: such a dataset is projected only from attempts made as the target will be asked.

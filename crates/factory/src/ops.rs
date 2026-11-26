@@ -57,7 +57,7 @@ use crate::registry::{OperationSpec, Registry};
 mod dataset;
 pub use dataset::{
     DocumentSplit, ExtendDatasetParams, ImportDatasetParams, PreferenceOptions, ProjectParams,
-    RewardOptions, TextDatasetParams, ValidationSplit, OBJECTIVES,
+    RewardOptions, Supervise, TextDatasetParams, ValidationSplit, OBJECTIVES,
 };
 
 /// `tasks.pin`: the tasks of a collection, pinned into the run.

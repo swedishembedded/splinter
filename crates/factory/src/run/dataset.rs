@@ -41,6 +41,7 @@
 //! supervised messages), `dataset.json` (the [`DatasetProduct`]) and
 //! `report.md`.
 
+mod report;
 mod views;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -61,7 +62,8 @@ use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{
-    AttemptParams, Hint, PreferenceOptions, ProjectParams, RewardOptions, ValidationSplit,
+    AttemptParams, Hint, PreferenceOptions, ProjectParams, RewardOptions, Supervise,
+    ValidationSplit,
 };
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -126,8 +128,25 @@ struct Dataset {
     max_block: Option<u64>,
     thinking: bool,
     validation: Option<ValidationSplit>,
+    supervise: Supervise,
     seed: u64,
 }
+
+/// An admitted trial projected as its record.
+struct Admitted {
+    /// The attempt stage that made it.
+    source: String,
+    trial: TrialResult,
+    record: Record,
+    /// The actions the record supervises.
+    actions: usize,
+    /// The tools the supervised actions call, in order.
+    tools: Vec<String>,
+}
+
+/// A trial's record, the actions it supervises, their tools and the calls
+/// answered with an error.
+type Projection = (Record, usize, Vec<String>, BTreeSet<String>);
 
 fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunError> {
     let params: ProjectParams = stage.params().map_err(|e| stage_error(&stage.key, e))?;
@@ -162,6 +181,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         max_block: params.max_block,
         thinking: params.thinking,
         validation: params.validation,
+        supervise: params.supervise,
         seed: params.seed,
     })
 }
@@ -217,6 +237,11 @@ pub(crate) fn identity(
     if let Some(options) = &dataset.preference {
         parameters["preference"] = json!(options);
     }
+    // A parameter at its default is left out, so a recipe that does not name
+    // it keeps the identity it had before the parameter existed.
+    if dataset.supervise != Supervise::All {
+        parameters["supervise"] = json!(dataset.supervise);
+    }
     Ok(super::identity_of(
         &stage.versioned_operation(),
         &dataset.name,
@@ -227,13 +252,12 @@ pub(crate) fn identity(
     ))
 }
 
-/// The record of one admitted trial, or why it has none.
 /// The record of one admitted trial under `projection`, or why it has none.
 fn project(
     view: &Path,
     trial: &TrialResult,
     projection: &str,
-) -> Result<(Record, usize, Vec<String>), (String, String)> {
+) -> Result<Projection, (String, String)> {
     let dir = view.join(&trial.native_dir);
     let trace = std::fs::read(dir.join(TRAJECTORY))
         .map_err(|e| ("no_trajectory".to_owned(), format!("{TRAJECTORY}: {e}")))?;
@@ -257,6 +281,7 @@ fn project(
         },
         native.actions,
         native.tools,
+        native.failed_calls,
     ))
 }
 
@@ -369,7 +394,8 @@ pub(crate) fn produce(
     }
     let mut raw = 0u64;
     let mut successes = 0u64;
-    let mut projected: Vec<(String, TrialResult, Record, usize, Vec<String>)> = Vec::new();
+    let mut projected: Vec<Admitted> = Vec::new();
+    let mut failed_masked = 0u64;
     let mut excluded: Vec<Excluded> = Vec::new();
     let mut sources = Vec::new();
     for source in &dataset.sources {
@@ -427,6 +453,15 @@ pub(crate) fn produce(
                 }
                 Ok(found)
             });
+            let learned = learned.and_then(|(record, actions, tools, failed)| {
+                if dataset.supervise == Supervise::All {
+                    return Ok((record, actions, tools));
+                }
+                let (record, actions, masked) = productive(record, actions, &failed)?;
+                failed_masked += masked as u64;
+                let tools = supervised_tools(&record);
+                Ok((record, actions, tools))
+            });
             match learned {
                 Ok((mut record, actions, tools)) => {
                     record.metadata.trial = Some(TrialSource {
@@ -438,7 +473,13 @@ pub(crate) fn produce(
                         guided: trial.guided,
                         imported: trial.imported.clone(),
                     });
-                    projected.push((source.clone(), trial, record, actions, tools))
+                    projected.push(Admitted {
+                        source: source.clone(),
+                        trial,
+                        record,
+                        actions,
+                        tools,
+                    })
                 }
                 Err((reason, detail)) => excluded.push(exclude(reason, detail)),
             }
@@ -450,8 +491,8 @@ pub(crate) fn produce(
     // would teach it to emit reasoning it is never asked for.
     let mut reasoning_removed = 0u64;
     if !dataset.thinking {
-        for (_, _, record, _, _) in &mut projected {
-            if let RecordBody::Chat { messages, .. } = &mut record.body {
+        for admitted in &mut projected {
+            if let RecordBody::Chat { messages, .. } = &mut admitted.record.body {
                 for message in messages.iter_mut() {
                     if message.reasoning_content.take().is_some() {
                         reasoning_removed += 1;
@@ -463,20 +504,19 @@ pub(crate) fn produce(
     if let (Some(limit), Some(trainer)) = (dataset.max_block, factory.services.trainer) {
         let lines: Vec<String> = projected
             .iter()
-            .map(|(_, _, record, _, _)| splinter_data::dataset_line(Objective::Sft, record))
+            .map(|a| splinter_data::dataset_line(Objective::Sft, &a.record))
             .collect::<Result<_, _>>()
             .map_err(|e| stage_error(&stage.key, e))?;
         let lengths = trainer
             .measure(&dataset.target, &lines)
             .map_err(|e| stage_error(&stage.key, e))?;
         let mut kept = Vec::new();
-        for ((source, trial, record, actions, tools), tokens) in projected.into_iter().zip(lengths)
-        {
+        for (admitted, tokens) in projected.into_iter().zip(lengths) {
             if tokens > limit {
                 excluded.push(Excluded {
-                    pass: source,
-                    slot: trial.slot.to_string(),
-                    task: trial.task.clone(),
+                    pass: admitted.source,
+                    slot: admitted.trial.slot.to_string(),
+                    task: admitted.trial.task.clone(),
                     reason: "longer_than_max_block".into(),
                     detail: format!(
                         "{tokens} tokens of {} where max_block is {limit}",
@@ -484,7 +524,7 @@ pub(crate) fn produce(
                     ),
                 });
             } else {
-                kept.push((source, trial, record, actions, tools));
+                kept.push(admitted);
             }
         }
         projected = kept;
@@ -505,7 +545,7 @@ pub(crate) fn produce(
         ));
     }
     let group_of = |trial: &TrialResult| group_of(factory, &dataset, &trial.task);
-    let groups: BTreeSet<String> = projected.iter().map(|(_, t, ..)| group_of(t)).collect();
+    let groups: BTreeSet<String> = projected.iter().map(|a| group_of(&a.trial)).collect();
     let held = dataset
         .validation
         .as_ref()
@@ -517,7 +557,14 @@ pub(crate) fn produce(
     let mut composition: BTreeMap<String, u64> = BTreeMap::new();
     let mut per_task: BTreeMap<String, u64> = BTreeMap::new();
     let mut supervised_actions = 0u64;
-    for (source, trial, record, actions, tools) in &projected {
+    for Admitted {
+        source,
+        trial,
+        record,
+        actions,
+        tools,
+    } in &projected
+    {
         let split = if held.contains(&group_of(trial)) {
             "validation"
         } else {
@@ -577,8 +624,8 @@ pub(crate) fn produce(
     let leaked: Vec<&String> = {
         let train_groups: BTreeSet<String> = projected
             .iter()
-            .filter(|(_, t, ..)| !held.contains(&group_of(t)))
-            .map(|(_, t, ..)| group_of(t))
+            .map(|a| group_of(&a.trial))
+            .filter(|g| !held.contains(g))
             .collect();
         held.iter().filter(|g| train_groups.contains(*g)).collect()
     };
@@ -641,7 +688,7 @@ pub(crate) fn produce(
         thinking: dataset.thinking,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
-    let report = Report {
+    let report = report::Report {
         thinking: dataset.thinking,
         reasoning_removed,
         name: &dataset.name,
@@ -654,76 +701,39 @@ pub(crate) fn produce(
         composition: &composition,
         per_task: &per_task,
         tasks: tasks_offered(factory, &dataset.sources),
+        failed_masked: (dataset.supervise == Supervise::Productive).then_some(failed_masked),
     };
     std::fs::write(staging.path().join("report.md"), report.render()).map_err(io(staging.path()))
 }
 
-/// What the dataset's report shows.
-struct Report<'a> {
-    thinking: bool,
-    reasoning_removed: u64,
-    name: &'a str,
-    waterfall: &'a [WaterfallStep],
-    exclusions: &'a BTreeMap<String, u64>,
-    supervised_actions: u64,
-    train: usize,
-    validation: usize,
-    tools: &'a BTreeMap<String, u64>,
-    composition: &'a BTreeMap<String, u64>,
-    per_task: &'a BTreeMap<String, u64>,
-    tasks: usize,
+/// `record` (supervising `actions`) under `supervise: productive`: every
+/// action whose calls all failed (`failed`) kept as context. Returns the
+/// record, the actions it supervises and how many were taken out; a record
+/// left supervising nothing has no record.
+fn productive(
+    mut record: Record,
+    actions: usize,
+    failed: &BTreeSet<String>,
+) -> Result<(Record, usize, usize), (String, String)> {
+    let masked = splinter_data::mask_failed_actions(&mut record.body, failed);
+    if masked >= actions {
+        return Err((
+            "nothing_supervised".into(),
+            format!("every one of its {actions} actions made only calls that failed"),
+        ));
+    }
+    Ok((record, actions - masked, masked))
 }
 
-impl Report<'_> {
-    fn render(&self) -> String {
-        let table = |rows: &BTreeMap<String, u64>, head: &str| -> String {
-            let mut out = format!("| {head} | n |\n|---|---|\n");
-            for (k, v) in rows {
-                out.push_str(&format!("| {k} | {v} |\n"));
-            }
-            out
-        };
-        let mut out = format!(
-            "# Dataset {}\n\n## Waterfall\n\n| step | remaining |\n|---|---|\n",
-            self.name
-        );
-        for step in self.waterfall {
-            out.push_str(&format!("| {} | {} |\n", step.step, step.remaining));
-        }
-        out.push_str(&format!(
-            "\n{} records ({} train, {} validation), {} supervised actions, {} of {} tasks covered.\n",
-            self.train + self.validation,
-            self.train,
-            self.validation,
-            self.supervised_actions,
-            self.per_task.len(),
-            self.tasks
-        ));
-        out.push_str(&if self.thinking {
-            "\nReasoning is kept (thinking: true): the target is trained to reason before it answers.\n".to_owned()
-        } else {
-            format!(
-                "\nThe target is trained for no-think mode (thinking: false): reasoning removed from {} turns.\n",
-                self.reasoning_removed
-            )
-        });
-        out.push_str(&format!(
-            "\n## Exclusions\n\n{}",
-            table(self.exclusions, "reason")
-        ));
-        out.push_str(&format!(
-            "\n## Agents and models\n\n{}",
-            table(self.composition, "agent / model")
-        ));
-        out.push_str(&format!(
-            "\n## Supervised tool calls\n\n{}",
-            table(self.tools, "tool")
-        ));
-        out.push_str(&format!(
-            "\n## Records per task\n\n{}",
-            table(self.per_task, "task")
-        ));
-        out
+/// The tools the supervised actions of `record` call, in order.
+fn supervised_tools(record: &Record) -> Vec<String> {
+    match &record.body {
+        RecordBody::Chat { messages, .. } => messages
+            .iter()
+            .filter(|m| m.role == "assistant" && m.train)
+            .flat_map(|m| m.tool_calls.iter().map(|c| c.function.name.clone()))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

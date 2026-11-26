@@ -142,6 +142,19 @@ pub struct RewardOptions {
     pub penalties_percent: std::collections::BTreeMap<String, u32>,
 }
 
+/// Which assistant actions of an SFT record are supervised.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Supervise {
+    /// Every action of the agent.
+    #[default]
+    All,
+    /// Every action but one whose tool calls were all answered with an error:
+    /// that one stays in the context, unsupervised. The action that recovers
+    /// and the final answer stay supervised.
+    Productive,
+}
+
 /// `dataset.project`: training records projected from attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -173,6 +186,9 @@ pub struct ProjectParams {
     /// How validation records are held out.
     #[serde(default)]
     pub validation: Option<ValidationSplit>,
-    /// The split's seed.
+    /// Which actions of an SFT record are supervised (`all`, `productive`).
+    #[serde(default)]
+    pub supervise: Supervise,
+    /// The seed of the split and of every draw the projection makes.
     pub seed: u64,
 }

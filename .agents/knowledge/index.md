@@ -211,3 +211,4 @@ in the same commit.
 | [223](223-a-no-think-rollout-must-be-trained-in-no-think-mode.md) | A no-think rollout must be trained in no-think mode |
 | [224](224-a-program-this-process-just-wrote-is-busy-while-a-sibling-forks.md) | A program this process just wrote is busy while a sibling thread forks |
 | [225](225-sandbox-image-copies-in-memory-exhaust-a-node.md) | Sandbox image copies in memory exhaust a node; an interrupted batch could not resume |
+| [226](226-a-tool-results-error-status-is-in-the-request-not-the-trajectory.md) | A tool result's error status is in the request, not the trajectory, and the marker alone is no evidence |

@@ -737,6 +737,8 @@ pub fn portable_record(trajectory: &Trajectory) -> Result<crate::NativeRecord, U
         copied,
         scrubbed: conversation.scrubbed,
         tools,
+        // A trajectory keeps no result's error status.
+        failed_calls: Default::default(),
     })
 }
 

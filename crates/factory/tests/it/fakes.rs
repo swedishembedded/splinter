@@ -34,6 +34,20 @@ pub enum Outcome {
     Lost,
     /// Full credit, and a trajectory that is not JSON.
     CorruptTrace,
+    /// Full credit, with the first tool result shown to the model as an
+    /// error (marked as Sven marks an `isError` result) and recovered from.
+    PassAfterError,
+}
+
+/// The fixture's first tool call, which `PassAfterError` answers with an error.
+pub const FIRST_CALL: &str = "chatcmpl-tool-a594c16291a6a462";
+
+/// The request log `bytes` with the result of `call` shown as an error.
+fn shown_as_error(bytes: Vec<u8>, call: &str) -> Vec<u8> {
+    let text = String::from_utf8(bytes).unwrap();
+    let sent = format!("\"tool_call_id\":\"{call}\",\"content\":\"");
+    assert!(text.contains(&sent), "the fixture answers {call}");
+    text.replace(&sent, &format!("{sent}error: ")).into_bytes()
 }
 
 fn fixture() -> PathBuf {
@@ -235,7 +249,7 @@ fn attempt_as(
     let native = format!("harbor/job/{name}");
     let dir = out.join(&native);
     let reward = match outcome {
-        Outcome::Pass | Outcome::CorruptTrace => 1.0,
+        Outcome::Pass | Outcome::CorruptTrace | Outcome::PassAfterError => 1.0,
         _ => 0.0,
     };
     let mut result = json!({
@@ -254,10 +268,11 @@ fn attempt_as(
             json!({"exception_type": "ApiInternalServerError", "exception_message": "500"});
     }
     write(&dir.join("result.json"), result.to_string().as_bytes());
-    write(
-        &dir.join("agent/requests.jsonl"),
-        &ended(fixture_file("agent/requests.jsonl", instruction), vary),
-    );
+    let mut requests = ended(fixture_file("agent/requests.jsonl", instruction), vary);
+    if outcome == Outcome::PassAfterError {
+        requests = shown_as_error(requests, FIRST_CALL);
+    }
+    write(&dir.join("agent/requests.jsonl"), &requests);
     let trace = if outcome == Outcome::CorruptTrace {
         b"not json".to_vec()
     } else {
