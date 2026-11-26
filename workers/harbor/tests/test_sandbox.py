@@ -114,3 +114,19 @@ def test_a_confined_command_reads_only_the_system_its_tree_and_its_binds(tmp_pat
     assert "/" not in reads and not any(p in reads for p in ("/home", "/root", "/tmp", "/data", "/var"))
     assert set(SYSTEM_READ) <= set(reads) and "/srv/kb" in reads
     assert {str(image), str(scratch), str(tmp_path / "logs")} <= set(writes) and "/srv/kb" not in writes
+
+
+def test_the_host_runtime_is_found_once_per_process(monkeypatch) -> None:
+    """Every command a userns sandbox runs binds the host's C library; finding it reads this process's memory map and
+    lists a library directory of thousands of files, so it is done once, not once per command: at hundreds of commands
+    a second that scan held the worker's interpreter most of the time it ran trials."""
+    from splinter_harbor_worker.sandbox import userns
+
+    first = userns._host_runtime()
+
+    def scanned(*_args, **_kwargs):
+        raise AssertionError("the host's runtime was looked up again")
+
+    monkeypatch.setattr(Path, "read_text", scanned)
+    monkeypatch.setattr(Path, "glob", scanned)
+    assert userns._host_runtime() == first

@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import json
 import os
 import re
@@ -157,9 +158,11 @@ _STATE_DIRS = {
 }
 
 
+@functools.cache
 def _host_runtime() -> tuple[Path, str] | None:
     """(the host's C library directory, its dynamic loader's file name), where the host
-    keeps both together, which is how its own programs find them."""
+    keeps both together, which is how its own programs find them. Fixed for the process's life, so looked up once:
+    every command a sandbox runs binds it."""
     for line in Path("/proc/self/maps").read_text().splitlines():
         if line.rstrip().endswith("/libc.so.6"):
             libdir = Path(line.split()[-1]).resolve().parent
