@@ -84,7 +84,7 @@ interpretable either.
 - Backward material (`backward2`): 705 outcome-first proposals, 562 reached by the teacher, 467 final tasks; student
   3688 attempts, pass rate 0.031, 36 solved; teacher 1868, 0.722, 410 solved: harder than the forward tasks and
   nearer the exams (teacher 0.63, student 0.00).
-- 2026-11-26 21:00: all 15 arm-seeds (B, C, D, F, G x 3) training, one card each.
+- 2026-11-26 21:00: all 15 arm-seeds (B, C, D, F, G x 3) training, one card each; 2026-11-27 02:30 exam results below.
 - Defects found and fixed on the way (each with its own commit and knowledge entry): sandbox images held in tmpfs
   exhausted a node's memory (splinter 851216e17, k225); the worker's reconcile failed resumes (5fb824d6b); on-disk
   sandbox copies took 436 s to start (shared lower tree plus overlay, 9841886df, k227); attempts lost to interruptions
@@ -93,6 +93,38 @@ interpretable either.
   upstreams (ae72fc212), packed one model on few cards (b726c045b), opened the GPUs (da6ce90cc); Qwen3 plans withdrew
   a model instead of fitting the free memory (f74314255); a CUDA lane can hang with /health reporting ok (brain k602,
   watchdog open).
+
+## Result on the exams (2026-11-27, registered analysis)
+
+All 15 arm-seeds trained (800 steps, held-out validation loss 2.49 to 0.60 for B seed 1) and were measured on the 100
+held-out course exams, 4 attempts per exam, each against a base run in the same evaluation stage. Infrastructure:
+at most 11 of 800 attempts of an evaluation stage (1.4%), within the 2% bound in every stage.
+
+| Arm | Exam passes (of 1200 attempts, 3 seeds) | Exams solved | Base passes (paired, about 1180 attempts) |
+|---|---|---|---|
+| B every verified success | 22 (6, 6, 10) | 10 | 0 |
+| C one trial per task | 10 (5, 2, 3) | 6 | 0 |
+| D productive actions only | 22 (10, 4, 8) | 11 | 0 |
+| F shuffled-request control | 0 (0, 0, 0) | 0 | 0 |
+| G backward (outcome-first) tasks | 42 (14, 11, 17) | 25 | 0 |
+
+Primary family (each arm against the base, per exam pooled over seeds, one-sided exact sign test, Holm at 0.05):
+B 10 wins / 0 losses, p 0.00098; C 6 / 0, p 0.0156; D 11 / 0, p 0.00049; G 24 / 0, p 6e-8: all significant. Each
+against the negative control F: B 10 / 0 (p 0.00098), C 6 / 0 (0.0156), D 11 / 0 (0.00049), G 25 / 0 (3e-8): all
+significant. **The registered claim holds: trajectories on tasks authored from the manual alone teach the 4B student
+skills it applies to exams it never saw, and the gain is the trajectories' content, not exposure to the tool's
+format (F stays at the base's 0).**
+
+Secondary (two-sided, intervals by task bootstrap, not claims of the registered family): G against B 21 / 5,
+p 0.0025, pass-rate difference +0.017 [+0.003, +0.031], although G trained on fewer records (1,059 against 3,002):
+outcome-first tasks teach more transfer per record than section-by-section tasks. D against B 7 / 5, p 0.77, no
+difference measured. C against B 2 / 8, p 0.11, -0.010 [-0.019, -0.002]: one solution per task teaches less than all
+verified solutions. Absolute level stays low (G 3.5% of attempts, 25 of 100 exams solved at least once): the
+exams combine several ideas on unseen material and the base 4B solves none of them.
+
+Not claimed: anything about other tools or domains (T3), retention on non-Vim tasks (no anchor was run), or stability
+under another authoring seed of the material. Evidence: per-task outcomes and the decision in
+`~/project/shared/tmp/t2s/results/` (decide.py, export-results.py), arm runs on the nodes' local disks.
 
 ## Transfer experiment support (2026-11-26)
 
