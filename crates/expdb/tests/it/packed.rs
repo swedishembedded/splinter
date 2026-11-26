@@ -476,3 +476,42 @@ fn damage_in_a_pack_is_found_deeply_and_filled_from_a_copy() {
     assert!(db.verify(true).unwrap().problems.is_empty());
     assert_eq!(db.snapshot().unwrap().records().unwrap().len(), 8);
 }
+
+/// Make every file and directory under `root` read-only (`writable: false`)
+/// or writable again, as a committed product directory is made read-only.
+fn set_writable(root: &Path, writable: bool) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut pending = vec![root.to_path_buf()];
+    let mut dirs = Vec::new();
+    while let Some(path) = pending.pop() {
+        let meta = std::fs::symlink_metadata(&path).unwrap();
+        if meta.is_dir() {
+            pending.extend(std::fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
+            dirs.push(path);
+        } else {
+            let mode = if writable { 0o644 } else { 0o444 };
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        }
+    }
+    for dir in dirs {
+        let mode = if writable { 0o755 } else { 0o555 };
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+}
+
+#[test]
+fn a_database_in_a_read_only_directory_opens_and_reads() {
+    // A stage reads the database an earlier stage committed, and a committed
+    // product directory is read-only: opening it must write nothing.
+    let scratch = Scratch::new();
+    ingest(&scratch.open(), 0, 4);
+    set_writable(scratch.dir.path(), false);
+    let opened = Database::open(scratch.dir.path(), Config::default())
+        .and_then(|db| db.snapshot()?.records().map(|r| r.len()));
+    set_writable(scratch.dir.path(), true);
+    assert_eq!(
+        opened.unwrap(),
+        8,
+        "every record of the committed database reads"
+    );
+}

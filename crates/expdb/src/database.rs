@@ -56,7 +56,18 @@ impl Database {
         config.validate()?;
         let marker = Key::new(Kind::Ref, FORMAT_NAME)?;
         let wanted = backend.layout().marker();
-        if !backend.write_once(&marker, wanted)? && backend.read(&marker)? != wanted {
+        // An existing marker is only read: writing it again would touch a
+        // committed, read-only database.
+        let held = match backend.read(&marker) {
+            Ok(bytes) => Some(bytes),
+            Err(Error::NotFound { .. }) => None,
+            Err(other) => return Err(other),
+        };
+        let matches = match held {
+            Some(bytes) => bytes == wanted,
+            None => backend.write_once(&marker, wanted)? || backend.read(&marker)? == wanted,
+        };
+        if !matches {
             return Err(Error::corrupt(
                 "database format marker",
                 format!(

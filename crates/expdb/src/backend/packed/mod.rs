@@ -81,6 +81,9 @@ struct State {
     index: Index,
     /// The journal, once it exists.
     journal: Option<File>,
+    /// Whether `journal` was opened for writing: a reader of a read-only
+    /// store opens it for reading only, and a writer opens it again.
+    journal_writable: bool,
     /// Pack files opened for reading, by number.
     readers: HashMap<u32, Arc<File>>,
 }
@@ -148,8 +151,19 @@ impl PackedBackend {
     fn refresh(&self, state: &mut State) -> Result<()> {
         if state.journal.is_none() {
             let path = self.journal_path();
-            match OpenOptions::new().read(true).write(true).open(&path) {
-                Ok(file) => state.journal = Some(file),
+            let opened = match OpenOptions::new().read(true).write(true).open(&path) {
+                Ok(file) => Ok((file, true)),
+                // A committed store is read-only; reading it needs no more.
+                Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+                    File::open(&path).map(|file| (file, false))
+                }
+                Err(e) => Err(e),
+            };
+            match opened {
+                Ok((file, writable)) => {
+                    state.journal = Some(file);
+                    state.journal_writable = writable;
+                }
                 Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
                 Err(e) => return Err(Error::Io { path, source: e }),
             }
@@ -211,7 +225,7 @@ impl PackedBackend {
     /// Creates the journal if needed and takes its exclusive lock.
     fn lock_journal(&self, state: &mut State) -> Result<Flock> {
         let path = self.journal_path();
-        if state.journal.is_none() {
+        if state.journal.is_none() || !state.journal_writable {
             let dir = self.dir();
             let created = !dir.exists();
             fs::create_dir_all(&dir).map_err(Error::io(&dir))?;
@@ -227,6 +241,7 @@ impl PackedBackend {
                 sync_dir(&self.root)?;
             }
             state.journal = Some(file);
+            state.journal_writable = true;
         }
         let journal = state
             .journal

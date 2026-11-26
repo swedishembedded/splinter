@@ -70,8 +70,12 @@ impl Layout {
 
     /// The layout of the database under `root`, recording `wanted` first
     /// when the root holds none. Racing openers of a new root agree: the
-    /// marker is written once and every one of them reads the winner's.
+    /// marker is written once and every one of them reads the winner's. A
+    /// root that holds one is only read, so a read-only one opens.
     pub fn establish(root: &Path, wanted: Layout) -> Result<Self> {
+        if let Some(held) = Self::of_root(root)? {
+            return Ok(held);
+        }
         let marker = Key::new(Kind::Ref, FORMAT_NAME)?;
         let files = PosixBackend::new(root);
         if files.write_once(&marker, wanted.marker())? {
