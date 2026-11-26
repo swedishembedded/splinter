@@ -30,11 +30,18 @@ compressed answer would reach the agent with a content encoding it was not told 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import dataclasses
 import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
+import select
+import socket
+import subprocess
+import sys
 import threading
 import time
 import zlib
@@ -115,6 +122,21 @@ class ModelGateway:
     def register(self, trial: str, upstream: Upstream, request_log: Path) -> None:
         """Serve ``trial`` from ``upstream``, recording its requests in ``request_log``."""
         self._trials[trial] = (upstream, request_log)
+
+    def handover(self) -> dict:
+        """What a gateway process needs to serve exactly these trials with these tokens (``from_handover``): the secret
+        and the upstream credentials, so it travels only over a pipe."""
+        return {"secret": self._secret,
+                "trials": {trial: {**dataclasses.asdict(upstream), "log": str(log)}
+                           for trial, (upstream, log) in self._trials.items()}}
+
+    @classmethod
+    def from_handover(cls, handover: dict) -> ModelGateway:
+        gateway = cls(secret=handover["secret"])
+        for trial, entry in handover["trials"].items():
+            log = Path(entry.pop("log"))
+            gateway.register(trial, Upstream(**{**entry, "drop_headers": tuple(entry["drop_headers"])}), log)
+        return gateway
 
     def _client_for(self, trial: str) -> httpx.AsyncClient:
         """The connection pool ``trial``'s requests go through: always the same one, so its conversation keeps its
@@ -337,31 +359,104 @@ class ModelGateway:
 
 
 class GatewayServer:
-    """A ``ModelGateway`` served by uvicorn on a thread of this process: the gateway runs on an event loop of its own,
-    beside the loop that runs the Harbor job, on a free port of ``host``."""
+    """A ``ModelGateway`` served by uvicorn in ``processes`` child processes of its own, all accepting on one socket of
+    ``host`` this process binds to a free port. The gateway relays every token every agent receives, and the
+    interpreter that runs the Harbor job is busy for much of a run: on a thread of that interpreter each relayed chunk
+    waited for it. A child gets the gateway's secret and registered trials (upstream credentials included) on its
+    standard input, never on a command line, in its environment or in a file, and ends when that input closes, which
+    is also what the parent's own end does."""
 
-    def __init__(self, gateway: ModelGateway, host: str = "127.0.0.1") -> None:
+    def __init__(self, gateway: ModelGateway, host: str = "127.0.0.1", processes: int = 1) -> None:
+        if processes < 1:
+            raise ValueError("a gateway runs in at least one process")
         self.gateway = gateway
-        self._config = uvicorn.Config(gateway.app, host=host, port=0, log_level="warning", access_log=False)
-        self._server = uvicorn.Server(self._config)
-        self._thread = threading.Thread(target=self._server.run, name="model-gateway", daemon=True)
         self.host = host
+        self._processes = processes
+        self._socket = socket.create_server((host, 0), backlog=_LISTEN_BACKLOG)
+        self._children: list[subprocess.Popen] = []
 
     def start(self) -> None:
-        self._thread.start()
-        deadline = time.monotonic() + 20
-        while not self._server.started:
-            if not self._thread.is_alive() or time.monotonic() > deadline:
-                raise RuntimeError("the model gateway did not start")
-            time.sleep(0.02)
+        handover = (json.dumps(self.gateway.handover()) + "\n").encode()
+        fd = self._socket.fileno()
+        try:
+            for _ in range(self._processes):
+                child = subprocess.Popen(
+                    [sys.executable, "-I", "-c", _CHILD, str(Path(__file__).resolve().parents[1]), str(fd)],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, pass_fds=(fd,))
+                self._children.append(child)
+                child.stdin.write(handover)
+                child.stdin.flush()
+            for child in self._children:
+                if not _ready(child, _START_SECONDS):
+                    raise RuntimeError(f"the model gateway did not start (its process ended with {child.poll()})")
+        except BaseException:
+            self.stop()
+            raise
 
     @property
     def port(self) -> int:
-        return self._server.servers[0].sockets[0].getsockname()[1]
+        return self._socket.getsockname()[1]
 
     def stop(self) -> None:
-        self._server.should_exit = True
-        self._thread.join(timeout=20)
+        children, self._children = self._children, []
+        for child in children:
+            with contextlib.suppress(OSError):
+                child.stdin.close()
+        for child in children:
+            try:
+                child.wait(timeout=_STOP_SECONDS)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+            if child.returncode != 0:
+                _log.warning("a model gateway process ended with exit status %s", child.returncode)
+        self._socket.close()
+
+
+def _ready(child: subprocess.Popen, timeout: float) -> bool:
+    """Whether ``child`` said it serves within ``timeout`` seconds."""
+    if not select.select([child.stdout], [], [], timeout)[0]:
+        return False
+    return child.stdout.readline() == b"ready\n"
+
+
+def serve_child(fd: int) -> None:
+    """A gateway process (``GatewayServer``): the handover from standard input, the app on the inherited socket ``fd``
+    until standard input closes."""
+    handover = json.loads(sys.stdin.buffer.readline())
+    gateway = ModelGateway.from_handover(handover)
+    server = uvicorn.Server(uvicorn.Config(gateway.app, log_level="warning", access_log=False))
+
+    def watch() -> None:
+        while not server.started and not server.should_exit:
+            time.sleep(0.02)
+        sys.stdout.write("ready\n")
+        sys.stdout.flush()
+        sys.stdin.buffer.read()  # until the parent closes it, or ends
+        server.should_exit = True
+
+    threading.Thread(target=watch, name="gateway-parent", daemon=True).start()
+    server.run(sockets=[socket.socket(fileno=fd)])
+
+
+# Concurrent trials one gateway process relays before it becomes their wait (a load test of streaming agents measured
+# where one process falls behind; the commit that set this value has the numbers).
+TRIALS_PER_PROCESS = 128
+
+
+def processes_for(concurrency: int) -> int:
+    """The gateway processes for a job that runs ``concurrency`` trials at once: one per ``TRIALS_PER_PROCESS``, at
+    most one per CPU."""
+    return max(1, min(os.cpu_count() or 1, -(-concurrency // TRIALS_PER_PROCESS)))
+
+
+# A child's program, run isolated (`-I`) so nothing of the environment changes what it imports; its first argument puts
+# this very package first on the path.
+_CHILD = ("import sys; sys.path.insert(0, sys.argv[1]); "
+          "from splinter_harbor_worker.gateway import serve_child; serve_child(int(sys.argv[2]))")
+_LISTEN_BACKLOG = 4096
+_START_SECONDS = 20
+_STOP_SECONDS = 20
 
 
 def _error(status: int, message: str) -> JSONResponse:

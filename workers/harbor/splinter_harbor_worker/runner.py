@@ -31,7 +31,7 @@ from splinter_harbor_worker import runtime
 from splinter_harbor_worker.errors import UsageError, WorkerError
 from splinter_harbor_worker.events import EventLog
 from splinter_harbor_worker.evidence import build_report, finished_trial
-from splinter_harbor_worker.gateway import REQUEST_LOG, GatewayServer, ModelGateway, Upstream
+from splinter_harbor_worker.gateway import REQUEST_LOG, GatewayServer, ModelGateway, Upstream, processes_for
 from splinter_harbor_worker.plan import (
     resolve_sandboxes,
     JOB_NAME, GatewayAddress, Guided, job_config, preflight, report_path, stage_task, stage_tools,
@@ -178,7 +178,7 @@ async def run_job(specs, tasks_root, files_root, out, concurrency, image_cache, 
     if any(spec.model is not None for spec in specs):
         gateway = ModelGateway()
         _register_models(gateway, specs, out)
-        server = GatewayServer(gateway, host=checked.gateway_host)
+        server = GatewayServer(gateway, host=checked.gateway_host, processes=processes_for(concurrency))
         server.start()
     runtime.publish_gateway(gateway)
     address = GatewayAddress(checked.gateway_host, server.port) if server else None

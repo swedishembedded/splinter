@@ -150,8 +150,8 @@ def test_a_connections_dropped_headers_never_reach_its_upstream(tmp_path, stub_m
 
 def test_a_jobs_trials_are_spread_over_several_upstream_pools_each_trial_on_one(tmp_path) -> None:
     """One connection pool for every trial of a job was the gateway's bottleneck: the pool's bookkeeping scans every
-    connection it holds for each request it starts and ends, so 256 concurrent streams through one pool ran at a ninth
-    of the rate of the same streams sent to the upstream directly. A trial keeps one pool, so its conversation reuses
+    connection it holds for each request it starts and ends, so hundreds of concurrent streams through one pool ran at a
+    small fraction of the rate of the same streams sent to the upstream directly. A trial keeps one pool, so its conversation reuses
     its keep-alive connection."""
     gateway = ModelGateway(secret="test-secret")
     trials = [f"trial-{n}" for n in range(512)]
@@ -159,3 +159,33 @@ def test_a_jobs_trials_are_spread_over_several_upstream_pools_each_trial_on_one(
     assert all(gateway._client_for(trial) is pools[trial] for trial in trials)
     sizes = sorted(sum(1 for pool in pools.values() if pool is shared) for shared in set(pools.values()))
     assert len(sizes) > 1 and sizes[-1] <= 4 * len(trials) // len(sizes), sizes
+
+
+def test_the_gateway_answers_while_the_workers_interpreter_is_held(served) -> None:
+    """The gateway shares nothing with the interpreter that runs the Harbor job: on a live run the job's own loop
+    held the interpreter much of the time, and a gateway thread waiting for it made every agent wait for its model.
+    A request sent while this process holds its interpreter (a C loop never lets another thread run) is answered at
+    once, not when the loop ends. It is one the gateway answers itself (no token), since the stub upstream is this
+    process."""
+    import subprocess
+    import sys
+    import time
+
+    server, _, _ = served
+    client = subprocess.Popen([sys.executable, "-I", "-c", (
+        "import sys, time, httpx; time.sleep(0.3); t = time.monotonic(); "
+        "r = httpx.post(sys.argv[1], json={'messages': []}, timeout=30); print(r.status_code, time.monotonic() - t)"),
+        f"http://127.0.0.1:{server.port}/v1/chat/completions"],
+        stdout=subprocess.PIPE, text=True)
+    held_from = time.monotonic()
+    sum(range(3 * 10**8))  # holds this interpreter for a few seconds
+    held = time.monotonic() - held_from
+    status, took = client.communicate(timeout=60)[0].split()
+    assert status == "401" and float(took) < held / 2, (took, held)
+
+
+def test_a_job_gets_a_gateway_process_per_share_of_its_concurrent_trials() -> None:
+    from splinter_harbor_worker.gateway import TRIALS_PER_PROCESS, processes_for
+
+    assert processes_for(1) == 1 and processes_for(TRIALS_PER_PROCESS) == 1
+    assert processes_for(TRIALS_PER_PROCESS + 1) == 2 and processes_for(4 * TRIALS_PER_PROCESS) == 4

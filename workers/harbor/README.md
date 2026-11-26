@@ -105,7 +105,8 @@ Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that f
   read from the worker's environment when the trial starts and never written to a file. A literal under a credential-like
   name is refused. The attempt's seed is given as `SPLINTER_SEED`, not as a flag (Sven refuses a sampling seed a model
   cannot honour; a recipe that wants one passes it in `args`).
-* **Model.** With `model`, the worker runs one gateway for the job. The agent gets the trial's HMAC token as its only
+* **Model.** With `model`, the worker runs one gateway for the job, in processes of its own (one per 128 trials the job
+  runs at once) so relaying never waits for the job's own interpreter. The agent gets the trial's HMAC token as its only
   credential; the gateway forwards to `model.url` with the token read from the worker's `model.token_env` variable,
   rewrites the model, sends `accept-encoding: identity` and logs each request (Chat Completions, Responses or Anthropic Messages) to `<trial>/gateway/requests.jsonl`
   (`evidence.requests`). Error text is stripped of control characters. Without `model` the agent uses its own provider
