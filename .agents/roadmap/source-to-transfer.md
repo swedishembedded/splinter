@@ -73,3 +73,19 @@ interpretable either.
 - 2026-11-26 14:50: material run started on 16 GH200 (4 nodes, one brain per card behind one router).
 - Arms options (curation, per-task limit, shuffled control, holdout, composition report) being built in splinter; the backward pipeline in bench.
 - Calibration (selects nothing): the base 4B passed 0 of 1012 counted exam attempts (12 per exam, partial run).
+
+## Transfer experiment support (2026-11-26)
+
+Landed in splinter (branch `transfer-arms`), every option absent by default so existing recipes keep their stage
+identities and records:
+
+- `dataset.project` `supervise: productive` (arm D): an action whose tool calls were all answered with an error is
+  context (`train: false`); the error status is read from the request the model was sent against the tool's raw
+  output in the trajectory (knowledge 226). Needs `projection: native-sft`.
+- `dataset.project` `per_task: N`, `prefer: fewest-actions | random` (arm C); the rest listed as `per_task_limit`.
+- `dataset.project` `control: shuffled-requests` (arm F): a seeded derangement of the tasks' first user messages;
+  the manifest records `control`.
+- `composition.json` for every SFT dataset (records, trials, tasks, distinct action sequences, supervised and masked
+  messages, supervised characters), named by the manifest and shown in `report.md`.
+- `tasks.pin` `holdout: { percent, seed, side: kept | held }` (T1): each task's side is a hash of the seed and its id.
+- `dataset.project` optional input `tasks`: only trials of those pinned tasks are admitted (`not_in_tasks`).
