@@ -49,6 +49,7 @@ use splinter_store::factory::products::Staging;
 
 use super::dataset::{dataset_of, file_ref, Accepted, Excluded, DATASET_FILE};
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
+use crate::holdout::held_out_by_id;
 use crate::ops::ExtendDatasetParams;
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -124,14 +125,6 @@ fn read_lines(path: &Path, ignore: &[String], prefixes: &[String]) -> Result<Vec
                 .map_err(|e| format!("{} line {number}: {e}", path.display()))
         })
         .collect()
-}
-
-/// The side a task new to the base goes to: held out as a whole at
-/// `percent`, by a hash of the seed and the task.
-fn held_out(seed: u64, task: &str, percent: u8) -> bool {
-    let digest = Digest::of(format!("{seed}\0{task}").as_bytes());
-    let draw = u64::from_str_radix(&digest.hex()[..16], 16).unwrap_or(0);
-    draw % 100 < u64::from(percent)
 }
 
 /// The content digest candidates are ordered by.
@@ -212,7 +205,7 @@ impl Admission {
         let validation = if self.count.contains_key(&line.task) {
             self.held.contains(&line.task)
         } else {
-            held_out(self.seed, &line.task, self.percent)
+            held_out_by_id(self.seed, &line.task, u32::from(self.percent))
         };
         if validation {
             self.held.insert(line.task.clone());
@@ -662,7 +655,7 @@ mod tests {
         let first = weigh(&mut admission, &record("fresh", "P", &["1"]));
         let second = weigh(&mut admission, &record("fresh", "P", &["2"]));
         assert_eq!(first, second, "both records of a task go to one side");
-        let again = held_out(7, "fresh", 10);
+        let again = held_out_by_id(7, "fresh", 10);
         assert_eq!(first, Fate::Admitted { validation: again });
     }
 

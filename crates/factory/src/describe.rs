@@ -41,13 +41,11 @@ pub(crate) fn work(
                 format!("pin {} tasks of {file}", loaded.collection.tasks.len())
             }
             None => {
-                let split = stage
+                let selection = stage
                     .params::<crate::ops::PinParams>()
-                    .ok()
-                    .and_then(|p| p.split)
-                    .map_or_else(String::new, |s| format!("{s} "));
+                    .map_or_else(|_| String::new(), |p| format!(" of {}", p.selection()));
                 format!(
-                    "pin the {split}tasks that stage {} makes",
+                    "pin the tasks{selection} that stage {} makes",
                     stage.source("collection").unwrap_or("?")
                 )
             }

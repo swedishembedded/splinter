@@ -513,3 +513,122 @@ fn every_sft_dataset_reports_its_composition() {
     let report = std::fs::read_to_string(dir.path().join("arm/report.md")).unwrap();
     assert!(report.contains("## Composition"), "{report}");
 }
+
+/// `repo` with `n` more training tasks.
+fn more_tasks(repo: &Repo, n: usize) {
+    for i in 0..n {
+        let id = format!("train/1{i:02}-more");
+        repo.write(
+            &format!("tasks/vim/{id}/task.toml"),
+            &format!("[task]\nname = \"org/{id}\"\n[metadata]\nbench_family = \"course\"\n"),
+        );
+        repo.write(
+            &format!("tasks/vim/{id}/instruction.md"),
+            &format!("Do {id}.\n"),
+        );
+        repo.write(&format!("tasks/vim/{id}/tests/test.sh"), "exit 0\n");
+    }
+}
+
+/// Two pins of the training tasks: the kept and the held side of one
+/// holdout of `percent` drawn by `seed`.
+// seed: the attempt stages state a seed; the fake backend draws nothing from it.
+fn sides(percent: u32, seed: u64) -> String {
+    format!(
+        "schema: splinter.recipe/v2
+name: sides
+inputs:
+  course: {{ kind: files, path: collections/vim.yaml }}
+models:
+  student: \"brain:Qwen/Qwen3-4B\"
+stages:
+  - id: practice
+    uses: tasks.pin
+    inputs: {{ collection: $inputs.course }}
+    with: {{ split: train, holdout: {{ percent: {percent}, seed: {seed}, side: kept }} }}
+  - id: exam
+    uses: tasks.pin
+    inputs: {{ collection: $inputs.course }}
+    with: {{ split: train, holdout: {{ percent: {percent}, seed: {seed}, side: held }} }}
+  - id: local
+    uses: attempt.collect
+    inputs: {{ tasks: $stages.practice.tasks }}
+    with: {{ agent: sven, model: student, environment: environments/vim.yaml, seed: 11 }}
+  - id: exam-attempts
+    uses: attempt.collect
+    inputs: {{ tasks: $stages.exam.tasks }}
+    with: {{ agent: sven, model: student, environment: environments/vim.yaml, seed: 11 }}
+"
+    )
+}
+
+fn pinned(resolved: &splinter_factory::resolve::Resolved, stage: &str) -> Vec<String> {
+    resolved.collections[stage]
+        .collection
+        .tasks
+        .iter()
+        .map(|t| t.id.clone())
+        .collect()
+}
+
+#[test]
+fn a_pins_holdout_splits_the_tasks_by_id_into_complementary_sides() {
+    let repo = Repo::new();
+    more_tasks(&repo, 30);
+    let all: std::collections::BTreeSet<String> = resolved(&repo, RECIPE).collections["tasks"]
+        .collection
+        .tasks
+        .iter()
+        .map(|t| t.id.clone())
+        .collect();
+    assert_eq!(all.len(), 32);
+    // seed: any seed splits 32 tasks at 25% into two non-empty sides but for a negligible chance; one is enough.
+    let split = resolved(&repo, &sides(25, 7));
+    let (kept, held) = (pinned(&split, "practice"), pinned(&split, "exam"));
+    assert!(!kept.is_empty() && !held.is_empty(), "{kept:?} {held:?}");
+    assert!(
+        kept.iter().all(|t| !held.contains(t)),
+        "no task on both sides"
+    );
+    let union: std::collections::BTreeSet<String> = kept.iter().chain(&held).cloned().collect();
+    assert_eq!(union, all, "every task on one side");
+    // Each task's side is its own draw: adding tasks moves none of the others.
+    more_tasks(&repo, 40);
+    let grown = resolved(&repo, &sides(25, 7));
+    let regrown = pinned(&grown, "exam");
+    assert!(
+        held.iter().all(|t| regrown.contains(t)),
+        "{held:?} {regrown:?}"
+    );
+    assert!(pinned(&grown, "practice").iter().all(|t| !held.contains(t)));
+    // Another seed draws another side.
+    let other = resolved(&repo, &sides(25, 8));
+    assert_ne!(pinned(&other, "exam"), regrown);
+    // The run pins what the plan read.
+    let backend = FakeBackend::with(Outcome::Pass);
+    let dir = tempfile::tempdir().unwrap();
+    run(&grown, dir.path(), &backend, &FakeTrainer::default()).unwrap();
+    let ran: std::collections::BTreeSet<String> = backend
+        .executed()
+        .into_iter()
+        .filter(|s| s.slot.pass == "exam-attempts")
+        .map(|s| s.task.id)
+        .collect();
+    assert_eq!(ran, regrown.into_iter().collect());
+}
+
+#[test]
+fn a_holdout_that_keeps_every_task_or_none_is_refused() {
+    let repo = Repo::new();
+    for percent in [0, 100] {
+        let refused = splinter_factory::resolve::resolve(
+            &repo.root,
+            &sides(percent, 7),
+            crate::repo::connections(),
+        )
+        .err()
+        .map(|e| format!("{e:?}"))
+        .unwrap_or_default();
+        assert!(refused.contains("holdout"), "{percent}: {refused}");
+    }
+}

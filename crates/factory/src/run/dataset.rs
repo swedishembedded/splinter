@@ -48,7 +48,7 @@ mod selection;
 mod supervision;
 mod views;
 
-pub(crate) use super::holdout::held_out;
+pub(crate) use crate::holdout::held_out;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

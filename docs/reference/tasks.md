@@ -62,6 +62,21 @@ rest by a stable hash of the seed and each task's family, using the practice exa
 `--family-share F` picks that fraction of the families, `--per-family N` at most that many
 tasks of each. Naming the sets in another order changes nothing.
 
+A recipe's `tasks.pin` stage pins the tasks of a collection into a run: `split` keeps one split's
+tasks, and `holdout: { percent, seed, side }` keeps one side of a split of them by task id. A task is
+held out when a hash of the seed and its id falls under `percent` (1 to 99); `side: kept` pins the
+others, `side: held` the held-out ones. Each task's side is its own draw, so two pins with the same
+seed and percent take complementary sides whatever else the collection holds, and adding a task moves
+no other. This holds whole tasks out of training for an evaluation on unseen instances of the
+practised distribution:
+
+```yaml
+  - { id: practice, uses: tasks.pin, inputs: { collection: $stages.authored.tasks },
+      with: { split: train, holdout: { percent: 10, seed: 41, side: kept } } }
+  - { id: unseen, uses: tasks.pin, inputs: { collection: $stages.authored.tasks },
+      with: { split: train, holdout: { percent: 10, seed: 41, side: held } } }
+```
+
 ## Combining faults
 
 `tasks combine TASKSET-ID --faults K --per-family N` makes harder tasks of the admitted

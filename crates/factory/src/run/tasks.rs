@@ -69,14 +69,11 @@ pub(crate) fn produced_collection(
     loaded
         .collection
         .tasks
-        .retain(|t| params.split.is_none() || t.split == params.split);
+        .retain(|t| params.selects(&t.id, t.split.as_deref()));
     if loaded.collection.tasks.is_empty() {
         return Err(stage_error(
             &stage.key,
-            format!(
-                "{source} produced no task of split {}",
-                params.split.as_deref().unwrap_or("(any)")
-            ),
+            format!("{source} produced no task of {}", params.selection()),
         ));
     }
     Ok(loaded)

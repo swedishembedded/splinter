@@ -67,6 +67,66 @@ pub struct PinParams {
     /// Only the tasks of this split.
     #[serde(default)]
     pub split: Option<String>,
+    /// Only one side of a split of the tasks by id: whole tasks held out, for
+    /// an evaluation on tasks no training stage sees.
+    #[serde(default)]
+    pub holdout: Option<PinHoldout>,
+}
+
+/// A split of a collection's tasks by id. Each task's side is a hash of the
+/// seed and its id, so a pin of the `kept` side and a pin of the `held` side
+/// with the same seed and percent take complementary sets, and adding a task
+/// moves no other.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PinHoldout {
+    /// The share of tasks held out, in percent (1 to 99).
+    pub percent: u32,
+    /// The seed of the draw.
+    pub seed: u64,
+    /// The side the pin takes.
+    pub side: HoldoutSide,
+}
+
+/// The side of a holdout a pin takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum HoldoutSide {
+    /// The tasks not held out.
+    Kept,
+    /// The tasks held out.
+    Held,
+}
+
+impl PinParams {
+    /// Whether the pin takes the task `id` of split `split`.
+    #[must_use]
+    pub fn selects(&self, id: &str, split: Option<&str>) -> bool {
+        let in_split = self.split.is_none() || self.split.as_deref() == split;
+        in_split
+            && self.holdout.as_ref().is_none_or(|h| {
+                let held = crate::holdout::held_out_by_id(h.seed, id, h.percent);
+                held == (h.side == HoldoutSide::Held)
+            })
+    }
+
+    /// What the pin takes, for a person: its split and its side of a holdout.
+    #[must_use]
+    pub fn selection(&self) -> String {
+        let split = self.split.as_deref().unwrap_or("(any)");
+        match &self.holdout {
+            None => format!("split {split}"),
+            Some(h) => format!(
+                "split {split}, {} side of a {}% holdout (seed {})",
+                match h.side {
+                    HoldoutSide::Kept => "kept",
+                    HoldoutSide::Held => "held",
+                },
+                h.percent,
+                h.seed
+            ),
+        }
+    }
 }
 
 /// What a hinted pass shows the model beside the task.

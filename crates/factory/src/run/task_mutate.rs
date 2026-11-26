@@ -45,8 +45,8 @@ use splinter_store::factory::products::Staging;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
-use super::holdout::held_out;
 use super::{io, stage_error, write_json, Factory, RunError};
+use crate::holdout::held_out;
 use crate::ops::MutateParams;
 use crate::plan::PlannedStage;
 

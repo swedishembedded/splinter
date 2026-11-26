@@ -6,11 +6,13 @@
 // expertise in evaluation design for learning systems, you can procure our
 // services by sending an email to info@swedishembedded.com.
 
-//! Which groups (tasks, families, documents) a split holds out.
+//! Which groups (tasks, families, documents) a split holds out: a share of a
+//! set drawn by rank ([`held_out`]), or each item by its own draw
+//! ([`held_out_by_id`]), which no other item changes.
 
 use std::collections::BTreeSet;
 
-use splinter_core::digest::digest_of;
+use splinter_core::digest::{digest_of, Digest};
 
 /// The groups held out: `percent` of them, drawn by `seed`, never all.
 pub(crate) fn held_out(groups: &BTreeSet<String>, percent: u32, seed: u64) -> BTreeSet<String> {
@@ -27,6 +29,16 @@ pub(crate) fn held_out(groups: &BTreeSet<String>, percent: u32, seed: u64) -> BT
         .take(wanted)
         .map(|(_, g)| g.clone())
         .collect()
+}
+
+/// Whether `item` is held out at `percent` by its own draw, a hash of
+/// `seed` and `item`: the same seed and percent put an item on the same side
+/// whatever else is drawn beside it, so two stages that name them take
+/// complementary sides of one split.
+pub(crate) fn held_out_by_id(seed: u64, item: &str, percent: u32) -> bool {
+    let digest = Digest::of(format!("{seed}\0{item}").as_bytes());
+    let draw = u64::from_str_radix(&digest.hex()[..16], 16).unwrap_or(0);
+    draw % 100 < u64::from(percent)
 }
 
 #[cfg(test)]

@@ -422,6 +422,17 @@ fn check(
             let Ok(params) = stage.params::<PinParams>() else {
                 return;
             };
+            if let Some(holdout) = &params.holdout {
+                if !(1..=99).contains(&holdout.percent) {
+                    problem(
+                        reader,
+                        &format!(
+                            "a holdout of {} percent keeps every task on one side; name 1 to 99",
+                            holdout.percent
+                        ),
+                    );
+                }
+            }
             // A collection a stage produces is read when the pin runs.
             let Some(input) = stage.input("collection") else {
                 return;
@@ -435,14 +446,11 @@ fn check(
             loaded
                 .collection
                 .tasks
-                .retain(|t| params.split.is_none() || t.split == params.split);
+                .retain(|t| params.selects(&t.id, t.split.as_deref()));
             if loaded.collection.tasks.is_empty() {
                 problem(
                     reader,
-                    &format!(
-                        "{path} has no task of split {}",
-                        params.split.as_deref().unwrap_or("(any)")
-                    ),
+                    &format!("{path} has no task of {}", params.selection()),
                 );
             }
             found.collections.insert(stage.key.clone(), loaded);
