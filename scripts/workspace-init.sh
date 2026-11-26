@@ -134,7 +134,11 @@ freeze splinter "$splinter_full" splinter
 if [ ! -x "$dir/venv/bin/splinter-harbor-worker" ] || [ "$(cat "$dir/venv/.worker-commit" 2>/dev/null)" != "$splinter_full" ]; then
   say "installing the Harbor worker"
   [ -x "$dir/venv/bin/pip" ] || python3 -m venv "$dir/venv"
-  "$dir/venv/bin/pip" install --quiet --force-reinstall --no-deps "$(snapshot splinter "$splinter_full")/workers/harbor" \
+  worker="$(snapshot splinter "$splinter_full")/workers/harbor"
+  # Its dependencies first (a fresh environment has none of them), then the worker itself again from this commit, which
+  # pip would otherwise keep when the version number did not change.
+  "$dir/venv/bin/pip" install --quiet "$worker" \
+    && "$dir/venv/bin/pip" install --quiet --force-reinstall --no-deps "$worker" \
     || die "the Harbor worker did not install (network?)"
   printf '%s\n' "$splinter_full" >"$dir/venv/.worker-commit"
 fi
