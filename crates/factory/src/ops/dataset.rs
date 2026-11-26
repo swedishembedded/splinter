@@ -167,6 +167,26 @@ pub enum Prefer {
     Random,
 }
 
+/// A negative control an SFT dataset is built as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Control {
+    /// Each record's task request (its first user message) is the request of
+    /// another admitted task, by a derangement of the tasks drawn by the
+    /// stage's seed; everything else is the record's own.
+    ShuffledRequests,
+}
+
+impl Control {
+    /// The name a recipe and the manifest give it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ShuffledRequests => "shuffled-requests",
+        }
+    }
+}
+
 /// `dataset.project`: training records projected from attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -209,6 +229,9 @@ pub struct ProjectParams {
     /// `random`.
     #[serde(default)]
     pub prefer: Option<Prefer>,
+    /// Build the SFT dataset as a negative control (`shuffled-requests`).
+    #[serde(default)]
+    pub control: Option<Control>,
     /// The seed of the split and of every draw the projection makes.
     pub seed: u64,
 }

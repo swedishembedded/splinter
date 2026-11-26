@@ -288,3 +288,145 @@ fn a_preference_without_a_per_task_limit_is_refused() {
         assert!(refused.contains("per_task"), "{with}: {refused}");
     }
 }
+
+/// `repo` with two more training tasks, four in all.
+fn four_tasks(repo: &Repo) {
+    for id in ["train/003-third", "train/004-fourth"] {
+        repo.write(
+            &format!("tasks/vim/{id}/task.toml"),
+            &format!("[task]\nname = \"org/{id}\"\n[metadata]\nbench_family = \"course\"\n"),
+        );
+        repo.write(
+            &format!("tasks/vim/{id}/instruction.md"),
+            &format!("Do {id}.\n"),
+        );
+        repo.write(&format!("tasks/vim/{id}/tests/test.sh"), "exit 0\n");
+    }
+}
+
+/// The first user message of each record, by its trial's pass and slot.
+fn requests(path: &std::path::Path) -> std::collections::BTreeMap<String, (String, Value)> {
+    lines(path)
+        .into_iter()
+        .map(|r| {
+            let trial = &r["metadata"]["trial"];
+            let key = format!("{}#{}", trial["pass"], trial["slot"]);
+            let task = r["metadata"]["group"].as_str().unwrap().to_owned();
+            (key, (task, r))
+        })
+        .collect()
+}
+
+fn first_user(record: &Value) -> String {
+    record["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "user")
+        .unwrap()["content"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[test]
+fn a_shuffled_request_control_gives_each_record_another_tasks_request_and_nothing_else() {
+    let repo = Repo::new();
+    four_tasks(&repo);
+    let backend = FakeBackend {
+        echo_instruction: true,
+        ..FakeBackend::with(Outcome::Pass)
+    };
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, &twice(&with_arm("control: shuffled-requests"))),
+        dir.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let own = requests(&dir.path().join("sft/train.jsonl"));
+    let shuffled = requests(&dir.path().join("arm/train.jsonl"));
+    assert_eq!(own.len(), 8);
+    assert_eq!(
+        own.keys().collect::<Vec<_>>(),
+        shuffled.keys().collect::<Vec<_>>()
+    );
+    // Each task's own request: its instruction as the agent was sent it.
+    let mut request_of: std::collections::BTreeMap<String, String> = Default::default();
+    for (task, record) in own.values() {
+        let request = first_user(record);
+        assert!(request.starts_with(&format!("Do {task}.")), "{request}");
+        assert_eq!(
+            request_of.entry(task.clone()).or_insert(request.clone()),
+            &request
+        );
+    }
+    let mut given: std::collections::BTreeMap<String, String> = Default::default();
+    for (key, (task, record)) in &shuffled {
+        let (own_task, own_record) = &own[key];
+        assert_eq!(task, own_task, "a record keeps its own task");
+        let request = first_user(record);
+        assert_ne!(request, request_of[task], "{key} kept its own request");
+        let donor = request_of
+            .iter()
+            .find(|(_, r)| **r == request)
+            .map(|(t, _)| t.clone())
+            .expect("another admitted task's request");
+        // Every record of a task is given the same other task's request.
+        assert_eq!(given.entry(task.clone()).or_insert(donor.clone()), &donor);
+        // Everything but the request is the record's own.
+        let mut restored = record.clone();
+        for m in restored["messages"].as_array_mut().unwrap() {
+            if m["role"] == "user" {
+                m["content"] = Value::String(request_of[task].clone());
+                break;
+            }
+        }
+        assert_eq!(&restored, own_record);
+    }
+    assert_eq!(given.len(), 4, "every task is given another's request");
+    let supervision = lines(&dir.path().join("arm/supervision.jsonl"));
+    assert!(supervision
+        .iter()
+        .all(|l| given[l["task"].as_str().unwrap()] == l["request_of"].as_str().unwrap()));
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("arm/dataset.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest["control"], "shuffled-requests");
+    let plain: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("sft/dataset.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(plain.get("control").is_none());
+}
+
+#[test]
+fn a_shuffled_request_control_needs_two_tasks() {
+    let repo = Repo::new();
+    let backend = FakeBackend::with(Outcome::Pass);
+    backend.script("train/002-second", &[Outcome::Fail]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    let failed = run(
+        &resolved(&repo, &with_arm("control: shuffled-requests")),
+        dir.path(),
+        &backend,
+        &trainer,
+    )
+    .err()
+    .map(|e| e.to_string())
+    .unwrap_or_default();
+    assert!(failed.contains("two tasks"), "{failed}");
+    let refused = splinter_factory::resolve::resolve(
+        &repo.root,
+        &with_arm("objective: preference, control: shuffled-requests"),
+        crate::repo::connections(),
+    )
+    .err()
+    .map(|e| format!("{e:?}"))
+    .unwrap_or_default();
+    assert!(refused.contains("control"), "{refused}");
+}

@@ -279,6 +279,7 @@ pub(crate) fn produce(
         waterfall,
         exclusions: exclusions.clone(),
         thinking: false,
+        control: None,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let mut report = format!(

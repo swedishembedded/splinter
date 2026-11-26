@@ -56,7 +56,7 @@ use crate::registry::{OperationSpec, Registry};
 
 mod dataset;
 pub use dataset::{
-    DocumentSplit, ExtendDatasetParams, ImportDatasetParams, Prefer, PreferenceOptions,
+    Control, DocumentSplit, ExtendDatasetParams, ImportDatasetParams, Prefer, PreferenceOptions,
     ProjectParams, RewardOptions, Supervise, TextDatasetParams, ValidationSplit, OBJECTIVES,
 };
 

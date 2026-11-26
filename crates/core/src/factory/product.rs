@@ -179,6 +179,11 @@ pub struct DatasetProduct {
     /// for.
     #[serde(default)]
     pub thinking: bool,
+    /// The negative control the dataset was built as (`shuffled-requests`:
+    /// each record's task request is another task's); absent for a dataset
+    /// that is no control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<String>,
 }
 
 /// The form a trained model takes.

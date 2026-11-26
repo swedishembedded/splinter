@@ -476,6 +476,8 @@ pub(crate) fn produce(
         waterfall,
         exclusions: exclusions.clone(),
         thinking: base.thinking,
+        // Records added to a control's leave it a control.
+        control: base.control.clone(),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let new_tasks: Vec<&String> = train_tasks

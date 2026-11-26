@@ -53,6 +53,15 @@ using them is [Build datasets and train a candidate](../guides/training.md).
   actions it took. `prefer: fewest-actions` (the default) keeps the trials that took the fewest actions, ties drawn
   by the seed; `prefer: random` draws them by the seed. A trial's draw depends only on the seed and the trial, so
   the same seed keeps the same trials. `prefer` without `per_task`, and `per_task: 0`, are refused.
+- `control: shuffled-requests`: an `sft` dataset's only, a negative control. Each record's task request (its
+  first user message: the task's instruction with its starting files) is replaced by the request of another
+  admitted task, by a derangement of the tasks drawn by the seed: no record keeps its own task's request, every
+  record of one task gets the same other task's, and everything else (the system prompt, every action and result,
+  the supervision, the task the record is grouped and split by) is the record's own. It needs at least two tasks.
+  The manifest says `control: shuffled-requests` and `supervision.jsonl` names the task each record's request is
+  from (`request_of`). A dataset made this way keeps the tool-use format and the actions but not the mapping from
+  a request to the actions that answer it, so a model that gains as much from it as from the real records gained
+  from the format, not from the content.
 
 A stage that projects a non-`sft` dataset is refused when a source attempt stage is hinted, continued or runs
 a harness: such a dataset is projected only from attempts made as the target will be asked.

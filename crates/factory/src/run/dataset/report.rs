@@ -30,6 +30,8 @@ pub(super) struct Report<'a> {
     /// Under `supervise: productive`, the actions kept as context because
     /// every call they made failed; `None` when every action is supervised.
     pub(super) failed_masked: Option<u64>,
+    /// The negative control the dataset was built as, if any.
+    pub(super) control: Option<&'static str>,
 }
 
 impl Report<'_> {
@@ -57,6 +59,11 @@ impl Report<'_> {
             self.per_task.len(),
             self.tasks
         ));
+        if let Some(control) = self.control {
+            out.push_str(&format!(
+                "\nA negative control ({control}): each record's task request is another admitted task's.\n"
+            ));
+        }
         if let Some(masked) = self.failed_masked {
             out.push_str(&format!(
                 "\n{masked} {} whose every call failed kept as context, unsupervised (supervise: productive).\n",

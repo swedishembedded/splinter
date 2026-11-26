@@ -542,6 +542,7 @@ pub(super) fn produce(
         waterfall: waterfall.clone(),
         exclusions: exclusions.clone(),
         thinking: dataset.thinking,
+        control: None,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let mut report = format!(

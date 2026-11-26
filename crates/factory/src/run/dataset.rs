@@ -41,6 +41,7 @@
 //! supervised messages), `dataset.json` (the [`DatasetProduct`]) and
 //! `report.md`.
 
+mod control;
 mod report;
 mod selection;
 mod supervision;
@@ -64,8 +65,8 @@ use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{
-    AttemptParams, Hint, Prefer, PreferenceOptions, ProjectParams, RewardOptions, Supervise,
-    ValidationSplit,
+    AttemptParams, Control, Hint, Prefer, PreferenceOptions, ProjectParams, RewardOptions,
+    Supervise, ValidationSplit,
 };
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -133,6 +134,7 @@ struct Dataset {
     supervise: Supervise,
     /// The most trials kept per task, and which.
     per_task: Option<(usize, Prefer)>,
+    control: Option<Control>,
     seed: u64,
 }
 
@@ -191,6 +193,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         per_task: params
             .per_task
             .map(|limit| (limit, params.prefer.unwrap_or_default())),
+        control: params.control,
         seed: params.seed,
     })
 }
@@ -254,6 +257,9 @@ pub(crate) fn identity(
     if let Some((limit, prefer)) = dataset.per_task {
         parameters["per_task"] = json!(limit);
         parameters["prefer"] = json!(prefer);
+    }
+    if let Some(control) = dataset.control {
+        parameters["control"] = json!(control);
     }
     Ok(super::identity_of(
         &stage.versioned_operation(),
@@ -564,6 +570,15 @@ pub(crate) fn produce(
             format!("no trial of {raw} became a record; excluded: {reasons:?} {first}"),
         ));
     }
+    // A record of the control keeps its own task (and so its side of the
+    // split); only its request is another task's.
+    let request_of = match dataset.control {
+        Some(Control::ShuffledRequests) => Some(
+            control::shuffle_requests(&mut projected, dataset.seed)
+                .map_err(|e| stage_error(&stage.key, e))?,
+        ),
+        None => None,
+    };
     let group_of = |trial: &TrialResult| group_of(factory, &dataset, &trial.task);
     let groups: BTreeSet<String> = projected.iter().map(|a| group_of(&a.trial)).collect();
     let held = dataset
@@ -577,14 +592,17 @@ pub(crate) fn produce(
     let mut composition: BTreeMap<String, u64> = BTreeMap::new();
     let mut per_task: BTreeMap<String, u64> = BTreeMap::new();
     let mut supervised_actions = 0u64;
-    for Admitted {
-        source,
-        trial,
-        record,
-        actions,
-        tools,
-        ..
-    } in &projected
+    for (
+        at,
+        Admitted {
+            source,
+            trial,
+            record,
+            actions,
+            tools,
+            ..
+        },
+    ) in projected.iter().enumerate()
     {
         let split = if held.contains(&group_of(trial)) {
             "validation"
@@ -609,11 +627,15 @@ pub(crate) fn produce(
                 .collect(),
             _ => Vec::new(),
         };
-        supervision.push(json!({
+        let mut line = json!({
             "split": split, "line": index, "pass": source, "slot": trial.slot.to_string(), "task": trial.task,
             "trace": trial.trace.as_ref().map(|t| &t.path), "supervised_messages": supervised,
             "withheld": withheld(factory, source),
-        }));
+        });
+        if let Some(request_of) = &request_of {
+            line["request_of"] = json!(request_of[at]);
+        }
+        supervision.push(line);
         let agent = format!(
             "{}{} {}",
             if trial.guided { "guided " } else { "" },
@@ -713,6 +735,7 @@ pub(crate) fn produce(
         waterfall: waterfall.clone(),
         exclusions: exclusions.clone(),
         thinking: dataset.thinking,
+        control: dataset.control.map(|c| c.name().to_owned()),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let report = report::Report {
@@ -729,6 +752,7 @@ pub(crate) fn produce(
         per_task: &per_task,
         tasks: tasks_offered(factory, &dataset.sources),
         failed_masked: (dataset.supervise == Supervise::Productive).then_some(failed_masked),
+        control: dataset.control.map(Control::name),
     };
     std::fs::write(staging.path().join("report.md"), report.render()).map_err(io(staging.path()))
 }
