@@ -24,7 +24,8 @@ archive named by the digest of the base and those steps, and the rest as a small
 dataset of thousands of tasks then holds one copy of the installed tools and a few kilobytes per task, and builds the
 installation once, not once per task.
 
-A sandbox unpacks the archive into its own tmpfs (``sandbox/userns_keeper.py``). The name carries the
+A sandbox's keeper unpacks the archives (``sandbox/userns_keeper.py``): the shared one once per node, the task's
+layer into the sandbox's own overlay over it. The name carries the
 build context's digest (``images._context_digest``: the Dockerfile and every file beside it), so an unchanged context
 is built once and a context with any changed file is built again; a concurrent build of the same name waits for the
 first under a lock.

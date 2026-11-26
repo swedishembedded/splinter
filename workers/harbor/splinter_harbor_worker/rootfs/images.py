@@ -18,8 +18,10 @@ the archives to unpack, in order, into an empty tree, its environment and its wo
   (``platform_fallback="dockerfile"``): the result is the same recipe on another architecture, not the pinned image,
   and its provenance says so and why.
 
-The cache holds only archives (``blobs/``, ``images/``): an unpacked image is tens of thousands of files, which a disk
-with an inode quota cannot hold per image. The tree exists only in the memory of the sandbox that unpacks it.
+The cache holds archives (``blobs/``, ``images/``): an unpacked image is tens of thousands of files, which a disk
+with an inode quota cannot hold per image. Where the cache is on a local disk, the sandboxes add one unpacked tree per
+distinct set of shared layers under ``unpacked/`` (``sandbox/userns_keeper.py``); elsewhere each sandbox unpacks its
+own copy.
 """
 
 from __future__ import annotations

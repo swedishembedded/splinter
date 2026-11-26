@@ -13,8 +13,13 @@ For hosts without a container daemon that allow unprivileged user namespaces. Th
 pulled, or its Dockerfile built once, into that cache as archives.
 
 Each sandbox has a keeper (``userns_keeper.py``) holding a private, writable copy of the image in its own user,
-mount and PID namespaces: a directory of the sandbox on the local disk its trial directory is on, removed when the
-sandbox stops, or a tmpfs when that directory is on a network filesystem (``copy_in_memory``); every exec enters them (``nsenter``) and builds its own mount namespace with
+mount and PID namespaces (``copy_placement``): on the local disk its trial directory is on, an overlay over the
+image's shared layers unpacked once per node into ``<images>/unpacked`` (one tree per distinct set of shared layers,
+kept for reuse and never evicted while the worker runs: a tree in use cannot be told from one that is not, so clear
+it between runs if the disk needs the room), with only the task's own layer and the sandbox's writes in the sandbox's
+directory, removed when the sandbox stops; with every layer unpacked into that directory when the overlay cannot be
+had (the reason is logged and recorded in the trial's image record); or a tmpfs when the trial directory is on a
+network filesystem. Every exec enters those namespaces (``nsenter``) and builds its own mount namespace with
 ``userns_launch.py``, which binds the trial's writable state, pivots into the tree and drops every capability before the
 command runs. /logs/{agent,verifier,artifacts} are the trial's own directories, bind-mounted, so nothing needs
 downloading. /tests and /solution are filled by Harbor's uploads.
@@ -74,17 +79,18 @@ _HOST_CERTIFICATES = "/etc/ssl/certs"
 _OUTPUT_GRACE_SEC = 10
 # The storage of an image sandbox when the task states none (Harbor's own default task size).
 _DEFAULT_STORAGE_MB = 10240
+# A sandbox's image copy (mounted there in its keeper's namespace) and its overlay's upper and work directories, in
+# the sandbox's directory; the image's shared layers unpacked once per node, in the image cache.
+_IMAGE, _OVERLAY, _UNPACKED = "image", "overlay", "unpacked"
 # Filesystems an unpacked image is not kept on: a lower layer there is refused by overlayfs, every one of an image's
 # files costs a metadata round trip, and their inode quotas cannot hold unpacked trees. A copy there is held in memory.
 _NETWORK_FILESYSTEMS = frozenset({"lustre", "nfs", "nfs4", "cifs", "smb3", "gpfs", "beegfs", "ceph", "glusterfs",
                                   "9p", "virtiofs"})
 
 
-def copy_in_memory(path: Path, mountinfo: str | None = None) -> bool:
-    """Whether a sandbox's image copy at ``path`` is held in a tmpfs rather than as a directory on disk: only when the
-    filesystem ``path`` is on (the mount whose point is its longest leading run of whole components, from
-    ``/proc/self/mountinfo`` unless given) is a network filesystem. A local disk holds every concurrent sandbox's copy
-    where memory cannot: hundreds of copies of a few hundred megabytes each exhausted a node's memory limit."""
+def on_network_filesystem(path: Path, mountinfo: str | None = None) -> bool:
+    """Whether ``path`` is on a network filesystem: the mount whose point is its longest leading run of whole
+    components, from ``/proc/self/mountinfo`` unless given."""
     if mountinfo is None:
         mountinfo = Path("/proc/self/mountinfo").read_text()
     parts = Path(os.path.abspath(path)).parts
@@ -100,6 +106,28 @@ def copy_in_memory(path: Path, mountinfo: str | None = None) -> bool:
     return fstype in _NETWORK_FILESYSTEMS or fstype.startswith("fuse.")
 
 
+def copy_placement(image_root: Path, images: Path, mountinfo: str | None = None) -> dict:
+    """How the keeper builds a sandbox's copy at ``image_root`` (``userns_keeper.py``): in memory only when
+    ``image_root`` is on a network filesystem (hundreds of copies of a few hundred megabytes each in memory exhausted a
+    node's memory limit while its local disk had room for all of them); else on that disk, as an overlay over the
+    image's shared layers unpacked once per node under ``<images>/unpacked`` when the image cache is on a local disk
+    too, or with every layer unpacked, and why, when it is not."""
+    if on_network_filesystem(image_root, mountinfo):
+        return {"in_memory": True, "lower_cache": None, "disk_reason": None}
+    cache = images / _UNPACKED
+    if on_network_filesystem(cache, mountinfo):
+        return {"in_memory": False, "lower_cache": None,
+                "disk_reason": f"the image cache {images} is on a network filesystem, which cannot hold a shared tree"}
+    return {"in_memory": False, "lower_cache": str(cache), "disk_reason": None}
+
+
+def remove_image_copy(sandbox: Path) -> None:
+    """Remove what a sandbox's image copy left on disk (its tree, or its overlay's upper and work directories); the
+    shared tree under the image cache stays for the next sandbox."""
+    for name in (_IMAGE, _OVERLAY):
+        remove_tree(sandbox / name)
+
+
 def remove_tree(path: Path) -> None:
     """Remove a sandbox's image copy on disk, including directories the image or its commands left without write
     permission (the namespace's root owns them as this user on the host, so permissions are only restored, never
@@ -110,7 +138,10 @@ def remove_tree(path: Path) -> None:
         for target in (parent, failed):
             with contextlib.suppress(OSError):
                 os.chmod(target, os.lstat(target).st_mode | stat.S_IRWXU, follow_symlinks=False)
-        function(failed)
+        if function is os.open:
+            remove_tree(Path(failed))  # a directory it could not enter (an overlay's work/work is mode 000): now it can
+        else:
+            function(failed)
 
     if os.path.lexists(path):
         shutil.rmtree(path, onexc=writable)
@@ -377,7 +408,7 @@ class UserNamespaceEnvironment(BaseEnvironment):
     @property
     def _image_root(self) -> Path:
         """Where the keeper mounts the image's private copy (empty on the host: it exists in the keeper's namespace)."""
-        return self._sandbox / "image"
+        return self._sandbox / _IMAGE
 
     @property
     def _tools_dir(self) -> Path:
@@ -452,12 +483,10 @@ class UserNamespaceEnvironment(BaseEnvironment):
             name=self.environment_name, platform_fallback=self._platform_fallback,
             client=RegistryClient(self._images, mirror=self._registry_mirror),
             log=lambda message: self.logger.info(message))
-        record = self.trial_paths.trial_dir / f"image-{self.session_id}.json"
-        record.write_text(json.dumps({**self._pulled.provenance, "workdir": self._pulled.workdir}, indent=2,
-                                     sort_keys=True) + "\n")
+        self._write_image_record(None)
         self._image_root.mkdir(parents=True, exist_ok=True)
-        self._copy_in_memory = copy_in_memory(self._image_root)
-        self.logger.info(f"userns: image copy {'in memory' if self._copy_in_memory else 'on disk'} at {self._image_root}")
+        placement = copy_placement(self._image_root, self._images)
+        self._copy_in_memory = placement["in_memory"]
         size_mb = self.task_env_config.storage_mb or _DEFAULT_STORAGE_MB
         self._keeper = await asyncio.create_subprocess_exec(
             "unshare", "--user", "--map-root-user", "--mount", "--pid", "--fork", "--kill-child", "--",
@@ -466,20 +495,33 @@ class UserNamespaceEnvironment(BaseEnvironment):
             start_new_session=True, env=_LAUNCHER_ENV)
         shim = await asyncio.to_thread(ensure_shim, self._images)
         spec = {"mountpoint": str(self._image_root), "layers": [str(layer) for layer in self._pulled.layers],
-                "size_mb": size_mb, "preload": str(shim), "in_memory": self._copy_in_memory}
+                "size_mb": size_mb, "preload": str(shim), "overlay": str(self._sandbox / _OVERLAY), **placement}
         self._keeper.stdin.write(json.dumps(spec).encode() + b"\n")
         await self._keeper.stdin.drain()
-        line = await self._keeper.stdout.readline()
-        if line.strip() != b"ready":
+        word, _, report = (await self._keeper.stdout.readline()).decode(errors="replace").strip().partition(" ")
+        if word != "ready":
             error = (await self._keeper.stderr.read()).decode(errors="replace").strip()
             await self._stop_keeper()
             raise RuntimeError(f"userns environment: the image copy did not start: {error[-2000:]}")
+        copy = json.loads(report)
+        if copy["mode"] == "disk":
+            self.logger.warning(f"userns: every layer of the image unpacked at {self._image_root}: {copy['reason']}")
+        else:
+            self.logger.info(f"userns: image copy at {self._image_root}: {copy}")
+        self._write_image_record(copy)
         # `unshare --fork` stays outside the PID namespace; its one child is the keeper.
         children = Path(f"/proc/{self._keeper.pid}/task/{self._keeper.pid}/children").read_text().split()
         if len(children) != 1:
             await self._stop_keeper()
             raise RuntimeError(f"userns environment: cannot find the image keeper under {self._keeper.pid}")
         self._keeper_pid = int(children[0])
+
+    def _write_image_record(self, copy: dict | None) -> None:
+        """The trial's record of its image: provenance and working directory, and once the keeper is ready how the
+        sandbox's copy was made (``userns_keeper.py``: overlay, disk with the reason, or memory)."""
+        record = {**self._pulled.provenance, "workdir": self._pulled.workdir, **({"copy": copy} if copy else {})}
+        path = self.trial_paths.trial_dir / f"image-{self.session_id}.json"
+        path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
 
     async def _stop_keeper(self) -> None:
         keeper, self._keeper, self._keeper_pid = self._keeper, None, None
@@ -496,9 +538,9 @@ class UserNamespaceEnvironment(BaseEnvironment):
 
 
     async def stop(self, delete: bool) -> None:
-        await self._stop_keeper()  # a copy in memory is freed with the keeper's namespace
+        await self._stop_keeper()  # a copy in memory, and the overlay mount, end with the keeper's namespace
         if not self._copy_in_memory:
-            await asyncio.to_thread(remove_tree, self._image_root)  # a copy on disk goes with the sandbox too
+            await asyncio.to_thread(remove_image_copy, self._sandbox)  # what it left on disk goes with the sandbox
         if delete:
             shutil.rmtree(self._sandbox, ignore_errors=True)
 
