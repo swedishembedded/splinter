@@ -67,12 +67,32 @@ interpretable either.
 | Date | Change | Why |
 |---|---|---|
 | 2026-11-26 | arm G (backward-authored material) added, primary family grows to four comparisons | the user proposed outcome-first authoring while the material run was in progress; added before any arm trained |
+| 2026-11-26 | the source is Vim 9.1's own `usr_*.txt` (the text of the manual), not an OCR of its PDF | the OCR'd copy was lost with a node; the text form is what the task image's Vim ships |
+| 2026-11-26 | the material run was forked once (`material2`) after a node ran out of memory and the serving fleet hung; its committed stages (authoring, review, tasks, oracle) were reused, its student and teacher attempts collected again from the start | the interrupted attempts could not be resumed by the build that fixed the defects; no attempt of the first run is used |
+| 2026-11-26 | servers run `--speculative off` | 7 of 16 servers hung on a device kernel under `auto`; speculative decoding leaves the sampled distribution unchanged |
+| 2026-11-26 | each arm-seed trains on one card and evaluates through its node's four cards, 64 attempts at once | a router does not route training jobs; 64 is a card's slots |
 
 ## Status
 
 - 2026-11-26 14:50: material run started on 16 GH200 (4 nodes, one brain per card behind one router).
 - Arms options (curation, per-task limit, shuffled control, holdout, composition report) being built in splinter; the backward pipeline in bench.
-- Calibration (selects nothing): the base 4B passed 0 of 1012 counted exam attempts (12 per exam, partial run).
+- Calibration (selects nothing): the base 4B passed 0 of 1012 counted exam attempts (12 per exam, partial run); the
+  27B teacher solved 94 of 100 exams within 4 attempts, pass@1 0.63.
+- Material (`material2`): 1030 forward tasks (66% need one or two commands); student 8204 counted attempts, pass rate
+  0.100, 231 tasks solved; teacher 4095, 0.811, 944 solved. Arm B's dataset: 3739 verified trials of 857 tasks (the
+  T1 hold-out excluded), 3411 distinct action sequences.
+- Backward material (`backward2`): 705 outcome-first proposals, 562 reached by the teacher, 467 final tasks; student
+  3688 attempts, pass rate 0.031, 36 solved; teacher 1868, 0.722, 410 solved: harder than the forward tasks and
+  nearer the exams (teacher 0.63, student 0.00).
+- 2026-11-26 21:00: all 15 arm-seeds (B, C, D, F, G x 3) training, one card each.
+- Defects found and fixed on the way (each with its own commit and knowledge entry): sandbox images held in tmpfs
+  exhausted a node's memory (splinter 851216e17, k225); the worker's reconcile failed resumes (5fb824d6b); on-disk
+  sandbox copies took 436 s to start (shared lower tree plus overlay, 9841886df, k227); attempts lost to interruptions
+  spent retries (cc5581333); the gateway's connection pool, Harbor's job lock and a per-command lookup took about 50
+  of 70 s per trial (9415eb39b, 2b62ff444, de1149b0a, 418046bd7, k228); brain's router stranded requests behind hung
+  upstreams (ae72fc212), packed one model on few cards (b726c045b), opened the GPUs (da6ce90cc); Qwen3 plans withdrew
+  a model instead of fitting the free memory (f74314255); a CUDA lane can hang with /health reporting ok (brain k602,
+  watchdog open).
 
 ## Transfer experiment support (2026-11-26)
 
