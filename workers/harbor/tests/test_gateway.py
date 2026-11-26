@@ -146,3 +146,16 @@ def test_a_connections_dropped_headers_never_reach_its_upstream(tmp_path, stub_m
     kept, dropped = stub_model.posts()
     assert kept.headers["anthropic-beta"] == "some-beta"
     assert "anthropic-beta" not in dropped.headers and dropped.headers["anthropic-version"] == "2023-06-01"
+
+
+def test_a_jobs_trials_are_spread_over_several_upstream_pools_each_trial_on_one(tmp_path) -> None:
+    """One connection pool for every trial of a job was the gateway's bottleneck: the pool's bookkeeping scans every
+    connection it holds for each request it starts and ends, so 256 concurrent streams through one pool ran at a ninth
+    of the rate of the same streams sent to the upstream directly. A trial keeps one pool, so its conversation reuses
+    its keep-alive connection."""
+    gateway = ModelGateway(secret="test-secret")
+    trials = [f"trial-{n}" for n in range(512)]
+    pools = {trial: gateway._client_for(trial) for trial in trials}
+    assert all(gateway._client_for(trial) is pools[trial] for trial in trials)
+    sizes = sorted(sum(1 for pool in pools.values() if pool is shared) for shared in set(pools.values()))
+    assert len(sizes) > 1 and sizes[-1] <= 4 * len(trials) // len(sizes), sizes

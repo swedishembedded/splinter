@@ -37,6 +37,7 @@ import logging
 import secrets
 import threading
 import time
+import zlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +53,10 @@ from splinter_harbor_worker.spec import FORWARDED_HEADERS
 # Generation can legitimately stay silent for minutes on a slow local model; connecting cannot.
 _UPSTREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=None)
 _UPSTREAM_LIMITS = httpx.Limits(max_connections=None, max_keepalive_connections=256, keepalive_expiry=30.0)
+# The trials' requests are spread over this many connection pools, each trial always on the same one. A pool's
+# bookkeeping scans every connection it holds, for each idle one, whenever a request starts or ends (httpcore 1.0), so
+# one pool for a whole job grows quadratically with the trials running at once.
+_UPSTREAM_POOLS = 64
 _MODELS_TIMEOUT = httpx.Timeout(10.0)
 # How often a request waiting on its upstream checks whether the agent left.
 _DISCONNECT_POLL_SECONDS = 1.0
@@ -100,7 +105,9 @@ class ModelGateway:
     def __init__(self, secret: str | None = None) -> None:
         self._secret = secret or secrets.token_hex(32)
         self._trials: dict[str, tuple[Upstream, Path]] = {}
-        self._client = httpx.AsyncClient(timeout=_UPSTREAM_TIMEOUT, limits=_UPSTREAM_LIMITS)
+        tls = httpx.create_ssl_context()  # what each client would load for itself, loaded once
+        self._clients = [httpx.AsyncClient(timeout=_UPSTREAM_TIMEOUT, limits=_UPSTREAM_LIMITS, verify=tls)
+                         for _ in range(_UPSTREAM_POOLS)]
         self._model_info: dict[tuple[str, str], dict] = {}
         self._log_lock = threading.Lock()
         self.app = self._build_app()
@@ -108,6 +115,11 @@ class ModelGateway:
     def register(self, trial: str, upstream: Upstream, request_log: Path) -> None:
         """Serve ``trial`` from ``upstream``, recording its requests in ``request_log``."""
         self._trials[trial] = (upstream, request_log)
+
+    def _client_for(self, trial: str) -> httpx.AsyncClient:
+        """The connection pool ``trial``'s requests go through: always the same one, so its conversation keeps its
+        connection."""
+        return self._clients[zlib.crc32(trial.encode()) % len(self._clients)]
 
     def token_for(self, trial: str) -> str:
         """The token a trial's agent sends."""
@@ -156,7 +168,7 @@ class ModelGateway:
             headers["authorization"] = f"Bearer {upstream.token}"
         return headers
 
-    async def _models(self, upstream: Upstream) -> dict:
+    async def _models(self, trial: str, upstream: Upstream) -> dict:
         """The upstream's own listing of its model (context length, capabilities), so an agent sizes its requests by
         the served model's window; a bare entry while the upstream lists nothing."""
         key = (upstream.base_url, upstream.model)
@@ -164,7 +176,7 @@ class ModelGateway:
             return self._model_info[key]
         headers = {"authorization": f"Bearer {upstream.token}", "x-api-key": upstream.token} if upstream.token else {}
         try:
-            reply = await self._client.get(f"{upstream.base_url.rstrip('/')}/models", headers=headers,
+            reply = await self._client_for(trial).get(f"{upstream.base_url.rstrip('/')}/models", headers=headers,
                                            timeout=_MODELS_TIMEOUT)
             reply.raise_for_status()
             listed = [m for m in reply.json().get("data", []) if isinstance(m, dict)]
@@ -184,7 +196,7 @@ class ModelGateway:
             if trial is None:
                 return _error(401, "missing or invalid gateway token")
             upstream = self._trials[trial][0]
-            return JSONResponse({"object": "list", "data": [await self._models(upstream)]})
+            return JSONResponse({"object": "list", "data": [await self._models(trial, upstream)]})
 
         @app.post("/v1/chat/completions")
         async def chat(request: Request) -> Response:
@@ -223,8 +235,9 @@ class ModelGateway:
         body["model"] = upstream.model
         url = f"{upstream.base_url.rstrip('/')}{path}"
         try:
+            client = self._client_for(trial)
             reply = await self._send_unless_abandoned(
-                request, self._client.build_request("POST", url, json=body, headers=self._headers(upstream, request)))
+                request, client, client.build_request("POST", url, json=body, headers=self._headers(upstream, request)))
         except httpx.HTTPError as exc:
             if record:
                 self._record(trial, 502, None, f"unreachable: {type(exc).__name__}: {exc}")
@@ -256,10 +269,12 @@ class ModelGateway:
             self._record(trial, reply.status_code, usage, error)
         return Response(content, status_code=reply.status_code, media_type=reply.headers.get("content-type"))
 
-    async def _send_unless_abandoned(self, request: Request, outgoing: httpx.Request) -> httpx.Response:
+    @staticmethod
+    async def _send_unless_abandoned(request: Request, client: httpx.AsyncClient,
+                                     outgoing: httpx.Request) -> httpx.Response:
         """Send ``outgoing``; raise ``_Abandoned`` when the agent disconnects before the upstream has answered,
         cancelling the upstream request."""
-        send = asyncio.ensure_future(self._client.send(outgoing, stream=True))
+        send = asyncio.ensure_future(client.send(outgoing, stream=True))
         while True:
             done, _ = await asyncio.wait({send}, timeout=_DISCONNECT_POLL_SECONDS)
             if done:
@@ -317,7 +332,8 @@ class ModelGateway:
                 self._record(trial, 499, usage, "the agent closed the stream before the answer ended")
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        for client in self._clients:
+            await client.aclose()
 
 
 class GatewayServer:
