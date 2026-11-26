@@ -21,3 +21,13 @@ how one would measure, improvement across successive generations of a model taug
 The question it builds towards is whether learning makes further learning cheaper: whether a system that has acquired
 several task families reaches competence on a new one, chosen after that learning ended, with less verified experience and
 compute than an otherwise equal system that has not.
+
+\paragraph{Operational definition.} The loop \emph{improves itself continuously} when, run as a recipe
+with no human-written training tasks, no human labels and no human intervention between generations, it shows across at least
+three successive generations: (a) each generation beats its predecessor (generation~1: the base) on sealed exams that no
+generation trained on, under a registered paired test; (b) no generation regresses on skills earlier generations had, by a
+registered forgetting gate; (c) the gains hold across seeds and beat a shuffled-request control, which keeps the training
+records and their tool-use format but pairs each record with another task's request; (d) the loop restarts end to end from the
+recipe and the frozen binaries with no manual step. A part that was not measured is unmet. The definition was written on
+2026-11-27, after the first generation of the Vim task family had been examined and before any verdict against it; RSI5
+(Section~\ref{sec:results}) was registered under its own criteria, which correspond to part~(a).

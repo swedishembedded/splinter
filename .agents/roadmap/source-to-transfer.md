@@ -17,6 +17,23 @@ exposure to the tool's format; without arms that differ only in the material, no
 experiment is SFT only: if correct, curated trajectories do not transfer under SFT, an RL result would not be
 interpretable either.
 
+## Continuous self-improvement: the operational definition this line of work is judged by (written 2026-11-27)
+
+The loop improves itself continuously when, run as a recipe with no human-written training tasks, no human labels and
+no human intervention between generations, it shows across at least 3 successive generations:
+
+1. **Held-out gain.** Each generation beats its predecessor (generation 1: the base) on sealed exams that no
+   generation trained on, under a registered paired test.
+2. **No forgetting.** No generation regresses on the skills earlier generations had, measured by a registered
+   forgetting gate on tasks of earlier skills.
+3. **Robust and content-borne.** The gains hold across seeds and beat the shuffled-request control (same records and
+   tool-use format, requests deranged).
+4. **Restartable.** The loop restarts end to end from the recipe and the frozen binaries with no manual step.
+
+Each part is a separate measurement; a part not measured is unmet, not assumed. Prior support for part 1 in another
+family: RSI4 (2026-11-15, Lua output prediction, 4 of 4 lineages, 3 generations, each step held under the examiner's
+sign test; `papers/splinter-brain-sven-flywheel`, S4), with no forgetting gate and no shuffled control.
+
 ## Material (one run, shared by every arm)
 
 - Source: the Vim 9.1 user manual (`usr_*.txt` of the runtime the task image carries), chapter and section headings
@@ -71,6 +88,7 @@ interpretable either.
 | 2026-11-26 | the material run was forked once (`material2`) after a node ran out of memory and the serving fleet hung; its committed stages (authoring, review, tasks, oracle) were reused, its student and teacher attempts collected again from the start | the interrupted attempts could not be resumed by the build that fixed the defects; no attempt of the first run is used |
 | 2026-11-26 | servers run `--speculative off` | 7 of 16 servers hung on a device kernel under `auto`; speculative decoding leaves the sampled distribution unchanged |
 | 2026-11-26 | each arm-seed trains on one card and evaluates through its node's four cards, 64 attempts at once | a router does not route training jobs; 64 is a card's slots |
+| 2026-11-27 | the operational definition of continuous self-improvement (above) written after generation 1's exam results existed and before any verdict against it | the user asked for the claim to be scoped by a definition fixed before judging it; it adds no comparison to the registered family |
 
 ## Status
 
