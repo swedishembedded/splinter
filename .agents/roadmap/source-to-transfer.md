@@ -39,6 +39,7 @@ interpretable either.
 | C | B with at most one trial per task, the one with the fewest actions (diversity per token) |
 | D | B with only productive actions supervised: an action whose tool calls all returned an error stays in context, unsupervised |
 | F | negative control: B with each record's task request replaced by another task's (derangement); same tool-use format, no request-to-action mapping |
+| G | B's selection rule on tasks authored backward (bench `recipes/vim-manual/backward.yaml`): the author proposes starting files and a desired multi-change result, the teacher proves the result reachable with the vim tool, the request is written last from the before/after pair; same optimizer budget |
 
 ## Measurements
 
@@ -53,15 +54,22 @@ interpretable either.
 
 - Unit: an exam task. For a pair of arms X, Y: d_t = (passes of X over its 3 seeds x 4 attempts) - (passes of Y over
   12 attempts; for A, 12 attempts of the base). One-sided exact sign test over tasks with d_t != 0.
-- Primary family (Holm, alpha 0.05): B > A, D > A, C > A on the exams.
+- Primary family (Holm, alpha 0.05): B > A, D > A, C > A, G > A on the exams.
 - The goal's claim ("trajectories teach transferable skills") holds when at least one of B, C, D beats A in the
   primary family AND the same arm beats F on the exams (one-sided sign test, alpha 0.05). Beating A alone could be
   format exposure; beating F says the content of the trajectories matters.
-- Secondary, reported with task-bootstrap 95% intervals and never as claims when not significant: D vs B, C vs B,
+- Secondary, reported with task-bootstrap 95% intervals and never as claims when not significant: G vs B, D vs B, C vs B,
   every arm on T1, per-seed rates, failure classes.
 - No exam result selects a checkpoint, a recipe, a seed or a data mix; the exam trials are never trained on.
+
+## Deviations
+
+| Date | Change | Why |
+|---|---|---|
+| 2026-11-26 | arm G (backward-authored material) added, primary family grows to four comparisons | the user proposed outcome-first authoring while the material run was in progress; added before any arm trained |
 
 ## Status
 
 - 2026-11-26 14:50: material run started on 16 GH200 (4 nodes, one brain per card behind one router).
-- Arms options (curation, per-task limit, shuffled control, holdout, composition report) being built in splinter.
+- Arms options (curation, per-task limit, shuffled control, holdout, composition report) being built in splinter; the backward pipeline in bench.
+- Calibration (selects nothing): the base 4B passed 0 of 1012 counted exam attempts (12 per exam, partial run).
