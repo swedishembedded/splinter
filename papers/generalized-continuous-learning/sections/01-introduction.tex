@@ -2,25 +2,19 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \section{Introduction}\label{sec:introduction}
 
-A companion paper~\cite{frontier2026} showed that a 4B model trained on programs it proposed itself, labelled by a Lua 5.1
-interpreter, roughly doubled its accuracy at predicting program output on a fresh exam over three generations. Its first
-generation did not improve on that exam, the model never reasoned before answering, and a matched-data control could not
-separate the generational loop from the amount of verified data. Thinking enabled, the untrained base already answered far more
-of the same exam than the best trained generation answered directly.
-
 Continuous learning in the sense of this paper is not training on everything a model encounters. It is a system that turns
 verified experience into competence that is reused: every generation better than the last on tasks it never trained on, earlier
 competence retained, and, ultimately, new task families acquired faster than before. Each of these is a separate measurement,
-and none follows from a rising training score.
+and none follows from a rising training score. A companion paper~\cite{frontier2026} showed that a 4B model trained on programs
+it proposed itself, labelled by a Lua~5.1 interpreter, roughly doubled its accuracy at predicting program output on a fresh exam
+over three generations.
 
 \paragraph{Scope.} This paper asks whether the same three systems (Splinter as the learning controller, Sven as the model
 client, Brain as the serving and training engine) produce continuous improvement: every generation better than its predecessor
-on held-out exams judged by a separate examiner, for as many generations as are run, with retention and the compute spent
-reported beside the gain, and on task families beyond the first. A finding belongs here if it changes what is claimed about, or
-how one would measure, improvement across successive generations of a model taught by an executable environment.
-The question it builds towards is whether learning makes further learning cheaper: whether a system that has acquired
-several task families reaches competence on a new one, chosen after that learning ended, with less verified experience and
-compute than an otherwise equal system that has not.
+on held-out exams judged by a separate examiner, with retention and the compute spent reported beside the gain, and on task
+families beyond the first. A finding belongs here if it changes what is claimed about, or how one would measure, improvement
+across successive generations of a model taught by an executable environment. The question it builds towards is whether
+learning makes further learning cheaper.
 
 \paragraph{Operational definition.} The loop \emph{improves itself continuously} when, run as a recipe
 with no human-written training tasks, no human labels and no human intervention between generations, it shows across at least
@@ -29,5 +23,20 @@ generation trained on, under a registered paired test; (b) no generation regress
 registered forgetting gate; (c) the gains hold across seeds and beat a shuffled-request control, which keeps the training
 records and their tool-use format but pairs each record with another task's request; (d) the loop restarts end to end from the
 recipe and the frozen binaries with no manual step. A part that was not measured is unmet. The definition was written on
-2026-11-27, after the first generation of the Vim task family had been examined and before any verdict against it; RSI5
-(Section~\ref{sec:results}) was registered under its own criteria, which correspond to part~(a).
+2026-11-27, after the first generation of the Vim family had been examined and before any verdict against it
+(\cref{app:deviations}); the Lua run was registered under its own criteria, which correspond to part~(a).
+
+\paragraph{The method, step by step.} \Cref{sec:method} describes one method; \cref{sec:results} reports what each step was
+tested on and what it measured, in the same order:
+\begin{enumerate}
+\item an executable environment as the only teacher (\cref{sec:m-teacher});
+\item a separate examiner that holds sealed exams and returns only aggregate verdicts (\cref{sec:m-examiner});
+\item a growing pool of interpreter-labelled programs, retrained from the base at each generation (Lua; \cref{sec:r-pool});
+\item practice tasks authored from raw source material, Vim's user manual (\cref{sec:r-authoring});
+\item oracle admission of each task in the task image (\cref{sec:r-admission});
+\item outcome-first authoring (\cref{sec:r-outcome});
+\item verified trajectories trained into adapters, measured against the base and a shuffled-request control on sealed exams
+  (\cref{sec:r-adapters}).
+\end{enumerate}
+\Cref{sec:limitations} gives the verdict against the definition and the limitations. Registrations, internal run names,
+deviations, the measurements that showed no gain, and the reproduction commands are in the appendix.

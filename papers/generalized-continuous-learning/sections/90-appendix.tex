@@ -1,0 +1,118 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+\appendix
+
+\section{Registrations and internal names}\label{app:registrations}
+
+The Lua run is registered as RSI5 in \texttt{prereg/rsi5.md} (2026-11-16) with its launch record \texttt{prereg/rsi5-launch.md};
+its sealed exam is the examiner's exam G and its secondary exam the companion paper's exam F; its criteria G1 (every generation
+better than its predecessor; not met), G2 (generation~4 at least five points above the base; met) and G3 (gain on never-examined
+families; met) are evaluated by \texttt{scripts/rsi5\_criteria.py}. \texttt{prereg/rsi6.md} and \texttt{prereg/rsi7.md} are
+later registrations of this paper with no examined result yet. The Vim experiment is registered in splinter's
+\texttt{.agents/roadmap/source-to-transfer.md} (commit \texttt{c319ff4c3}, 2026-11-26, before any arm trained; outcome-first arm
+added in \texttt{66277f180}). Its arms are lettered there: A the base, B all verified, C one per task, D productive actions, F
+the shuffled-request control, G outcome first, S student only; the held-out authored tasks are its measurement T1 and the exams
+T2/T4. The evidence files keep these letters (\texttt{arm-<letter>-s<seed>}).
+
+\section{Deviations}\label{app:deviations}
+
+\paragraph{Lua run.} Four dated deviations, all before any candidate was examined, are recorded beside the registration: the
+gate's planning target (0.08 to 0.09), the proposer state moved to memory when the disk's file quota filled, one lineage's last
+generation moved to a freed card, and the fourth generation's proposal budget raised after one lineage spent it with 3706 of its
+4000 frontier programs found. None changes a proposal, a training record or a gate decision.
+
+\paragraph{Vim experiment.}
+
+\begin{center}\footnotesize
+\begin{tabular}{p{17mm}p{64mm}p{60mm}}
+\toprule
+Date & Change & Why \\
+\midrule
+2026-11-26 & outcome-first arm added; the comparison family grows to four & outcome-first authoring was proposed while the
+material run was in progress; added before any arm trained \\
+2026-11-26 & source is the manual's text (\texttt{usr\_*.txt}), not an OCR of its PDF & the OCR copy was lost with a node \\
+2026-11-26 & the material run was forked once; its authoring, review, task and oracle stages reused, all student and teacher
+attempts collected again & a node ran out of memory and the serving fleet hung; no attempt of the first run is used \\
+2026-11-26 & servers run without speculative decoding & 7 of 16 servers hung on a device kernel with it; the sampled
+distribution is unchanged \\
+2026-11-26 & each arm-seed trains on one card and evaluates through its node's four cards & a router does not route training \\
+2026-11-27 & the operational definition (\cref{sec:introduction}) written after generation~1 was examined, before any verdict
+against it & requested so that the claim is scoped by a fixed definition; adds no registered comparison \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Measurements that showed no gain, and exploratory readings}\label{app:other}
+
+\paragraph{Lua run.} Generations 3 and 4 did not improve on their predecessors (\cref{tab:lua}); the learner's own gate
+advanced every generation, including on development leads that were not significant, so it did not detect the plateau. On the
+items the base already answered, every comparison involving generation~1 loses ($-37$ points on that small stratum). On exam F
+(2340 items, thinking off) the lineages' mean share right was 8.4\% for the base and 15.3\%, 17.6\%, 19.2\% and 19.7\% after
+generations 1--4. With thinking on (one greedy completion, 8192-token budget, descriptive), the base and the generation-4
+candidates failed to finish 437 and 466--653 of the 2040 items; with 35\% failures tolerated in advance the examiner keeps the
+768 items every model finished, on which the base answered 66.3\% and generation~4 63.7\% ($-2.6$ points, $[-8.1, +2.8]$,
+inconclusive). Two learner-side signals were read without exam data (descriptive, after~\cite{cai2026nosecondrun}): the frontier
+yield fell from 0.73--0.91 in generation~1 to 0.39--0.54 in generation~2, and the proposer's novelty collapsed in generation~4
+in every lineage (0.42, 0.27, 0.56, 0.34), the generation whose step is flat.
+
+\paragraph{Learner-side pilots on supervision (Lua, development tasks only).} Before registration, training on 4000
+interpreter-labelled answers raised greedy direct-answer accuracy on 400 development programs from 0.535 to 0.695 (0.750 after a
+second round), while training on the base's own interpreter-confirmed reasoning traces, in the manner
+of~\cite{zelikman2022star,singh2023rest}, lowered thinking-enabled accuracy from 0.402 to 0.31--0.34 at each of three learning
+rates. After the run, supervising reasoning with the interpreter's execution trace, raw or as sentences, lowered thinking-enabled
+accuracy against answer-only training (0.69 and 0.72 against 0.78) while cutting tokens per correct answer about eightfold.
+These fixed the choice of answer-only supervision; they are not examined results.
+
+\paragraph{Vim secondary comparisons} (two-sided, task-bootstrap intervals; evidence file
+\nolinkurl{decision/secondary-eval-exam.json}):
+
+\begin{center}\footnotesize
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrll}
+\toprule
+Comparison & Wins/losses & $p$ & Pass-rate difference [95\% interval] \\
+\midrule
+\inputrows{generated/vim-transfer-secondary.tex}
+\bottomrule
+\end{tabular}}
+\end{center}
+
+Masking all-error actions changed nothing measurable; keeping one solution per task taught less than keeping all verified
+solutions, on fewer records, so diversity is not separated from volume. On the held-out authored tasks the shuffled-request
+control passes 9 of 1128 attempts against its base's 133 (2 tasks won, 26 lost, two-sided $p=3.0\times10^{-6}$; exploratory,
+outside the registration): trained on actions paired with other tasks' requests, it acts without regard to the request.
+
+\section{Defects found and fixed during the Vim run}\label{app:failures}
+
+\begin{itemize}
+\item Admission read Vim's output in text mode and ran Vim under a locale the task image lacks (bench \texttt{f73ae591},
+  bench knowledge 086; \cref{sec:r-admission}).
+\item Sandbox images held in memory exhausted a node (splinter \texttt{851216e17}, knowledge 225), forcing the fork of the
+  material run; a resumed batch could not reconcile (\texttt{5fb824d6b}); attempts lost to interruptions spent retries
+  (\texttt{cc5581333}).
+\item On-disk sandbox copies took 436~s to start (shared lower tree plus overlay, \texttt{9841886df}, knowledge 227); the
+  gateway's connection pool, Harbor's job lock and a per-command lookup took about 50 of 70~s per trial (\texttt{9415eb39b},
+  \texttt{2b62ff444}, \texttt{de1149b0a}, \texttt{418046bd7}, knowledge 228).
+\item Brain's router stranded requests behind hung upstreams (\texttt{ae72fc212}) and packed one model on few cards
+  (\texttt{b726c045b}); Qwen3 serving plans withdrew a model instead of fitting free memory (\texttt{f74314255}); a CUDA lane
+  can hang while \texttt{/health} reports ok (brain knowledge 602; no watchdog yet).
+\item Of the teacher's 2820 attempts at the 705 outcome-first end states, 1498 ran out of wall-clock time; 143 end states were
+  never reached and are not tasks.
+\end{itemize}
+
+\section{Evidence and reproduction}\label{app:reproduction}
+\begin{sloppypar}
+Lua: the examiner's signed group verdict is \texttt{data/rsi5-groups-G.json} (thinking-on: \texttt{data/rsi5-groups-G-thinking.json});
+adapters, lineage records and per-candidate verdicts are in the private dataset
+\nolinkurl{swedishembedded/generalized-continuous-learning-evidence}. Vim: aggregate evidence is in the private dataset
+\nolinkurl{swedishembedded/source-to-transfer-evidence} (training sets with lineage, per-arm recipes, locks and frozen revisions,
+training reports, exam aggregates, decision and secondary outputs, the authoring funnel, the material runs' manifests, the
+analysis code); the 15 adapters in \nolinkurl{swedishembedded/vim-manual-transfer-adapters}; tasks and trajectories in
+\nolinkurl{swedishembedded/vim-headless-mastery-manual} and \nolinkurl{swedishembedded/vim-headless-mastery-sft-manual}.
+Per-exam outcomes are item-level exam data and stay with the examiner's private evidence. Frozen builds of the Vim run:
+splinter \texttt{f6661e34}, sven \texttt{704496d6}, brain \texttt{b2f46a22}; recipes from bench \texttt{fac113db}
+(section by section), \texttt{83e1b4f8} (outcome first) and \texttt{662ac1d6} (arms). The decision is recomputed by
+\texttt{decide.py RESULTS eval-exam} and \texttt{secondary.py RESULTS eval-exam} from the per-task outcomes
+\texttt{export-results.py} writes. The tables and figures are made by \texttt{scripts/paper\_data.py} from \texttt{data/},
+whose \texttt{vim-transfer/} files are byte copies of the evidence dataset's (\texttt{make vim-data EVIDENCE=DIR}).
+\end{sloppypar}

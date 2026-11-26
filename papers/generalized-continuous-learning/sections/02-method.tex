@@ -2,27 +2,104 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \section{Method}\label{sec:method}
 
-Each generation repeats one cycle, the environment-supervised cycle of the companion paper~\cite{frontier2026}. The current
-champion proposes Lua~5.1 programs from three sections of the language manual; the pinned interpreter runs them and records
-their output. The champion then predicts each program's output four times at temperature~1.0, and a program enters the
-frontier when at least one prediction is wrong. A fresh low-rank adapter is trained from the base on every frontier program
-kept so far, each record pairing the program with the interpreter's output, so the model is taught the correct answer even on
-programs it never solves. The pool doubles at every generation (1000, 2000, 4000, 8000 records). A candidate replaces the
-champion only if it passes a gate on the learner's own development tasks; the gate may reject, and a rejected candidate is
-recorded with its evidence. The learner hands each new champion, with the list of programs it trained on, to the examiner,
-and never receives anything back except signed aggregate verdicts.
+\subsection{An executable environment as the only teacher}\label{sec:m-teacher}
 
-\paragraph{Why answers, not reasoning traces (learner-side pilot).} Before registration, a pilot on learner data only (lineage
-proposals of the companion paper and the lineages' own development items; no exam and no verdict) compared two sources of
-supervision on 400 development programs, with Qwen3-4B, rank-16 adapters and two epochs. Training on 4000 interpreter-labelled
-answers at learning rate $10^{-4}$ raised greedy direct-answer accuracy from 0.535 to 0.695, and a second round on 4000 fresh
-programs to 0.750; thinking-enabled accuracy (mean of four samples) rose from 0.402 to 0.776. Training instead on the shortest
-of the base model's own reasoning traces whose final answer the interpreter confirmed, in the manner of self-taught
-reasoning~\cite{zelikman2022star} and self-training on verified samples~\cite{singh2023rest}, lowered thinking-enabled accuracy
-to 0.31--0.34 at each of three learning rates, while the trainer's own held-out loss improved. These are pilot numbers on
-in-distribution development tasks, not examined results; they fixed the choice of supervision for the registered run.
-A second learner-side pilot, run after RSI5 with the same budget per arm, supervised the reasoning with the interpreter's own
-execution trace (each executed line with the values it changed and what it printed, deterministic and correct by construction),
-raw or rendered as sentences. Both lowered thinking-enabled accuracy against answer-only training (0.69 and 0.72 against 0.78)
-while cutting the tokens per correct answer about eightfold; the trace records what each line produced, not how a library call
-computes it, and most remaining errors are of that kind (formatting, mathematical functions, patterns).
+No human writes a training task, a label or a solution. In the Lua family the pinned Lua~5.1 interpreter runs every program
+and its output is the label. In the Vim family the agent has one tool that runs Ex commands in a fresh Vim on the task's files
+and returns Vim's output, and a hidden check grades the files the agent leaves; a training record is admitted only if that
+check passed. The models are Qwen3-4B (the learner) and, in the Vim family, Qwen3.8-27B-FP8 (author and teacher), served and
+trained by Brain, driven through Sven, with thinking off.
+
+\subsection{A separate examiner with sealed exams}\label{sec:m-examiner}
+
+The learner never controls grading. In the Lua family the examiner draws each exam from its own program generator with a seed
+only it holds, excludes any item that matches a program a candidate trained on, serves every candidate on a pinned build,
+grades each answer by the interpreter's output and returns signed aggregate verdicts. In the Vim family the exams are 100
+hand-written tasks of a Vim course (bench \texttt{tasks/vim}, evaluation side): unseen material, each combining several ideas,
+never authored from the manual and never read by any stage that produces training data. Every candidate is measured against a
+base run in the same evaluation stage. Per-item outcomes stay with the examiner's private evidence. The registered criteria
+and analyses are fixed before any candidate is examined (\cref{app:registrations}).
+
+\subsection{A growing pool of interpreter-labelled programs}\label{sec:m-pool}
+
+Each generation of the Lua family repeats one cycle, the environment-supervised cycle of the companion
+paper~\cite{frontier2026}. The current champion proposes Lua~5.1 programs from three sections of the language manual; the
+interpreter runs them and records their output. The champion predicts each program's output four times at temperature~1.0,
+and a program enters the frontier when at least one prediction is wrong. A fresh low-rank adapter is trained from the base on
+every frontier program kept so far, each record pairing the program with the interpreter's output, so the model is taught the
+correct answer even on programs it never solves. The pool doubles at every generation (1000, 2000, 4000, 8000 records). A
+candidate replaces the champion only if it passes a gate on the learner's own development tasks.
+
+\subsection{Practice tasks authored from raw source material}\label{sec:m-authoring}
+
+\begin{sloppypar}
+The Vim family starts from the text of Vim~9.1's user manual (\texttt{usr\_*.txt} as the task image's Vim ships it), with
+chapter and section headings added by bench's \texttt{environments/vim/manual\_headings.py}: 222 sections split into 263
+items of at most about 1500 words. For each item the 27B author proposes tasks of one to six Ex-command steps in three
+material variants, each with a request, starting files and a reference solution (bench
+\texttt{recipes/vim-manual/transfer.yaml}). Vim runs every reference; a reference Vim refuses is repaired once by the author;
+a reviewer (the same model) checks each result against its request, and refused results are fixed and reviewed again.
+Admission rejects malformed tasks, references that change nothing or err in Vim, duplicates, and requests that quote the
+reference's commands.
+\end{sloppypar}
+
+\subsection{Oracle admission in the task image}\label{sec:m-admission}
+
+A task is kept only if the harness, replaying its reference solution inside the task image, passes the task's own check.
+Since bench \texttt{f73ae591} (knowledge 086 of bench), admission reads and writes files as exact bytes and runs Vim in the
+image's locale, so the expected files are what the image's Vim leaves; a result that is not UTF-8 text is refused.
+
+\subsection{Outcome-first authoring}\label{sec:m-outcome}
+
+In the second authoring mode (bench \texttt{recipes/vim-manual/backward.yaml}) the author proposes, for each item, the
+starting files and the desired end files of a job of several changes, without a request. The teacher must reach each end state
+with the Vim tool within 4 attempts; the teacher's commands must reproduce the end state when Vim replays them, and must edit
+rather than retype the files. Only then is the request written, from the before and after files, and the teacher's verified
+solution becomes the reference; a request that quotes most of the target or the solution is refused.
+
+\begin{figure}[tbp]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[fig, node distance=5mm and 7mm]
+  \node[data] (man) {Vim 9.1 user manual\\{\scriptsize 263 items}};
+  \node[proc, right=of man, yshift=10mm] (fw) {section-by-section authoring\\{\scriptsize 3 variants per item}};
+  \node[proc, right=of fw] (adm) {Vim runs each reference; review, fix};
+  \node[data, right=of adm] (ft) {1030 tasks\\{\scriptsize oracle solves 1026}};
+  \node[proc, right=of man, yshift=-10mm] (bw) {outcome-first authoring\\{\scriptsize start and end files}};
+  \node[proc, right=of bw] (rep) {teacher reaches the end state};
+  \node[data, right=of rep] (bt) {467 tasks\\{\scriptsize request written last}};
+  \node[proc, right=of $(ft)!0.5!(bt)$, xshift=12mm] (tr) {attempts\\{\scriptsize student 8, teacher 4}};
+  \node[data] (ds) at ($(tr |- bt)+(0,-17mm)$) {training sets\\{\scriptsize one per arm}};
+  \node[proc, left=12mm of ds] (lora) {LoRA from the base\\{\scriptsize 3 seeds per arm}};
+  \node[data, left=12mm of lora] (ex) {100 sealed exams\\{\scriptsize 4 attempts, paired base}};
+  \draw[flow] (man.east) -- ++(3mm,0) |- (fw); \draw[flow] (man.east) -- ++(3mm,0) |- (bw);
+  \draw[flow] (fw) -- (adm); \draw[flow] (adm) -- (ft);
+  \draw[flow] (bw) -- (rep); \draw[flow] (rep) -- (bt);
+  \draw[flow] (ft) -| (tr); \draw[flow] (bt) -| (tr);
+  \draw[flow] (tr) -- node[edge label, right] {verified; 10\% of tasks held out} (ds);
+  \draw[flow] (ds) -- (lora); \draw[measure] (lora) -- (ex);
+\end{tikzpicture}}
+\caption{The Vim pipeline as run for generation~1. Rounded boxes run; boxes with a bar are stored. The author and teacher is
+Qwen3.8-27B-FP8, the student Qwen3-4B. 10\% of each authoring mode's tasks (by task id) are held out of every arm's training.
+The exams are hand-written and were never read by any stage.}\label{fig:vim-pipeline}
+\end{figure}
+
+\subsection{Verified trajectories into adapters}\label{sec:m-adapters}
+
+Every admitted task is attempted by the student (8 attempts, temperature 0.7, top-p 0.8, top-k 20) and the teacher (4
+attempts) through Sven with a budget of 60 turns and 16384 completion tokens. The registered arms (\cref{fig:vim-pipeline})
+start from the same base Qwen3-4B and train a LoRA adapter (rank 16, alpha 32, learning rate $2\times10^{-4}$, up to 800 steps
+of 4 records, block 16384, checkpoint chosen by held-out validation loss every 40 steps with patience 4), seeds 1, 2 and 3. They
+differ only in the training material: \emph{all verified} (every verified successful attempt of teacher and student on the
+section-by-section tasks, every action supervised); \emph{one per task} (at most one attempt per task, the one with the fewest
+actions); \emph{productive actions} (all verified, but an action whose tool calls all returned an error stays in context
+unsupervised); \emph{outcome first} (the all-verified rule on the outcome-first tasks); and the \emph{shuffled-request
+control} (all verified, with each record's request replaced by another task's, a seeded derangement: the same records and
+tool-use format with no request-to-action mapping). No exam result selects a checkpoint, recipe, seed or data mix.
+
+\paragraph{Decision rule (as registered).} Unit: an exam. For arms X and Y, $d_t$ is X's passes over its 3 seeds $\times$ 4
+attempts minus Y's over 12 attempts (for the base, the base runs paired with X); one-sided exact sign test over exams with
+$d_t\neq0$. Comparison family, Holm at $\alpha=0.05$: each of all verified, one per task, productive actions and outcome first
+greater than the base. Trajectories teach transferable skills when at least one of the first three beats the base in the family
+and the same arm beats the shuffled-request control (one-sided sign test, $\alpha=0.05$). Comparisons between arms, the
+held-out authored tasks and per-seed rates are secondary, reported with task-bootstrap 95\% intervals.

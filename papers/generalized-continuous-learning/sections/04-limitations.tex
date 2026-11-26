@@ -1,0 +1,18 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+\section{Verdict and limitations}\label{sec:limitations}
+
+\paragraph{Verdict against the operational definition.} Lua family: part~(a) holds for generations 1 and 2 and not for 3 and
+4, so the registered criterion that every generation improves is not met; parts (b) to (d) were not measured. Vim family, one
+examined generation: (a) holds for generation~1 against the base, and the three-generation requirement is unmet; (b) is
+unmet, no forgetting gate has been run; (c) holds for generation~1 (every seed of every trained arm except the control passes
+exams, every arm beats the control); (d) is unmet: the material run was forked by hand after a node ran out of memory and the
+serving fleet hung, and pipeline defects were fixed during the run (\cref{app:failures}). What is supported is one step of the
+loop in a second task family, not continuous self-improvement.
+
+\paragraph{Limitations.} Each family has one task protocol and one 4B learner with rank-16 adapters. The Lua gains shrink with
+each doubling of the pool (5.1, 1.6, 1.2, 0.3 points) and there is no matched-data control. In the Vim family the absolute level
+is low (3.5\% of exam attempts for the best arm, against the teacher's 63\% first-attempt rate); most training records are the
+27B teacher's; the comparison of authoring modes is confounded with passes per record and task difficulty; the 100 exams come
+from one course; the per-seed intervals of \cref{fig:vim-seeds} treat attempts as independent. Other tools and domains, and
+stability under another authoring seed, are not measured.

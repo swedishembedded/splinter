@@ -11,16 +11,17 @@ include ../paper.mk
 
 SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex)
 
-# The Vim section's tables and figure data are made from data/vim-transfer/, a copy of the aggregate files of the
-# private evidence dataset swedishembedded/source-to-transfer-evidence, into the build directory; the paper reads them
-# as generated/* through TEXINPUTS, so a build writes nothing into this directory.
+# The tables and figure data are made from data/ (the examiner's verdict of the Lua run, and data/vim-transfer/, a copy of
+# the aggregate files of the private evidence dataset swedishembedded/source-to-transfer-evidence) into the build
+# directory; the paper reads them as generated/* through TEXINPUTS, so a build writes nothing into this directory.
 GENERATED := $(BUILD)/generated
 VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decision/secondary-eval-exam.json \
-	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json material/funnel.json
+	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json decision/per-seed-eval-unseen-b.json \
+	material/funnel.json
 export TEXINPUTS := $(BUILD):
 
-$(GENERATED)/.stamp: scripts/vim_transfer_data.py $(addprefix data/vim-transfer/,$(VIM_FILES))
-	python3 scripts/vim_transfer_data.py data/vim-transfer $(GENERATED)
+$(GENERATED)/.stamp: scripts/paper_data.py data/rsi5-groups-G.json $(addprefix data/vim-transfer/,$(VIM_FILES))
+	python3 scripts/paper_data.py data $(GENERATED)
 	touch $@
 
 $(PDF): $(SOURCES) $(GENERATED)/.stamp

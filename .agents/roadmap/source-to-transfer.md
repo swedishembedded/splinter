@@ -152,7 +152,7 @@ C on the 94 held-out forward tasks 642 / 1128 (0.569) against its base's 113 / 1
 held-out backward tasks 127 / 612 (0.208) against 22 / 612, 25 / 0, p 3.0e-8, +0.172 [+0.113, +0.237]. F 9 / 1128
 against its base's 133 / 1128: 2 tasks won, 26 lost (exploratory, two-sided p 3.0e-6, -0.110 [-0.162, -0.062]):
 training on actions paired with other tasks' requests made the model worse than the base at following a request. B's
-T1 is open (seeds 1 and 2 still being measured).
+T1 is open: seed 3 passed 255 / 376 against its base's 42 / 376; seeds 1 and 2 are still being measured.
 
 Recomputed 2026-11-27 from the per-task outcomes with `decide.py results eval-exam` and `secondary.py results
 eval-exam`: every number above matches.
@@ -169,9 +169,10 @@ Claim as supported: one step of the loop in a second task family, not continuous
 
 ## Evidence and paper
 
-- Paper: `papers/generalized-continuous-learning`, section "A second task family: editing files with Vim, taught from
-  its user manual" (pipeline, funnel, registered design, deviations, results, per-seed figure, generations, verdict).
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit bf8a5b70): arm datasets with lineage, arm
+- Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
+  steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
+  Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 99c9c4da): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
