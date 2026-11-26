@@ -37,6 +37,9 @@ pub enum Outcome {
     /// Full credit, with the first tool result shown to the model as an
     /// error (marked as Sven marks an `isError` result) and recovered from.
     PassAfterError,
+    /// Full credit, from a real trial of seven actions (`sven-trial`) where
+    /// every other outcome's has three.
+    LongPass,
 }
 
 /// The fixture's first tool call, which `PassAfterError` answers with an error.
@@ -51,8 +54,14 @@ fn shown_as_error(bytes: Vec<u8>, call: &str) -> Vec<u8> {
 }
 
 fn fixture() -> PathBuf {
+    fixture_named("sven-5.9-reasoning")
+}
+
+fn fixture_named(name: &str) -> PathBuf {
     // From this crate or another one that includes this kit.
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../factory/tests/it/fixtures/sven-5.9-reasoning")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../factory/tests/it/fixtures")
+        .join(name)
 }
 
 /// A scripted execution backend.
@@ -208,7 +217,11 @@ fn ended(bytes: Vec<u8>, vary: bool) -> Vec<u8> {
 
 /// The fixture's file with its instruction replaced by `instruction`.
 fn fixture_file(name: &str, instruction: Option<&str>) -> Vec<u8> {
-    let fixture = fixture();
+    fixture_file_of(&fixture(), name, instruction)
+}
+
+/// `name` of the trial in `fixture` with its instruction replaced by `instruction`.
+fn fixture_file_of(fixture: &Path, name: &str, instruction: Option<&str>) -> Vec<u8> {
     let text = std::fs::read_to_string(fixture.join(name)).unwrap();
     let Some(instruction) = instruction else {
         return text.into_bytes();
@@ -249,7 +262,7 @@ fn attempt_as(
     let native = format!("harbor/job/{name}");
     let dir = out.join(&native);
     let reward = match outcome {
-        Outcome::Pass | Outcome::CorruptTrace | Outcome::PassAfterError => 1.0,
+        Outcome::Pass | Outcome::CorruptTrace | Outcome::PassAfterError | Outcome::LongPass => 1.0,
         _ => 0.0,
     };
     let mut result = json!({
@@ -268,7 +281,15 @@ fn attempt_as(
             json!({"exception_type": "ApiInternalServerError", "exception_message": "500"});
     }
     write(&dir.join("result.json"), result.to_string().as_bytes());
-    let mut requests = ended(fixture_file("agent/requests.jsonl", instruction), vary);
+    let trial = if outcome == Outcome::LongPass {
+        fixture_named("sven-trial")
+    } else {
+        fixture()
+    };
+    let mut requests = ended(
+        fixture_file_of(&trial, "agent/requests.jsonl", instruction),
+        vary,
+    );
     if outcome == Outcome::PassAfterError {
         requests = shown_as_error(requests, FIRST_CALL);
     }
@@ -276,7 +297,10 @@ fn attempt_as(
     let trace = if outcome == Outcome::CorruptTrace {
         b"not json".to_vec()
     } else {
-        ended(fixture_file("agent/trajectory.json", instruction), vary)
+        ended(
+            fixture_file_of(&trial, "agent/trajectory.json", instruction),
+            vary,
+        )
     };
     write(&dir.join("agent/trajectory.json"), &trace);
     let report = AttemptReport {

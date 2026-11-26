@@ -42,6 +42,8 @@
 //! `report.md`.
 
 mod report;
+mod selection;
+mod supervision;
 mod views;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,7 +64,7 @@ use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{
-    AttemptParams, Hint, PreferenceOptions, ProjectParams, RewardOptions, Supervise,
+    AttemptParams, Hint, Prefer, PreferenceOptions, ProjectParams, RewardOptions, Supervise,
     ValidationSplit,
 };
 use crate::plan::PlannedStage;
@@ -129,6 +131,8 @@ struct Dataset {
     thinking: bool,
     validation: Option<ValidationSplit>,
     supervise: Supervise,
+    /// The most trials kept per task, and which.
+    per_task: Option<(usize, Prefer)>,
     seed: u64,
 }
 
@@ -140,6 +144,8 @@ struct Admitted {
     record: Record,
     /// The actions the record supervises.
     actions: usize,
+    /// The actions the trial took, supervised or not.
+    taken: usize,
     /// The tools the supervised actions call, in order.
     tools: Vec<String>,
 }
@@ -182,6 +188,9 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         thinking: params.thinking,
         validation: params.validation,
         supervise: params.supervise,
+        per_task: params
+            .per_task
+            .map(|limit| (limit, params.prefer.unwrap_or_default())),
         seed: params.seed,
     })
 }
@@ -241,6 +250,10 @@ pub(crate) fn identity(
     // it keeps the identity it had before the parameter existed.
     if dataset.supervise != Supervise::All {
         parameters["supervise"] = json!(dataset.supervise);
+    }
+    if let Some((limit, prefer)) = dataset.per_task {
+        parameters["per_task"] = json!(limit);
+        parameters["prefer"] = json!(prefer);
     }
     Ok(super::identity_of(
         &stage.versioned_operation(),
@@ -453,17 +466,17 @@ pub(crate) fn produce(
                 }
                 Ok(found)
             });
-            let learned = learned.and_then(|(record, actions, tools, failed)| {
+            let learned = learned.and_then(|(record, taken, tools, failed)| {
                 if dataset.supervise == Supervise::All {
-                    return Ok((record, actions, tools));
+                    return Ok((record, taken, taken, tools));
                 }
-                let (record, actions, masked) = productive(record, actions, &failed)?;
+                let (record, actions, masked) = supervision::productive(record, taken, &failed)?;
                 failed_masked += masked as u64;
-                let tools = supervised_tools(&record);
-                Ok((record, actions, tools))
+                let tools = supervision::supervised_tools(&record);
+                Ok((record, actions, taken, tools))
             });
             match learned {
-                Ok((mut record, actions, tools)) => {
+                Ok((mut record, actions, taken, tools)) => {
                     record.metadata.trial = Some(TrialSource {
                         pass: source.clone(),
                         slot: trial.slot.to_string(),
@@ -478,6 +491,7 @@ pub(crate) fn produce(
                         trial,
                         record,
                         actions,
+                        taken,
                         tools,
                     })
                 }
@@ -529,6 +543,12 @@ pub(crate) fn produce(
         }
         projected = kept;
     }
+    let mut waterfall_limited = None;
+    if let Some((limit, prefer)) = dataset.per_task {
+        projected =
+            selection::limit_per_task(projected, limit, prefer, dataset.seed, &mut excluded);
+        waterfall_limited = Some(projected.len() as u64);
+    }
     if projected.is_empty() {
         let mut reasons: BTreeMap<&str, u64> = BTreeMap::new();
         for e in &excluded {
@@ -563,6 +583,7 @@ pub(crate) fn produce(
         record,
         actions,
         tools,
+        ..
     } in &projected
     {
         let split = if held.contains(&group_of(trial)) {
@@ -652,7 +673,7 @@ pub(crate) fn produce(
     for e in &excluded {
         *exclusions.entry(e.reason.clone()).or_default() += 1;
     }
-    let waterfall = vec![
+    let mut waterfall = vec![
         WaterfallStep {
             step: "raw_trials".into(),
             remaining: raw,
@@ -665,11 +686,17 @@ pub(crate) fn produce(
             step: "projected".into(),
             remaining: eligible,
         },
-        WaterfallStep {
-            step: "accepted".into(),
-            remaining: accepted.len() as u64,
-        },
     ];
+    if let Some(remaining) = waterfall_limited {
+        waterfall.push(WaterfallStep {
+            step: "per_task".into(),
+            remaining,
+        });
+    }
+    waterfall.push(WaterfallStep {
+        step: "accepted".into(),
+        remaining: accepted.len() as u64,
+    });
     let product = DatasetProduct {
         schema: DATASET_SCHEMA.into(),
         name: dataset.name.clone(),
@@ -704,37 +731,6 @@ pub(crate) fn produce(
         failed_masked: (dataset.supervise == Supervise::Productive).then_some(failed_masked),
     };
     std::fs::write(staging.path().join("report.md"), report.render()).map_err(io(staging.path()))
-}
-
-/// `record` (supervising `actions`) under `supervise: productive`: every
-/// action whose calls all failed (`failed`) kept as context. Returns the
-/// record, the actions it supervises and how many were taken out; a record
-/// left supervising nothing has no record.
-fn productive(
-    mut record: Record,
-    actions: usize,
-    failed: &BTreeSet<String>,
-) -> Result<(Record, usize, usize), (String, String)> {
-    let masked = splinter_data::mask_failed_actions(&mut record.body, failed);
-    if masked >= actions {
-        return Err((
-            "nothing_supervised".into(),
-            format!("every one of its {actions} actions made only calls that failed"),
-        ));
-    }
-    Ok((record, actions - masked, masked))
-}
-
-/// The tools the supervised actions of `record` call, in order.
-fn supervised_tools(record: &Record) -> Vec<String> {
-    match &record.body {
-        RecordBody::Chat { messages, .. } => messages
-            .iter()
-            .filter(|m| m.role == "assistant" && m.train)
-            .flat_map(|m| m.tool_calls.iter().map(|c| c.function.name.clone()))
-            .collect(),
-        _ => Vec::new(),
-    }
 }
 
 /// The dataset product of a committed dataset view.

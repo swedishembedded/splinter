@@ -193,6 +193,18 @@ pub(crate) fn projection_problems(
             }
         }
     }
+    if params.per_task.is_some() || params.prefer.is_some() {
+        if params.objective != "sft" {
+            out.push(format!(
+                "per_task and prefer are an SFT dataset's; a {} dataset is projected by its own view",
+                params.objective
+            ));
+        } else if params.per_task.is_none() {
+            out.push("prefer chooses the trials a per_task limit keeps; name per_task".to_owned());
+        } else if params.per_task == Some(0) {
+            out.push("per_task: 0 keeps no trial; name at least 1".to_owned());
+        }
+    }
     if params.supervise != ops::Supervise::All {
         if params.objective != "sft" {
             out.push(format!(

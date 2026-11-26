@@ -155,6 +155,18 @@ pub enum Supervise {
     Productive,
 }
 
+/// Which admitted trials of a task an SFT dataset keeps when it keeps only
+/// `per_task` of them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Prefer {
+    /// The trials with the fewest actions, ties drawn by the stage's seed.
+    #[default]
+    FewestActions,
+    /// Trials drawn by the stage's seed.
+    Random,
+}
+
 /// `dataset.project`: training records projected from attempts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -189,6 +201,14 @@ pub struct ProjectParams {
     /// Which actions of an SFT record are supervised (`all`, `productive`).
     #[serde(default)]
     pub supervise: Supervise,
+    /// The most admitted trials an SFT dataset keeps of one task; every one
+    /// when unset. The others are excluded as `per_task_limit`.
+    #[serde(default)]
+    pub per_task: Option<usize>,
+    /// Which trials `per_task` keeps: `fewest-actions` (the default) or
+    /// `random`.
+    #[serde(default)]
+    pub prefer: Option<Prefer>,
     /// The seed of the split and of every draw the projection makes.
     pub seed: u64,
 }

@@ -179,3 +179,112 @@ fn productive_supervision_needs_the_requests_the_model_was_sent() {
             .unwrap_or_default();
     assert!(refused.contains("supervise"), "{refused}");
 }
+
+/// `RECIPE` with two attempts per task.
+fn twice(recipe: &str) -> String {
+    recipe.replace("attempts: 1, seed: 11", "attempts: 2, seed: 11")
+}
+
+#[test]
+fn a_per_task_limit_keeps_the_trials_with_the_fewest_actions_and_lists_the_rest() {
+    let repo = Repo::new();
+    let backend = FakeBackend::with(Outcome::Pass);
+    backend.script("train/001-first", &[Outcome::LongPass, Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, &twice(&with_arm("per_task: 1"))),
+        dir.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    // Without the limit every verified trial is a record.
+    assert_eq!(lines(&dir.path().join("sft/train.jsonl")).len(), 4);
+    let kept = supervision(&dir.path().join("arm/train.jsonl"));
+    assert_eq!(
+        kept,
+        [
+            ("train/001-first".to_owned(), vec![true, true, true]),
+            ("train/002-second".to_owned(), vec![true, true, true]),
+        ],
+        "one trial per task, the shorter one of the first"
+    );
+    let excluded = lines(&dir.path().join("arm/excluded.jsonl"));
+    assert_eq!(excluded.len(), 2, "{excluded:#?}");
+    assert!(excluded.iter().all(|e| e["reason"] == "per_task_limit"));
+    let long = excluded
+        .iter()
+        .find(|e| e["task"] == "train/001-first")
+        .unwrap();
+    assert!(
+        long["detail"].as_str().unwrap().contains("7 actions"),
+        "{long}"
+    );
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("arm/dataset.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest["exclusions"]["per_task_limit"], 2);
+    let steps: Vec<&str> = manifest["waterfall"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["step"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            "raw_trials",
+            "verified_successes",
+            "projected",
+            "per_task",
+            "accepted"
+        ]
+    );
+}
+
+#[test]
+fn a_random_per_task_draw_is_the_seeds() {
+    let repo = Repo::new();
+    let backend = FakeBackend::with(Outcome::Pass);
+    backend.script("train/001-first", &[Outcome::LongPass, Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let kept = |seed: u64| {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = twice(&with_arm("per_task: 1, prefer: random"))
+            .replace("seed: 13, per_task", &format!("seed: {seed}, per_task"));
+        run(&resolved(&repo, &recipe), dir.path(), &backend, &trainer).unwrap();
+        lines(&dir.path().join("arm/accepted.jsonl"))
+            .into_iter()
+            .map(|a| (a["task"].to_string(), a["slot"].to_string()))
+            .collect::<Vec<_>>()
+    };
+    let draws: Vec<_> = (0..12).map(kept).collect();
+    assert!(draws.iter().all(|d| d.len() == 2), "{draws:?}");
+    assert_eq!(kept(3), draws[3], "the same seed draws the same trials");
+    assert!(
+        draws.iter().any(|d| d != &draws[0]),
+        "another seed draws others: {draws:?}"
+    );
+}
+
+#[test]
+fn a_preference_without_a_per_task_limit_is_refused() {
+    let repo = Repo::new();
+    for with in [
+        "prefer: random",
+        "per_task: 0",
+        "objective: feedback, per_task: 1",
+    ] {
+        let refused = splinter_factory::resolve::resolve(
+            &repo.root,
+            &with_arm(with),
+            crate::repo::connections(),
+        )
+        .err()
+        .map(|e| format!("{e:?}"))
+        .unwrap_or_default();
+        assert!(refused.contains("per_task"), "{with}: {refused}");
+    }
+}

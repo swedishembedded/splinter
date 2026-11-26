@@ -48,6 +48,11 @@ using them is [Build datasets and train a candidate](../guides/training.md).
   an error is read from the requests the model was sent (the agent marks an error result) against the tool's
   own output in the trajectory, so `productive` needs `projection: native-sft`. The report counts the actions
   kept as context.
+- `per_task` and `prefer`: an `sft` dataset's only. `per_task: N` keeps at most N admitted trials of each task
+  (after admission, projection and `max_block`); the others are excluded as `per_task_limit`, each with how many
+  actions it took. `prefer: fewest-actions` (the default) keeps the trials that took the fewest actions, ties drawn
+  by the seed; `prefer: random` draws them by the seed. A trial's draw depends only on the seed and the trial, so
+  the same seed keeps the same trials. `prefer` without `per_task`, and `per_task: 0`, are refused.
 
 A stage that projects a non-`sft` dataset is refused when a source attempt stage is hinted, continued or runs
 a harness: such a dataset is projected only from attempts made as the target will be asked.
