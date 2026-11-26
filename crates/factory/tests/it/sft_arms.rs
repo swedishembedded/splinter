@@ -430,3 +430,86 @@ fn a_shuffled_request_control_needs_two_tasks() {
     .unwrap_or_default();
     assert!(refused.contains("control"), "{refused}");
 }
+
+fn composition(dir: &std::path::Path, stage: &str) -> Value {
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join(stage).join("dataset.json")).unwrap(),
+    )
+    .unwrap();
+    let file = manifest["composition"]["path"].as_str().unwrap();
+    serde_json::from_str(&std::fs::read_to_string(dir.join(stage).join(file)).unwrap()).unwrap()
+}
+
+/// The characters of a message the loss reads: its text, its reasoning and
+/// each call's name and arguments.
+fn characters(message: &Value) -> u64 {
+    let text = |v: &Value| v.as_str().map_or(0, |s| s.chars().count() as u64);
+    text(&message["content"])
+        + text(&message["reasoning_content"])
+        + message["tool_calls"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|c| text(&c["function"]["name"]) + text(&c["function"]["arguments"]))
+            .sum::<u64>()
+}
+
+#[test]
+fn every_sft_dataset_reports_its_composition() {
+    let repo = Repo::new();
+    let backend = FakeBackend::with(Outcome::Pass);
+    backend.script("train/001-first", &[Outcome::PassAfterError, Outcome::Pass]);
+    let trainer = FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, &twice(&with_arm("supervise: productive"))),
+        dir.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    let all = composition(dir.path(), "sft");
+    let productive = composition(dir.path(), "arm");
+    for c in [&all, &productive] {
+        assert_eq!(c["records"], 4, "{c:#}");
+        assert_eq!(c["train_records"], 4);
+        assert_eq!(c["validation_records"], 0);
+        assert_eq!(c["trials"], 4);
+        assert_eq!(c["tasks"], 2);
+    }
+    // The four trials take the same actions; leaving one failed action out
+    // of the loss makes that trial's supervised sequence another one.
+    assert_eq!(all["action_sequences"], 1);
+    assert_eq!(productive["action_sequences"], 2);
+    assert_eq!(all["supervised_messages"], 12);
+    assert_eq!(all["masked_messages"], 0);
+    assert_eq!(all["failed_actions_masked"], 0);
+    assert_eq!(all["supervise"], "all");
+    assert_eq!(productive["supervised_messages"], 11);
+    assert_eq!(productive["masked_messages"], 1);
+    assert_eq!(productive["failed_actions_masked"], 1);
+    assert_eq!(productive["supervise"], "productive");
+    assert!(all["control"].is_null());
+    // The supervised characters are those of the supervised messages, and
+    // the masked action's are no longer among them.
+    let supervised: u64 = lines(&dir.path().join("sft/train.jsonl"))
+        .iter()
+        .flat_map(|r| r["messages"].as_array().unwrap().clone())
+        .filter(|m| m["train"] == true)
+        .map(|m| characters(&m))
+        .sum();
+    assert_eq!(all["supervised_characters"], supervised);
+    let masked: u64 = lines(&dir.path().join("arm/train.jsonl"))
+        .iter()
+        .flat_map(|r| r["messages"].as_array().unwrap().clone())
+        .filter(|m| m["role"] == "assistant" && m["train"] == false)
+        .map(|m| characters(&m))
+        .sum();
+    assert!(masked > 0);
+    assert_eq!(
+        productive["supervised_characters"].as_u64().unwrap() + masked,
+        supervised
+    );
+    let report = std::fs::read_to_string(dir.path().join("arm/report.md")).unwrap();
+    assert!(report.contains("## Composition"), "{report}");
+}

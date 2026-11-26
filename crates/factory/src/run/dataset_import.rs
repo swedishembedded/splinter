@@ -297,6 +297,7 @@ pub(crate) fn produce(
         exclusions,
         thinking: import.params.thinking,
         control: None,
+        composition: None,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let held = splits[1].1.len();

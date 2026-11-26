@@ -32,6 +32,8 @@ pub(super) struct Report<'a> {
     pub(super) failed_masked: Option<u64>,
     /// The negative control the dataset was built as, if any.
     pub(super) control: Option<&'static str>,
+    /// What the dataset is made of.
+    pub(super) make_up: &'a super::Composition,
 }
 
 impl Report<'_> {
@@ -78,6 +80,10 @@ impl Report<'_> {
                 self.reasoning_removed
             )
         });
+        out.push_str("\n## Composition\n\n| measure | value |\n|---|---|\n");
+        for (measure, value) in self.make_up.rows() {
+            out.push_str(&format!("| {measure} | {value} |\n"));
+        }
         out.push_str(&format!(
             "\n## Exclusions\n\n{}",
             table(self.exclusions, "reason")

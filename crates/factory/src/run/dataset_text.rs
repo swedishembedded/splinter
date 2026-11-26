@@ -280,6 +280,7 @@ pub(crate) fn produce(
         exclusions: exclusions.clone(),
         thinking: false,
         control: None,
+        composition: None,
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let mut report = format!(

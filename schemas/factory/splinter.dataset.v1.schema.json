@@ -12,6 +12,17 @@
       "description": "The admission rule (`verified-success`).",
       "type": "string"
     },
+    "composition": {
+      "description": "What an SFT dataset is made of: records, trials, tasks, distinct\naction sequences, supervised and masked messages and characters\n(`composition.json`); absent for another objective's dataset.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FileRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "control": {
       "description": "The negative control the dataset was built as (`shuffled-requests`:\neach record's task request is another task's); absent for a dataset\nthat is no control.",
       "type": [

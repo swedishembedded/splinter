@@ -32,7 +32,6 @@ use std::sync::Arc;
 
 use serde_json::json;
 use splinter_core::clock::SystemClock;
-use splinter_core::digest::digest_of;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_knowledge::capture::{capture_tree, DirtyPolicy, TreeRequest};
 use splinter_knowledge::tasks::workspace::{
@@ -46,6 +45,7 @@ use splinter_store::factory::products::Staging;
 use splinter_store::workspace::Workspace;
 use splinter_store::StateRoot;
 
+use super::holdout::held_out;
 use super::{io, stage_error, write_json, Factory, RunError};
 use crate::ops::MutateParams;
 use crate::plan::PlannedStage;
@@ -81,24 +81,6 @@ fn slug(family: &str) -> String {
     family
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-        .collect()
-}
-
-/// The `percent` of `families` held out, drawn by `seed`: always at least
-/// one when any is asked for, never all.
-fn held_out(families: &BTreeSet<String>, percent: u32, seed: u64) -> BTreeSet<String> {
-    let mut drawn: Vec<(u64, &String)> = families
-        .iter()
-        .map(|f| (digest_of(&(seed, f)).leading_u64(), f))
-        .collect();
-    drawn.sort();
-    let wanted = (families.len() * percent as usize)
-        .div_ceil(100)
-        .min(families.len().saturating_sub(1));
-    drawn
-        .into_iter()
-        .take(wanted)
-        .map(|(_, f)| f.clone())
         .collect()
 }
 

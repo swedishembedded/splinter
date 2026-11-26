@@ -67,7 +67,14 @@ A stage that projects a non-`sft` dataset is refused when a source attempt stage
 a harness: such a dataset is projected only from attempts made as the target will be asked.
 
 The product holds `train.jsonl` and `validation.jsonl`, `accepted.jsonl` and `excluded.jsonl` (one line per
-trial, with the reason for each exclusion), and the manifest. Chat records are written as `generic-messages-v2`.
+trial, with the reason for each exclusion), and the manifest. An `sft` dataset also holds `supervision.jsonl` (each record's
+trial, split and supervised messages) and `composition.json`, which the manifest names (`composition`) and
+`report.md` shows: the records (train and validation), the distinct trials and tasks they are of, the distinct
+action sequences (each record's supervised tool calls in order, by tool name and arguments with sorted keys and no
+spacing), the supervised and the masked (`train: false`) assistant messages, the characters of the supervised
+messages (text, reasoning and each call's name and arguments; tokens are the trainer's to count), the actions
+`supervise: productive` kept as context, and the `supervise`, `per_task` and `control` it was built with. Two
+arms built from one set of attempts are compared by it before either is trained. Chat records are written as `generic-messages-v2`.
 Every record's `metadata.trial` names the pass, slot, agent and model that made its trial, and what the target was
 produced with that the record leaves out (`withheld`), so that a hint is never supervised silently.
 

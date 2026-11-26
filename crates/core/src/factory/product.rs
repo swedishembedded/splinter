@@ -184,6 +184,11 @@ pub struct DatasetProduct {
     /// that is no control.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control: Option<String>,
+    /// What an SFT dataset is made of: records, trials, tasks, distinct
+    /// action sequences, supervised and masked messages and characters
+    /// (`composition.json`); absent for another objective's dataset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition: Option<FileRef>,
 }
 
 /// The form a trained model takes.

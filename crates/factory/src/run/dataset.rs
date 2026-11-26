@@ -41,18 +41,21 @@
 //! supervised messages), `dataset.json` (the [`DatasetProduct`]) and
 //! `report.md`.
 
+mod composition;
 mod control;
 mod report;
 mod selection;
 mod supervision;
 mod views;
 
+pub(crate) use super::holdout::held_out;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use splinter_core::digest::{digest_of, Digest};
+use splinter_core::digest::Digest;
 use splinter_core::factory::execution::FileRef;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::factory::product::{DatasetProduct, TrialResult, WaterfallStep, DATASET_SCHEMA};
@@ -60,6 +63,8 @@ use splinter_data::{
     native_record, portable_record, Objective, Record, RecordBody, RecordMetadata, TrialSource,
 };
 use splinter_store::factory::products::Staging;
+
+pub use composition::{Composition, COMPOSITION_FILE};
 
 use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
@@ -384,23 +389,6 @@ pub(crate) fn file_ref(staging: &Staging, name: &str) -> Result<FileRef, RunErro
     })
 }
 
-/// The groups held out: `percent` of them, drawn by `seed`, never all.
-pub(crate) fn held_out(groups: &BTreeSet<String>, percent: u32, seed: u64) -> BTreeSet<String> {
-    let mut drawn: Vec<(u64, &String)> = groups
-        .iter()
-        .map(|g| (digest_of(&(seed, g)).leading_u64(), g))
-        .collect();
-    drawn.sort();
-    let wanted = (groups.len() * percent as usize)
-        .div_ceil(100)
-        .min(groups.len().saturating_sub(1));
-    drawn
-        .into_iter()
-        .take(wanted)
-        .map(|(_, g)| g.clone())
-        .collect()
-}
-
 #[allow(clippy::too_many_lines)]
 pub(crate) fn produce(
     factory: &Factory<'_>,
@@ -691,6 +679,18 @@ pub(crate) fn produce(
     write_lines(&staging.path().join("accepted.jsonl"), &accepted)?;
     write_lines(&staging.path().join("excluded.jsonl"), &excluded)?;
     write_lines(&staging.path().join("supervision.jsonl"), &supervision)?;
+    let make_up = composition::composition(
+        &projected,
+        &composition::Build {
+            train_records: train.len(),
+            validation_records: validation.len(),
+            failed_actions_masked: failed_masked,
+            supervise: json!(dataset.supervise).as_str().unwrap_or_default(),
+            per_task: dataset.per_task.map(|(limit, _)| limit),
+            control: dataset.control.map(Control::name),
+        },
+    );
+    write_json(&staging.path().join(COMPOSITION_FILE), &make_up)?;
     let mut exclusions: BTreeMap<String, u64> = BTreeMap::new();
     for e in &excluded {
         *exclusions.entry(e.reason.clone()).or_default() += 1;
@@ -736,6 +736,7 @@ pub(crate) fn produce(
         exclusions: exclusions.clone(),
         thinking: dataset.thinking,
         control: dataset.control.map(|c| c.name().to_owned()),
+        composition: Some(file_ref(staging, COMPOSITION_FILE)?),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let report = report::Report {
@@ -753,6 +754,7 @@ pub(crate) fn produce(
         tasks: tasks_offered(factory, &dataset.sources),
         failed_masked: (dataset.supervise == Supervise::Productive).then_some(failed_masked),
         control: dataset.control.map(Control::name),
+        make_up: &make_up,
     };
     std::fs::write(staging.path().join("report.md"), report.render()).map_err(io(staging.path()))
 }
@@ -763,23 +765,4 @@ pub(crate) fn produce(
 /// Its description cannot be read.
 pub fn dataset_of(view: &Path) -> Result<DatasetProduct, RunError> {
     super::read_json(&view.join(DATASET_FILE))
-}
-
-#[cfg(test)]
-mod held_out_spec {
-    use super::*;
-
-    fn groups(n: usize) -> BTreeSet<String> {
-        (0..n).map(|i| format!("g{i}")).collect()
-    }
-
-    /// `percent` of the groups, rounded up, are held out, but never every
-    /// one: a split with no training group trains on nothing.
-    #[test]
-    fn the_share_is_rounded_up_and_never_takes_every_group() {
-        assert_eq!(held_out(&groups(10), 25, 1).len(), 3);
-        assert_eq!(held_out(&groups(2), 99, 1).len(), 1);
-        assert!(held_out(&groups(1), 50, 1).is_empty());
-        assert_eq!(held_out(&groups(10), 25, 1), held_out(&groups(10), 25, 1));
-    }
 }

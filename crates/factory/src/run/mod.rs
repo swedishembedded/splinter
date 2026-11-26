@@ -32,6 +32,7 @@ mod directory;
 pub mod eval;
 pub mod fork;
 pub mod harness_search;
+mod holdout;
 pub mod import;
 mod lease;
 pub mod online;
