@@ -132,6 +132,42 @@ def test_reconcile_names_the_slots_whose_trial_never_finished(finished, capsys) 
         assert main(["reconcile", "--out", str(out)]) == 0
 
 
+def test_reconcile_removes_what_the_sandbox_of_a_finished_trial_left(tmp_path, capsys) -> None:
+    """A worker killed after Harbor finished and reported a trial but before its sandbox was taken down leaves that
+    sandbox in a finished trial's directory. The controller publishes the batch's whole tree, so reconcile removes it
+    there too; the trial's records and its report stay as they were."""
+    from splinter_harbor_worker.plan import trial_name
+    from splinter_harbor_worker.runner import report_path
+    from splinter_harbor_worker.spec import ExecutionSpec
+
+    out = tmp_path / "out"
+    spec = make_spec(TASK, agent="nop")
+    write_specs(out.parent / "specs.jsonl", [spec])
+    (out / "harbor" / "job").mkdir(parents=True)
+    shutil.copy(out.parent / "specs.jsonl", out / "specs.jsonl")
+    parsed = ExecutionSpec.model_validate(spec)
+    trial = out / "harbor" / "job" / trial_name(parsed)
+    (trial / "agent").mkdir(parents=True)
+    (trial / "result.json").write_text(json.dumps({"trial_name": trial.name}))
+    report = report_path(out, parsed)
+    report.parent.mkdir(parents=True)
+    report.write_text("{}")
+    sandbox = trial / "sandbox-left-behind"
+    (sandbox / "overlay" / "upper" / "splinter" / "host").mkdir(parents=True)
+    (sandbox / "overlay" / "upper" / "splinter" / "host" / "ld.so").symlink_to("lib/ld-linux-aarch64.so.1")
+    (sandbox / "overlay" / "work" / "work").mkdir(parents=True)
+    (sandbox / "overlay" / "work" / "work").chmod(0)
+    try:
+        assert main(["reconcile", "--out", str(out)]) == 0
+        assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"missing": [], "reported": 1}
+        assert not sandbox.exists()
+        assert sorted(p.name for p in trial.iterdir()) == ["agent", "result.json"]
+        assert report.read_text() == "{}"
+    finally:
+        if (sandbox / "overlay" / "work" / "work").exists():
+            (sandbox / "overlay" / "work" / "work").chmod(0o700)
+
+
 def test_reconcile_removes_what_the_sandbox_of_an_unfinished_trial_left(tmp_path, capsys) -> None:
     """A worker killed mid-trial leaves that trial's sandbox on disk: an image copy holding links into host
     directories the sandbox mounted, and directories its overlay left unreadable. The controller then publishes the

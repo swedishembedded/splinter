@@ -274,9 +274,9 @@ async def run_job(specs, tasks_root, files_root, out, concurrency, image_cache, 
 
 
 def remove_sandboxes(trial: Path) -> None:
-    """Remove what the sandboxes of a trial that never finished left in its directory (each ``sandbox-<session>``:
-    an image copy, an overlay with directories it made unreadable, links into the host directories it mounted),
-    which a killed worker could not; the trial's own records stay."""
+    """Remove what the sandboxes of a trial left in its directory (each ``sandbox-<session>``: an image copy, an
+    overlay with directories it made unreadable, links into the host directories it mounted), which a killed worker
+    could not; the trial's own records stay."""
     if trial.is_dir():
         for sandbox in trial.glob("sandbox-*"):
             remove_tree(sandbox)
@@ -287,7 +287,8 @@ def reconcile(out: Path) -> int:
     attempts have no finished trial. Idempotent. Exit 0 whenever that worked: an attempt with no finished trial is
     what an interrupted run leaves, and the caller runs it again (it is listed under ``missing``); a failure to read
     ``out`` is an error with its own exit code. What the sandboxes of such a trial left in its directory is removed,
-    so the caller can keep ``out`` as it is."""
+    so the caller can keep ``out`` as it is: of a trial that never finished, and of one a worker killed after the trial
+    ended but before its sandbox was taken down. No worker runs in ``out`` while it is reconciled."""
     out = out.resolve()
     copy = out / SPECS_COPY
     if not copy.is_file():
@@ -295,7 +296,7 @@ def reconcile(out: Path) -> int:
     specs = load_specs(copy, environ={}, check_environment=False)
     events = EventLog(out / "events.jsonl")
     outcome = sweep(out, specs, events, "reconciled")
-    for spec in outcome.unreported:
+    for spec in specs:
         remove_sandboxes(trial_dir(out, spec))
     missing = [{"slot": s.slot.as_json(), "attempt": s.attempt} for s in outcome.unreported]
     print(json.dumps({"reported": len(outcome.reported), "missing": missing}, sort_keys=True))
