@@ -636,6 +636,17 @@ fn check(
                 problem(reader, &text);
             }
         }
+        crate::run::online::ONLINE => {
+            let Ok(params) = stage.params::<crate::run::online::OnlineParams>() else {
+                return;
+            };
+            if let Some(agent) = &params.agent {
+                reader.environment(&agent.environment, &mut found.environments);
+                for file in agent.files.iter().chain(agent.system_prompt.iter()) {
+                    reader.read(file);
+                }
+            }
+        }
         names::TRAIN => {
             let Ok(params) = stage.params::<TrainParams>() else {
                 return;

@@ -16,8 +16,10 @@ import json
 import shutil
 from pathlib import Path
 
+import yaml
 from conftest import make_spec, make_task, write_specs
 
+from splinter_harbor_worker.agents.sven import SvenAgent
 from splinter_harbor_worker.cli import main
 
 TASK = "train/002-ask-model"
@@ -361,3 +363,16 @@ def test_specifications_kept_in_the_output_directory_are_run_and_run_again(tmp_p
             "--image-cache", str(tmp_path / "cache")]
     assert main(argv) == 0
     assert main(argv) == 0, "a rerun of the kept, resolved specifications"
+
+
+def test_a_model_bound_with_a_driver_is_reached_through_that_driver() -> None:
+    # A brain server is reached through sven's brain driver, which honours a request's seed and reads the policy trace
+    # an online run trains on; any other model through its protocol's driver.
+    agent = SvenAgent.__new__(SvenAgent)
+    agent._settings = {"gateway_url": "http://127.0.0.1:1", "protocol": "openai", "driver": "brain", "model": "m",
+                       "timeout_sec": 300}
+    config = yaml.safe_load(agent.home_files()[".config/sven/config.yaml"])
+    assert config["providers"]["gateway"]["name"] == "brain"
+    agent._settings["driver"] = None
+    config = yaml.safe_load(agent.home_files()[".config/sven/config.yaml"])
+    assert config["providers"]["gateway"]["name"] == "openai"

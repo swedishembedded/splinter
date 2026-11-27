@@ -12,6 +12,7 @@
 mod brain;
 mod doubles;
 mod simulation;
+mod worker;
 
 use splinter_core::factory::group::{
     GroupKey, GroupState, RolloutOutcome, RolloutState, VersionSpan,

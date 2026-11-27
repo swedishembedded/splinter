@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# A task whose agent's only tool is an MCP server its environment declares: what an online run's rollouts are
+# held to give the agent, whatever the environment.
+schema_version = "1.4"
+
+[task]
+name = "online-tools/notes"
+
+[verifier]
+timeout_sec = 60.0
+
+[agent]
+timeout_sec = 300.0
+
+[environment]
+build_timeout_sec = 600.0
+os = "linux"
+
+[[environment.mcp_servers]]
+name = "notes"
+transport = "stdio"
+command = "python3"
+args = ["/usr/local/share/notes/notes_mcp.py"]

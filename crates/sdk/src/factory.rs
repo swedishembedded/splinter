@@ -286,6 +286,7 @@ mod tests {
             url: Some("http://127.0.0.1:1/v1".into()),
             token_env: None,
             drop_headers: Vec::new(),
+            driver: None,
         }
     }
 

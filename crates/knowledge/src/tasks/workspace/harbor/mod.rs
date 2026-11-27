@@ -22,7 +22,8 @@
 //! solver is given, on every run, the request neither quotes nor points at
 //! the hidden files, and, when an oracle change exists, the verifier passes
 //! it. What the host cannot honour is refused with the reason: a Dockerfile
-//! with `RUN`, a prebuilt image, a Windows task, a multi-step task. A task
+//! with `RUN`, a prebuilt image, tools given as MCP servers, a Windows task,
+//! a multi-step task. A task
 //! splinter itself exported carries its check in `[metadata.splinter]` and
 //! is rebuilt exactly; any other task is graded by its own `test.sh`, run
 //! through a runner that maps `/tests`, `/logs/verifier` and the working
@@ -168,6 +169,19 @@ impl HarborTask {
         let setting = |key: &str| environment.and_then(|e| e.get(key));
         if setting("os").and_then(toml::Value::as_str) == Some("windows") {
             return refuse(dir, "it is a Windows task");
+        }
+        // The host gives its agent the tools of its own runtime: a task whose
+        // environment gives its agent tools (its MCP servers) runs in that
+        // environment, or its agent would run without them.
+        if setting("mcp_servers")
+            .and_then(toml::Value::as_array)
+            .is_some_and(|servers| !servers.is_empty())
+        {
+            return refuse(
+                dir,
+                "its environment gives the agent tools ([[environment.mcp_servers]]) the host cannot start: \
+                 run it in its own environment on the execution worker",
+            );
         }
         if setting("docker_image").is_some() {
             return refuse(

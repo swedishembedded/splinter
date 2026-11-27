@@ -688,6 +688,30 @@ compiles its collection evaluates on the same compiled tasks:
   epoch, to which the groups it had not committed are sent again. `scripts/online/cpu-stack.sh`
   (`make test/online`) runs this end to end on the CPU with a toy model over `tasks/toy-answers`,
   killing the controller and brain mid-run and checking the products.
+
+  With `agent:` the rollouts run on the execution worker instead, each one attempt of its task
+  in the task's own environment, exactly as an `attempt.collect` pass runs it: the agent is
+  offered the tools, configuration and sandbox the task declares (the MCP servers of its
+  `task.toml` and the agent configuration its image installs), whatever the environment is.
+  `agent` names the adapter (`sven`, the one that records the policy trace) and the
+  environment file, with the same `args`, `files`, `system_prompt`, `environment_variables`,
+  `budget` and `timeout_policy` as an attempt pass; the run sets each request's sampling and
+  seed itself. A task whose environment gives its agent tools is refused by the in-process
+  rollouts, which could not give them. A bench environment's task set is trained on so:
+  ```yaml
+  - id: online
+    uses: train.online
+    inputs: { tasks: $stages.tasks.tasks }
+    with: { base: student, groups: 64, group_size: 8, rollout_tokens: 4096, step_tokens: 16384,
+            queue_tokens: 65536, seed: 1,
+            agent: { agent: sven, environment: environments/vim/environment.yaml } }
+  ```
+  A rollout a limit ended (the served context, a reply's own token limit, the run's output
+  budget, the turn cap, the deadline) is a scored failure (reward 0) counted by cause in the
+  report's `rollouts.truncations`, never retried as an infrastructure failure; its completed
+  calls are trained unless a reply was cut at its own token limit. `make test/online/tools`
+  runs the worker path against a fixture task whose only tool is an MCP server, and
+  `make test/online/tools/tasks TASKS=<dir>` against any task set that declares tools.
 - **Replay** (`model.train` with `replay`). A candidate trained on new chat records can rehearse
   earlier datasets' records beside them, `replay_share` of the draws (the plain union when
   unset), so what it learned before is kept: `inputs: { dataset: $stages.sft.dataset, replay:

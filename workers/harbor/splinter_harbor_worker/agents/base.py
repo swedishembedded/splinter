@@ -19,6 +19,7 @@ the ``ExecutionSpec`` (``AgentConfig.kwargs``, written to the trial's ``config.j
 ``files_root``     where the worker finds them;
 ``system_prompt``  text appended to the agent's own system prompt;
 ``gateway_url``, ``protocol``, ``model``  the model, when the worker routes it through its gateway;
+``driver``         the agent's driver for that model when it is not the protocol's generic one (``brain``);
 ``timeout_sec``    the agent's wall-clock limit.
 
 Per trial an adapter gives the agent an isolated HOME (no user configuration leaks in), the trial's gateway token as its

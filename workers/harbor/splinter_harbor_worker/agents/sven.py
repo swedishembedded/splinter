@@ -45,7 +45,7 @@ class SvenAgent(SplinterAgent):
         # `agent.stream_idle_timeout_secs` stays inside the run's time budget: a local model can stay silent through
         # the prefill of a long prompt for longer than Sven's default, so only a stuck run should trip it.
         config = {
-            "providers": {"gateway": {"name": settings["protocol"], "base_url": f"{settings['gateway_url'].rstrip('/')}/v1",
+            "providers": {"gateway": {"name": settings.get("driver") or settings["protocol"], "base_url": f"{settings['gateway_url'].rstrip('/')}/v1",
                                       "api_key_file": TOKEN_FILE}},
             "model": {"provider": "gateway", "name": settings["model"]},
             "agent": {"stream_idle_timeout_secs": max(60, int(settings["timeout_sec"]) - 60)},

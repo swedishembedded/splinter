@@ -312,6 +312,11 @@ fn a_task_the_host_cannot_honour_is_refused_with_the_reason_and_discovery_writes
     );
     let no_test = foreign(&root, "no-test", REWARD_TXT);
     fs::remove_file(no_test.join("tests/test.sh")).unwrap();
+    let tools = foreign(&root, "tools", REWARD_TXT);
+    write(
+        &tools.join("task.toml"),
+        "schema_version = \"1.4\"\n[[environment.mcp_servers]]\nname = \"edit\"\ntransport = \"stdio\"\ncommand = \"python3\"\nargs = [\"/usr/local/bin/edit.py\"]\n",
+    );
 
     let before: Vec<_> = walk(&root);
     let found = discover(&root).unwrap();
@@ -330,6 +335,10 @@ fn a_task_the_host_cannot_honour_is_refused_with_the_reason_and_discovery_writes
     assert!(reason("image").unwrap().contains("prebuilt image"));
     assert!(reason("windows").unwrap().contains("Windows"));
     assert!(reason("no-test").unwrap().contains("test.sh"));
+    assert!(
+        reason("tools").unwrap().contains("mcp_servers"),
+        "a task whose agent is given tools is never run without them"
+    );
     assert_eq!(found.iter().filter(|d| d.refusal.is_none()).count(), 1);
     let _ = good;
 }

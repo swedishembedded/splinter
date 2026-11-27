@@ -25,7 +25,9 @@ use std::thread::JoinHandle;
 use serde_json::{json, Value};
 
 /// The policy behind the endpoint: the assistant message (OpenAI shape) that
-/// answers one request.
+/// answers one request. A `brain` or `policy_trace` member of it is sent
+/// beside the choice, where a brain server sends its account of the decode
+/// and the policy trace.
 pub type Policy = dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync;
 
 /// One request and what the policy answered.
@@ -37,9 +39,15 @@ pub struct Exchange {
     pub reply: Result<Value, String>,
 }
 
+/// More entries of the model list, read when the list is asked for: models
+/// served under ids known only once a run has named them (an adapter a
+/// learner publishes), with what the server says of them.
+pub type Listing = dyn Fn() -> Vec<Value> + Send + Sync;
+
 struct Shared {
     model: String,
     policy: Box<Policy>,
+    listing: Mutex<Option<Box<Listing>>>,
     exchanges: Mutex<Vec<Exchange>>,
 }
 
@@ -63,6 +71,7 @@ impl Endpoint {
         let shared = Arc::new(Shared {
             model: model.to_string(),
             policy,
+            listing: Mutex::new(None),
             exchanges: Mutex::new(Vec::new()),
         });
         let stop = Arc::new(AtomicBool::new(false));
@@ -87,6 +96,18 @@ impl Endpoint {
             port,
             thread: Some(thread),
         })
+    }
+
+    /// The endpoint, listing besides its own model the entries `listing`
+    /// gives whenever the list is asked for.
+    #[must_use]
+    pub fn listing(self, listing: Box<Listing>) -> Self {
+        *self
+            .shared
+            .listing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(listing);
+        self
     }
 
     /// The base URL, `http://127.0.0.1:<port>/v1`.
@@ -141,7 +162,17 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
         return;
     }
     if request_line.starts_with("GET /v1/models") {
-        let list = json!({ "object": "list", "data": [{ "id": shared.model, "object": "model", "owned_by": "minimind" }] });
+        let mut data =
+            vec![json!({ "id": shared.model, "object": "model", "owned_by": "minimind" })];
+        if let Some(listing) = shared
+            .listing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            data.extend(listing());
+        }
+        let list = json!({ "object": "list", "data": data });
         let _ = respond(&mut stream, "200 OK", "application/json", &list.to_string());
     } else if request_line.starts_with("POST /v1/chat/completions") {
         chat(&mut stream, shared, &body);
@@ -174,6 +205,16 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
             return;
         }
     };
+    let mut message = message;
+    // What a brain server sends beside the choice (its account of the decode
+    // and the policy trace), when the policy answers with it.
+    let beside: serde_json::Map<String, Value> = ["brain", "policy_trace"]
+        .into_iter()
+        .filter_map(|key| {
+            let value = message.as_object_mut()?.remove(key)?;
+            Some((key.to_string(), value))
+        })
+        .collect();
     let model = request["model"]
         .as_str()
         .unwrap_or(&shared.model)
@@ -194,9 +235,13 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
             }
         }
         let chunk = |choice: Value| json!({ "id": "minimind", "object": "chat.completion.chunk", "created": 0, "model": model, "choices": [choice] });
+        let mut first = chunk(json!({ "index": 0, "delta": delta, "finish_reason": null }));
+        if let Some(frame) = first.as_object_mut() {
+            frame.extend(beside);
+        }
         let mut sse = String::new();
         for c in [
-            chunk(json!({ "index": 0, "delta": delta, "finish_reason": null })),
+            first,
             chunk(json!({ "index": 0, "delta": {}, "finish_reason": finish })),
         ] {
             sse.push_str(&format!("data: {c}\n\n"));
@@ -204,8 +249,11 @@ fn chat(stream: &mut TcpStream, shared: &Shared, body: &[u8]) {
         sse.push_str("data: [DONE]\n\n");
         let _ = respond(stream, "200 OK", "text/event-stream", &sse);
     } else {
-        let whole = json!({ "id": "minimind", "object": "chat.completion", "created": 0, "model": model,
+        let mut whole = json!({ "id": "minimind", "object": "chat.completion", "created": 0, "model": model,
             "choices": [{ "index": 0, "message": message, "finish_reason": finish }] });
+        if let Some(frame) = whole.as_object_mut() {
+            frame.extend(beside);
+        }
         let _ = respond(stream, "200 OK", "application/json", &whole.to_string());
     }
 }

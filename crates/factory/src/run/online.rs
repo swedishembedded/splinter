@@ -50,11 +50,12 @@ use splinter_core::factory::product::{CandidateKind, ModelCandidate, CANDIDATE_S
 use splinter_core::revision::{ModelDigests, REVISIONS_FILE};
 use splinter_store::factory::products::Staging;
 
+use super::online_worker::{self, OnlineAgent};
 use super::training::CANDIDATE_FILE;
 use super::{io, stage_error, write_json, Factory, RunError, LEASE_SECONDS};
 use crate::online::driver::{run, Ended, OnlineError, Report, RunLedger, Seams};
 use crate::online::seams::{
-    LearnerTelemetry, RolloutsRequest, RoundRobin, StreamLearner, SystemRunClock,
+    LearnerTelemetry, OnlineRollouts, RolloutsRequest, RoundRobin, StreamLearner, SystemRunClock,
 };
 use crate::online::Settings;
 use crate::plan::PlannedStage;
@@ -134,6 +135,13 @@ pub struct OnlineParams {
     pub max_failures: u32,
     /// The seed every rollout's draws derive from.
     pub seed: u64,
+    /// Run each rollout on the execution worker, in its task's own
+    /// environment, with this agent: the tools, configuration and sandbox
+    /// the task declares, exactly as an attempt pass runs it. Unset, each
+    /// rollout is a session in this process in a copy of its task's tree
+    /// (a task that gives its agent tools is refused there).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<OnlineAgent>,
     /// The learner's other policy-gradient settings, as brain names them (not `thinking`: the rollouts are drawn
     /// with thinking off, and the learner always trains that mode).
     #[serde(default)]
@@ -188,6 +196,9 @@ impl OnlineParams {
         }
         if p.max_output_tokens == Some(0) {
             return Err("max_output_tokens is at least 1".into());
+        }
+        if let Some(agent) = &p.agent {
+            agent.check()?;
         }
         if p.groups == 0 || p.publish_every == 0 {
             return Err("groups and publish_every are at least 1".into());
@@ -313,14 +324,18 @@ fn identity_parts(
         .services
         .trainer
         .ok_or_else(|| stage_error(&stage.key, "no trainer is configured"))?;
-    let rollouts = factory
-        .services
-        .online
-        .ok_or_else(|| stage_error(&stage.key, "nothing runs online rollouts here"))?;
-    Ok((
-        params,
-        format!("{} | {}", trainer.identity(), rollouts.identity()),
-    ))
+    let rollouts = match &params.agent {
+        Some(agent) => {
+            let arm = online_worker::arm(factory, stage, &tasks_key(stage)?, agent, params.seed)?;
+            online_worker::identity(factory, &arm)?
+        }
+        None => factory
+            .services
+            .online
+            .ok_or_else(|| stage_error(&stage.key, "nothing runs online rollouts here"))?
+            .identity(),
+    };
+    Ok((params, format!("{} | {rollouts}", trainer.identity())))
 }
 
 pub(crate) fn identity(
@@ -366,10 +381,6 @@ pub(crate) fn produce(
         .services
         .trainer
         .ok_or_else(|| fail("no trainer".into()))?;
-    let rollouts = factory
-        .services
-        .online
-        .ok_or_else(|| fail("no online rollouts".into()))?;
     let base = factory
         .resolved
         .model(&params.base)
@@ -387,6 +398,32 @@ pub(crate) fn produce(
     std::fs::create_dir_all(&scratch).map_err(io(&scratch))?;
     let learner_params = params.learner_params();
     let start = start_adapter(factory, stage, &base)?;
+    let arm = match &params.agent {
+        Some(agent) => Some(online_worker::arm(
+            factory,
+            stage,
+            &key,
+            agent,
+            params.seed,
+        )?),
+        None => None,
+    };
+    let worker = match &arm {
+        Some(arm) => Some(online_worker::WorkerRollouts::new(
+            factory,
+            arm,
+            &base,
+            factory.work(&stage.key).join("worker"),
+        )?),
+        None => None,
+    };
+    let rollouts: &dyn OnlineRollouts = match &worker {
+        Some(worker) => worker,
+        None => factory
+            .services
+            .online
+            .ok_or_else(|| fail("no online rollouts".into()))?,
+    };
     let mut restarts = 0;
     let trained = loop {
         let mut learner = trainer

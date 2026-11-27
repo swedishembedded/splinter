@@ -139,6 +139,8 @@ class ModelBinding(_Strict):
     url: str | None = None
     token_env: str | None = None
     drop_headers: list[str] = []
+    # The agent runtime's driver for this endpoint when it is not the protocol's generic one (``brain``).
+    driver: str | None = None
 
     @field_validator("drop_headers")
     @classmethod

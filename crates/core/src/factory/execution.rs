@@ -151,7 +151,16 @@ pub struct ModelBinding {
     /// endpoint (one of [`FORWARDED_HEADERS`]); empty for most.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub drop_headers: Vec<String>,
+    /// The agent runtime's driver for this endpoint when it is not the
+    /// protocol's generic one: `brain` for a brain server, whose sampling
+    /// controls (a request's seed) and policy trace the runtime then
+    /// honours. Unset, the protocol's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
 }
+
+/// The driver an agent runtime reaches a brain server with.
+pub const BRAIN_DRIVER: &str = "brain";
 
 /// The agent's own headers the worker's gateway passes on to an Anthropic
 /// endpoint; a connection may drop any of them.

@@ -304,6 +304,7 @@ def _agent_config(spec: ExecutionSpec, files_root: Path, gateway: GatewayAddress
         "timeout_sec": timeout,
         "gateway_url": gateway.url if gateway and spec.model else None,
         "protocol": spec.model.protocol if spec.model else None,
+        "driver": spec.model.driver if spec.model else None,
         "model": spec.model.model if spec.model else None,
     }
     kwargs: dict = {"splinter": settings}

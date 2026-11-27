@@ -133,6 +133,16 @@ test/online:
 	$(CARGO) build $(PROFILE) -p splinter
 	bash scripts/online/cpu-stack.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)" "$(ONLINE_PORT)" "$(ESTIMATOR)"
 
+## test/online/tools - train.online's rollouts on the execution worker in their tasks' own environment: an agent offered exactly the MCP tool its task's image declares, graded by the task's verifier, against a scripted policy and learner (needs `make worker/install`, sven on PATH and the network to build the task image; minutes)
+test/online/tools:
+	PATH="$(CURDIR)/workers/harbor/.venv/bin:$$PATH" $(CARGO) test $(PROFILE) -p splinter-factory --test it -- online::worker --ignored
+
+## test/online/tools/tasks - the same on any task set that declares tools (TASKS: a directory of task folders, a handful; the first is rolled out by a policy that calls the first tool it is offered): every offered tool is one a task declares, every call answers, every rollout is graded by its task's verifier
+test/online/tools/tasks:
+	@test -n "$(TASKS)" || { echo "TASKS=<directory of task folders> is required" >&2; exit 2; }
+	rm -rf target/online-tools/tasks && mkdir -p target/online-tools/tasks && cp -r "$(TASKS)"/. target/online-tools/tasks/
+	PATH="$(CURDIR)/workers/harbor/.venv/bin:$$PATH" $(CARGO) test $(PROFILE) -p splinter-factory --test it -- online::worker::any_task --ignored
+
 ## test/contract - lists the cross-project contract targets; runs nothing
 test/contract:
 	@bash scripts/make-help.sh test/contract
@@ -602,7 +612,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/contract test/contract/brain test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/online/tools test/online/tools/tasks test/contract test/contract/brain test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

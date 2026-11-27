@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The agent in this environment: the notes MCP server's one tool is the only tool a session offers.
+tools:
+  only:
+    - "notes-append"
+mcp_servers:
+  notes:
+    transport:
+      type: stdio
+      command: python3
+      args:
+        - "/usr/local/share/notes/notes_mcp.py"
+    tools:
+      append: allow

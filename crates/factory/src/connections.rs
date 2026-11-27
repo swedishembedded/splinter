@@ -248,6 +248,7 @@ impl Connections {
                 .and_then(|t| t.strip_prefix("env:"))
                 .map(str::to_owned),
             drop_headers: connection.drop_headers.clone(),
+            driver: None,
         })
     }
 }

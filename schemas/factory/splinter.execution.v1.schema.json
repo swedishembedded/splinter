@@ -261,6 +261,13 @@
           "description": "The connection's name (`brain`, `hosted`).",
           "type": "string"
         },
+        "driver": {
+          "description": "The agent runtime's driver for this endpoint when it is not the\nprotocol's generic one: `brain` for a brain server, whose sampling\ncontrols (a request's seed) and policy trace the runtime then\nhonours. Unset, the protocol's.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "drop_headers": {
           "description": "Headers of the agent's the gateway does not pass on to this\nendpoint (one of [`FORWARDED_HEADERS`]); empty for most.",
           "type": "array",
