@@ -1,0 +1,276 @@
+{
+ "schema": "source-to-transfer.rerun/1",
+ "size": "8B",
+ "student": "Qwen/Qwen3-8B",
+ "attempts_per_task": 4,
+ "test": "exact one-sided paired sign test over tasks",
+ "generations": [
+  {
+   "generation": 1,
+   "run": "s8b-g1",
+   "promoted": true,
+   "revisions": {
+    "splinter": "578cfec9b9318f41cb27e4672020c05125ca1366",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "evaluations": [
+    {
+     "stage": "eval-unseen",
+     "purpose": "target",
+     "decision": "improved",
+     "baseline": {
+      "model": "brain:Qwen/Qwen3-8B",
+      "trials": 224,
+      "counted": 224,
+      "passed": 9
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-8991bc751f77",
+      "trials": 224,
+      "counted": 224,
+      "passed": 85
+     },
+     "wins": 79,
+     "losses": 3,
+     "p_one_sided": 1.901770946320672e-20,
+     "unpaired_slots": 0,
+     "difference": 0.3392857142857143,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-exam",
+     "purpose": "exam",
+     "decision": "inconclusive",
+     "baseline": {
+      "model": "brain:Qwen/Qwen3-8B",
+      "trials": 400,
+      "counted": 391,
+      "passed": 0
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-8991bc751f77",
+      "trials": 400,
+      "counted": 400,
+      "passed": 25
+     },
+     "wins": 25,
+     "losses": 0,
+     "p_one_sided": 2.98023223876953e-08,
+     "unpaired_slots": 9,
+     "difference": 0.0639386189258312,
+     "incomplete": true
+    }
+   ],
+   "claims": {
+    "source": "splinter observe s8b-g1",
+    "eval-unseen": {
+     "baseline": {
+      "claimed_passed": 9,
+      "claimed_failed": 164
+     },
+     "candidate": {
+      "claimed_passed": 85,
+      "claimed_failed": 134
+     }
+    },
+    "eval-exam": {
+     "baseline": {
+      "claimed_passed": 0,
+      "claimed_failed": 249
+     },
+     "candidate": {
+      "claimed_passed": 25,
+      "claimed_failed": 321
+     }
+    }
+   }
+  },
+  {
+   "generation": 2,
+   "run": "s8b-g2",
+   "promoted": true,
+   "revisions": {
+    "splinter": "578cfec9b9318f41cb27e4672020c05125ca1366",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "evaluations": [
+    {
+     "stage": "eval-unseen-g2",
+     "purpose": "target",
+     "decision": "improved",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g1",
+      "trials": 188,
+      "counted": 188,
+      "passed": 40
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g2-1087f22833c8",
+      "trials": 188,
+      "counted": 188,
+      "passed": 55
+     },
+     "wins": 29,
+     "losses": 14,
+     "p_one_sided": 0.015769748676575504,
+     "unpaired_slots": 0,
+     "difference": 0.0797872340425532,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-forget-g2",
+     "purpose": "retention-g1",
+     "decision": "inconclusive",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g1",
+      "trials": 224,
+      "counted": 224,
+      "passed": 86
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g2-1087f22833c8",
+      "trials": 224,
+      "counted": 224,
+      "passed": 92
+     },
+     "wins": 29,
+     "losses": 23,
+     "p_one_sided": 0.2442278346899455,
+     "unpaired_slots": 0,
+     "difference": 0.026785714285714284,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-exam-g2",
+     "purpose": "exam",
+     "decision": "not_improved",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g1",
+      "trials": 400,
+      "counted": 400,
+      "passed": 30
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g2-1087f22833c8",
+      "trials": 400,
+      "counted": 400,
+      "passed": 30
+     },
+     "wins": 17,
+     "losses": 17,
+     "p_one_sided": 0.5679168797796589,
+     "unpaired_slots": 0,
+     "difference": 0.0,
+     "incomplete": false
+    }
+   ]
+  },
+  {
+   "generation": 3,
+   "run": "s8b-g3",
+   "promoted": true,
+   "revisions": {
+    "splinter": "578cfec9b9318f41cb27e4672020c05125ca1366",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "evaluations": [
+    {
+     "stage": "eval-unseen-g3",
+     "purpose": "target",
+     "decision": "improved",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g2",
+      "trials": 196,
+      "counted": 196,
+      "passed": 45
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g3-bcf52b53fb91",
+      "trials": 196,
+      "counted": 196,
+      "passed": 59
+     },
+     "wins": 25,
+     "losses": 11,
+     "p_one_sided": 0.014408359827939381,
+     "unpaired_slots": 0,
+     "difference": 0.07142857142857142,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-forget-g3",
+     "purpose": "retention-g2",
+     "decision": "not_improved",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g2",
+      "trials": 188,
+      "counted": 188,
+      "passed": 54
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g3-bcf52b53fb91",
+      "trials": 188,
+      "counted": 188,
+      "passed": 49
+     },
+     "wins": 14,
+     "losses": 19,
+     "p_one_sided": 0.8518968157004577,
+     "unpaired_slots": 0,
+     "difference": -0.026595744680851064,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-forget-g1-g3",
+     "purpose": "retention-g1",
+     "decision": "inconclusive",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g2",
+      "trials": 224,
+      "counted": 224,
+      "passed": 105
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g3-bcf52b53fb91",
+      "trials": 224,
+      "counted": 224,
+      "passed": 109
+     },
+     "wins": 18,
+     "losses": 14,
+     "p_one_sided": 0.298307447927072,
+     "unpaired_slots": 0,
+     "difference": 0.017857142857142856,
+     "incomplete": false
+    },
+    {
+     "stage": "eval-exam-g3",
+     "purpose": "exam",
+     "decision": "not_improved",
+     "baseline": {
+      "model": "champion:/scratch/local/work/ws/runs/s8b-g2",
+      "trials": 400,
+      "counted": 400,
+      "passed": 32
+     },
+     "candidate": {
+      "model": "Qwen/Qwen3-8B:splinter:candidate:lora-g3-bcf52b53fb91",
+      "trials": 400,
+      "counted": 400,
+      "passed": 32
+     },
+     "wins": 18,
+     "losses": 18,
+     "p_one_sided": 0.5660302997857795,
+     "unpaired_slots": 0,
+     "difference": 0.0,
+     "incomplete": false
+    }
+   ]
+  }
+ ],
+ "uncounted_cause": "eval-exam of generation 1: 9 baseline slots whose agent ended a tool-call loop (gateway HTTP 499), classified as endpoint rejections and retried until exhausted; fixed in splinter 27372f64b after the runs"
+}

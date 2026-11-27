@@ -302,6 +302,17 @@ $>15$ & 5/188 & 0.03 & 0/159 & 0.00 \\
 within each length is unchanged.}\label{tab:calls}
 \end{table}
 
+\begin{figure}[htbp]
+\centering
+\input{figures/rerun-body}
+\caption{Qwen3-8B, three generations of the fixed loop. Left: each generation (filled) against the model it replaces (open),
+on its own held-out authored tasks, every earlier generation's held-out tasks and the 100 hand-written exams, measured in the
+same stage, Wilson 95\% intervals over counted attempts; $^\dagger$faded: 9 of the base's 400 slots uncounted, above the 2\%
+bound, reported and excluded from claims. Middle: exam passes per measurement; each adapter is measured twice, as a new
+generation and as the champion the next one faces. Right: the share of generation~1's claims of completion that the grader
+found false, against the base's.}\label{fig:rerun}
+\end{figure}
+
 \paragraph{Three generations after the fixes (Qwen3-8B).} The defects above were fixed in place in the loop's recipes
 (bench \texttt{d971e5df}, splinter \texttt{578cfec9b}) and the three generations were run again at 8B from the authoring run,
 unattended, from 17:16 to 23:58 on 2026-11-27 (\cref{app:deviations}). The changes: training and validation data are the
@@ -309,7 +320,7 @@ teacher's verified attempts; the champion's are replay, one per task drawn at ra
 the LoRA continues the champion at a learning rate of $10^{-4}$ with patience 8; the budget is 1.9 epochs at every
 generation; sven's tool rounds are capped at the registered 60 turns; the champion's attempts are 4 per task; and a release
 needs both its target (its own held-out tasks) and retention (every earlier generation's held-out tasks, margin 0.05) with at
-most 2\% unpaired slots. Every generation was promoted. Each comparison is paired, 4 attempts per task, one-sided sign test
+most 2\% unpaired slots. Every generation was promoted (\cref{fig:rerun}). Each comparison is paired, 4 attempts per task, one-sided sign test
 over tasks:
 \begin{itemize}
 \item \emph{Generation 1 against the base.} Own held-out tasks 85 of 224 against 9 (79 won, 3 lost, $p=1.9\times10^{-20}$,
