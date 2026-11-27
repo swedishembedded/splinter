@@ -277,3 +277,40 @@ fn each_record_is_measured_as_its_own_length_by_brains_check() {
         .collect();
     assert_eq!(lengths, own);
 }
+
+/// What an epoch budget is divided by: brain's fine-tune draws one record a
+/// micro-batch, `grad_accum` micro-batches a step, on every data-parallel rank.
+#[test]
+fn a_step_consumes_grad_accum_records_on_every_rank() {
+    use splinter_model::endpoint::TrainSpan;
+    let trainer = |span: TrainSpan| {
+        BrainTrainer::new(
+            BrainEndpoints::new(vec!["http://127.0.0.1:1/v1".into()], SCRIPTED_KEY)
+                .unwrap()
+                .with_train_span(span),
+            std::path::PathBuf::from("models"),
+        )
+    };
+    let params = json!({"rank": 4, "grad_accum": 4});
+    assert_eq!(
+        trainer(TrainSpan::OneCard)
+            .records_per_step("lora", &params)
+            .unwrap(),
+        4
+    );
+    assert_eq!(
+        trainer(TrainSpan::Cards(2))
+            .records_per_step("lora", &params)
+            .unwrap(),
+        8
+    );
+    assert_eq!(
+        trainer(TrainSpan::OneCard)
+            .records_per_step("lora", &json!({"rank": 4}))
+            .unwrap(),
+        1
+    );
+    assert!(trainer(TrainSpan::OneCard)
+        .records_per_step("lora", &json!({"rank": 4, "grad_accum": 0}))
+        .is_err());
+}

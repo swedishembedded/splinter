@@ -89,6 +89,9 @@ pub struct Trained {
     pub params: Value,
     /// The trainer's report.
     pub report: Value,
+    /// The training record among `files` (a JSON object), if the trainer
+    /// writes one.
+    pub record: Option<PathBuf>,
 }
 
 /// What trains and serves.
@@ -103,6 +106,19 @@ pub trait Trainer: Send + Sync {
     /// # Errors
     /// The method or a parameter is refused.
     fn resolve(&self, method: &str, params: &Value) -> Result<Value, TrainError>;
+
+    /// The records one optimizer step of `method` consumes under `params`
+    /// (a budget in steps), what an epoch budget is divided by.
+    ///
+    /// # Errors
+    /// The trainer cannot size a step, or a parameter is refused.
+    fn records_per_step(&self, method: &str, params: &Value) -> Result<u64, TrainError> {
+        let _ = (method, params);
+        Err(TrainError(format!(
+            "{} cannot state a budget in epochs; give steps",
+            self.identity()
+        )))
+    }
 
     /// The length in the target's tokens of each line of a chat dataset.
     ///
@@ -313,10 +329,11 @@ impl BrainTrainer {
         report: Value,
     ) -> Result<Trained, TrainError> {
         Ok(Trained {
-            files: vec![adapter.clone(), record],
+            files: vec![adapter.clone(), record.clone()],
             adapter: Some(adapter),
             params: serde_json::to_value(params).map_err(error)?,
             report,
+            record: Some(record),
         })
     }
 
@@ -497,6 +514,27 @@ impl Trainer for BrainTrainer {
         serde_json::to_value(&lora).map_err(error)
     }
 
+    /// One record per micro-batch, `grad_accum` micro-batches a step on
+    /// every data-parallel rank: brain's fine-tune draws one record a
+    /// micro-batch, and each rank its own record of every round of ranks.
+    fn records_per_step(&self, method: &str, params: &Value) -> Result<u64, TrainError> {
+        // What a step consumes does not depend on how many steps run: the
+        // budget asks before it has a step count.
+        let mut sized = params.clone();
+        if sized.get(crate::budget::STEPS).is_none() {
+            sized[crate::budget::STEPS] = Value::from(1);
+        }
+        let resolved = self.resolve(method, &sized)?;
+        let lora: LoraParams = serde_json::from_value(resolved)
+            .map_err(|e| TrainError(format!("lora params: {e}")))?;
+        if lora.grad_accum == 0 {
+            return Err(TrainError(
+                "lora params: grad_accum must be at least 1".into(),
+            ));
+        }
+        Ok(u64::from(lora.grad_accum) * u64::from(self.endpoints.train_span().ranks()))
+    }
+
     fn measure(&self, target: &ModelRef, lines: &[String]) -> Result<Vec<u64>, TrainError> {
         let dir = tempfile::tempdir().map_err(error)?;
         let path = dir.path().join("measure.jsonl");
@@ -600,10 +638,11 @@ impl Trainer for BrainTrainer {
             "adapter_sha256": trained.adapter_digest, "base_digest": trained.base_digest,
         });
         Ok(Trained {
-            files: vec![trained.adapter.clone(), trained.training_record],
+            files: vec![trained.adapter.clone(), trained.training_record.clone()],
             adapter: Some(trained.adapter),
             params: serde_json::to_value(&params).map_err(error)?,
             report,
+            record: Some(trained.training_record),
         })
     }
 

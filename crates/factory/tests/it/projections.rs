@@ -337,13 +337,10 @@ fn the_tasks_attempts_solve_only_sometimes_are_an_rlvr_collection() {
     assert_eq!(report["train/001-first"]["pass_rate"], 0.5, "{report:#}");
 }
 
-/// Replay: a candidate trained on new records rehearses an earlier
-/// dataset's beside them, at a stated share of the draws, so what it
-/// learned before is kept.
-#[test]
-fn an_earlier_dataset_is_replayed_beside_the_new_records() {
-    let repo = repo();
-    // seed: a training stage states its seed; the fake trainer draws nothing.
+/// The projection recipe with an earlier text dataset replayed beside the
+/// SFT dataset by a `model.train` stage `with` these settings.
+fn replay_recipe(repo: &Repo, with: &str) -> String {
+    // seed: a dataset stage states its seed; the text dataset's split is not what is tested.
     let recipe = RECIPE.to_owned()
         + "  - id: earlier
     uses: dataset.text
@@ -352,17 +349,27 @@ fn an_earlier_dataset_is_replayed_beside_the_new_records() {
   - id: lora
     uses: model.train
     inputs: { dataset: $stages.sft.dataset, replay: [$stages.earlier.dataset] }
-    with: { base: student, method: lora, params: { rank: 8 }, replay_share: 0.25, seed: 1 }
-";
-    let recipe = recipe.replace(
-        "  course: { kind: files, path: collections/vim.yaml }\n",
-        "  course: { kind: files, path: collections/vim.yaml }\n  notes: { kind: files, path: notes }\n",
-    );
+    with: "
+        + with
+        + "\n";
     repo.write(
         "notes/known.md",
         "# Known\n\nWhat the model already knew, rehearsed.\n",
     );
-    let resolved = resolve(&repo.root, &recipe, connections()).unwrap();
+    recipe.replace(
+        "  course: { kind: files, path: collections/vim.yaml }\n",
+        "  course: { kind: files, path: collections/vim.yaml }\n  notes: { kind: files, path: notes }\n",
+    )
+}
+
+/// Run `recipe` with every training task passing once of two, under `trainer`, in `dir`.
+fn run_trained(
+    repo: &Repo,
+    recipe: &str,
+    trainer: &crate::fakes::FakeTrainer,
+    dir: &std::path::Path,
+) {
+    let resolved = resolve(&repo.root, recipe, connections()).unwrap();
     let backend = FakeBackend {
         vary_failures: true,
         ..FakeBackend::with(Outcome::Fail)
@@ -370,20 +377,118 @@ fn an_earlier_dataset_is_replayed_beside_the_new_records() {
     for task in ["train/001-first", "train/002-second"] {
         backend.script(task, &[Outcome::Pass, Outcome::Fail]);
     }
-    let trainer = crate::fakes::FakeTrainer::default();
     let services = Services {
         backend: &backend,
-        trainer: Some(&trainer),
+        trainer: Some(trainer),
         models: None,
         variables: None,
         online: None,
         build: splinter_core::build::BuildInfo::this_executable(),
     };
-    let dir = tempfile::tempdir().unwrap();
-    Factory::open(&resolved, dir.path(), services, "test")
+    Factory::open(&resolved, dir, services, "test")
         .unwrap()
         .run()
         .unwrap();
+}
+
+/// The training records of a committed dataset view.
+fn train_records(view: &std::path::Path) -> u64 {
+    let dataset = splinter_factory::run::dataset::dataset_of(view).unwrap();
+    lines(&view.join(dataset.train.path)).len() as u64
+}
+
+/// An epoch budget: the trainer is asked for `ceil(epochs * draws / records a step)`
+/// steps, the draws an epoch being the dataset over its share of the draws when a
+/// replay share is set and the union of dataset and replay when not; the budget is
+/// recorded in the report, the training record and the candidate's identity.
+#[test]
+fn an_epoch_budget_is_resolved_over_the_records_drawn() {
+    let repo = repo();
+    // seed: a training stage states its seed; the fake trainer draws nothing.
+    let shared = replay_recipe(
+        &repo,
+        "{ base: student, method: lora, params: { rank: 8, epochs: 3, grad_accum: 2 }, replay_share: 0.25, seed: 1 }",
+    );
+    let trainer = crate::fakes::FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run_trained(&repo, &shared, &trainer, dir.path());
+    let (dataset, replay) = (
+        train_records(&dir.path().join("sft")),
+        train_records(&dir.path().join("earlier")),
+    );
+    assert!(dataset > 0 && replay > 0, "{dataset} {replay}");
+    let expected = (3.0 * dataset as f64 / 0.75 / 2.0).ceil() as u64;
+    let trained = trainer.trained.lock().unwrap().clone();
+    assert_eq!(trained.len(), 1);
+    assert_eq!(
+        trained[0]["steps"].as_u64(),
+        Some(expected),
+        "{}",
+        trained[0]
+    );
+    assert!(trained[0].get("epochs").is_none(), "{}", trained[0]);
+    let report: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("lora/report.json")).unwrap(),
+    )
+    .unwrap();
+    let record: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("lora/training.json")).unwrap(),
+    )
+    .unwrap();
+    for budget in [&report["budget"], &record["budget"]] {
+        assert_eq!(budget["steps"].as_u64(), Some(expected), "{budget}");
+        assert_eq!(budget["epochs"], 3.0, "{budget}");
+        assert_eq!(
+            budget["dataset_records"].as_u64(),
+            Some(dataset),
+            "{budget}"
+        );
+        assert_eq!(budget["replay_records"].as_u64(), Some(replay), "{budget}");
+        assert_eq!(budget["records_per_step"], 2, "{budget}");
+    }
+
+    // The plain union: the same epochs over more draws is more steps, and another candidate.
+    let union = shared.replace(", replay_share: 0.25", "");
+    let trainer = crate::fakes::FakeTrainer::default();
+    let other = tempfile::tempdir().unwrap();
+    run_trained(&repo, &union, &trainer, other.path());
+    let expected_union = (3.0 * (dataset + replay) as f64 / 2.0).ceil() as u64;
+    assert_eq!(
+        trainer.trained.lock().unwrap()[0]["steps"].as_u64(),
+        Some(expected_union)
+    );
+    let identity = |root: &std::path::Path| -> Value {
+        let candidate: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join("lora/candidate.json")).unwrap(),
+        )
+        .unwrap();
+        candidate["params"].clone()
+    };
+    assert_ne!(identity(dir.path()), identity(other.path()));
+
+    // A budget is stated once: in epochs or in steps.
+    let both = shared.replace("epochs: 3,", "epochs: 3, steps: 40,");
+    let refused = resolve(&repo.root, &both, connections())
+        .err()
+        .map(|e| format!("{e:?}"))
+        .unwrap_or_default();
+    assert!(refused.contains("epochs and steps"), "{refused}");
+}
+
+/// Replay: a candidate trained on new records rehearses an earlier
+/// dataset's beside them, at a stated share of the draws, so what it
+/// learned before is kept.
+#[test]
+fn an_earlier_dataset_is_replayed_beside_the_new_records() {
+    let repo = repo();
+    // seed: a training stage states its seed; the fake trainer draws nothing.
+    let recipe = replay_recipe(
+        &repo,
+        "{ base: student, method: lora, params: { rank: 8 }, replay_share: 0.25, seed: 1 }",
+    );
+    let trainer = crate::fakes::FakeTrainer::default();
+    let dir = tempfile::tempdir().unwrap();
+    run_trained(&repo, &recipe, &trainer, dir.path());
     assert_eq!(*trainer.replayed.lock().unwrap(), [(1, Some(0.25))]);
 
     // Replay rehearses chat records: a preference dataset trains without it.

@@ -463,6 +463,14 @@ pub(crate) fn mutate_problems(
     out
 }
 
+/// What is wrong with a `model.train` stage's budget before any record is
+/// counted: `epochs` beside `steps`, or epochs that are not positive.
+pub(crate) fn budget_problems(stage: &PlannedStage) -> Vec<String> {
+    ops::params::<ops::TrainParams>(&stage.params)
+        .map(|p| crate::budget::problems(&p.params))
+        .unwrap_or_default()
+}
+
 /// A `model.train` stage whose `replay` cannot be rehearsed: replay
 /// rehearses chat records, so neither the dataset trained nor a replayed
 /// one may be of a view objective, and a share is a share.

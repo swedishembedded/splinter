@@ -36,6 +36,7 @@
 
 pub mod agent_op;
 pub mod backend;
+pub mod budget;
 pub mod champion;
 pub mod collection;
 pub mod connections;

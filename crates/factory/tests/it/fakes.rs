@@ -517,6 +517,14 @@ impl Trainer for FakeTrainer {
         Ok(params.clone())
     }
 
+    /// `grad_accum` records a step (one when unnamed).
+    fn records_per_step(&self, _: &str, params: &serde_json::Value) -> Result<u64, TrainError> {
+        Ok(params
+            .get("grad_accum")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(1))
+    }
+
     fn measure(&self, _: &ModelRef, lines: &[String]) -> Result<Vec<u64>, TrainError> {
         Ok(lines.iter().map(|l| l.len() as u64 / 4).collect())
     }
@@ -549,10 +557,11 @@ impl Trainer for FakeTrainer {
         let record = request.out.join("training.json");
         std::fs::write(&record, json!({"records": records}).to_string()).unwrap();
         Ok(Trained {
-            files: vec![adapter.clone(), record],
+            files: vec![adapter.clone(), record.clone()],
             adapter: Some(adapter),
             params: request.params.clone(),
             report: json!({"records": records, "base_digest": format!("sha256:{}", "e".repeat(64))}),
+            record: Some(record),
         })
     }
 

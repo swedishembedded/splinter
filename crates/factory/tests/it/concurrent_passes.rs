@@ -211,6 +211,9 @@ impl Trainer for Counting {
     fn resolve(&self, method: &str, params: &Value) -> Result<Value, TrainError> {
         self.inner.resolve(method, params)
     }
+    fn records_per_step(&self, method: &str, params: &Value) -> Result<u64, TrainError> {
+        self.inner.records_per_step(method, params)
+    }
     fn measure(&self, target: &ModelRef, lines: &[String]) -> Result<Vec<u64>, TrainError> {
         self.inner.measure(target, lines)
     }

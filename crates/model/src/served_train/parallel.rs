@@ -22,17 +22,17 @@ use crate::endpoint::{BrainEndpoints, TrainSpan};
 fn requested(span: &TrainSpan) -> ParallelRequest {
     match span {
         TrainSpan::OneCard => ParallelRequest {
-            world_size: 1,
+            world_size: span.ranks(),
             servers: 1,
             first_server_ranks: 1,
         },
         TrainSpan::Cards(cards) => ParallelRequest {
-            world_size: *cards,
+            world_size: span.ranks(),
             servers: 1,
             first_server_ranks: *cards,
         },
         TrainSpan::Servers(job) => ParallelRequest {
-            world_size: job.cards.iter().sum(),
+            world_size: span.ranks(),
             servers: u32::try_from(job.cards.len()).unwrap_or(u32::MAX),
             first_server_ranks: job.cards.first().copied().unwrap_or(0),
         },

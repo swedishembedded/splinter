@@ -19,10 +19,12 @@ stopping, patience 4, every 40 steps):
 Generation 2 did not beat generation 1 at either size (`.agents/roadmap/source-to-transfer.md`); half the passes per record
 is one of the measured differences.
 
-**Fix (a recipe rule, `gen-scaled.py` in the experiment's analysis directory):** hold epochs constant,
-`steps = ceil(E * N / grad_accum)`, with `E` the first generation's effective epochs at its selected step (4B 1.891, 8B 1.92)
-and `N` the generation's training records including replay. Validation-loss early stopping stays on; no other
-hyperparameter changes; exams play no part.
+**Fix:** `model.train` takes `params.epochs` in place of `steps` (`docs/guides/training.md`, Parameters): the factory
+resolves it into `ceil(epochs * draws / records_per_step)` steps, the draws of an epoch being the dataset's training records
+plus the replay (the plain union) or the dataset's over `1 - replay_share`, and a step `grad_accum` records on each
+data-parallel rank. The resolved budget is part of the stage identity and is written into `report.json` and
+`training.json`. Use `E` the first generation's effective epochs at its selected step (4B 1.891, 8B 1.92); validation-loss
+early stopping stays on; no other hyperparameter changes; exams play no part. The out-of-tree `gen-scaled.py` is retired.
 
 **How to apply:** any loop that retrains from the base on a cumulative dataset must size its budget in epochs, not steps, and
 record the epochs at the selected step in each generation's report, so a cap that binds shows before the generation is

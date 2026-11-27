@@ -27,6 +27,7 @@ use splinter_store::factory::products::Staging;
 
 use super::dataset::dataset_of;
 use super::{io, stage_error, write_json, Factory, RunError};
+use crate::budget::{Draws, EpochBudget};
 use crate::ops::TrainParams;
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -112,6 +113,66 @@ fn dataset_key(stage: &PlannedStage) -> Result<String, RunError> {
         .ok_or_else(|| stage_error(&stage.key, "trains on no dataset"))
 }
 
+/// The training records of a dataset file: its non-blank lines.
+fn records_in(path: &std::path::Path) -> Result<u64, RunError> {
+    let text = std::fs::read_to_string(path).map_err(io(path))?;
+    Ok(text.lines().filter(|l| !l.trim().is_empty()).count() as u64)
+}
+
+/// The variant's parameters with an epoch budget resolved into steps over
+/// the records the stage draws from (the dataset's training split and every
+/// replayed one's), and the budget as resolved.
+fn budgeted(
+    factory: &Factory<'_>,
+    stage: &PlannedStage,
+    variant: &Variant,
+) -> Result<(serde_json::Value, Option<EpochBudget>), RunError> {
+    if !crate::budget::in_epochs(&variant.params) {
+        return Ok((variant.params.clone(), None));
+    }
+    let train_file = |key: &str| -> Result<std::path::PathBuf, RunError> {
+        let view = factory.view(key);
+        Ok(view.join(dataset_of(&view)?.train.path))
+    };
+    let dataset = records_in(&train_file(&dataset_key(stage)?)?)?;
+    let mut replay = 0;
+    for replayed in stage.sources("replay") {
+        replay += records_in(&train_file(replayed)?)?;
+    }
+    let replay_share = stage
+        .params::<TrainParams>()
+        .map_err(|e| stage_error(&stage.key, e))?
+        .replay_share;
+    let draws = Draws {
+        dataset,
+        replay,
+        replay_share,
+    };
+    let trainer = trainer(factory, stage)?;
+    crate::budget::resolve(&variant.params, draws, |params| {
+        trainer
+            .records_per_step(&variant.method, params)
+            .map_err(|e| e.to_string())
+    })
+    .map_err(|e| stage_error(&stage.key, e))
+}
+
+/// Write `budget` into the trainer's training record, a JSON object.
+fn record_budget(record: &std::path::Path, budget: &EpochBudget) -> Result<(), RunError> {
+    let text = std::fs::read_to_string(record).map_err(io(record))?;
+    let refused = |message: String| RunError::Io {
+        path: record.to_path_buf(),
+        message,
+    };
+    let mut value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| refused(format!("the training record is not JSON: {e}")))?;
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| refused("the training record is not an object".into()))?;
+    object.insert("budget".into(), json!(budget));
+    write_json(record, &value)
+}
+
 pub(crate) fn identity(
     factory: &Factory<'_>,
     stage: &PlannedStage,
@@ -126,11 +187,17 @@ pub(crate) fn identity(
         .params::<crate::ops::TrainParams>()
         .map_err(|e| stage_error(&stage.key, e))?
         .replay_share;
+    let (params, budget) = budgeted(factory, stage, &variant)?;
     let mut parameters = json!({
         "engine": variant.engine, "base": variant.base, "method": variant.method,
         // As the trainer will train them: a changed default is a new candidate.
-        "params": trainer(factory, stage)?.resolve(&variant.method, &variant.params).map_err(|e| stage_error(&stage.key, e))?,
+        "params": trainer(factory, stage)?.resolve(&variant.method, &params).map_err(|e| stage_error(&stage.key, e))?,
     });
+    if let Some(budget) = budget {
+        // The same epochs over other records is another budget. A budget in
+        // steps keeps the identity it had before epochs could be named.
+        parameters["budget"] = json!(budget);
+    }
     if let Some(start) = &variant.start {
         // By content: the same adapter continued is the same input, wherever its run is. A candidate
         // trained from nothing keeps the identity it had before a start could be named.
@@ -176,11 +243,12 @@ pub(crate) fn produce(
     let tag = format!("{}-{}", variant.name, &stage_id.hex()[..12]);
     let out = factory.work(&stage.key).join(&tag);
     std::fs::create_dir_all(&out).map_err(io(&out))?;
-    let trained = trainer
+    let (params, budget) = budgeted(factory, stage, &variant)?;
+    let mut trained = trainer
         .train(&TrainRequest {
             base: &variant.base,
             method: &variant.method,
-            params: &variant.params,
+            params: &params,
             objective: &dataset.objective,
             train: &view.join(&dataset.train.path),
             validation: &view.join(&dataset.validation.path),
@@ -194,6 +262,12 @@ pub(crate) fn produce(
             start: variant.start.as_ref().and_then(|c| c.adapter.as_deref()),
         })
         .map_err(|e| stage_error(&stage.key, e))?;
+    if let Some(budget) = &budget {
+        trained.report["budget"] = json!(budget);
+        if let Some(record) = &trained.record {
+            record_budget(record, budget)?;
+        }
+    }
     let mut artifacts = Vec::new();
     for file in &trained.files {
         let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| {

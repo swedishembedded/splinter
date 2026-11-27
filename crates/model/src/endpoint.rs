@@ -95,6 +95,20 @@ pub enum TrainSpan {
     Servers(ServersJob),
 }
 
+impl TrainSpan {
+    /// The data-parallel ranks a run spread this way has: one per card.
+    /// Every rank trains its own records each micro-step, so an optimizer
+    /// step consumes this many times what one rank does.
+    #[must_use]
+    pub fn ranks(&self) -> u32 {
+        match self {
+            Self::OneCard => 1,
+            Self::Cards(cards) => *cards,
+            Self::Servers(job) => job.cards.iter().sum(),
+        }
+    }
+}
+
 /// One data-parallel job over several servers, as the fleet that started
 /// them set it up.
 #[derive(Clone, Debug, PartialEq, Eq)]

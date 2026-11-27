@@ -235,7 +235,9 @@ pub struct TrainParams {
     pub base: String,
     /// The method (`lora`, `full`).
     pub method: String,
-    /// The trainer's own parameters, validated by the trainer.
+    /// The trainer's own parameters, validated by the trainer; a budget of
+    /// `epochs` in place of `steps` is resolved by the factory into steps
+    /// over the records the stage draws from.
     #[serde(default)]
     pub params: Value,
     /// A champion role whose adapter the candidate continues instead of

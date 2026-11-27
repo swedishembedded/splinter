@@ -680,6 +680,11 @@ compiles its collection evaluates on the same compiled tasks:
   unset), so what it learned before is kept: `inputs: { dataset: $stages.sft.dataset, replay:
   [$stages.earlier.dataset] }`. Replay rehearses chat records, so a view objective's dataset
   takes none and is none.
+  A loop that retrains from the base on a dataset that grows with replay states its budget as
+  `params: { epochs: E }` instead of `steps`: the factory resolves it into
+  `ceil(E * draws / records_per_step)` steps over the records the stage draws from (the union of
+  dataset and replay, or the dataset over `1 - replay_share` with a share), so every generation
+  trains the same passes over its data; see [Training](training.md#parameters).
 - **Training** (`model.train`). Each candidate is one brain job of its dataset's regime, resumable under a key derived from
   its identity; a candidate counts only once brain's server lists it. Changing a
   stage's parameters trains a new candidate and reuses the dataset and attempts.

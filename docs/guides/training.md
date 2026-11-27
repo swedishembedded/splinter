@@ -25,9 +25,19 @@ the datasets and the adapter move through the artifact store `--brain-artifact-s
 A `model.train` stage names its `base` role, its `method` (`lora`), its `seed` and the trainer's own
 `params`. For `lora` the `params` are checked before the run:
 
-- `steps` and `rank` are required; there is no default step budget.
+- `rank` is required, and so is a budget: `steps` (optimiser steps) or `epochs` (passes over the dataset),
+  never both; there is no default budget.
+- `epochs` (positive, fractional allowed) states the budget in passes, so it keeps its meaning when the
+  dataset grows: the run trains `ceil(epochs * draws / records_per_step)` steps. The draws of one epoch are
+  the dataset's training records plus the replayed ones (the plain union, each record seen `epochs` times);
+  with a `replay_share` they are the dataset's records over `1 - replay_share`, so each record of the
+  dataset is seen `epochs` times and the replay takes its share beside them. `records_per_step` is
+  `grad_accum` times the data-parallel ranks the run spreads over (`--brain-train-cards`). The resolved
+  `steps`, `epochs`, the record counts and `records_per_step` are part of the candidate's identity (the
+  same epochs over other records is another candidate) and are written as `budget` into the stage's
+  `report.json` and the training record `training.json`.
 - `alpha` defaults to twice the rank, so the update's scale does not change with the rank.
-- `grad_accum` is the records per optimiser step and defaults to 1.
+- `grad_accum` is the records per optimiser step on each data-parallel rank and defaults to 1.
 - `learning_rate` is brain's default when absent; `weight_decay` defaults to 0.
 - `max_block` bounds the longest training row in tokens.
 - `base_precision` is how the frozen base is held: `fp32` (brain's default), `bf16`, `int8`, `nf4` or `fp8`;
