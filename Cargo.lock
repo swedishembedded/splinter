@@ -5098,6 +5098,7 @@ name = "splinter-data"
 version = "0.2.0"
 dependencies = [
  "atif",
+ "base64 0.22.1",
  "proptest",
  "regex",
  "serde",

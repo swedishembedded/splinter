@@ -46,7 +46,9 @@ use splinter_core::harness::ModelCall;
 use crate::markers::chat_tool_list;
 use crate::record::{Record, RecordBody, RecordMetadata, RolloutOutcome};
 use crate::requests::{scope_calls, sent_and_answered};
-use crate::sampled::{ProxyReason, SampledTurn, SampledTurns, POLICY_KIND};
+use crate::sampled::{
+    token_ids, trained_ids, ProxyReason, SampledTurn, SampledTurns, StepIds, POLICY_KIND,
+};
 use crate::scrub::Scrub;
 use crate::Objective;
 
@@ -188,10 +190,10 @@ impl CallProjection {
 }
 
 /// What sven recorded of one request.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Traced {
-    prompt: Option<Vec<i64>>,
-    completion: Option<Vec<i64>>,
+    /// The prompt and generated ids, or why they cannot be read.
+    ids: Result<Option<StepIds>, ProxyReason>,
     logprobs: Option<Vec<f64>>,
     kind: Option<String>,
     temperature: Option<f64>,
@@ -218,8 +220,7 @@ impl Traced {
         logprobs: Option<Vec<f64>>,
     ) -> Self {
         Self {
-            prompt,
-            completion,
+            ids: trained_ids(Some(facts), prompt.as_deref(), completion.as_deref()),
             logprobs,
             kind: field(facts, "logprob_kind"),
             temperature: field(facts, "logprob_temperature"),
@@ -269,24 +270,15 @@ fn requests(trajectory: &Trajectory) -> Vec<Traced> {
     out
 }
 
-fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
-    ids.iter()
-        .map(|id| u32::try_from(*id).map_err(|_| ProxyReason::InvalidIds))
-        .collect()
-}
-
 /// The digest, sampled turn and policy version of `traced`, when it is
 /// exact under `sampler`.
 fn exact_turn(
     traced: &Traced,
     sampler: &Sampler,
 ) -> Result<(String, SampledTurn, u64), ProxyReason> {
-    let (Some(prompt), Some(completion), Some(logprobs), Some(digest)) = (
-        &traced.prompt,
-        &traced.completion,
-        &traced.logprobs,
-        &traced.digest,
-    ) else {
+    let (Some((prompt, completion)), Some(logprobs), Some(digest)) =
+        (traced.ids.clone()?, &traced.logprobs, &traced.digest)
+    else {
         return Err(ProxyReason::NoTrace);
     };
     match traced.kind.as_deref() {
@@ -321,8 +313,8 @@ fn exact_turn(
     Ok((
         digest.clone(),
         SampledTurn {
-            prompt_token_ids: token_ids(prompt)?,
-            token_ids: token_ids(completion)?,
+            prompt_token_ids: prompt,
+            token_ids: completion,
             behavior_logprobs: narrow(logprobs),
             behavior_top_ids: top_ids,
             behavior_top_logprobs: top_logprobs
@@ -425,7 +417,13 @@ pub fn project_calls(
         calls: calls.len(),
         tokens: traced
             .iter()
-            .map(|t| t.completion.as_ref().map_or(0, Vec::len) as u64)
+            .map(|t| {
+                t.ids
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .map_or(0, |(_, c)| c.len()) as u64
+            })
             .sum(),
         truncated: traced.iter().any(|t| t.truncated),
         ..CallProjection::default()

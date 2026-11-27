@@ -23,6 +23,7 @@ use std::collections::BTreeMap;
 
 use atif::{StepOrigin, Trajectory};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// The `logprob_kind` sven records for the policy's own full-distribution
 /// figures: the only kind a policy gradient may weigh by.
@@ -111,9 +112,12 @@ pub enum ProxyReason {
     UnreadableRequest,
     /// The answer says nothing and calls nothing.
     EmptyAnswer,
-    /// The answer's tool-call arguments are text that is not JSON, which no
-    /// record carries (the agent sent the call back repaired, as context).
+    /// The answer's tool-call arguments are text that is not JSON: the call
+    /// is context as the model wrote it, never a supervised action.
     UnparsedArguments,
+    /// The server's record of what it sampled (`extra.sven.sampled`) names
+    /// other ids than the step's trace, or cannot be read.
+    SampledDiffers,
 }
 
 /// How many rewarded actions carry the tokens the policy sampled, and why the
@@ -156,9 +160,12 @@ pub(crate) fn trace_of(
         .and_then(|s| s.metrics.as_ref())
         .ok_or(ProxyReason::NoTrace)?;
     let sven = |key: &str| metrics.extra.as_ref()?.pointer(&format!("/sven/{key}"));
-    let (Some(prompt), Some(completion), Some(logprobs)) = (
-        &metrics.prompt_token_ids,
-        &metrics.completion_token_ids,
+    let (Some((prompt, completion)), Some(logprobs)) = (
+        trained_ids(
+            metrics.extra.as_ref().and_then(|e| e.get("sven")),
+            metrics.prompt_token_ids.as_deref(),
+            metrics.completion_token_ids.as_deref(),
+        )?,
         &metrics.logprobs,
     ) else {
         return Err(ProxyReason::NoTrace);
@@ -180,16 +187,11 @@ pub(crate) fn trace_of(
     if logprobs.iter().any(|l| !l.is_finite() || *l > 0.0) {
         return Err(ProxyReason::InvalidLogprobs);
     }
-    let ids = |ids: &[i64]| -> Result<Vec<u32>, ProxyReason> {
-        ids.iter()
-            .map(|id| u32::try_from(*id).map_err(|_| ProxyReason::InvalidIds))
-            .collect()
-    };
     Ok((
         digest.to_string(),
         SampledTurn {
-            prompt_token_ids: ids(prompt)?,
-            token_ids: ids(completion)?,
+            prompt_token_ids: prompt,
+            token_ids: completion,
             // The trainer reads f32; the policy's own figures are f32 in sven.
             #[allow(clippy::cast_possible_truncation)]
             behavior_logprobs: logprobs.iter().map(|l| *l as f32).collect(),
@@ -232,4 +234,88 @@ pub(crate) fn turns_of(
             .map(|t| t.ok().map(|(_, turn)| turn))
             .collect(),
     })
+}
+
+/// A step's prompt ids and generated ids.
+pub(crate) type StepIds = (Vec<u32>, Vec<u32>);
+
+/// Ids as a trace records them, each a token id.
+pub(crate) fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
+    ids.iter()
+        .map(|id| u32::try_from(*id).map_err(|_| ProxyReason::InvalidIds))
+        .collect()
+}
+
+/// The prompt and generated ids an agent step trains, from its `extra.sven`
+/// facts `sven` and its trace's `prompt` and `completion` ids: the server's
+/// record of what it sampled (`sampled`, the exact text the server sent)
+/// when the step kept one, else the trace's. `None` when the step has
+/// neither.
+///
+/// # Errors
+/// [`ProxyReason::SampledDiffers`] when the record cannot be read or names
+/// other ids than the trace (whose log-probabilities belong to the trace's
+/// ids); [`ProxyReason::InvalidIds`] when a trace id is not a token id.
+pub(crate) fn trained_ids(
+    sven: Option<&Value>,
+    prompt: Option<&[i64]>,
+    completion: Option<&[i64]>,
+) -> Result<Option<StepIds>, ProxyReason> {
+    let traced = match (prompt, completion) {
+        (Some(prompt), Some(completion)) => Some((token_ids(prompt)?, token_ids(completion)?)),
+        _ => None,
+    };
+    let Some(record) = sven.and_then(|s| s.get("sampled")) else {
+        return Ok(traced);
+    };
+    let record: Value = match record {
+        Value::String(text) => {
+            serde_json::from_str(text).map_err(|_| ProxyReason::SampledDiffers)?
+        }
+        other => other.clone(),
+    };
+    let ids = |key: &str| {
+        record
+            .get(key)
+            .and_then(Value::as_str)
+            .ok_or(ProxyReason::SampledDiffers)
+            .and_then(|text| decode_ids(text).map_err(|_| ProxyReason::SampledDiffers))
+    };
+    let sampled = (ids("prefill_token_ids")?, ids("token_ids")?);
+    match traced {
+        Some(traced) if traced != sampled => Err(ProxyReason::SampledDiffers),
+        _ => Ok(Some(sampled)),
+    }
+}
+
+/// The ids of a reply's `sampled` record (a brain server's `token_ids` and
+/// `prefill_token_ids`): each id an unsigned LEB128 varint, the run
+/// base64-encoded. These are the ids a merged session trains, the ones the
+/// server spliced into every later prompt.
+///
+/// # Errors
+/// The text is not base64, a varint is cut off or longer than an id.
+pub fn decode_ids(text: &str) -> Result<Vec<u32>, String> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(text)
+        .map_err(|e| format!("sampled ids: {e}"))?;
+    let mut ids = Vec::with_capacity(bytes.len() / 2);
+    let (mut value, mut shift) = (0u64, 0u32);
+    for b in bytes {
+        value |= u64::from(b & 0x7f) << shift;
+        if b & 0x80 == 0 {
+            ids.push(u32::try_from(value).map_err(|_| "sampled ids: an id past u32".to_string())?);
+            (value, shift) = (0, 0);
+        } else {
+            shift += 7;
+            if shift > 28 {
+                return Err("sampled ids: a varint longer than five bytes".to_string());
+            }
+        }
+    }
+    if shift != 0 {
+        return Err("sampled ids: the text ends inside a varint".to_string());
+    }
+    Ok(ids)
 }

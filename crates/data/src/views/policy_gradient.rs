@@ -278,11 +278,12 @@ impl PolicyGradient {
     /// action supervised, the context once. Each record still carries its
     /// trial's reward, group and rollout, so the trainer counts the trial once
     /// in its group either way. A rewarded conversation whose actions carry
-    /// the tokens the policy sampled is one record only when its session is
-    /// append-only and every action exact (a session-merged record, which
-    /// brain trains to exactly its per-action records' gradient under
-    /// `token-sum`); any other is written one record per action, counted in
-    /// [`Projection::sessions`] under why
+    /// the tokens the policy sampled is one record per segment: a run of
+    /// actions each of whose prompt ids extend the one before under one
+    /// tokenizer and tool list (a session-merged record, which brain trains
+    /// to exactly its per-action records' gradient under `token-sum`). Only
+    /// a conversation with an untraced action is written one record per
+    /// action, counted in [`Projection::sessions`]
     /// ([`crate::session::FallbackReason`]).
     #[must_use]
     pub fn packed(mut self, packed: bool) -> Self {
@@ -290,10 +291,8 @@ impl PolicyGradient {
         self
     }
 
-    /// The same view writing a packed session one record per action when its
-    /// merged sequence holds more than `block` ids
-    /// ([`crate::session::FallbackReason::LongerThanBlock`]); any length
-    /// when `None`.
+    /// The same view ending a packed session's segment before an action
+    /// whose sequence would take it past `block` ids; any length when `None`.
     #[must_use]
     pub fn session_block(self, block: Option<u64>) -> Self {
         Self {
@@ -443,13 +442,8 @@ impl PolicyGradient {
         };
         let singles = one_each.records_of_actions(conversations, projection, |_| Judgement::Admit);
         // Requests that are not one conversation were read request by
-        // request: the session's later requests do not extend the earlier.
-        let one_conversation = conversations.len() == 1;
-        if self.rendering.packed && !one_conversation && !singles.is_empty() {
-            projection
-                .sessions
-                .fell_back(FallbackReason::MessagesDiverge);
-        }
+        // request (a compaction rewrote the history): each conversation is
+        // its own segments.
         let mut records = Vec::new();
         let mut at = 0;
         while at < singles.len() {
@@ -467,12 +461,12 @@ impl PolicyGradient {
                     sampled_tokens(trajectory, c, actions, &mut projection.tokens)
                 })
                 .collect();
-            if self.rendering.packed && one_conversation {
+            if self.rendering.packed {
                 if let Some(merged) = self.merged_session(conversation, group, &traced, projection)
                 {
-                    records.push(
-                        merged.with_outcome(outcome.clone().with_sampled(merged_turns(&traced))),
-                    );
+                    records.extend(merged.into_iter().map(|(body, sampled)| {
+                        body.with_outcome(outcome.clone().with_sampled(sampled))
+                    }));
                     continue;
                 }
             }
@@ -494,78 +488,78 @@ impl PolicyGradient {
         records
     }
 
-    /// The one record of `conversation`'s admitted actions `group` (each
-    /// with its sampled tokens `traced`), when the session merges: every
-    /// action exact under one tokenizer, every later request's prompt ids
-    /// extending the session so far (brain's rule `session_not_append_only`),
-    /// one tool list, and a sequence within the block when one is set.
-    /// `None` when it does not, counted under why; a session none of whose
-    /// actions carries sampled tokens is packed as a text record, as before,
-    /// and counted as untraced.
+    /// The records of `conversation`'s admitted actions `group` (each with
+    /// its sampled tokens `traced`), one per segment: a run of actions each
+    /// of which extends the one before (one tokenizer and tool list, prompt
+    /// ids that start with the previous action's prompt and generated ids;
+    /// brain's rule `session_not_append_only`), cut further before an action
+    /// whose sequence would pass the block. `None` when an action carries no
+    /// sampled tokens, counted as untraced; a session none of whose actions
+    /// carries them is packed as one text record.
     fn merged_session(
         &self,
         conversation: &Conversation,
         group: &[(RecordBody, Vec<Action>, &Conversation)],
         traced: &[Option<SampledTurns>],
         projection: &mut Projection,
-    ) -> Option<RecordBody> {
+    ) -> Option<Vec<(RecordBody, Option<SampledTurns>)>> {
         let actions: Vec<&Action> = group.iter().flat_map(|(_, a, _)| a).collect();
-        // One record holds one list of tools.
         let one_tool_list = actions.iter().all(|a| a.tools == actions[0].tools);
         if one_tool_list && traced.iter().all(Option::is_none) {
             projection.sessions.untraced();
-            return conversation.packed_record(&actions);
+            return conversation
+                .packed_record(&actions)
+                .map(|body| vec![(body, None)]);
         }
-        let turns: Option<Vec<(&str, &SampledTurn)>> = traced
-            .iter()
-            .map(|s| {
-                let s = s.as_ref()?;
-                let [Some(turn)] = s.turns.as_slice() else {
-                    return None;
-                };
-                Some((s.tokenizer_digest.as_str(), turn))
-            })
-            .collect();
-        let why = match turns {
-            None if !one_tool_list => Some(FallbackReason::ToolsDiffer),
-            None => Some(FallbackReason::NotExact),
-            Some(_) if !one_tool_list => Some(FallbackReason::ToolsDiffer),
-            Some(turns) => match check_turns(&turns) {
-                Err(why) => Some(why.reason()),
-                Ok(()) => {
-                    let sampled: Vec<&SampledTurn> = turns.iter().map(|(_, t)| *t).collect();
-                    let (tokens, per_call) = forwarded(&sampled);
-                    if self.session_block.is_some_and(|block| tokens > block) {
-                        Some(FallbackReason::LongerThanBlock)
-                    } else {
-                        projection.sessions.merged(tokens, per_call);
-                        None
-                    }
+        // One action per traced turn, in order: a group's records each hold
+        // one action and its one turn.
+        let mut turns = Vec::with_capacity(traced.len());
+        for s in traced {
+            match s.as_ref().map(|s| (s, s.turns.as_slice())) {
+                Some((s, [Some(turn)]))
+                    if check_turns(&[(s.tokenizer_digest.as_str(), turn)]).is_ok() =>
+                {
+                    turns.push((s.tokenizer_digest.as_str(), turn));
                 }
-            },
-        };
-        match why {
-            Some(why) => {
-                projection.sessions.fell_back(why);
-                None
+                _ => {
+                    projection.sessions.fell_back(FallbackReason::Untraced);
+                    return None;
+                }
             }
-            None => conversation.packed_record(&actions),
         }
+        if turns.len() != actions.len() {
+            projection.sessions.fell_back(FallbackReason::Untraced);
+            return None;
+        }
+        let extends = |k: usize| {
+            turns[k - 1].0 == turns[k].0
+                && actions[k - 1].tools == actions[k].tools
+                && check_turns(&[turns[k - 1], turns[k]]).is_ok()
+        };
+        let mut out = Vec::new();
+        let mut start = 0;
+        for end in 1..=turns.len() {
+            let closes = end == turns.len()
+                || !extends(end)
+                || self
+                    .session_block
+                    .is_some_and(|block| forwarded(&[turns[end].1]).0 > block);
+            if closes {
+                let sampled: Vec<&SampledTurn> =
+                    turns[start..end].iter().map(|(_, t)| *t).collect();
+                let (tokens, per_call) = forwarded(&sampled);
+                projection.sessions.merged(tokens, per_call);
+                let body = conversation.packed_record(&actions[start..end])?;
+                let turns = SampledTurns {
+                    tokenizer_digest: turns[start].0.to_string(),
+                    turns: sampled.into_iter().cloned().map(Some).collect(),
+                };
+                out.push((body, Some(turns)));
+                start = end;
+            }
+        }
+        Some(out)
     }
-}
-
-/// The sampled tokens of a merged session: each action's one turn, in
-/// order, under their one tokenizer.
-fn merged_turns(traced: &[Option<SampledTurns>]) -> Option<SampledTurns> {
-    let first = traced.iter().flatten().next()?;
-    Some(SampledTurns {
-        tokenizer_digest: first.tokenizer_digest.clone(),
-        turns: traced
-            .iter()
-            .flatten()
-            .flat_map(|s| s.turns.iter().cloned())
-            .collect(),
-    })
 }
 
 impl View for PolicyGradient {

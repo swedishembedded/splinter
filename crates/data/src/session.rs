@@ -7,9 +7,8 @@
 // you can procure our services by sending an email to
 // info@swedishembedded.com.
 
-//! One training record per agent session, from its exact call records, when
-//! the session is append-only; otherwise the reason it stays one record per
-//! call.
+//! One training record per append-only segment of an agent session, from
+//! its exact call records; otherwise the reason it stays one record per call.
 //!
 //! A session's calls each re-send the context the earlier calls built. When
 //! every call's request is the previous call's request, its sampled answer
@@ -31,8 +30,13 @@
 //! call `k`'s prompt ids followed by its generated ids, and every call's
 //! request and answer are the first messages of the next call's request.
 //! Anything else is an [`Unmergeable`] naming the call (and the position)
-//! where the property fails, and its calls are trained one record each:
-//! nothing is merged by approximation.
+//! where the property fails: nothing is merged by approximation.
+//!
+//! A session whose history was rewritten (a compaction, a changed system
+//! prompt or tool list) is several append-only segments
+//! ([`SessionRecord::segments`]): one merged record each, all carrying the
+//! session's one reward. Only a session with an untraced call or calls drawn
+//! under several samplers stays one record per call ([`FallbackReason`]).
 
 use std::collections::BTreeMap;
 
@@ -40,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use splinter_core::chat::WireMessage;
 
-use crate::calls::{CallProjection, CallRecord, Sampler};
+use crate::calls::{CallRecord, Sampler};
 use crate::record::{Record, RecordBody, RecordMetadata, RolloutOutcome};
 use crate::sampled::{SampledTurn, SampledTurns};
 use crate::Objective;
@@ -49,29 +53,16 @@ use crate::Objective;
 pub const SESSION_VIEW: &str = "online-sessions";
 
 /// Why a session is trained one record per call, by kind: what a dataset
-/// counts.
+/// counts. Everything else (a compaction, a changed system prompt or tool
+/// list, a block too small) only ends a segment: each segment is a record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FallbackReason {
-    /// Some call is not exact (no trace, another temperature, unpaired, ...):
-    /// the per-call projection already says why.
-    NotExact,
-    /// A call names no prompt ids, no generated ids, or not one behaviour
-    /// log-probability per generated id.
-    MissingIds,
+    /// Some call carries no sampled ids (no trace, or not one behaviour
+    /// log-probability per generated id): there is nothing to train exactly.
+    Untraced,
     /// The calls were drawn under different sampling controls.
-    SamplerDiffers,
-    /// The calls' ids are of different tokenizers.
-    TokenizerDiffers,
-    /// A call's prompt ids do not start with the session so far.
-    NotAppendOnly,
-    /// A call's request does not start with the previous call's request and
-    /// answer, message for message.
-    MessagesDiverge,
-    /// The calls offered different tools: one record holds one list.
-    ToolsDiffer,
-    /// The merged sequence is longer than the training block.
-    LongerThanBlock,
+    MixedSampler,
 }
 
 impl FallbackReason {
@@ -79,14 +70,8 @@ impl FallbackReason {
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
-            Self::NotExact => "not_exact",
-            Self::MissingIds => "missing_ids",
-            Self::SamplerDiffers => "sampler_differs",
-            Self::TokenizerDiffers => "tokenizer_differs",
-            Self::NotAppendOnly => "not_append_only",
-            Self::MessagesDiverge => "messages_diverge",
-            Self::ToolsDiffer => "tools_differ",
-            Self::LongerThanBlock => "longer_than_block",
+            Self::Untraced => "untraced",
+            Self::MixedSampler => "mixed_sampler",
         }
     }
 }
@@ -135,30 +120,6 @@ pub enum Unmergeable {
         /// The call.
         call: usize,
     },
-    /// The merged sequence holds `tokens` ids, more than the block's `block`.
-    LongerThanBlock {
-        /// The merged sequence's length.
-        tokens: u64,
-        /// The training block.
-        block: u64,
-    },
-}
-
-impl Unmergeable {
-    /// What kind of reason it is.
-    #[must_use]
-    pub fn reason(&self) -> FallbackReason {
-        match self {
-            Self::NotExact => FallbackReason::NotExact,
-            Self::MissingIds { .. } => FallbackReason::MissingIds,
-            Self::SamplerDiffers { .. } => FallbackReason::SamplerDiffers,
-            Self::TokenizerDiffers { .. } => FallbackReason::TokenizerDiffers,
-            Self::NotAppendOnly { .. } => FallbackReason::NotAppendOnly,
-            Self::MessagesDiverge { .. } => FallbackReason::MessagesDiverge,
-            Self::ToolsDiffer { .. } => FallbackReason::ToolsDiffer,
-            Self::LongerThanBlock { .. } => FallbackReason::LongerThanBlock,
-        }
-    }
 }
 
 impl std::fmt::Display for Unmergeable {
@@ -187,10 +148,6 @@ impl std::fmt::Display for Unmergeable {
             Self::ToolsDiffer { call } => {
                 write!(f, "call {call} offered other tools than the session's last call")
             }
-            Self::LongerThanBlock { tokens, block } => write!(
-                f,
-                "the merged session holds {tokens} ids, more than the training block of {block}"
-            ),
         }
     }
 }
@@ -275,6 +232,30 @@ fn first_message_difference(earlier: &[WireMessage], later: &[WireMessage]) -> O
         .or_else(|| (later.len() < earlier.len()).then_some(later.len()))
 }
 
+/// Whether call `next` extends call `before`: one tokenizer and one tool list,
+/// prompt ids that start with `before`'s prompt and generated ids, and a
+/// request that starts with `before`'s request and answer.
+fn extends(before: &CallRecord, next: &CallRecord) -> bool {
+    let (Some(Some(a)), Some(Some(b))) = (before.sampled.turns.first(), next.sampled.turns.first())
+    else {
+        return false;
+    };
+    before.sampled.tokenizer_digest == next.sampled.tokenizer_digest
+        && before.tools == next.tools
+        && first_divergence(&[a, b]).is_none()
+        && first_message_difference(&before.messages, &next.messages[..next.messages.len() - 1])
+            .is_none()
+}
+
+/// The ids a call's record forwards: its prompt and generated ids.
+fn sequence_of(call: &CallRecord) -> u64 {
+    call.sampled
+        .turns
+        .first()
+        .and_then(Option::as_ref)
+        .map_or(0, sequence)
+}
+
 /// One agent session as one training record: the last request and its
 /// answer, every answer the session sampled supervised with its call's ids.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -300,18 +281,6 @@ pub struct SessionRecord {
 }
 
 impl SessionRecord {
-    /// The session `projection` is, as one record, when it is exact and
-    /// append-only.
-    ///
-    /// # Errors
-    /// Why the session stays one record per call ([`Unmergeable`]).
-    pub fn merge(projection: &CallProjection) -> Result<Self, Unmergeable> {
-        if !projection.exact() {
-            return Err(Unmergeable::NotExact);
-        }
-        Self::of_calls(&projection.records)
-    }
-
     /// The session whose exact call records are `calls`, in request order,
     /// as one record.
     ///
@@ -367,6 +336,51 @@ impl SessionRecord {
         })
     }
 
+    /// The session whose call records are `calls`, in request order, as one
+    /// record per segment: a segment is a run of calls each of which extends
+    /// the one before (its prompt ids start with the previous call's prompt
+    /// and generated ids, under one tokenizer, one tool list, and its request
+    /// starts with the previous request and answer), cut further where it
+    /// would grow past a training `block` of ids. A compaction or a changed
+    /// system prompt or tool list starts a segment; each record carries the
+    /// session's reward and rollout when written ([`Self::record`]).
+    ///
+    /// # Errors
+    /// [`FallbackReason::Untraced`] when a call carries no sampled ids, and
+    /// [`FallbackReason::MixedSampler`] when the calls were drawn under
+    /// different samplers: the session is then one record per call.
+    pub fn segments(calls: &[CallRecord], block: Option<u64>) -> Result<Vec<Self>, FallbackReason> {
+        let Some(first) = calls.first() else {
+            return Err(FallbackReason::Untraced);
+        };
+        for record in calls {
+            match record.sampled.turns.as_slice() {
+                [Some(turn)] if complete(turn) => {}
+                _ => return Err(FallbackReason::Untraced),
+            }
+            if record.sampler != first.sampler {
+                return Err(FallbackReason::MixedSampler);
+            }
+        }
+        // Each boundary is found from the two calls beside it, so the whole
+        // session is read once; each segment is then checked and built once.
+        let mut segments = Vec::new();
+        let mut start = 0;
+        for end in 1..=calls.len() {
+            let closes = end == calls.len()
+                || !extends(&calls[end - 1], &calls[end])
+                || block.is_some_and(|block| sequence_of(&calls[end]) > block);
+            if closes {
+                // A run of calls each extending the one before always merges.
+                segments.push(
+                    Self::of_calls(&calls[start..end]).map_err(|_| FallbackReason::Untraced)?,
+                );
+                start = end;
+            }
+        }
+        Ok(segments)
+    }
+
     /// The ids the merged record forwards: the last request's prompt ids and
     /// its generated ids.
     #[must_use]
@@ -376,21 +390,6 @@ impl SessionRecord {
             .last()
             .and_then(Option::as_ref)
             .map_or(0, sequence)
-    }
-
-    /// The same record, when its sequence fits a training block of `block`
-    /// ids (any length when `None`).
-    ///
-    /// # Errors
-    /// [`Unmergeable::LongerThanBlock`].
-    pub fn within(self, block: Option<u64>) -> Result<Self, Unmergeable> {
-        match block {
-            Some(block) if self.tokens() > block => Err(Unmergeable::LongerThanBlock {
-                tokens: self.tokens(),
-                block,
-            }),
-            _ => Ok(self),
-        }
     }
 
     /// The training record of the session once it earned `reward` in the

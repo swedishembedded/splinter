@@ -442,13 +442,14 @@ fn a_record_whose_system_prompt_is_replaced_carries_no_ids() {
     );
 }
 
-/// Packed, a trial's session is one record only when it is a session brain
-/// trains exactly (rule `session_not_append_only`): every action exact and
-/// every later prompt the session so far. Any other is written one record
-/// per action, each with its own exact tokens, and counted under why; a
-/// merged sequence longer than the session block falls back too.
+/// Packed, a trial's session is one record per segment: a run of actions
+/// each of whose prompt ids extend the one before (brain's rule
+/// `session_not_append_only`). A rewritten history or the session block
+/// starts a new segment, each record still with its own exact tokens; only
+/// a session with an action whose exact tokens are missing is written one
+/// record per action, counted as untraced.
 #[test]
-fn a_packed_session_merges_only_when_append_only_and_exact_else_one_record_per_action() {
+fn a_packed_session_is_one_record_per_append_only_segment() {
     use splinter_data::session::FallbackReason;
     let (call_step, answer) = good();
     let merged = view()
@@ -467,19 +468,18 @@ fn a_packed_session_merges_only_when_append_only_and_exact_else_one_record_per_a
     );
     assert!(merged.sessions.per_call.is_empty());
 
-    let one_each = |projection: &Projection, reason: FallbackReason| {
+    let two_segments = |projection: &Projection| {
         let written = lines(projection);
-        assert_eq!(written.len(), 4, "{reason:?}: one record per action");
-        assert_eq!(
-            projection.sessions.per_call.get(&reason),
-            Some(&2),
-            "{reason:?}"
-        );
-        assert_eq!(projection.sessions.merged, 0, "{reason:?}");
+        assert_eq!(written.len(), 4, "two segments per trial");
+        assert_eq!(projection.sessions.merged, 4);
+        assert!(projection.sessions.per_call.is_empty());
+        for pair in written.chunks(2) {
+            assert_eq!(pair[0]["outcome"], pair[1]["outcome"], "one reward");
+        }
         written
     };
     // The second request holds the first answer otherwise than it was
-    // sampled (a template that drops its reasoning): not append-only.
+    // sampled (a compaction rewrote it): a new segment.
     let rewritten = trace(
         &[1, 2, 3, 11, 4],
         &[12, 13, 14],
@@ -490,7 +490,7 @@ fn a_packed_session_merges_only_when_append_only_and_exact_else_one_record_per_a
         .packed(true)
         .project(&traced(call_step.clone(), rewritten, None))
         .unwrap();
-    for pair in one_each(&projection, FallbackReason::NotAppendOnly).chunks(2) {
+    for pair in two_segments(&projection).chunks(2) {
         assert_exact(&pair[0], &[(&[1, 2, 3], &[10, 11], &[-0.5, -0.25])]);
         assert_exact(
             &pair[1],
@@ -498,17 +498,22 @@ fn a_packed_session_merges_only_when_append_only_and_exact_else_one_record_per_a
         );
     }
 
-    let sampler = trace(&[1, 2, 3], &[10, 11], &[-0.5, -0.25], "sampler");
-    let projection = view()
-        .packed(true)
-        .project(&traced(sampler, answer.clone(), None))
-        .unwrap();
-    one_each(&projection, FallbackReason::NotExact);
-
     let projection = view()
         .packed(true)
         .session_block(Some(8))
-        .project(&traced(call_step, answer, None))
+        .project(&traced(call_step, answer.clone(), None))
         .unwrap();
-    one_each(&projection, FallbackReason::LongerThanBlock);
+    two_segments(&projection);
+
+    let sampler = trace(&[1, 2, 3], &[10, 11], &[-0.5, -0.25], "sampler");
+    let projection = view()
+        .packed(true)
+        .project(&traced(sampler, answer, None))
+        .unwrap();
+    assert_eq!(lines(&projection).len(), 4, "one record per action");
+    assert_eq!(
+        projection.sessions.per_call.get(&FallbackReason::Untraced),
+        Some(&2)
+    );
+    assert_eq!(projection.sessions.merged, 0);
 }

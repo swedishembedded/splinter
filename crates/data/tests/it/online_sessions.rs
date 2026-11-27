@@ -181,7 +181,6 @@ fn a_template_that_drops_earlier_reasoning_is_not_append_only() {
             position: 2
         }
     );
-    assert_eq!(why.reason(), FallbackReason::NotAppendOnly);
     assert!(why.to_string().contains("position 2"), "{why}");
 }
 
@@ -247,14 +246,6 @@ fn a_session_that_cannot_merge_says_why_and_where() {
     let merged = SessionRecord::of_calls(&base()).unwrap();
     let tokens = merged.tokens();
     assert_eq!(tokens, 8, "the last prompt (7 ids) and its answer");
-    assert_eq!(
-        merged.clone().within(Some(tokens - 1)),
-        Err(Unmergeable::LongerThanBlock {
-            tokens,
-            block: tokens - 1
-        })
-    );
-    assert!(merged.within(Some(tokens)).is_ok());
     assert_eq!(SessionRecord::of_calls(&[]), Err(Unmergeable::NotExact));
 }
 
@@ -274,7 +265,10 @@ fn a_recorded_append_only_rollout_is_one_brain_rollout_line() {
         [3, 4],
     );
     let projection = project_calls(&trajectory, &calls(), &sampler());
-    let merged = SessionRecord::merge(&projection).unwrap();
+    let [merged] = SessionRecord::segments(&projection.records, None)
+        .unwrap()
+        .try_into()
+        .unwrap();
     assert_eq!((merged.tokens(), merged.per_call_tokens), (6, 10));
     let line: Value = serde_json::from_str(
         &dataset_line(
@@ -312,5 +306,134 @@ fn a_recorded_append_only_rollout_is_one_brain_rollout_line() {
         &calls()[..1],
         &Sampler::untruncated(0.8).unwrap(),
     );
-    assert_eq!(SessionRecord::merge(&inexact), Err(Unmergeable::NotExact));
+    assert!(
+        !inexact.exact(),
+        "an inexact projection is written per call"
+    );
+}
+
+/// A session compacted between calls is several append-only segments: each
+/// is one merged record, all carrying the session's one reward and rollout,
+/// and together they supervise every call's answer exactly once.
+#[test]
+fn a_compacted_session_yields_one_merged_record_per_segment_with_one_reward() {
+    let answers = vec![vec![7, 8], vec![5], vec![6], vec![3, 4]];
+    let mut prompts = append_only(&[1, 2], &answers, &[vec![9], vec![4], vec![2]]);
+    // Compaction before call 2: its prompt is notes, not the session so far.
+    prompts[2] = vec![1, 77, 78];
+    prompts[3] = [prompts[2].clone(), answers[2].clone(), vec![2]].concat();
+    let mut calls = session(&prompts, &answers);
+    calls[2].messages = vec![
+        message("user", "notes", false),
+        message("assistant", "answer 2", true),
+    ];
+    calls[3].messages = vec![
+        message("user", "notes", false),
+        message("assistant", "answer 2", false),
+        message("user", "observation 2", false),
+        message("assistant", "answer 3", true),
+    ];
+    let segments = SessionRecord::segments(&calls, None).unwrap();
+    assert_eq!(segments.len(), 2, "one record per segment");
+    assert_eq!(
+        segments
+            .iter()
+            .map(|s| s.sampled.turns.len())
+            .collect::<Vec<_>>(),
+        [2, 2]
+    );
+    let records: Vec<_> = segments.iter().map(|s| s.record(1.0, "g", "r7")).collect();
+    for record in &records {
+        let line = serde_json::to_value(record).unwrap();
+        let text = line.to_string();
+        assert!(
+            text.contains("\"reward\":1.0") && text.contains("\"rollout\":\"r7\""),
+            "{text}"
+        );
+    }
+    // A block too small for a segment splits it at a call.
+    let small = SessionRecord::segments(&calls, Some(6)).unwrap();
+    assert!(
+        small.len() > 2
+            && small
+                .iter()
+                .all(|s| s.tokens() <= 6 || s.sampled.turns.len() == 1)
+    );
+}
+
+/// Only two things keep a session from merged records: a call with no sampled
+/// ids (untraced) and calls drawn under different samplers.
+#[test]
+fn a_session_falls_back_only_when_untraced_or_of_mixed_samplers() {
+    let answers = vec![vec![7, 8], vec![5]];
+    let prompts = append_only(&[1, 2], &answers, &[vec![9]]);
+    let mut calls = session(&prompts, &answers);
+    calls[1].sampled.turns = vec![None];
+    assert_eq!(
+        SessionRecord::segments(&calls, None),
+        Err(FallbackReason::Untraced)
+    );
+    let mut calls = session(&prompts, &answers);
+    calls[1].sampler = Sampler::untruncated(1.0).unwrap();
+    assert_eq!(
+        SessionRecord::segments(&calls, None),
+        Err(FallbackReason::MixedSampler)
+    );
+    assert_eq!(FallbackReason::Untraced.name(), "untraced");
+    assert_eq!(FallbackReason::MixedSampler.name(), "mixed_sampler");
+}
+
+/// The ids a reply's `sampled` record carries (unsigned LEB128 varints,
+/// base64) read back as the ids.
+#[test]
+fn a_sampled_records_ids_decode() {
+    assert_eq!(
+        splinter_data::decode_ids("AAF/gAGAgAHboAk=").unwrap(),
+        vec![0, 1, 127, 128, 16384, 151_643]
+    );
+    assert!(
+        splinter_data::decode_ids("gA==").is_err(),
+        "cut inside a varint"
+    );
+}
+
+/// A call trains the ids the server's `sampled` record names (kept as the
+/// exact text it sent): ids the record agrees with are exact, and a record
+/// naming other ids than the call's trace leaves the call untrained.
+#[test]
+fn a_call_trains_the_ids_its_sampled_record_names() {
+    let project = |token_ids: &str| {
+        let first = request(&[1, 2], &[7, 8], "4");
+        let mut second = request(&[1, 2, 7, 8, 9], &[5], "3");
+        second["sampled"] = json!(format!(
+            r#"{{"token_ids":"{token_ids}","prefill_token_ids":"AQIHCAk=","finish":"stop"}}"#
+        ));
+        let trajectory = with_span(
+            trajectory(vec![
+                user(1, "List the files."),
+                step(2, "", single(&first)),
+                step(3, "One file: a.txt.", single(&second)),
+            ]),
+            [3, 4],
+        );
+        project_calls(&trajectory, &calls(), &sampler())
+    };
+    let agreeing = project("BQ==");
+    assert!(agreeing.exact(), "{:?}", agreeing.proxy);
+    assert_eq!(
+        agreeing.records[1].sampled.turns[0]
+            .as_ref()
+            .unwrap()
+            .token_ids,
+        [5]
+    );
+
+    let differing = project("Bg==");
+    assert!(!differing.exact());
+    assert_eq!(
+        differing
+            .proxy
+            .get(&splinter_data::ProxyReason::SampledDiffers),
+        Some(&1)
+    );
 }

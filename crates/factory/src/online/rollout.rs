@@ -13,7 +13,7 @@
 
 use splinter_core::factory::group::{Behaviour, RolloutOutcome, Truncation, VersionSpan};
 use splinter_data::calls::CallProjection;
-use splinter_data::session::SessionRecord;
+use splinter_data::session::{FallbackReason, SessionRecord};
 
 use super::seams::FinishedRollout;
 
@@ -23,8 +23,9 @@ pub enum Sessions {
     /// One record per model call.
     #[default]
     PerCall,
-    /// The whole session as one record when it is exact, append-only and
-    /// holds at most `block` ids; else one per call, with why.
+    /// One record per append-only segment of the session, each cut to at
+    /// most `block` ids where it can be, when every call is exact; else one
+    /// per call, with why.
     Merged {
         /// The learner's training block, when it has one.
         block: Option<u64>,
@@ -35,7 +36,7 @@ pub enum Sessions {
 /// `truncation` when a limit ended it, its agent having behaved as
 /// `behaviour` says when its trajectory was read. Its records are written
 /// only when every call is exact: one JSON line per model call, or, when
-/// `sessions` merges and the session merges, the session as one line (the
+/// `sessions` merges, one line per append-only segment of the session (the
 /// outcome's `session` says which, and why not). A rollout with no version
 /// span is not exact, and its span is then only a placeholder.
 ///
@@ -56,14 +57,24 @@ pub fn rollout_of(
     let mut records = String::new();
     let mut session = None;
     if let Sessions::Merged { block } = sessions {
-        match SessionRecord::merge(projection).and_then(|merged| merged.within(block)) {
-            Ok(merged) => {
-                records =
-                    serde_json::to_string(&merged).map_err(|e| format!("a session record: {e}"))?;
-                records.push('\n');
+        // One merged record per append-only segment, each carrying the
+        // rollout's one reward.
+        let segments = if exact {
+            SessionRecord::segments(&projection.records, block)
+        } else {
+            Err(FallbackReason::Untraced)
+        };
+        match segments {
+            Ok(segments) => {
+                for merged in &segments {
+                    let line = serde_json::to_string(merged)
+                        .map_err(|e| format!("a session record: {e}"))?;
+                    records.push_str(&line);
+                    records.push('\n');
+                }
                 session = Some("merged".to_string());
             }
-            Err(why) => session = Some(why.reason().name().to_string()),
+            Err(why) => session = Some(why.name().to_string()),
         }
     }
     if exact && session.as_deref() != Some("merged") {

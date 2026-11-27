@@ -558,11 +558,11 @@ fn a_rollout_pinned_to_a_version_asks_it_for_every_call_of_its_episode() {
     );
 }
 
-/// Spec: a run that merges sessions writes an exact, append-only session as one record, its every answer
-/// supervised where it stands, and says so; a session that is not append-only stays one record per call, and the
-/// outcome names why.
+/// Spec: a run that merges sessions writes each append-only segment of a session as one record, its every answer
+/// supervised where it stands: an append-only session is one record, one whose history the server rewrote is one
+/// record per segment, all of the rollout.
 #[test]
-fn a_merged_run_writes_an_append_only_session_as_one_record_and_names_why_another_is_not() {
+fn a_merged_run_writes_one_record_per_append_only_segment() {
     for append_only in [true, false] {
         let s = setup(
             &format!("online-sessions-{append_only}"),
@@ -586,19 +586,13 @@ fn a_merged_run_writes_an_append_only_session_as_one_record_and_names_why_anothe
         .unwrap();
         let done = ends[0].result.as_ref().unwrap();
         let lines: Vec<&str> = done.records.lines().collect();
-        if append_only {
-            assert_eq!(done.outcome.session.as_deref(), Some("merged"), "{done:?}");
-            assert_eq!(lines.len(), 1, "the session is one record");
+        assert_eq!(done.outcome.session.as_deref(), Some("merged"), "{done:?}");
+        let segments = if append_only { 1 } else { 2 };
+        assert_eq!(lines.len(), segments, "one record per segment");
+        for line in lines {
             let session: splinter_data::session::SessionRecord =
-                serde_json::from_str(lines[0]).unwrap();
+                serde_json::from_str(line).unwrap();
             assert_eq!(session.policy_version, 3);
-        } else {
-            assert_eq!(
-                done.outcome.session.as_deref(),
-                Some("not_append_only"),
-                "{done:?}"
-            );
-            assert_eq!(lines.len(), 2, "one record per call");
         }
     }
 }

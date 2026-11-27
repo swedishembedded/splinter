@@ -67,17 +67,17 @@ held-out tasks out of a dataset built from attempts that cover all of them. Its 
   from the format, not from the content.
 
 - `sessions`: a `policy-gradient` dataset's only: how an attempt's agent session is written. `per-call` (the
-  default) writes one record per action, each in the context its request was sent. `merged` writes the session as
-  one record, every action supervised in place with the ids it sampled, when the session is append-only (each
-  later request's prompt ids are the earlier prompt's, its sampled answer's and the turns between) and every
-  action carries its exact sampled tokens: the shared context is forwarded once, and trained with answers packed
-  the gradient equals the per-action records' under `loss_agg: token-sum` (`seq-mean` weighs sessions alike).
-  Any other session is written one record per action and counted by why (`not_exact`, `not_append_only`,
-  `tokenizer_differs`, `tools_differ`, `messages_diverge`, `longer_than_block` when the merged sequence exceeds
-  `max_block`); a session none of whose actions recorded sampled tokens is packed as text and counted as
-  `untraced`. The manifest's `sessions` holds the counts and the ids the merged records forward against their
-  per-call records', and `report.md` states them. Train such a dataset with a `max_block` that holds the
-  longest session.
+  default) writes one record per action, each in the context its request was sent. `merged` writes each
+  append-only segment of the session as one record, every action supervised in place with the ids it sampled: a
+  segment is a run of actions each of whose prompt ids are the previous prompt's, its sampled answer's and the
+  turns between, under one tokenizer and tool list. A compaction or a changed system prompt or tool list starts a
+  segment, as does an action that would take the segment past `max_block`; every segment's record carries the
+  attempt's one reward. The shared context is forwarded once per segment, and trained with answers packed the
+  gradient equals the per-action records' under `loss_agg: token-sum` (`seq-mean` weighs records alike). A
+  session with an action that carries no exact sampled tokens is written one record per action, counted as
+  `untraced` (`mixed_sampler` when an online rollout's calls were drawn under several samplers); a session none
+  of whose actions recorded sampled tokens is packed as text. The manifest's `sessions` holds the counts and the
+  ids the merged records forward against their per-call records', and `report.md` states them.
 
 A stage that projects a non-`sft` dataset is refused when a source attempt stage is hinted, continued or runs
 a harness: such a dataset is projected only from attempts made as the target will be asked.
