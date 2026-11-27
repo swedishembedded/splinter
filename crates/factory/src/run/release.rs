@@ -87,7 +87,12 @@ pub(crate) fn produce(
     let mut gates: std::collections::BTreeMap<String, std::collections::BTreeMap<Purpose, Gate>> =
         std::collections::BTreeMap::new();
     for (purpose, result) in &evaluated {
-        let gate = gate(*purpose, result, params.retention_margin);
+        let gate = gate(
+            *purpose,
+            result,
+            params.retention_margin,
+            params.max_unpaired_share,
+        );
         let held = gates.entry(result.name.clone()).or_default();
         let worst = held.get(purpose).map_or(gate, |g| (*g).min(gate));
         held.insert(*purpose, worst);
@@ -305,6 +310,7 @@ fn gate(
     purpose: Purpose,
     result: &splinter_core::factory::product::EvalResult,
     margin: f64,
+    max_unpaired_share: Option<f64>,
 ) -> Gate {
     if result.protected && result.signature.is_none() {
         return Gate::Unsigned;
@@ -315,8 +321,35 @@ fn gate(
     match result.decision {
         Decision::Improved => Gate::Improved,
         Decision::NotImproved => Gate::NotImproved,
-        Decision::Inconclusive => Gate::Inconclusive,
+        Decision::Inconclusive => match max_unpaired_share {
+            Some(share) if improved_within(&result.statistics, share) => Gate::Improved,
+            _ => Gate::Inconclusive,
+        },
     }
+}
+
+/// Whether a development plan's paired sign test that is inconclusive only
+/// because some slots went uncounted is improved on the slots both arms
+/// counted, with the uncounted share at most `share`.
+fn improved_within(statistics: &serde_json::Value, share: f64) -> bool {
+    let number = |key: &str| statistics.get(key).and_then(serde_json::Value::as_f64);
+    let (Some(pairs), Some(unpaired), Some(p), Some(alpha), Some(difference), Some(min)) = (
+        number("pairs"),
+        number("unpaired_slots"),
+        number("p"),
+        number("alpha"),
+        number("difference"),
+        number("min_difference"),
+    ) else {
+        return false;
+    };
+    let slots = pairs + unpaired;
+    pairs > 0.0
+        && slots > 0.0
+        && unpaired / slots <= share
+        && p < alpha
+        && difference >= min
+        && difference > 0.0
 }
 
 /// The retention gate of an evaluation's `statistics`, whichever measured
@@ -391,6 +424,9 @@ fn gates_of(
             .collect::<Result<Vec<_>, _>>()?;
         parameters["requires"] = json!(params.required());
         parameters["retention_margin"] = json!(params.retention_margin);
+        if let Some(share) = params.max_unpaired_share {
+            parameters["max_unpaired_share"] = json!(share);
+        }
         parameters["divergence_window"] = json!(params.divergence_window);
         parameters["purposes"] = json!(purposes);
     }
@@ -508,7 +544,36 @@ mod retention_spec {
     }
 
     fn retention(protected: bool, statistics: serde_json::Value) -> Gate {
-        gate(Purpose::Retention, &result(protected, statistics), 0.05)
+        gate(
+            Purpose::Retention,
+            &result(protected, statistics),
+            0.05,
+            None,
+        )
+    }
+
+    /// A target evaluation left inconclusive only by uncounted slots is judged
+    /// on the slots both arms counted when the uncounted share is within the
+    /// run's bound, and stays inconclusive past it or without a bound.
+    #[test]
+    fn uncounted_slots_within_the_bound_do_not_block_a_clear_improvement() {
+        let stats = json!({ "pairs": 200, "unpaired_slots": 4, "wins": 50, "losses": 1,
+                            "p": 1e-12, "alpha": 0.05, "difference": 0.245, "min_difference": 0.0 });
+        let target = |share| gate(Purpose::Target, &result(false, stats.clone()), 0.05, share);
+        assert_eq!(target(None), Gate::Inconclusive);
+        assert_eq!(target(Some(0.02)), Gate::Improved);
+        assert_eq!(target(Some(0.01)), Gate::Inconclusive);
+        let not_significant = json!({ "pairs": 200, "unpaired_slots": 1, "wins": 3, "losses": 2,
+                                      "p": 0.5, "alpha": 0.05, "difference": 0.005, "min_difference": 0.0 });
+        assert_eq!(
+            gate(
+                Purpose::Target,
+                &result(false, not_significant),
+                0.05,
+                Some(0.02)
+            ),
+            Gate::Inconclusive
+        );
     }
 
     /// A development plan's retention: a significant loss or a mean loss past

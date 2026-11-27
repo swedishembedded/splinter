@@ -439,6 +439,14 @@ pub struct PromotionParams {
     /// rate stays flat is not promoted.
     #[serde(default = "divergence_window")]
     pub divergence_window: usize,
+    /// The largest share of an evaluation's slots that the infrastructure may
+    /// have left uncounted for its paired test to still decide a promotion.
+    /// Unset, any uncounted slot leaves the evaluation inconclusive (the
+    /// sign test's own rule); set (a run's registered infrastructure bound,
+    /// such as 0.02), an evaluation within it is judged on the slots both
+    /// arms counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_unpaired_share: Option<f64>,
 }
 
 fn divergence_window() -> usize {
