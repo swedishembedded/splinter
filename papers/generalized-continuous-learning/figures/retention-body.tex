@@ -1,0 +1,34 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Figure: retention on earlier skills. Generation-1-era candidates against the base on the course's hand-written practice
+% tasks, which no arm trained on (168 exercises, 60 composites, 4 attempts each), Wilson 95% intervals over attempts.
+% Data: generated/retention.csv.
+\begin{tikzpicture}
+\pgfplotsset{ret/.style={paper, height=46mm, ytick={1,2,3}, y dir=reverse, ymin=0.5, ymax=3.5, ymajorgrids=false,
+    xmajorgrids, xmin=0}}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=6mm}]
+\nextgroupplot[ret, width=82mm, xmax=65, title={168 hand-written exercises}, xlabel={attempts passed (\%)},
+    yticklabels={{outcome first, s3 (gen.~1)}, {productive actions, s1}, {one per task, s1}},
+    legend style={at={(0.40,0.5)}, anchor=west}]
+  \addplot[only marks, mark=*, mark size=1.8pt, okBlue, discard if not={part}{exercises},
+    discard if not={side}{candidate}, error bars/.cd, x dir=both, x explicit]
+    table[y expr=\thisrow{y}-0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
+      x error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/retention.csv};
+  \addlegendentry{candidate}
+  \addplot[only marks, mark=square, mark size=1.8pt, okGrey, discard if not={part}{exercises},
+    discard if not={side}{baseline}, error bars/.cd, x dir=both, x explicit]
+    table[y expr=\thisrow{y}+0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
+      x error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/retention.csv};
+  \addlegendentry{base}
+\nextgroupplot[ret, width=55mm, xmax=8, title={60 hand-written composites}, xlabel={attempts passed (\%)}, yticklabels={}]
+  \addplot[only marks, mark=*, mark size=1.8pt, okBlue, discard if not={part}{composites},
+    discard if not={side}{candidate}, error bars/.cd, x dir=both, x explicit]
+    table[y expr=\thisrow{y}-0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
+      x error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/retention.csv};
+  \addplot[only marks, mark=square, mark size=1.8pt, okGrey, discard if not={part}{composites},
+    discard if not={side}{baseline}, error bars/.cd, x dir=both, x explicit]
+    table[y expr=\thisrow{y}+0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
+      x error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/retention.csv};
+\end{groupplot}
+\end{tikzpicture}

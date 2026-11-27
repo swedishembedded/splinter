@@ -198,5 +198,39 @@ paired base's \LoopFourGOneBasePasses{} of \LoopFourGOneBaseAttempts{}; \LoopFou
 lost (one-sided sign test $p=\LoopFourGOneP$); \LoopFourGOneSolved{} exams solved at least once. It was promoted on its own
 held-out tasks, where it passes \LoopFourGOneHeldout{} of attempts against the base's \LoopFourGOneHeldoutBase. Generation~2 of
 the 4B and generations 1 and 2 of the 8B are running; the trend test needs at least two generations and has not been
-computed. Retention measurements of generation-1 candidates against the base on the course's hand-written practice tasks are
-running. Evidence: \nolinkurl{loop/loop.json}.
+computed. Evidence: \nolinkurl{loop/loop.json}.
+
+\subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
+
+\paragraph{Tested on.} The course's \RetainTasks{} hand-written practice tasks (168 exercises and 60 composites of the
+public course dataset's training side), which no arm trained on and which test skills the base already partly has. Three
+generation-1-era candidates (the 4B loop's generation~1, and one seed each of the productive-actions and one-per-task arms),
+each against the base, 4 attempts per task, with the plan of the held-out authored tasks. This is an exploratory measurement;
+the registered retention check of the loop compares each generation with its predecessor (\cref{sec:m-loop}).
+
+\paragraph{Measured.} No candidate is worse than the base overall; each gains (\cref{fig:retention}, \cref{tab:retention}). The
+4B's generation~1 passes \RetainPasses{} of \RetainAttempts{} attempts against the base's \RetainBasePasses{} of
+\RetainBaseAttempts{}, winning \RetainWins{} tasks and losing \RetainLosses{}; almost all of the gain is on the exercises, while
+on the composites both stay near zero. A candidate does lose on some tasks (13 to 17 of 228), so the absence of regression is
+net, not task by task. Evidence: \nolinkurl{retention/} of the evidence dataset (per-task outcomes; these tasks are public),
+recipes in bench \nolinkurl{recipes/vim-manual/transfer-arms/retention-*.yaml}.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/retention-body}
+\caption{The gain carries over to hand-written practice tasks the base partly solves, with no net regression: each
+generation-1-era candidate against the base, 4 attempts per task, Wilson 95\% intervals over attempts.}\label{fig:retention}
+\end{figure}
+
+\begin{table}[htbp]
+\centering\footnotesize
+\begin{tabular}{@{}lrrll@{}}
+\toprule
+Candidate & Passes & Base & Tasks won/lost, $p$ & Difference [95\%] \\
+\midrule
+\inputrows{generated/retention.tex}
+\bottomrule
+\end{tabular}
+\caption{Retention on the 228 practice tasks: one-sided exact sign test over tasks on passes, task-bootstrap interval of the
+pass-rate difference.}\label{tab:retention}
+\end{table}

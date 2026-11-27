@@ -18,7 +18,7 @@ GENERATED := $(BUILD)/generated
 VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decision/secondary-eval-exam.json \
 	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json decision/student-only-decision-eval-exam.json \
 	decision/student-only-secondary-eval-exam.json loop/loop.json \
-	material/funnel.json
+	retention/retention.json material/funnel.json
 export TEXINPUTS := $(BUILD):
 
 $(GENERATED)/.stamp: scripts/paper_data.py data/rsi5-groups-G.json data/artifacts.csv data/builds.csv $(addprefix data/vim-transfer/,$(VIM_FILES))
@@ -29,7 +29,7 @@ $(GENERATED)/.stamp: scripts/paper_data.py data/rsi5-groups-G.json data/artifact
 # The paper inputs the body, so the figure is typeset as vector graphics in the paper's own fonts; figures/<name>.tex
 # wraps the same body as a standalone document, compiled to a vector PDF and a PNG preview at twice 96 dpi, which are
 # published with the figure data.
-FIGURES := loop method funnel exams generations records
+FIGURES := loop method funnel exams generations records retention
 PREVIEWS := $(foreach f,$(FIGURES),$(BUILD)/previews/fig-$(f).png)
 
 $(BUILD)/figures/fig-%.pdf: figures/%.tex figures/%-body.tex figures/style.tex $(GENERATED)/.stamp

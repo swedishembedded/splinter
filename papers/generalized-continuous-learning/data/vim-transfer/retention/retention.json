@@ -1,0 +1,173 @@
+{
+ "schema": "source-to-transfer.retention/1",
+ "candidates": {
+  "c-s1": {
+   "all": {
+    "tasks": 228,
+    "passes": 336,
+    "attempts": 912,
+    "base_passes": 142,
+    "base_attempts": 912,
+    "task_wins": 103,
+    "task_losses": 17,
+    "p_one_sided": 1.7036957164818765e-16,
+    "diff": 0.21271929824561403,
+    "ci95": [
+     0.16447368421052633,
+     0.2631578947368421
+    ]
+   },
+   "exercises": {
+    "tasks": 168,
+    "passes": 336,
+    "attempts": 672,
+    "base_passes": 142,
+    "base_attempts": 672,
+    "task_wins": 103,
+    "task_losses": 17,
+    "p_one_sided": 1.7036957164818765e-16,
+    "diff": 0.28869047619047616,
+    "ci95": [
+     0.22321428571428573,
+     0.35119047619047616
+    ]
+   },
+   "composites": {
+    "tasks": 60,
+    "passes": 0,
+    "attempts": 240,
+    "base_passes": 0,
+    "base_attempts": 240,
+    "task_wins": 0,
+    "task_losses": 0,
+    "p_one_sided": 1.0,
+    "diff": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "slots": {
+    "wins": 236,
+    "losses": 42,
+    "p_one_sided": 3.037660577388739e-34
+   },
+   "infrastructure": {
+    "candidate": 0,
+    "baseline": 0
+   }
+  },
+  "d-s1": {
+   "all": {
+    "tasks": 228,
+    "passes": 360,
+    "attempts": 912,
+    "base_passes": 141,
+    "base_attempts": 910,
+    "task_wins": 109,
+    "task_losses": 13,
+    "p_one_sided": 2.3390993301104976e-20,
+    "diff": 0.24065934065934066,
+    "ci95": [
+     0.19230769230769232,
+     0.29010989010989013
+    ]
+   },
+   "exercises": {
+    "tasks": 168,
+    "passes": 359,
+    "attempts": 672,
+    "base_passes": 141,
+    "base_attempts": 672,
+    "task_wins": 108,
+    "task_losses": 13,
+    "p_one_sided": 4.184713723126081e-20,
+    "diff": 0.3244047619047619,
+    "ci95": [
+     0.2619047619047619,
+     0.3854166666666667
+    ]
+   },
+   "composites": {
+    "tasks": 60,
+    "passes": 1,
+    "attempts": 240,
+    "base_passes": 0,
+    "base_attempts": 238,
+    "task_wins": 1,
+    "task_losses": 0,
+    "p_one_sided": 0.5,
+    "diff": 0.004201680672268907,
+    "ci95": [
+     0.0,
+     0.012711864406779662
+    ]
+   },
+   "slots": {
+    "wins": 253,
+    "losses": 34,
+    "p_one_sided": 7.590344647492034e-43
+   },
+   "infrastructure": {
+    "candidate": 0,
+    "baseline": 2
+   }
+  },
+  "g-s3": {
+   "all": {
+    "tasks": 228,
+    "passes": 378,
+    "attempts": 912,
+    "base_passes": 138,
+    "base_attempts": 912,
+    "task_wins": 120,
+    "task_losses": 16,
+    "p_one_sided": 3.452882113506886e-21,
+    "diff": 0.2631578947368421,
+    "ci95": [
+     0.21271929824561403,
+     0.31469298245614036
+    ]
+   },
+   "exercises": {
+    "tasks": 168,
+    "passes": 372,
+    "attempts": 672,
+    "base_passes": 138,
+    "base_attempts": 672,
+    "task_wins": 115,
+    "task_losses": 16,
+    "p_one_sided": 5.888054197641743e-20,
+    "diff": 0.3482142857142857,
+    "ci95": [
+     0.28422619047619047,
+     0.4107142857142857
+    ]
+   },
+   "composites": {
+    "tasks": 60,
+    "passes": 6,
+    "attempts": 240,
+    "base_passes": 0,
+    "base_attempts": 240,
+    "task_wins": 5,
+    "task_losses": 0,
+    "p_one_sided": 0.03125,
+    "diff": 0.025,
+    "ci95": [
+     0.004166666666666667,
+     0.05
+    ]
+   },
+   "slots": {
+    "wins": 275,
+    "losses": 35,
+    "p_one_sided": 1.1386688136966407e-47
+   },
+   "infrastructure": {
+    "candidate": 0,
+    "baseline": 0
+   }
+  }
+ }
+}

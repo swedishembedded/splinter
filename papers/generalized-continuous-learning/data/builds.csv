@@ -12,3 +12,4 @@ bench,fac113db48c6903e3f910f219d28e885830e1fe7,,(recipes),,section-by-section au
 bench,83e1b4f8def918459fcda711bfd75d48391812ff,,(recipes),,outcome-first authoring recipe
 bench,662ac1d6062cbdaa0c7378c7894e69ca1e3e75b8,,(recipes),,arm recipes and evaluation plans
 bench,f73ae591b05d698800480fe698f1b941530ad74f,,(admission),,byte- and locale-exact oracle admission
+bench,bcbc6dd458a072294bb0a03e099e494a62bfc220,,(recipes),,retention forks of the generation-1-era candidates
