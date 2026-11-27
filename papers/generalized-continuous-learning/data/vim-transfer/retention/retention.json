@@ -57,6 +57,118 @@
     "baseline": 19
    }
   },
+  "8b-s2": {
+   "all": {
+    "tasks": 227,
+    "passes": 461,
+    "attempts": 908,
+    "base_passes": 138,
+    "base_attempts": 903,
+    "task_wins": 138,
+    "task_losses": 10,
+    "p_one_sided": 3.073256559267015e-30,
+    "diff": 0.3576965669988926,
+    "ci95": [
+     0.30454042081949056,
+     0.40994475138121544
+    ]
+   },
+   "exercises": {
+    "tasks": 168,
+    "passes": 456,
+    "attempts": 672,
+    "base_passes": 138,
+    "base_attempts": 672,
+    "task_wins": 133,
+    "task_losses": 10,
+    "p_one_sided": 6.916696482784182e-29,
+    "diff": 0.4732142857142857,
+    "ci95": [
+     0.40922619047619047,
+     0.5357142857142857
+    ]
+   },
+   "composites": {
+    "tasks": 59,
+    "passes": 5,
+    "attempts": 236,
+    "base_passes": 0,
+    "base_attempts": 231,
+    "task_wins": 5,
+    "task_losses": 0,
+    "p_one_sided": 0.03125,
+    "diff": 0.021645021645021644,
+    "ci95": [
+     0.004347826086956522,
+     0.042735042735042736
+    ]
+   },
+   "slots": {
+    "wins": 345,
+    "losses": 22,
+    "p_one_sided": 4.4000402660946415e-76
+   },
+   "infrastructure": {
+    "candidate": 0,
+    "baseline": 9
+   }
+  },
+  "8b-s3": {
+   "all": {
+    "tasks": 228,
+    "passes": 408,
+    "attempts": 912,
+    "base_passes": 134,
+    "base_attempts": 897,
+    "task_wins": 127,
+    "task_losses": 14,
+    "p_one_sided": 2.9076576052606107e-24,
+    "diff": 0.3032329988851728,
+    "ci95": [
+     0.2541620421753607,
+     0.35353535353535354
+    ]
+   },
+   "exercises": {
+    "tasks": 168,
+    "passes": 398,
+    "attempts": 672,
+    "base_passes": 134,
+    "base_attempts": 670,
+    "task_wins": 120,
+    "task_losses": 14,
+    "p_one_sided": 1.7721554561720163e-22,
+    "diff": 0.39104477611940297,
+    "ci95": [
+     0.3288690476190476,
+     0.4523809523809524
+    ]
+   },
+   "composites": {
+    "tasks": 60,
+    "passes": 10,
+    "attempts": 240,
+    "base_passes": 0,
+    "base_attempts": 227,
+    "task_wins": 7,
+    "task_losses": 0,
+    "p_one_sided": 0.0078125,
+    "diff": 0.04405286343612335,
+    "ci95": [
+     0.013574660633484163,
+     0.07894736842105263
+    ]
+   },
+   "slots": {
+    "wins": 301,
+    "losses": 29,
+    "p_one_sided": 1.7527994901419547e-58
+   },
+   "infrastructure": {
+    "candidate": 0,
+    "baseline": 15
+   }
+  },
   "c-s1": {
    "all": {
     "tasks": 228,

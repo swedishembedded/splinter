@@ -162,15 +162,67 @@
       }
      }
     ]
+   },
+   {
+    "generation": 2,
+    "fork": "loop-g2-8b2",
+    "against": "champion",
+    "promoted": false,
+    "exam": {
+     "passes": 30,
+     "attempts": 400,
+     "champion_passes": 23,
+     "champion_attempts": 400,
+     "uncounted": 0,
+     "wins": 12,
+     "losses": 7,
+     "p_one_sided": 0.1796417236328125,
+     "diff": 0.0175,
+     "ci95": [
+      -0.0175,
+      0.0525
+     ]
+    },
+    "heldout": {
+     "passes": 81,
+     "attempts": 264,
+     "champion_passes": 78,
+     "champion_attempts": 264,
+     "uncounted": 0,
+     "wins": 15,
+     "losses": 10,
+     "p_one_sided": 0.21217811107635498,
+     "diff": 0.011363636363636364,
+     "ci95": [
+      -0.06439393939393939,
+      0.08333333333333333
+     ]
+    },
+    "forget": {
+     "passes": 60,
+     "attempts": 204,
+     "champion_passes": 46,
+     "champion_attempts": 204,
+     "uncounted": 0,
+     "wins": 16,
+     "losses": 10,
+     "p_one_sided": 0.16346979141235352,
+     "diff": 0.06862745098039216,
+     "ci95": [
+      -0.024509803921568627,
+      0.16176470588235295
+     ]
+    }
    }
   ]
  },
  "running": {
   "4B": [
-   3
+   3,
+   4
   ],
   "8B": [
-   2
+   3
   ]
  },
  "not_run": {

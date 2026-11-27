@@ -98,6 +98,8 @@ sign test; `papers/splinter-brain-sven-flywheel`, S4), with no forgetting gate a
 | 2026-11-27 | the harbor worker left the sandbox of a trial finished just before a kill and the stage publish failed on it; fixed in splinter 2fd05cc42, the one affected run cleaned up by hand | a manual step, recorded against part 4 of the definition |
 | 2026-11-27 07:00 | the 4B generation-3 recipe keeps generation 2's stages on their own champion (role champion-g2), so they are reused, not recomputed | generation 2 was not promoted; its tasks and attempts stay valid inputs |
 | 2026-11-27 | 27B teacher rounds on the tasks the teacher never solved (generation 2: 79 tasks, generation 3: 78; 8 more attempts each, no Inkling) | for the dataset only; not part of any arm or generation |
+| 2026-11-27 09:06 | brain's router balance and spill no longer read the servers' nominal decode slots (3466): a cached prefix or session yields to an idle card at 8 requests or a quarter of the lighter load (brain 685c185d1); spill at an absolute 8 requests (brain f0423caf8), deployed on n457's router at 09:06 (12 cards) and on n466's after the 4B generation-3 release | four cards had carried all load while eight idled; throughput only, nothing measured changes |
+| 2026-11-27 | the 4B generation-3 champion-attempt stage restarted with concurrency 1024 instead of 384 (run loop-g3b instead of loop-g3, about 5 minutes of attempts discarded); the 8B generation 3 also runs at 1024 | concurrency is not part of a stage's identity; every other stage was reused |
 
 ## Status
 
@@ -182,7 +184,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit e6f32ac2): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit e2bddc0b): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
@@ -227,7 +229,17 @@ loop's rule (the champion is the latest promoted release) generation 3 started a
 Qwen3-8B retention, seed 1, on the 228 course practice tasks: 463 / 912 against its base's 139 / 893, 129 / 14 tasks,
 p 8.9e-25, +0.361 [+0.305, +0.415]; base 19 slots uncounted (2.1%).
 
-Open: generation 2; a forgetting gate; an unattended restart from the recipe.
+Qwen3-8B generation 2 (run `loop-g2-8b2`, against the 8B generation-1 champion seed 3, every slot counted): exams 30 / 400
+against 23 / 400, 12 / 7, one-sided p 0.18, +0.018 [-0.018, +0.052]; its held-out tasks 81 / 264 against 78 / 264, 15 / 10,
+p 0.21; forgetting gate 60 / 204 against 46 / 204, 16 / 10, p 0.16. Not promoted. Both sizes: generation 1 a large significant
+gain over the base, generation 2 a small non-significant gain over generation 1 with nothing lost; by the registered
+criterion (each generation beats its predecessor, Holm over a size's generations) continuity fails at generation 2 at both
+sizes, pending generations 3 and 4. 8B generation 3 started at 09:08 from the generation-1 champion (`loop-g3-8b`, sharing
+the 528 generation-3 tasks and teacher attempts with the 4B); 4B generation 4 authoring (propose-outcome-g4.md) runs.
+Qwen3-8B retention, seeds 2 and 3: 461 / 912 against 138 / 903, 138 / 10, p 3.1e-30, +0.358 [+0.305, +0.410]; 408 / 912
+against 134 / 897, 127 / 14, p 2.9e-24, +0.303 [+0.254, +0.354]. All three 8B seeds retain.
+
+Open: generations 3 and 4 (and the trend test once a size has two promoted generations); an unattended restart from the recipe.
 
 ## Transfer experiment support (2026-11-26)
 

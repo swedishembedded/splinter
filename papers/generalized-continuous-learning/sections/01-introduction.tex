@@ -31,8 +31,8 @@ recipe and the frozen binaries with no manual step. A part that was not measured
 registered before any generation-2 exam result existed (\cref{app:registrations}). \Cref{fig:loop} shows what has been
 measured so far: generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts and
 generation~1 of Qwen3-8B \LoopEightGOnePasses{} to \LoopEightRepOnePasses{} of 400 in each of three training seeds, where
-both bases pass none. The 4B's second generation did not beat its first and was not promoted; later generations are
-running and are not estimated.
+both bases pass none. At both sizes the second generation did not beat the first and was not promoted; later
+generations are running and are not estimated.
 
 \begin{figure}[htbp]
 \centering
@@ -40,9 +40,9 @@ running and are not estimated.
 \caption{The headline: exam pass rate by generation of the loop, per model size, with the base at generation~0. Generation~1
 of Qwen3-4B (one seed: \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} attempts, Wilson 95\% interval) and of Qwen3-8B
 (three training seeds, mean \LoopEightMeanPct\%, bar: range of the seeds, open triangles: the seeds) pass exams their paired
-bases never pass. Generation~2 of Qwen3-4B (open circle, Wilson interval) did not beat the generation-1 champion measured in
-the same stage (cross) and was not promoted. The 27B teacher passes \TeacherExamPct\% of its attempts on the same exams.
-The shaded generation is running and has no measurement yet.}\label{fig:loop}
+bases never pass. Generation~2 (open circle: 4B, open triangle: 8B; Wilson intervals) did not beat the generation-1 champion measured in
+the same stage (crosses) at either size and was not promoted. The 27B teacher passes \TeacherExamPct\% of its attempts on
+the same exams. The shaded generations are running and have no measurement yet.}\label{fig:loop}
 \end{figure}
 
 \paragraph{The method, step by step.} \Cref{sec:method} describes one method; \cref{sec:results} reports what each step was

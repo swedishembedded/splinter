@@ -22,11 +22,13 @@ generation moved to a freed card, and the fourth generation's proposal budget ra
 
 \paragraph{Vim experiment.}
 
-\begin{center}\footnotesize
-\begin{tabular}{p{17mm}p{64mm}p{60mm}}
+{\footnotesize
+\begin{longtable}{>{\raggedright\arraybackslash}p{17mm}>{\raggedright\arraybackslash}p{64mm}>{\raggedright\arraybackslash}p{60mm}}
 \toprule
 Date & Change & Why \\
 \midrule
+\endhead
+
 2026-11-26 & outcome-first arm added; the comparison family grows to four & outcome-first authoring was proposed while the
 material run was in progress; added before any arm trained \\
 2026-11-26 & source is the manual's text (\texttt{usr\_*.txt}), not an OCR of its PDF & the OCR copy was lost with a node \\
@@ -63,9 +65,15 @@ definition \\
 generation~2 was not promoted; its tasks and attempts stay valid inputs \\
 2026-11-27 & extra 27B teacher rounds (8 more attempts) on the tasks the teacher never solved in generations 2 (79) and 3 (78) &
 for the published dataset only; no arm or generation trains on them \\
+2026-11-27 & brain's router stops reading the servers' nominal decode slots: a cached prefix or session yields to an idle card at
+8 requests or a quarter of the lighter load (brain \texttt{685c185d1}), spill at an absolute 8 requests (\texttt{f0423caf8}),
+deployed during generation~3 & four cards had carried all load while eight idled; throughput only, nothing measured changes \\
+2026-11-27 & the 4B generation-3 champion-attempt stage restarted at concurrency 1024 instead of 384 (about 5 minutes of
+attempts discarded; the 8B's generation~3 runs at 1024 too) & concurrency is not part of a stage's identity; every other stage
+was reused \\
 \bottomrule
-\end{tabular}
-\end{center}
+\end{longtable}
+}
 
 \section{Measurements that showed no gain, and exploratory readings}\label{app:other}
 

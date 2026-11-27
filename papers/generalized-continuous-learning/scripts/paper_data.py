@@ -53,6 +53,21 @@ def fmt_p(p: float) -> str:
     return f"{p:.2g}" if p < 0.01 else f"{p:.3f}".rstrip("0")
 
 
+def g2_macros(prefix: str, e: dict) -> dict:
+    """Macros of a generation measured against the standing champion: exam, own held-out tasks, forgetting gate."""
+    m = {}
+    for part, key in (("exam", "Exam"), ("heldout", "Held"), ("forget", "Forget")):
+        x = e[part]
+        m[f"{prefix}{key}"] = x["passes"]
+        m[f"{prefix}Champ{key}"] = x["champion_passes"]
+        m[f"{prefix}{key}Attempts"] = x["attempts"]
+        m[f"{prefix}{key}Wins"] = x["wins"]
+        m[f"{prefix}{key}Losses"] = x["losses"]
+        m[f"{prefix}{key}P"] = f"{x['p_one_sided']:.2f}"
+        m[f"{prefix}{key}Diff"] = f"${x['diff']:+.3f}$ [${x['ci95'][0]:+.3f}$, ${x['ci95'][1]:+.3f}$]"
+    return m
+
+
 def main(data: str, out: str) -> None:
     ev = os.path.join(data, "vim-transfer")
     agg = json.load(open(os.path.join(ev, "evaluation", "aggregates.json")))["arm_seeds"]
@@ -252,6 +267,7 @@ def main(data: str, out: str) -> None:
     write_csv(os.path.join(out, "loop-candidates.csv"),
               ["size", "generation", "who", "promoted", "passes", "attempts", "pct", "lo", "hi"], crows)
     g2 = next(e for e in loop["sizes"]["4B"] if e.get("against") == "champion" and e["generation"] == 2)
+    e2 = next(e for e in loop["sizes"]["8B"] if e.get("against") == "champion" and e["generation"] == 2)
     teacher = loop["teacher_exam"]
     g1 = loop["sizes"]["4B"][0]
     e1 = loop["sizes"]["8B"][0]
@@ -279,8 +295,9 @@ def main(data: str, out: str) -> None:
     # exercises and composites, with Wilson intervals over attempts.
     ret = json.load(open(os.path.join(ev, "retention", "retention.json")))["candidates"]
     names = {"g-s3": "4B generation 1 (outcome first, s3)", "d-s1": "4B productive actions, s1",
-             "c-s1": "4B one per task, s1", "8b-s1": "8B generation 1, s1"}
-    order = [k for k in ["g-s3", "d-s1", "c-s1", "8b-s1"] if k in ret]
+             "c-s1": "4B one per task, s1", "8b-s1": "8B generation 1, s1", "8b-s2": "8B generation 1, s2",
+             "8b-s3": "8B generation 1, s3"}
+    order = [k for k in ["g-s3", "d-s1", "c-s1", "8b-s3", "8b-s1", "8b-s2"] if k in ret]
     rrows = []
     for i, key in enumerate(order):
         for part in ("exercises", "composites"):
@@ -323,16 +340,7 @@ def main(data: str, out: str) -> None:
               "LoopEightRepOneWins": e1["replicates"][0]["vs_base"]["wins"], "LoopEightRepOneSolved": e1["replicates"][0]["exams_solved"],
               "LoopEightRepTwoPasses": e1["replicates"][1]["passes"], "LoopEightRepTwoBaseAttempts": e1["replicates"][1]["base_attempts"],
               "LoopEightRepTwoWins": e1["replicates"][1]["vs_base"]["wins"], "LoopEightRepTwoSolved": e1["replicates"][1]["exams_solved"],
-              "GTwoExam": g2["exam"]["passes"], "GTwoChampExam": g2["exam"]["champion_passes"],
-              "GTwoExamWins": g2["exam"]["wins"], "GTwoExamLosses": g2["exam"]["losses"],
-              "GTwoExamP": f"{g2['exam']['p_one_sided']:.2f}",
-              "GTwoExamDiff": f"${g2['exam']['diff']:+.3f}$ [${g2['exam']['ci95'][0]:+.3f}$, ${g2['exam']['ci95'][1]:+.3f}$]",
-              "GTwoHeld": g2["heldout"]["passes"], "GTwoChampHeld": g2["heldout"]["champion_passes"],
-              "GTwoHeldAttempts": g2["heldout"]["attempts"], "GTwoHeldWins": g2["heldout"]["wins"],
-              "GTwoHeldLosses": g2["heldout"]["losses"], "GTwoHeldP": f"{g2['heldout']['p_one_sided']:.2f}",
-              "GTwoForget": g2["forget"]["passes"], "GTwoChampForget": g2["forget"]["champion_passes"],
-              "GTwoForgetAttempts": g2["forget"]["attempts"], "GTwoForgetWins": g2["forget"]["wins"],
-              "GTwoForgetLosses": g2["forget"]["losses"], "GTwoForgetP": f"{g2['forget']['p_one_sided']:.2f}",
+              **g2_macros("GTwo", g2), **g2_macros("GTwoEight", e2),
               "LoopEightMeanPct": f"{sum(100 * x['passes'] / x['attempts'] for x in [e1] + e1['replicates']) / 3:.1f}",
               "BaseCalFourAttempts": cal["4B"]["attempts"], "BaseCalFourPasses": cal["4B"]["passes"],
               "BaseCalEightAttempts": cal["8B"]["attempts"], "BaseCalEightPasses": cal["8B"]["passes"],
@@ -342,7 +350,11 @@ def main(data: str, out: str) -> None:
               "RetainBaseAttempts": g1r["base_attempts"], "RetainWins": g1r["task_wins"], "RetainLosses": g1r["task_losses"],
               "RetainTasks": g1r["tasks"], "RetainEightPasses": e1r["passes"], "RetainEightBasePasses": e1r["base_passes"],
               "RetainEightBaseAttempts": e1r["base_attempts"], "RetainEightWins": e1r["task_wins"],
-              "RetainEightLosses": e1r["task_losses"]}
+              "RetainEightLosses": e1r["task_losses"],
+              "RetainEightMinWins": min(ret[k]["all"]["task_wins"] for k in ret if k.startswith("8b")),
+              "RetainEightMaxWins": max(ret[k]["all"]["task_wins"] for k in ret if k.startswith("8b")),
+              "RetainEightMinLosses": min(ret[k]["all"]["task_losses"] for k in ret if k.startswith("8b")),
+              "RetainEightMaxLosses": max(ret[k]["all"]["task_losses"] for k in ret if k.startswith("8b"))}
     open(os.path.join(out, "numbers.tex"), "w").write(
         "% Generated by scripts/paper_data.py from data/; do not edit.\n"
         + "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()))

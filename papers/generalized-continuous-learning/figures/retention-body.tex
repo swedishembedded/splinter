@@ -5,11 +5,11 @@
 % tasks, which no arm trained on (168 exercises, 60 composites, 4 attempts each), Wilson 95% intervals over attempts.
 % Data: generated/retention.csv.
 \begin{tikzpicture}
-\pgfplotsset{ret/.style={paper, height=56mm, ytick={1,2,3,4}, y dir=reverse, ymin=0.5, ymax=4.5, ymajorgrids=false,
+\pgfplotsset{ret/.style={paper, height=72mm, ytick={1,2,3,4,5,6}, y dir=reverse, ymin=0.5, ymax=6.5, ymajorgrids=false,
     xmajorgrids, xmin=0}}
 \begin{groupplot}[group style={group size=2 by 1, horizontal sep=6mm}]
 \nextgroupplot[ret, width=78mm, xmax=75, title={168 hand-written exercises}, xlabel={attempts passed (\%)},
-    yticklabels={{4B gen.~1 (outcome first, s3)}, {4B productive actions, s1}, {4B one per task, s1}, {8B gen.~1, s1}}]
+    yticklabels={{4B gen.~1 (outcome first, s3)}, {4B productive actions, s1}, {4B one per task, s1}, {8B gen.~1 (s3, champion)}, {8B gen.~1, s1}, {8B gen.~1, s2}}]
   \addplot[only marks, mark=*, mark size=1.8pt, okBlue, discard if not={part}{exercises},
     discard if not={side}{candidate}, error bars/.cd, x dir=both, x explicit]
     table[y expr=\thisrow{y}-0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
@@ -19,7 +19,7 @@
     table[y expr=\thisrow{y}+0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
       x error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/retention.csv};
 \nextgroupplot[ret, width=53mm, xmax=8, title={60 hand-written composites}, xlabel={attempts passed (\%)}, yticklabels={},
-    legend style={at={(0.97,0.55)}, anchor=east}]
+    legend style={at={(0.97,0.62)}, anchor=east}]
   \addplot[only marks, mark=*, mark size=1.8pt, okBlue, discard if not={part}{composites},
     discard if not={side}{candidate}, error bars/.cd, x dir=both, x explicit]
     table[y expr=\thisrow{y}-0.12, x=pct, x error plus expr=\thisrow{hi}-\thisrow{pct},
