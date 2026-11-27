@@ -12,10 +12,11 @@
 //! met. Each evaluation measures its candidate for a purpose
 //! ([`Purpose`]): `target` and `transfer` evaluations must find it
 //! `improved` (a protected plan's only on a signed verdict); a `retention`
-//! evaluation must not find it regressed, that is neither a loss the plan's
-//! sign test finds significant nor a pass rate more than `retention_margin`
-//! below the baseline's. A candidate is eligible when every evaluation of
-//! it meets its gate and it was evaluated for every purpose the promotion
+//! evaluation must find it retained: neither a loss the plan's sign test
+//! finds significant nor a pass rate more than `retention_margin` below the
+//! baseline's, measured on counted pairs with no more of its slots
+//! uncounted than `max_unpaired_share` allows. A candidate is eligible when
+//! every evaluation of it meets its gate and it was evaluated for every purpose the promotion
 //! `requires` (all three unless the recipe narrows them). With
 //! `promote: true` the eligible candidate with the largest target
 //! difference is promoted; none eligible promotes nothing. With
@@ -311,7 +312,7 @@ fn gate(
         return Gate::Unsigned;
     }
     if purpose == Purpose::Retention {
-        return retention(&result.statistics, margin);
+        return retention(&result.statistics, margin, max_unpaired_share);
     }
     match result.decision {
         Decision::Improved => Gate::Improved,
@@ -351,12 +352,15 @@ fn improved_within(statistics: &serde_json::Value, share: f64) -> bool {
 /// them; a measurement that is not there retains nothing (inconclusive).
 ///
 /// * A development plan's paired sign test (`wins`, `losses`, `difference`,
-///   `alpha`): regressed on a significant loss or a mean loss past `margin`,
-///   else retained.
+///   `alpha`, `pairs`, `unpaired_slots`): inconclusive without a counted
+///   pair; regressed on a loss the sign test finds significant or a point
+///   difference below `-margin`; else inconclusive when the share of slots
+///   one arm did not count exceeds `max_unpaired_share` (any uncounted slot
+///   when unset, the target rule); else retained.
 /// * An examiner's aggregate (`gain`, `one_sided_lower`): retained only when
 ///   the one-sided lower bound clears `-margin` (non-inferiority);
 ///   regressed when the gain itself is past it; else inconclusive.
-fn retention(statistics: &serde_json::Value, margin: f64) -> Gate {
+fn retention(statistics: &serde_json::Value, margin: f64, max_unpaired_share: Option<f64>) -> Gate {
     let number = |key: &str| statistics.get(key).and_then(serde_json::Value::as_f64);
     let count = |key: &str| {
         statistics
@@ -370,11 +374,22 @@ fn retention(statistics: &serde_json::Value, margin: f64) -> Gate {
         number("difference"),
         number("alpha"),
     ) {
+        // Nothing counted retains nothing: zero pairs read as no difference.
+        let (Some(pairs), Some(unpaired)) = (count("pairs"), count("unpaired_slots")) else {
+            return Gate::Inconclusive;
+        };
+        if pairs == 0 {
+            return Gate::Inconclusive;
+        }
         let lost = splinter_model::stats::one_sided_p(losses, wins) < alpha;
-        return if lost || difference < -margin {
-            Gate::Regressed
-        } else {
-            Gate::Retained
+        if lost || difference < -margin {
+            return Gate::Regressed;
+        }
+        let share = unpaired as f64 / (pairs + unpaired) as f64;
+        return match max_unpaired_share {
+            Some(bound) if share <= bound => Gate::Retained,
+            None if unpaired == 0 => Gate::Retained,
+            _ => Gate::Inconclusive,
         };
     }
     match (number("gain"), number("one_sided_lower")) {
@@ -571,16 +586,70 @@ mod retention_spec {
         );
     }
 
-    /// A development plan's retention: a significant loss or a mean loss past
-    /// the margin regresses; anything else is retained.
+    /// A development plan's paired sign test over `pairs` counted pairs and
+    /// `unpaired` slots one arm did not count.
+    fn paired(
+        wins: u64,
+        losses: u64,
+        pairs: u64,
+        unpaired: u64,
+        difference: f64,
+    ) -> serde_json::Value {
+        json!({
+            "wins": wins, "losses": losses, "pairs": pairs, "unpaired_slots": unpaired,
+            "difference": difference, "alpha": 0.05,
+        })
+    }
+
+    fn retention_within(statistics: serde_json::Value, share: Option<f64>) -> Gate {
+        gate(Purpose::Retention, &result(false, statistics), 0.05, share)
+    }
+
+    /// A development plan's retention: a significant loss or a point
+    /// difference below the negative margin regresses; anything else measured
+    /// on counted pairs is retained.
     #[test]
     fn a_measured_retention_is_retained_unless_it_lost() {
-        let kept = json!({ "wins": 3, "losses": 2, "difference": -0.01, "alpha": 0.05 });
-        assert_eq!(retention(false, kept), Gate::Retained);
-        let lost = json!({ "wins": 0, "losses": 9, "difference": -0.02, "alpha": 0.05 });
-        assert_eq!(retention(false, lost), Gate::Regressed);
-        let past_margin = json!({ "wins": 2, "losses": 3, "difference": -0.10, "alpha": 0.05 });
-        assert_eq!(retention(false, past_margin), Gate::Regressed);
+        assert_eq!(retention(false, paired(3, 2, 40, 0, -0.01)), Gate::Retained);
+        assert_eq!(
+            retention(false, paired(0, 9, 40, 0, -0.02)),
+            Gate::Regressed
+        );
+        assert_eq!(
+            retention(false, paired(2, 3, 40, 0, -0.10)),
+            Gate::Regressed
+        );
+    }
+
+    /// A retention that counted no pair, or left more of its slots uncounted
+    /// than the run's bound (any, without one: the target rule), decides
+    /// nothing; a loss on the pairs it did count still regresses.
+    #[test]
+    fn a_retention_without_counted_pairs_or_past_the_unpaired_bound_is_inconclusive() {
+        assert_eq!(
+            retention_within(paired(0, 0, 0, 0, 0.0), None),
+            Gate::Inconclusive
+        );
+        assert_eq!(
+            retention_within(paired(0, 0, 0, 40, 0.0), Some(0.02)),
+            Gate::Inconclusive
+        );
+        assert_eq!(
+            retention_within(paired(1, 1, 10, 30, 0.0), Some(0.02)),
+            Gate::Inconclusive
+        );
+        assert_eq!(
+            retention_within(paired(1, 1, 99, 1, 0.0), Some(0.02)),
+            Gate::Retained
+        );
+        assert_eq!(
+            retention_within(paired(1, 1, 99, 1, 0.0), None),
+            Gate::Inconclusive
+        );
+        assert_eq!(
+            retention_within(paired(0, 9, 10, 30, -0.9), Some(0.02)),
+            Gate::Regressed
+        );
     }
 
     /// An examiner's retention is retained only when its one-sided lower bound

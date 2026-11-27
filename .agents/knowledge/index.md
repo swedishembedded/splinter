@@ -227,3 +227,4 @@ in the same commit.
 | [239](239-stages-run-at-once-produced-a-shared-stage-identity-twice.md) | Stages run at once produced a stage identity they share twice, and offered one adapter over each other |
 | [240](240-start-champion-was-ignored-by-supervised-training-while-the-stage-identity-named-it.md) | `start: champion` was ignored by supervised training while the stage identity named it |
 | [241](241-champion-of-a-run-read-the-stage-called-release-whatever-generation-it-was.md) | `champion:RUN` read the stage called `release`, whatever generation it was |
+| [242](242-a-retention-gate-with-no-counted-pairs-passed-as-retained.md) | A retention gate with no counted pairs passed as retained |

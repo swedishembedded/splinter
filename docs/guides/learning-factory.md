@@ -719,13 +719,18 @@ compiles its collection evaluates on the same compiled tasks:
   `promote: true` it promotes the best candidate that meets them all. Each evaluation states its
   `purpose`: `target` (the default: what it was trained for, must be `improved`), `transfer`
   (tasks it was not trained on, must be `improved`) and `retention` (what the baseline could
-  already do: must not regress, neither a loss the plan's sign test finds significant nor a
-  pass rate more than `retention_margin`, 0.05, below the baseline's). A promotion requires
+  already do: must be `retained`). A development plan's retention is `regressed` on a loss the
+  plan's sign test finds significant or a point difference (candidate minus baseline pass rate
+  over the counted pairs) below `-retention_margin` (0.05); otherwise it is `inconclusive` when
+  it counted no pair or when the share of its slots either arm left uncounted exceeds
+  `max_unpaired_share` (any uncounted slot when that is unset, as for a target), and `retained`
+  only past those checks. An examiner's retention is `retained` when its one-sided lower bound
+  clears `-retention_margin`. A promotion requires
   an evaluation of every purpose; `requires: [target]` narrows that in plain sight, where a
   recipe has no transfer or retention suite. A slot either arm never counted (the
   infrastructure decided it) leaves a sign test `inconclusive`; `max_unpaired_share` (for
   example 0.02, a run's registered infrastructure bound) lets a promotion judge an evaluation
-  whose uncounted share is within it on the slots both arms counted instead. Evaluations of one baseline share its arm only
+  whose uncounted share is within it on the slots both arms counted instead, for every purpose. Evaluations of one baseline share its arm only
   when they run the same plan on the same tasks. Each release records a `lineage`, one point per
   generation of the champion (its target and transfer pass rates), carried from the champion's
   own release; a candidate whose point shows the target climbing over the last
