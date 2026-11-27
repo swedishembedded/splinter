@@ -11,7 +11,9 @@
 //!
 //! A shared service closes idle connections and restarts; a request sent on
 //! such a connection fails with "connection closed before message completed"
-//! before the model has produced anything. Asking again is safe and usually
+//! before the model has produced anything, or cuts a streaming reply off
+//! mid-body ("error reading a body from connection: unexpected EOF"). Asking
+//! again from the start is safe (a reply is only used whole) and usually
 //! succeeds, so [`Retrying`] asks again, a bounded number of times with a
 //! growing pause, for those failures only: a refusal, a malformed request or
 //! a deadline is returned at once. Every model call of the typed calls and
@@ -31,7 +33,9 @@ pub const FIRST_PAUSE: Duration = Duration::from_millis(500);
 
 /// Whether `error` is a connection-level or server-availability failure that
 /// asking again may get past: the request never reached a model that
-/// answered. A text sven has already classified as transient counts.
+/// answered, or the connection ended before the reply's body did. A body
+/// that arrived whole and does not parse is not one. A text sven has already
+/// classified as transient counts.
 #[must_use]
 pub fn is_transient(error: &anyhow::Error) -> bool {
     is_transient_text(&format!("{error:#}"))
@@ -45,6 +49,8 @@ pub fn is_transient_text(text: &str) -> bool {
         "transient",
         "connection closed before message completed",
         "connection reset",
+        "error reading a body from connection",
+        "unexpected eof",
         "broken pipe",
         "error sending request",
         "http 502",
@@ -212,6 +218,19 @@ mod tests {
             3,
             "one ask and two repeats"
         );
+    }
+
+    #[test]
+    fn a_reply_body_cut_off_mid_stream_is_transient() {
+        // What a router restart left an agent stage with: the reply's chunked
+        // body ended before its next chunk.
+        assert!(is_transient_text(
+            "error decoding response body: error reading a body from connection: \
+             unexpected EOF during chunk size line"
+        ));
+        assert!(!is_transient_text(
+            "error decoding response body: expected value at line 1 column 1"
+        ));
     }
 
     #[tokio::test]

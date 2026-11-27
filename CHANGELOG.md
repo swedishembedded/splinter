@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (a reply cut off mid-stream failed a whole `agent` stage)
+- A model reply whose body ends before it is complete ("error reading a body from connection: unexpected EOF", as a router restart leaves it) is a transient failure like a dropped connection: the call is asked again from the start under the same bounded retries, and each item's `call.json` counts the repeats as `transient_retries`. It failed the whole fan-out stage before. A body that arrives whole and does not parse is still an error.
+
 ### Fixed (a request log that was not one conversation trained a context the model never saw)
 - A policy-gradient or step dataset never trains a context rebuilt from the trajectory where the agent's requests were recorded. Requests that do not extend one another (compaction, an edited note) are read request by request, each action's context the request it answered; an answer the agent dropped (a stopped runaway call) is no action; an answer whose arguments are not JSON is left out and counted `unparsed_arguments`, the rest of its conversation kept; a step no request answered is counted `requests_unpaired`, and a rollout with none paired keeps only its group-baseline record. `dataset.json` and `report.md` list both. On two Vim runs this moves 134 and 79 rollouts (1,104 action records) off Splinter's generic prompt; 212 of the 213 now render from their requests.
 

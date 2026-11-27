@@ -175,8 +175,8 @@ impl Execute for Agent {
             repairs: p.repairs,
         };
         let input = input_of(&call.inputs)?;
-        let (reply, spent) = request.run(model, &input)?;
-        let value = match reply {
+        let ran = request.run(model, &input)?;
+        let value = match ran.reply {
             SchemaReply::Answered(value) => value,
             SchemaReply::Unanswered(why) => return Ok(Outcome::Rejected(why)),
         };
@@ -185,8 +185,9 @@ impl Execute for Agent {
             &call.out.join("call.json"),
             &json!({
                 "model": model.identity,
-                "input_tokens": spent.input_tokens,
-                "output_tokens": spent.output_tokens,
+                "input_tokens": ran.spent.input_tokens,
+                "output_tokens": ran.spent.output_tokens,
+                "transient_retries": ran.transient_retries,
             }),
         )?;
         Ok(Outcome::Produced)

@@ -54,6 +54,18 @@ pub enum SchemaReply {
     Unanswered(String),
 }
 
+/// What a run of a call came to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SchemaRun {
+    /// The reply.
+    pub reply: SchemaReply,
+    /// What the attempt that answered cost.
+    pub spent: Spent,
+    /// How often the call was asked again from the start after a failure that
+    /// may pass (a dropped connection, a reply cut off mid-stream).
+    pub transient_retries: u32,
+}
+
 /// Why a schema is refused before any call.
 ///
 /// # Errors
@@ -66,12 +78,13 @@ pub fn check_schema(schema: &Value) -> Result<(), String> {
 
 impl SchemaCall {
     /// The call run on `model` over `input`, on a runtime of its own (the
-    /// calling thread blocks): the reply and what it cost.
+    /// calling thread blocks): the reply, what it cost, and how often it was
+    /// asked again.
     ///
     /// # Errors
     /// The schema does not compile, or the call failed (the endpoint, the
     /// deadline): nothing was decided about the input.
-    pub fn run(self, model: &Model, input: &Value) -> Result<(SchemaReply, Spent), String> {
+    pub fn run(self, model: &Model, input: &Value) -> Result<SchemaRun, String> {
         let validator = jsonschema::validator_for(&self.schema)
             .map_err(|e| format!("not a JSON Schema: {e}"))?;
         let schema = serde_json::to_string_pretty(&self.schema).map_err(|e| e.to_string())?;
@@ -127,7 +140,11 @@ impl SchemaCall {
             Err(e) if unanswerable(&e) => SchemaReply::Unanswered(e.to_string()),
             Err(e) => return Err(e.to_string()),
         };
-        Ok((reply, measured.spent))
+        Ok(SchemaRun {
+            reply,
+            spent: measured.spent,
+            transient_retries: attempt,
+        })
     }
 }
 
@@ -176,8 +193,8 @@ mod tests {
     use super::*;
 
     /// Starts a reply and loses the connection in the middle of it the first
-    /// time, then answers with the JSON object asked for.
-    struct DropsMidReply(AtomicU32);
+    /// time, with `cut`, then answers with the JSON object asked for.
+    struct DropsMidReply(AtomicU32, &'static str);
 
     #[async_trait::async_trait]
     impl ModelProvider for DropsMidReply {
@@ -194,9 +211,7 @@ mod tests {
                 if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
                     vec![
                         Ok(ResponseEvent::TextDelta("{\"keep".into())),
-                        Err(anyhow::anyhow!(
-                        "error decoding response body: connection closed before message completed"
-                    )),
+                        Err(anyhow::anyhow!("{}", self.1)),
                     ]
                 } else {
                     vec![
@@ -209,21 +224,33 @@ mod tests {
     }
 
     #[test]
-    fn a_schema_call_whose_connection_drops_mid_reply_is_asked_again() {
-        let provider = Arc::new(DropsMidReply(AtomicU32::new(0)));
-        let model = Model::new(provider.clone(), "scripted");
-        let call = SchemaCall {
-            instruction: "Locate.".into(),
-            role: "You locate.".into(),
-            schema: json!({"type": "object", "required": ["keep_through"],
-                "properties": {"keep_through": {"type": "integer"}}}),
-            deadline: Duration::from_secs(30),
-            max_output_tokens: None,
-            repairs: 1,
-        };
-        let (reply, _) = call.run(&model, &json!({"input": "x"})).unwrap();
-        assert_eq!(reply, SchemaReply::Answered(json!({"keep_through": 2})));
-        assert_eq!(provider.0.load(Ordering::SeqCst), 2);
+    fn a_schema_call_whose_reply_is_cut_mid_stream_is_asked_again_and_counted() {
+        for cut in [
+            "error decoding response body: connection closed before message completed",
+            // A router restart: the chunked body ended between chunks.
+            "error decoding response body: error reading a body from connection: unexpected EOF \
+             during chunk size line",
+        ] {
+            let provider = Arc::new(DropsMidReply(AtomicU32::new(0), cut));
+            let model = Model::new(provider.clone(), "scripted");
+            let call = SchemaCall {
+                instruction: "Locate.".into(),
+                role: "You locate.".into(),
+                schema: json!({"type": "object", "required": ["keep_through"],
+                    "properties": {"keep_through": {"type": "integer"}}}),
+                deadline: Duration::from_secs(30),
+                max_output_tokens: None,
+                repairs: 1,
+            };
+            let ran = call.run(&model, &json!({"input": "x"})).unwrap();
+            assert_eq!(
+                ran.reply,
+                SchemaReply::Answered(json!({"keep_through": 2})),
+                "{cut}"
+            );
+            assert_eq!(provider.0.load(Ordering::SeqCst), 2, "{cut}");
+            assert_eq!(ran.transient_retries, 1, "{cut}");
+        }
     }
 
     #[test]
