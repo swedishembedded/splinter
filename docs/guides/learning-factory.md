@@ -673,7 +673,11 @@ compiles its collection evaluates on the same compiled tasks:
   drawn from. The candidate is the adapter the ended job leaves (its last, committed version); `report.json`
   holds the online statistics, `versions` (every published version with the run-level identity
   brain names for it: `lineage {run, epoch, update, base_digest, adapter_digest}`) and the stage's
-  `revisions` (below), and `experiences.jsonl` one line per committed group. The run
+  `revisions` (below), `experiences.jsonl` one line per committed group, and `groups.jsonl` the
+  log the stage keeps as it runs (in its work directory, `work/<stage>/groups.jsonl`): one line
+  each time a group is sent, applied, committed, filtered, dropped stale or rolled back, with its
+  epoch, the learner's version, its version span, rewards and each rollout's outcome, written
+  and synced as the transition is made durable, each transition once through kills and resumes. The run
   runs from the command line against a running `brain serve --openai --training` that serves its
   base with an adapter bank:
   ```bash

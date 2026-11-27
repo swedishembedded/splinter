@@ -18,6 +18,8 @@
 //! * [`driver`] - the loop over those seams, every change durable before
 //!   it takes effect, resumable after a crash at any point.
 //! * [`stats`] - what a run reports.
+//! * [`group_log`] - `groups.jsonl`, the live log of every group's
+//!   transitions.
 //! * [`brain`] - the learner on brain's streaming policy-gradient job.
 //! * [`rollout`] - a finished rollout from its projected model calls, the
 //!   same for every executor.
@@ -25,6 +27,7 @@
 pub mod brain;
 pub mod control;
 pub mod driver;
+pub mod group_log;
 pub mod rollout;
 pub mod seams;
 pub mod stats;

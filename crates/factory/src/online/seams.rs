@@ -282,6 +282,12 @@ pub trait GroupLedger {
     /// # Errors
     /// The ledger cannot be read.
     fn records(&mut self, key: &GroupKey) -> Result<Vec<(u32, String)>, LedgerError>;
+
+    /// The learner published `version`: a ledger that records the learner's
+    /// version beside what it logs takes it from here.
+    fn learner_version(&mut self, version: u64) {
+        let _ = version;
+    }
 }
 
 /// The run's clock in milliseconds: injected, so a test controls time.

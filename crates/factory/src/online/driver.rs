@@ -21,8 +21,8 @@ use splinter_store::factory::runstate::{Fence, GroupEntry, NewGroup, RunState};
 
 use super::control::{Change, ControlError, Controller};
 use super::seams::{
-    ExecutorError, GroupLedger, Learner, LearnerError, LedgerError, Member, OutgoingGroup,
-    RolloutExecutor, RolloutRequest, RunClock, SendOutcome, TaskSelector,
+    ExecutorError, GroupLedger, Learner, LearnerError, LearnerEvent, LedgerError, Member,
+    OutgoingGroup, RolloutExecutor, RolloutRequest, RunClock, SendOutcome, TaskSelector,
 };
 use super::stats::Stats;
 use super::Settings;
@@ -109,6 +109,9 @@ pub fn run(settings: Settings, seams: Seams<'_>) -> Result<Report, OnlineError> 
         }
         let now = clock.now_ms();
         for event in learner.poll()? {
+            if let LearnerEvent::Published { version } = event {
+                ledger.learner_version(version);
+            }
             let changes = control.learner_event(event);
             apply(ledger, executor, now, changes)?;
         }

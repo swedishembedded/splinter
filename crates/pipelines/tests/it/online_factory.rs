@@ -334,6 +334,14 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
         manifest_keys, committed,
         "the manifest is the committed groups"
     );
+    // The live group log holds every group's commit once, through the kill.
+    let mut logged: Vec<String> = lines(&view.join("groups.jsonl"))
+        .iter()
+        .filter(|l| l["state"] == "committed")
+        .map(|l| l["group"].as_str().unwrap().to_string())
+        .collect();
+    logged.sort();
+    assert_eq!(logged, committed, "the group log names each commit once");
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(view.join("report.json")).unwrap()).unwrap();
     assert_eq!(report["groups"]["started"], 6, "{report:#}");

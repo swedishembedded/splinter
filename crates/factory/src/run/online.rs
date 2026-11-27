@@ -31,8 +31,9 @@
 //! `report.json` (the online statistics: reward over every scored group,
 //! zero-variance groups included, the zero-std share, drops and filters,
 //! backpressure, the learner's wait and staleness, tokens generated and
-//! trained, utilisation and useful throughput) and `experiences.jsonl`, one
-//! line per committed group.
+//! trained, utilisation and useful throughput), `experiences.jsonl`, one
+//! line per committed group, and `groups.jsonl`, the log of every group's
+//! transitions the stage wrote as it ran ([`crate::online::group_log`]).
 
 use std::time::Instant;
 
@@ -54,8 +55,10 @@ use super::online_worker::{self, OnlineAgent};
 use super::training::CANDIDATE_FILE;
 use super::{io, stage_error, write_json, Factory, RunError, LEASE_SECONDS};
 use crate::online::driver::{run, Ended, OnlineError, Report, RunLedger, Seams};
+use crate::online::group_log::{GroupLog, LoggedLedger, GROUPS_FILE};
 use crate::online::seams::{
-    LearnerTelemetry, OnlineRollouts, RolloutsRequest, RoundRobin, StreamLearner, SystemRunClock,
+    GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RoundRobin, RunClock,
+    StreamLearner, SystemRunClock,
 };
 use crate::online::Settings;
 use crate::plan::PlannedStage;
@@ -404,6 +407,7 @@ pub(crate) fn produce(
     let tag = format!("{}-{}", stage.key, &hex[..12]);
     let publish = format!("splinter/online:{}:{}:latest", stage.key, &hex[..12]);
     let scratch = factory.work(&stage.key).join("rollouts");
+    let groups_log = factory.work(&stage.key).join(GROUPS_FILE);
     std::fs::create_dir_all(&scratch).map_err(io(&scratch))?;
     let learner_params = params.learner_params();
     let start = start_adapter(factory, stage, &base)?;
@@ -484,6 +488,14 @@ pub(crate) fn produce(
                         LEASE_SECONDS,
                         unix_now(),
                     );
+                    let log = match open_group_log(&groups_log, &mut ledger, &tag) {
+                        Ok(log) => log,
+                        Err(e) => {
+                            outcome = Some(Err(OnlineError::Ledger(e)));
+                            return;
+                        }
+                    };
+                    let mut ledger = LoggedLedger::new(&mut ledger, log);
                     let cancel = || factory.cancelled().is_err();
                     outcome = Some(run(
                         params.settings(&tag),
@@ -532,6 +544,8 @@ pub(crate) fn produce(
     report["revisions"] = json!(revisions);
     write_json(&staging.path().join("report.json"), &report)?;
     write_experiences(factory, &tag, staging)?;
+    let logged = staging.path().join(GROUPS_FILE);
+    std::fs::copy(&groups_log, &logged).map_err(io(&logged))?;
     write_json(&staging.path().join(CANDIDATE_FILE), &candidate)
 }
 
@@ -650,6 +664,22 @@ fn report(trained: &Trained, started: Instant) -> Value {
         // rollout of that version was drawn from, named across servers.
         "versions": telemetry.published,
     })
+}
+
+/// The live log of the stage's groups at `path`, brought up to date with
+/// the ledger's groups of the namespace `namespace`.
+fn open_group_log(
+    path: &std::path::Path,
+    ledger: &mut RunLedger<'_>,
+    namespace: &str,
+) -> Result<GroupLog, crate::online::seams::LedgerError> {
+    let prefix = format!("{namespace}:");
+    let entries: Vec<_> = ledger
+        .load()?
+        .into_iter()
+        .filter(|e| e.group.key.as_str().starts_with(&prefix))
+        .collect();
+    GroupLog::open(path, &entries, SystemRunClock.now_ms())
 }
 
 /// One line per committed group of the stage's namespace.

@@ -12,6 +12,7 @@
 mod brain;
 mod doubles;
 mod epochs;
+mod group_log;
 mod simulation;
 mod worker;
 
