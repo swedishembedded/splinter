@@ -243,6 +243,23 @@ re-sent until brain reports it committed (applied is not durable).
          base (brain A37-A39).
       Open: seeds 2-3 of S and A, the score-centred arm C (configs `cfg/cmp-C-*.with`), the Qwen3-4B pair, the
       after-measurement of `max_output_tokens`, and retention.
-- [ ] Merging append-only calls of one session into one sample (A15), against the per-call reference, once the
-      re-forwarded context is measured.
+- [ ] Merging append-only calls of one session into one sample (A15), against the per-call reference (brain A40-A41,
+      knowledge 619 there: under `token-sum` a merged record trains its per-call records' gradient). Done
+      (lane rl-merge-producer, 2026-11-27): the producer `splinter_data::session::SessionRecord::merge` turns an exact
+      call projection into brain's packed rollout record, or an `Unmergeable` naming the call and first differing
+      position (not exact, missing ids, sampler, tokenizer or tools differ, not append-only, messages diverge, longer
+      than the block); property tests hold its answers to the per-call answers and its divergence finder to brain's
+      rule. Offline: `dataset.project` `sessions: merged` (policy-gradient only, default `per-call`, identity unchanged
+      when unnamed) writes each append-only exact session as one record and any other one record per action, with the
+      counts in `dataset.json` `sessions` and `report.md`; a packed record no longer mixes exact and proxy turns. The
+      trainer already sends `pack_answers`, `max_block` and `policy_gradient.loss_agg`. Contract: brain reads the
+      merged group and refuses a rewritten one with `session_not_append_only` (`make test/contract/brain`). Measured on
+      178 recorded vim sessions (knowledge 252): 0 of 118 Qwen3 sessions are append-only (the template drops the
+      earlier empty think block), 58 of 60 Qwen3.8-27B sessions are (the two others: sven reordered argument keys),
+      and those forward 4.9x fewer ids merged. Open: the online seam (lane A's files): in `crate::online::rollout::rollout_of`,
+      when the projection is exact and the run merges, write `SessionRecord::merge(projection)` as the rollout's one
+      line, else the call records, counting `Unmergeable::reason()`; in `crate::online::brain::records_of`, read such
+      a line as a `SessionRecord` and write `record(member.reward, key, &rollout)`; start the stream job with
+      `pack_answers`, a `max_block` holding the longest session and `loss_agg`; sven to send each
+      call's arguments back as generated; the merge rate on traced online sessions; `token-sum` against `seq-mean`.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.
