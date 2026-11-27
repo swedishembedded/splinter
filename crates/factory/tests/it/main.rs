@@ -7,6 +7,7 @@
 
 mod agent_op;
 mod brain_trainer;
+mod champion_release;
 mod closed_book;
 mod concurrent_passes;
 mod dataset_extend;

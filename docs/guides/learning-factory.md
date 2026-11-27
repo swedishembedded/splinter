@@ -985,7 +985,13 @@ and the fork warns that the stages a later run computed downstream of it are
 not reused.
 
 `champion:RUN` names the run directory, relative to the task repository or
-absolute. The champion is served from its base and adapter wherever an agent's
+absolute. A run may hold several releases (one per generation of a loop:
+`release`, `release-g2`, ...); the champion it names is the one in the release
+the run's recipe declares as `outputs.release`, else in its only release, else
+in its newest release that promoted a candidate (by when the product was
+committed). A run of several releases none of which promoted is refused.
+`champion:RUN#STAGE` names the release stage `STAGE` itself, promoted or not.
+The champion is served from its base and adapter wherever an agent's
 model role goes, and it is never trained from (a `model.train` base or a
 dataset target that is the champion is refused): every variant trains from the base
 model on the data of every generation so far. A protected plan hands the

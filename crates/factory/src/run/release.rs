@@ -45,13 +45,12 @@ use splinter_store::factory::products::Staging;
 use super::eval::result_of;
 use super::training::candidate_of;
 use super::{io, stage_error, write_json, Factory, RunError};
-use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE, RELEASE_RECORD};
+use crate::champion::{Champion, ChampionRecord, ADAPTER_FILE, RELEASE_SCHEMA};
 use crate::ops::{EvaluationParams, PromotionParams, Purpose};
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
 
-/// The release decision in a release product.
-pub const RELEASE_FILE: &str = "release.json";
+pub use crate::champion::RELEASE_FILE;
 
 pub(crate) fn identity(
     factory: &Factory<'_>,
@@ -97,7 +96,7 @@ pub(crate) fn produce(
         let worst = held.get(purpose).map_or(gate, |g| (*g).min(gate));
         held.insert(*purpose, worst);
     }
-    let lineage = lineage_of(factory, kept_champion(factory, stage)?.1.as_ref())?;
+    let lineage = lineage_of(kept_champion(factory, stage)?.1.as_ref())?;
     let generation = lineage.last().map_or(0, |p| p.generation + 1);
     let mut candidates = Vec::new();
     let mut best: Option<(f64, String)> = None;
@@ -174,7 +173,7 @@ pub(crate) fn produce(
     write_json(
         &staging.path().join(RELEASE_FILE),
         &json!({
-            "schema": "splinter.release/1", "promote": promote, "promoted": promoted,
+            "schema": RELEASE_SCHEMA, "promote": promote, "promoted": promoted,
             "candidates": candidates, "champion": champion, "lineage": left,
         }),
     )
@@ -199,7 +198,7 @@ pub struct Point {
 /// The lineage the release of the run's champion recorded; empty for a
 /// base model. The champion's digest covers its release record, so the
 /// stage depends on it.
-fn lineage_of(factory: &Factory<'_>, champion: Option<&Champion>) -> Result<Vec<Point>, RunError> {
+fn lineage_of(champion: Option<&Champion>) -> Result<Vec<Point>, RunError> {
     let Some(champion) = champion else {
         return Ok(Vec::new());
     };
@@ -208,11 +207,7 @@ fn lineage_of(factory: &Factory<'_>, champion: Option<&Champion>) -> Result<Vec<
         #[serde(default)]
         lineage: Vec<Point>,
     }
-    let path = factory
-        .resolved
-        .repository
-        .join(&champion.reference.model)
-        .join(RELEASE_RECORD);
+    let path = champion.release.join(RELEASE_FILE);
     let bytes = std::fs::read(&path).map_err(io(&path))?;
     let recorded: Recorded = serde_json::from_slice(&bytes)
         .map_err(|e| stage_error("release", format!("{}: {e}", path.display())))?;

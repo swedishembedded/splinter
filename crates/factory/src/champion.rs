@@ -11,7 +11,12 @@
 //!
 //! A run's release product records its champion (`release.json`,
 //! `champion`): the candidate it promoted, else the model it was measured
-//! against, kept. The record holds the champion's base model and, for a
+//! against, kept. A run may hold several releases (one per generation of a
+//! loop: `release`, `release-g2`, ...); `champion:RUN` names the one its
+//! recipe declares as `outputs.release`, else its only release, else the
+//! newest release that promoted a candidate (by when its product was
+//! committed), and is refused when none did. `champion:RUN#STAGE` names the release stage `STAGE`,
+//! whatever it promoted. The record holds the champion's base model and, for a
 //! trained one, its adapter, copied into the release product; so a chain of
 //! generations needs only each run's release, not the products that trained
 //! it. A recipe names the champion of the run in `RUN` (a directory
@@ -34,8 +39,10 @@ use crate::recipe::ModelRef;
 
 /// The connection name a champion reference uses in place of a connection.
 pub const CHAMPION: &str = "champion";
-/// Where in a run its champion is recorded.
-pub const RELEASE_RECORD: &str = "release/release.json";
+/// Where in a release product its champion is recorded.
+pub const RELEASE_FILE: &str = "release.json";
+/// The schema of a release product's record.
+pub const RELEASE_SCHEMA: &str = "splinter.release/1";
 /// Where in a release product the champion's adapter is kept.
 pub const ADAPTER_FILE: &str = "champion/adapter.safetensors";
 
@@ -66,6 +73,8 @@ pub struct Champion {
     pub adapter: Option<PathBuf>,
     /// The record's and adapter's digest: what a stage using it depends on.
     pub digest: Digest,
+    /// The release product it was read from.
+    pub release: PathBuf,
 }
 
 /// Whether `model` names a champion rather than a connection's model.
@@ -77,11 +86,12 @@ pub fn is_champion(model: &ModelRef) -> bool {
 /// The champion `reference` names, read from its run under `repository`.
 ///
 /// # Errors
-/// The run has no release record, the record has no champion, or its
-/// adapter is missing or does not match its digest.
+/// The run has no release that names one (see the module documentation),
+/// the record has no champion, or its adapter is missing or does not match
+/// its digest.
 pub fn load(repository: &Path, reference: &ModelRef) -> Result<Champion, String> {
-    let run = repository.join(&reference.model);
-    let path = run.join(RELEASE_RECORD);
+    let release = release_of(repository, reference)?;
+    let path = release.join(RELEASE_FILE);
     let bytes = std::fs::read(&path).map_err(|e| {
         format!(
             "{reference}: {} cannot be read ({e}); a champion is named by a finished run",
@@ -92,9 +102,9 @@ pub fn load(repository: &Path, reference: &ModelRef) -> Result<Champion, String>
     struct Release {
         champion: Option<ChampionRecord>,
     }
-    let release: Release =
+    let recorded: Release =
         serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-    let record = release
+    let record = recorded
         .champion
         .ok_or_else(|| format!("{}: the run records no champion", path.display()))?;
     if is_champion(&record.base) {
@@ -107,7 +117,7 @@ pub fn load(repository: &Path, reference: &ModelRef) -> Result<Champion, String>
     let adapter = match (&record.adapter, &record.adapter_digest) {
         (None, _) => None,
         (Some(relative), Some(expected)) => {
-            let file = run.join("release").join(relative);
+            let file = release.join(relative);
             let found = std::fs::File::open(&file)
                 .and_then(Digest::sha256_of_reader)
                 .map_err(|e| format!("{}: {e}", file.display()))?;
@@ -132,5 +142,132 @@ pub fn load(repository: &Path, reference: &ModelRef) -> Result<Champion, String>
         record,
         adapter,
         digest: Digest::of(&digest_input),
+        release,
     })
+}
+
+/// The release product `reference` names: `RUN#STAGE`'s stage, else the
+/// release the run's recipe declares as `outputs.release`, else its only
+/// release, else its newest release that promoted a candidate.
+fn release_of(repository: &Path, reference: &ModelRef) -> Result<PathBuf, String> {
+    let (run, stage) = match reference.model.split_once('#') {
+        Some((run, stage)) => (run, Some(stage)),
+        None => (reference.model.as_str(), None),
+    };
+    let run = repository.join(run);
+    if let Some(stage) = stage {
+        if stage.is_empty() || stage.contains('/') || stage.starts_with('.') {
+            return Err(format!("{reference}: {stage:?} is not a stage of the run"));
+        }
+        return Ok(run.join(stage));
+    }
+    if let Some(declared) = declared_release(&run).map_err(|e| format!("{reference}: {e}"))? {
+        return Ok(run.join(declared));
+    }
+    let releases = releases_in(&run);
+    if releases.is_empty() {
+        return Err(format!(
+            "{reference}: {} holds no release product (such as {}); a champion is named by a finished run",
+            run.display(),
+            Path::new("release").join(RELEASE_FILE).display()
+        ));
+    }
+    if let [only] = releases.as_slice() {
+        // One release is unambiguous: what it promoted, else what it kept.
+        return Ok(run.join(&only.key));
+    }
+    releases
+        .iter()
+        .filter(|r| r.promoted)
+        .max_by(|a, b| (&a.created_at, &a.key).cmp(&(&b.created_at, &b.key)))
+        .map(|r| run.join(&r.key))
+        .ok_or_else(|| {
+            let keys: Vec<&str> = releases.iter().map(|r| r.key.as_str()).collect();
+            format!(
+                "{reference}: no release of the run promoted a candidate ({}), so it leaves no champion of its own; \
+                 name the release whose kept champion is meant as champion:RUN#STAGE",
+                keys.join(", ")
+            )
+        })
+}
+
+/// The stage the run's recipe declares as `outputs.release`, if it declares one.
+fn declared_release(run: &Path) -> Result<Option<String>, String> {
+    let Ok(text) = std::fs::read_to_string(run.join(crate::run::RECIPE_FILE)) else {
+        return Ok(None);
+    };
+    let recipe = crate::graph::parse(&text).map_err(|e| format!("{}: {e}", run.display()))?;
+    let Some(output) = recipe.outputs.get("release") else {
+        return Ok(None);
+    };
+    // A subrecipe's stages are named only once compiled; the operations the
+    // run's recipe used beyond the built-in ones do not change how an output
+    // that is a release resolves.
+    let repository = std::fs::read(run.join(crate::run::ORIGIN_FILE))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<crate::run::RunOrigin>(&b).ok())
+        .map(|o| o.repository);
+    let load = |path: &str| -> Result<String, String> {
+        let root = repository
+            .as_deref()
+            .ok_or("the run records no repository")?;
+        std::fs::read_to_string(root.join(path)).map_err(|e| e.to_string())
+    };
+    let (compiled, _) = crate::graph::compile_partly(&text, &crate::ops::registry(), &load)
+        .map_err(|e| format!("{}: {e}", run.display()))?;
+    match compiled.outputs.get("release") {
+        Some(crate::graph::Source::Stage { stage, .. }) => Ok(Some(stage.clone())),
+        _ => Err(format!(
+            "{}: the recipe's outputs.release ({output}) names no stage",
+            run.display()
+        )),
+    }
+}
+
+/// A release product committed in a run.
+struct Committed {
+    key: String,
+    promoted: bool,
+    created_at: String,
+}
+
+/// Every committed release product directly in `run`.
+fn releases_in(run: &Path) -> Vec<Committed> {
+    #[derive(Deserialize)]
+    struct Recorded {
+        schema: String,
+        #[serde(default)]
+        promoted: Option<String>,
+    }
+    let Ok(entries) = std::fs::read_dir(run) else {
+        return Vec::new();
+    };
+    let mut releases = Vec::new();
+    for entry in entries.flatten() {
+        let view = entry.path();
+        let Ok(bytes) = std::fs::read(view.join(RELEASE_FILE)) else {
+            continue;
+        };
+        let Ok(recorded) = serde_json::from_slice::<Recorded>(&bytes) else {
+            continue;
+        };
+        let manifest = std::fs::read(view.join(splinter_store::factory::products::VIEW_MANIFEST))
+            .ok()
+            .and_then(|b| {
+                serde_json::from_slice::<splinter_store::factory::products::ProductManifest>(&b)
+                    .ok()
+            });
+        let name = entry.file_name();
+        let (Some(manifest), Some(key)) = (manifest, name.to_str()) else {
+            continue;
+        };
+        if recorded.schema == RELEASE_SCHEMA {
+            releases.push(Committed {
+                key: key.to_owned(),
+                promoted: recorded.promoted.is_some(),
+                created_at: manifest.created_at,
+            });
+        }
+    }
+    releases
 }
