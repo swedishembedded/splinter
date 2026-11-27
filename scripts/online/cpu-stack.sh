@@ -38,7 +38,7 @@ family=$(realpath "$(dirname "$0")/../../tasks/toy-answers")
 
 mkdir -p -m 700 "$work"
 work=$(realpath "$work")
-rm -rf "${work:?}"/{models,artifacts,adapters,brain-runtime,repo,run,state,ready,brain.log,splinter.log}
+rm -rf "${work:?}"/{models,artifacts,adapters,brain-runtime,repo,run,state,events,ready,brain.log,splinter.log}
 mkdir -p -m 700 "$work"/{models/local,artifacts,adapters,brain-runtime}
 key="$work/key"
 [ -f "$key" ] || { head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$key"; chmod 600 "$key"; }
@@ -207,7 +207,8 @@ def check(ok, what):
 
 # Every group is accounted for: committed, filtered or dropped.
 filtered = sum(g["filtered"].values())
-check(g["started"] == g["committed"] + filtered + g["dropped_stale"] + g["dropped_by_learner"], "the groups add up")
+check(g["started"] == g["committed"] + filtered + g["dropped_stale"] + g["dropped_by_learner"] + g.get("rolled_back", 0),
+      "the groups add up")
 check(g["scored"] == g["started"], "every group was scored")
 check(g["committed"] > 0 and g["applied"] >= g["committed"], "groups were applied and committed")
 check(g["sent"] >= g["committed"], "every committed group was sent")
@@ -216,7 +217,7 @@ check(r["finished"] + r["abandoned"] >= g["started"], "rollouts finished")
 check(report["tokens_trained"] > 0 and report["learner"]["trained_tokens"] == report["tokens_trained"], "tokens trained")
 check(report["tokens_generated"] >= report["tokens_trained"], "no more tokens trained than generated")
 published = report["learner"]["published"]
-versions = [p[0] for p in published]
+versions = [p["version"] for p in published]
 check(versions == sorted(set(versions)) and len(versions) >= 2, "versions were published, each newer")
 # The committed groups are the experiences, each once.
 keys = [e["group"] for e in experiences]

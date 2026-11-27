@@ -81,6 +81,17 @@ identity when it is the default.
       difference over 2000 seeded comparisons (at most alpha spent), and a driven run that regresses from version 3,
       rolls back, and trains only its next epoch's groups (`it::online::watchdog`).
 
+- [x] **Validation (A7 a, b).** GPU-free: the tests named above, plus the false-alarm check end to end
+      (`a_watched_run_whose_policy_does_not_regress_is_evaluated_and_never_rolled_back`, splinter-pipelines
+      `it::online_factory`: training, monitor and confirm pins, a scripted streaming job and policy; every published
+      version evaluated against the anchor through frozen copies fetched by digest and served; no audit). The CPU toy
+      stack with every default (`make test/online`, brain 900a65bc1 built on the CPU, port outside the shared ones)
+      passed: 12 groups started, 8 committed, 4 filtered, versions 1..6, the controller and brain each killed and
+      resumed, no group trained twice; `splinter observe` printed its per-version health from the run. Two defects of
+      the stack's own checks were fixed on the way: it read a published version as a list (`p[0]`, a `KeyError` on
+      every run since versions became objects), and it kept an earlier invocation's brain event logs in a reused work
+      directory, so brain's commits of another run failed "every group brain committed is an experience".
+
 ## Measured
 
 - Loss weighting of a long episode: with one record per model call, brain's stream objective trains each call as a
