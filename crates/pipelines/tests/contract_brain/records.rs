@@ -186,6 +186,16 @@ fn rollouts(bench: &Bench, packed: bool) -> (std::path::PathBuf, Vec<String>) {
         projection.tokens.exact, 4,
         "every action of both attempts carries its sampled ids"
     );
+    if packed {
+        assert_eq!(
+            (
+                projection.sessions.merged,
+                projection.sessions.per_call.len()
+            ),
+            (2, 0),
+            "each attempt's append-only session is one merged record"
+        );
+    }
     let lines = std::fs::read_to_string(&path)
         .unwrap()
         .lines()
@@ -263,4 +273,37 @@ fn a_policy_gradient_group_is_read_with_exactly_the_sampled_ids_and_a_broken_rec
     let report = bench.check(&packed, &CheckSpec::chat("contract/chars", false, true));
     let both = sampled.call.len() + sampled.answer.len();
     assert_eq!(trained(&report, 2), vec![both, both]);
+
+    // A merged session whose second request does not extend the first (an id of the first answer re-rendered):
+    // brain refuses it by the rule a producer falls back on, and the valid merged record beside it stays valid.
+    let mut rewritten = parse(&lines[0]);
+    let answers: Vec<usize> = rewritten["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m["train"] == true)
+        .map(|(at, _)| at)
+        .collect();
+    let first_answer = rewritten["messages"][answers[0]]["prompt_token_ids"]
+        .as_array()
+        .unwrap()
+        .len();
+    let ids = &mut rewritten["messages"][answers[1]]["prompt_token_ids"][first_answer];
+    *ids = serde_json::json!(if ids == &serde_json::json!(0) { 1 } else { 0 });
+    let broken = bench.path("pg-not-append-only.jsonl");
+    std::fs::write(&broken, format!("{}\n{}\n", lines[1], rewritten)).unwrap();
+    let report = bench.check(&broken, &CheckSpec::chat("contract/chars", false, true));
+    let refused: Vec<(usize, Option<String>)> = report
+        .refused
+        .iter()
+        .map(|r| (r.line, r.rule.clone()))
+        .collect();
+    assert_eq!(
+        refused,
+        vec![(2, Some("session_not_append_only".into()))],
+        "{:?}",
+        report.refused
+    );
+    assert_eq!(report.valid_records, 1);
 }
