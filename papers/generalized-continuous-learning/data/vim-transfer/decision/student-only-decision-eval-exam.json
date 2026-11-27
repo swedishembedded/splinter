@@ -1,0 +1,35 @@
+{
+ "eval": "eval-exam",
+ "arms": {
+  "s": {
+   "seeds": 3,
+   "attempts": 1166,
+   "passes": 0,
+   "pass_rate": 0.0,
+   "tasks_solved": 0,
+   "base_attempts": 1184,
+   "base_passes": 0,
+   "infrastructure_slots": [
+    10,
+    21,
+    19
+   ]
+  }
+ },
+ "primary": {
+  "s": {
+   "tasks": 100,
+   "wins": 0,
+   "losses": 0,
+   "p": 1.0,
+   "diff": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "holm_alpha": 0.05,
+   "significant_holm": false
+  }
+ },
+ "vs_control": {}
+}

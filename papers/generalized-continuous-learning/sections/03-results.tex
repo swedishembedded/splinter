@@ -165,17 +165,38 @@ Training material & Tasks & Passes (rate) & Base & vs base: W/L, $p$ & Differenc
 \end{tabular}
 \end{center}
 
-\paragraph{Teacher and student records.} Of the all-verified arm's 3359 training records, 2699 come from the teacher and 660
-from the student (outcome first: 1014 and 86; one per task: 629 and 142), by each record's \texttt{model} field in the
-dataset's lineage (\cref{fig:records}).
+\subsection{The teacher's trajectories against the learner's own}\label{sec:r-teacher}
+
+\paragraph{Tested on.} The arms above train mostly on the 27B teacher's records (\cref{fig:records}): 2699 of the
+all-verified arm's 3359, 1014 of the outcome-first arm's 1100. A student-only arm trains on the 660 records of the 4B's own
+verified successes on the section-by-section tasks (the student's share of the all-verified arm; 200 tasks), with the same
+recipe and three seeds, and is examined like the others.
+
+\paragraph{Measured.} The student-only arm passes \StudentOnlyPasses{} of \StudentOnlyAttempts{} counted exam attempts, its
+paired base none of \StudentOnlyBaseAttempts{} (no exam won or lost). Generation~1's exam gain therefore comes from the
+teacher's trajectories, not from the learner's own verified attempts. The arm was decided on its own, outside the registered
+comparison family. Two of its three evaluation stages exceeded the registered 2\% bound on attempts ended by the
+infrastructure (21 and 19 of 800) and were not repeated; its held-out-task evaluation was not run. Evidence:
+\nolinkurl{decision/student-only-decision-eval-exam.json}.
 
 \begin{figure}[htbp]
 \centering
 \input{figures/records-body}
-\caption{Most training records are the 27B teacher's verified trajectories, so the arms do not separate what the teacher
-teaches from what the loop's own verified attempts teach; a student-only arm is being trained to separate them.}\label{fig:records}
+\caption{The exam gain follows the teacher's records. Left: who made each arm's training records. Right: each arm's exam pass
+rate pooled over three seeds, with the task-bootstrap interval of its difference from the paired base. The student-only arm,
+trained on the 4B's own verified successes, passes no exam.}\label{fig:records}
 \end{figure}
- A student-only arm (the all-verified rule on the 4B's own verified successes, 3 seeds) is being trained to
-separate the teacher's contribution from the loop's; generation~2 (new outcome-first tasks authored by a generation-2 rule,
-attempted by the generation-1 champion, the teacher and Inkling-2-Mini, trained from the base with generation~1's data as replay, examined on
-the exams, its own held-out tasks and a forgetting gate on generation~1's held-out tasks) is running. Neither has a result yet.
+
+\subsection{The iterated loop per model size}\label{sec:r-loop}
+
+\paragraph{Tested on.} Qwen3-4B and Qwen3-8B, each from its own base. A Qwen3.8-27B learner was not started: one 27B
+generation would have ended at about 08:30 on 2026-11-27, leaving no time for a second before the compute lease ended, and by
+the registered rule a size is run only if its generations can finish.
+
+\paragraph{Measured.} Qwen3-4B, generation~1: \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts against its
+paired base's \LoopFourGOneBasePasses{} of \LoopFourGOneBaseAttempts{}; \LoopFourGOneWins{} exams won, \LoopFourGOneLosses{}
+lost (one-sided sign test $p=\LoopFourGOneP$); \LoopFourGOneSolved{} exams solved at least once. It was promoted on its own
+held-out tasks, where it passes \LoopFourGOneHeldout{} of attempts against the base's \LoopFourGOneHeldoutBase. Generation~2 of
+the 4B and generations 1 and 2 of the 8B are running; the trend test needs at least two generations and has not been
+computed. Retention measurements of generation-1 candidates against the base on the course's hand-written practice tasks are
+running. Evidence: \nolinkurl{loop/loop.json}.

@@ -2,31 +2,34 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \section{Verdict and limitations}\label{sec:limitations}
 
-\Cref{tab:verdict} holds each family against the operational definition of \cref{sec:introduction}. What is supported is
-continuous gain over two generations in the Lua family and one step of the loop in the Vim family, not continuous
-self-improvement.
+\Cref{tab:verdict} holds each family and model size against the operational definition of \cref{sec:introduction}. What is
+supported is continuous gain over two generations in the Lua family and one examined generation of the Vim loop for the 4B,
+whose gain comes from the teacher's trajectories; not continuous self-improvement.
 
 \begin{table}[htbp]
-\centering\small
-\begin{tabular}{>{\raggedright\arraybackslash}p{40mm}>{\raggedright\arraybackslash}p{52mm}>{\raggedright\arraybackslash}p{52mm}}
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{36mm}>{\raggedright\arraybackslash}p{38mm}>{\raggedright\arraybackslash}p{38mm}>{\raggedright\arraybackslash}p{36mm}@{}}
 \toprule
-Part of the definition & Lua family (4 generations) & Vim family (1 examined generation) \\
+Part of the definition & Lua, Qwen3-4B (4 generations) & Vim, Qwen3-4B & Vim, Qwen3-8B \\
 \midrule
 (a) each generation beats its predecessor on sealed exams & generations 1 and 2 hold, 3 and 4 do not & generation~1 holds
-against the base; three generations not yet run \\
-(b) no forgetting of earlier skills & not measured & not measured; generation~2's forgetting gate is running \\
-(c) robust over seeds or lineages, above the shuffled-request control & generation~4 above the base in all four lineages; no control run & holds
-for generation~1: every seed improves, every arm beats the control \\
-(d) unattended restart from the recipe and frozen binaries & not measured & not met: the material run was forked by hand after
-a node failure \\
+against the base; generation~2 running & generation~1 running \\
+(b) no forgetting of earlier skills & not measured & running (forgetting gate; practice-task retention) & running \\
+(c) robust over seeds or lineages, above the shuffled-request control & generation~4 above the base in all four lineages; no
+control run & holds for generation~1 (every seed; every arm beats the control); the learner's own attempts alone give no gain
+& not yet measured \\
+(d) unattended restart from the recipe and frozen binaries & not measured & not met: the material run was forked by hand
+after a node failure & not yet measured \\
 \bottomrule
 \end{tabular}
-\caption{Verdict against the operational definition. Neither family meets it; each row is the measured state.}\label{tab:verdict}
+\caption{Verdict against the operational definition, per family and model size; a Qwen3.8-27B learner was not run. No row
+meets the definition; each cell is the measured state.}\label{tab:verdict}
 \end{table}
 
 \paragraph{Limitations.} Each family has one task protocol and one 4B learner with rank-16 adapters. The Lua gains shrink with
 each doubling of the pool (5.1, 1.6, 1.2, 0.3 points) and there is no matched-data control. In the Vim family the absolute level
-is low (3.5\% of exam attempts for the best arm, against the teacher's 63\% first-attempt rate); most training records are the
-27B teacher's; the comparison of authoring modes is confounded with passes per record and task difficulty; the 100 exams come
+is low (3.5\% of exam attempts for the best arm, against the teacher's 63\% first-attempt rate); generation~1's gain comes from the 27B teacher's trajectories, and learning from the
+learner's own attempts is not shown; the comparison of authoring modes is confounded with passes per record and task difficulty; the 100 exams come
 from one course and are public, so a model trained on data gathered after their publication could have seen them; the per-seed intervals of \cref{fig:vim-seeds} treat attempts as independent. Other tools and domains, and
 stability under another authoring seed, are not measured.

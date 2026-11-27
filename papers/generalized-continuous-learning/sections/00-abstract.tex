@@ -1,19 +1,19 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \begin{abstract}
-We describe one method by which a local 4B model learns from an executable environment, with no human-written training tasks
-or labels, and is judged by a separate examiner on sealed exams it never sees; we apply it to two task families. The
-environment is the only teacher: a Lua~5.1 interpreter labels the programs the model proposes, and Vim and hidden checks grade
-the file edits the model makes. In the first family, retraining Qwen3-4B on a pool of interpreter-labelled programs that
-doubles at each generation raises its share of a fresh sealed exam of 2040 items from 5.1\% to 13.2\% after four generations
-(+8.2 points, 95\% interval [+5.1, +11.5]), and raises it by +3.3 points [+0.7, +7.1] on program families no exam had used. In the
-second family, editing files with Vim, a 27B model authors practice tasks from Vim's user manual alone; an oracle admits a task
-only if replaying its reference solution in the task image gives the expected bytes; authoring the outcome first (start and end
-files, request written last) yields tasks whose verified trajectories transfer more than tasks written section by section. On
-100 hand-written sealed exams, each of the four arms in the registered comparison beats the base (which passes none of its
-attempts) and beats a
-control trained on the same trajectories with shuffled requests (which also passes none); the outcome-first arm passes 42 of
-1200 exam attempts (3.5\%) on a third of the records. Against the operational definition of continuous self-improvement
-stated in the introduction, the Vim family has one examined generation: held-out gain and robustness to the control hold for
-it; three generations, retention and an unattended restart are not shown.
+We measure whether a loop of authoring tasks, attempting them and training on the verified attempts improves a local model
+generation after generation, with no human-written training tasks or labels and every generation judged on exams no stage
+reads. The registered estimand is the exam pass rate per generation, per model size. On 100 hand-written Vim exams, the first
+generation of Qwen3-4B, trained on verified trajectories of tasks that a 27B model authored from Vim's user manual, passes 17 of
+400 attempts against its base's 0 of 393 (12 exams won, 0 lost, one-sided sign test $p=0.00024$); generation~2 of the 4B and
+generations 1 and 2 of Qwen3-8B are running, and a 27B learner is not run. The steps that lead there were each measured: an
+executable environment as the only judge of correctness (a Lua~5.1 interpreter, in a first family, raised a 4B model's share
+of a 2040-item sealed exam from 5.1\% to 13.2\% over four generations, +8.2 points [+5.1, +11.5], +3.3 [+0.7, +7.1] on program
+families no exam had used); oracle admission that replays every reference in the task image; outcome-first authoring (start and
+end files first, the request last), whose trajectories pass 42 of 1200 exam attempts against 22 for section-by-section tasks on
+a third of the records; and two controls. Trained on the same records with shuffled requests, the model passes no exam, so the
+gain comes from the pairing of request and action; trained on the 4B's own verified attempts alone, it passes none of 1166, so
+generation~1's gain comes from the 27B teacher's trajectories. Against the operational definition of continuous
+self-improvement stated in the introduction, one examined generation holds; three generations, retention and an unattended
+restart are not yet shown.
 \end{abstract}

@@ -1,0 +1,42 @@
+{
+ "eval": "eval-exam",
+ "per_seed": {
+  "arm-s-s1": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 393,
+    "infrastructure": 7
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 397,
+    "infrastructure": 3
+   }
+  },
+  "arm-s-s2": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 384,
+    "infrastructure": 16
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 395,
+    "infrastructure": 5
+   }
+  },
+  "arm-s-s3": {
+   "candidate": {
+    "passes": 0,
+    "attempts": 389,
+    "infrastructure": 11
+   },
+   "baseline": {
+    "passes": 0,
+    "attempts": 392,
+    "infrastructure": 8
+   }
+  }
+ },
+ "secondary": {}
+}

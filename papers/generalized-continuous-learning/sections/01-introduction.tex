@@ -26,17 +26,34 @@ recipe and the frozen binaries with no manual step. A part that was not measured
 2026-11-27, after the first generation of the Vim family had been examined and before any verdict against it
 (\cref{app:deviations}); the Lua run was registered under its own criteria, which correspond to part~(a).
 
+\paragraph{Primary estimand.} The exam pass rate per generation of the autonomous outcome-first loop
+(\cref{sec:m-loop}), per model size, each generation against the base and against the previous champion on the 100 Vim exams,
+registered before any generation-2 exam result existed (\cref{app:registrations}). \Cref{fig:loop} shows what has been
+measured so far: generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts against its
+base's \LoopFourGOneBasePasses{} of \LoopFourGOneBaseAttempts{}. Later generations are running and are not estimated.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/loop-body}
+\caption{The headline: exam pass rate by generation of the loop, per model size (Wilson 95\% intervals over attempts; base
+at generation~0). Generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} attempts, its paired base
+none; the 27B teacher passes \TeacherExamPct\% of its attempts on the same exams. The shaded generations are running and have
+no measurement yet.}\label{fig:loop}
+\end{figure}
+
 \paragraph{The method, step by step.} \Cref{sec:method} describes one method; \cref{sec:results} reports what each step was
-tested on and what it measured, in the same order:
+tested on and what it measured, in the order they build towards the loop:
 \begin{enumerate}
-\item an executable environment as the only teacher (\cref{sec:m-teacher});
+\item an executable environment as the only judge of correctness (\cref{sec:m-teacher});
 \item a separate examiner that holds sealed exams and returns only aggregate verdicts (\cref{sec:m-examiner});
 \item a growing pool of interpreter-labelled programs, retrained from the base at each generation (Lua; \cref{sec:r-pool});
 \item practice tasks authored from raw source material, Vim's user manual (\cref{sec:r-authoring});
 \item oracle admission of each task in the task image (\cref{sec:r-admission});
 \item outcome-first authoring (\cref{sec:r-outcome});
 \item verified trajectories trained into adapters, measured against the base and a shuffled-request control on sealed exams
-  (\cref{sec:r-adapters}).
+  (\cref{sec:r-adapters});
+\item the separation of the teacher's trajectories from the learner's own (\cref{sec:r-teacher});
+\item the iterated loop per model size (\cref{sec:r-loop}).
 \end{enumerate}
 \Cref{sec:limitations} gives the verdict against the definition and the limitations. Registrations, internal run names,
-deviations, the measurements that showed no gain, and the reproduction commands are in the appendix.
+deviations, the measurements that showed no gain, and the datasets, models and builds are in the appendix.

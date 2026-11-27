@@ -1472,6 +1472,240 @@
      "wins": 36
     }
    }
+  },
+  {
+   "fork": "arm-s-s1",
+   "arm": "s",
+   "seed": 1,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 727,
+    "train_records": 660,
+    "validation_records": 67,
+    "trials": 727,
+    "tasks": 200,
+    "action_sequences": 399,
+    "supervised_messages": 1955,
+    "masked_messages": 0,
+    "supervised_characters": 629243,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "validation:Qwen/Qwen3-4B": 67
+   },
+   "training": {
+    "selected_step": 640,
+    "steps_completed": 800,
+    "stopped_early": true,
+    "validation_records": 67,
+    "validation_loss": [
+     0.3228870630264282,
+     0.09980480372905731
+    ],
+    "token_accuracy": [
+     0.941366152523244,
+     0.9626484656312141
+    ],
+    "adapter_sha256": "sha256:837b2eab719a866e789eeb36d763ff11d9716c9481ff05ae37ccd0d4b9330101"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 397,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:840476b5fd9c17c3bbd9886964aec8ab3cc66447944c71300a3af8e83502d72a"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-70597ca9d239",
+     "trials": 400,
+     "counted": 393,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:95ae8788d4e6512483d5853b8d956052dca060e2d1afcdfea9ff6ab50972d6a4"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 390,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 10,
+     "wins": 0
+    }
+   }
+  },
+  {
+   "fork": "arm-s-s2",
+   "arm": "s",
+   "seed": 2,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 727,
+    "train_records": 660,
+    "validation_records": 67,
+    "trials": 727,
+    "tasks": 200,
+    "action_sequences": 399,
+    "supervised_messages": 1955,
+    "masked_messages": 0,
+    "supervised_characters": 629243,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "validation:Qwen/Qwen3-4B": 67
+   },
+   "training": {
+    "selected_step": 640,
+    "steps_completed": 800,
+    "stopped_early": true,
+    "validation_records": 67,
+    "validation_loss": [
+     0.3228870630264282,
+     0.10034342855215073
+    ],
+    "token_accuracy": [
+     0.941366152523244,
+     0.9621110334820229
+    ],
+    "adapter_sha256": "sha256:552287fabc08e154f1b4897f2d884ef07f49abaf96b7c557546899ffcc65b57d"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 395,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:e8da5e4d00a11646175752d591a750b5e8e66bd84b13f1b03cc25b1c3e1e1a25"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-cf7291c35fdd",
+     "trials": 400,
+     "counted": 384,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:1ff0771cae48eaf916a1d4cc34a9bf5a93163ebdff3cbd0386ab301fcb24c7a2"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 379,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 21,
+     "wins": 0
+    }
+   }
+  },
+  {
+   "fork": "arm-s-s3",
+   "arm": "s",
+   "seed": 3,
+   "revisions": {
+    "splinter": "f6661e34be6b4383a6fd978c272a4005be1a2f95",
+    "sven": "704496d626cbe6253527f8b34e9f45ba3c6efcb4",
+    "brain": "b2f46a22c8793d71e0bc21054e0cb2f3e3fe54ab"
+   },
+   "composition": {
+    "records": 727,
+    "train_records": 660,
+    "validation_records": 67,
+    "trials": 727,
+    "tasks": 200,
+    "action_sequences": 399,
+    "supervised_messages": 1955,
+    "masked_messages": 0,
+    "supervised_characters": 629243,
+    "failed_actions_masked": 0,
+    "supervise": "all",
+    "per_task": null,
+    "control": null
+   },
+   "records_by_model": {
+    "train:Qwen/Qwen3-4B": 660,
+    "validation:Qwen/Qwen3-4B": 67
+   },
+   "training": {
+    "selected_step": 640,
+    "steps_completed": 800,
+    "stopped_early": true,
+    "validation_records": 67,
+    "validation_loss": [
+     0.3228870630264282,
+     0.1014484092593193
+    ],
+    "token_accuracy": [
+     0.941366152523244,
+     0.9615198581179126
+    ],
+    "adapter_sha256": "sha256:84e30c1cbc3b3739f8baf8ed42bc3e0da375df6b5175fdf1d4865391441036f8"
+   },
+   "eval-exam": {
+    "baseline": {
+     "arm": "baseline",
+     "model": "brain:Qwen/Qwen3-4B",
+     "trials": 400,
+     "counted": 392,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:c19ba596fa640645443812b8f71ab2ec3c19d812355a9fd1c73c032c2c01912f"
+    },
+    "candidate": {
+     "arm": "lora",
+     "model": "Qwen/Qwen3-4B:splinter:candidate:lora-32d66f8b8f91",
+     "trials": 400,
+     "counted": 389,
+     "passed": 0,
+     "pass_rate": 0.0,
+     "pass_rate_of_trials": 0.0,
+     "trials_product": "blake3:58847602bcf81a0ac026022fba20132103da9c53abddbcf7910b9dd3d373926e"
+    },
+    "statistics": {
+     "alpha": 0.05,
+     "difference": 0.0,
+     "incomplete": true,
+     "losses": 0,
+     "min_difference": 0.0,
+     "p": 1.0,
+     "pairs": 382,
+     "test": "exact one-sided paired sign test",
+     "unpaired_slots": 18,
+     "wins": 0
+    }
+   }
   }
  ]
 }

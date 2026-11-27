@@ -1,0 +1,46 @@
+{
+ "schema": "source-to-transfer.loop/1",
+ "sizes": {
+  "4B": [
+   {
+    "generation": 1,
+    "fork": "arm-g-s3",
+    "passes": 17,
+    "attempts": 400,
+    "exams_solved": 12,
+    "base_passes": 0,
+    "base_attempts": 393,
+    "vs_base": {
+     "wins": 12,
+     "losses": 0,
+     "p_one_sided": 0.000244140625
+    },
+    "release_heldout": {
+     "passes": 42,
+     "attempts": 204,
+     "base_passes": 6,
+     "base_attempts": 204
+    }
+   }
+  ]
+ },
+ "running": {
+  "4B": [
+   2
+  ],
+  "8B": [
+   1,
+   2
+  ]
+ },
+ "not_run": {
+  "27B": "one generation would end about 08:30 on 2026-11-27, leaving no time for a second before the lease ends, so by the registered rule it was not started"
+ },
+ "teacher_exam": {
+  "model": "Qwen3.8-27B-FP8",
+  "passes": 249,
+  "attempts": 400,
+  "first_attempt_rate": 0.63,
+  "exams_solved": 94
+ }
+}

@@ -8,7 +8,8 @@ better than its predecessor; not met), G2 (generation~4 at least five points abo
 families; met) are evaluated by \texttt{scripts/rsi5\_criteria.py}. \texttt{prereg/rsi6.md} and \texttt{prereg/rsi7.md} are
 later registrations of this paper with no examined result yet. The Vim experiment is registered in splinter's
 \texttt{.agents/roadmap/source-to-transfer.md} (commit \texttt{c319ff4c3}, 2026-11-26, before any arm trained; outcome-first arm
-added in \texttt{66277f180}). Its arms are lettered there: A the base, B all verified, C one per task, D productive actions, F
+added in \texttt{66277f180}). The student-only arm was added on 2026-11-27 after the registered family had been decided, and the iterated loop per
+model size became the primary estimand in \texttt{7ddad366e}, before any generation-2 exam result. Its arms are lettered there: A the base, B all verified, C one per task, D productive actions, F
 the shuffled-request control, G outcome first, S student only; the held-out authored tasks are its measurement T1 and the exams
 T2/T4. The evidence files keep these letters (\texttt{arm-<letter>-s<seed>}).
 
@@ -36,6 +37,14 @@ distribution is unchanged \\
 2026-11-26 & each arm-seed trains on one card and evaluates through its node's four cards & a router does not route training \\
 2026-11-27 & the operational definition (\cref{sec:introduction}) written after generation~1 was examined, before any verdict
 against it & requested so that the claim is scoped by a fixed definition; adds no registered comparison \\
+2026-11-27 & student-only arm added, decided outside the registered family & to separate the teacher's contribution from
+the learner's own attempts \\
+2026-11-27 & two student-only evaluation stages kept with 21 and 19 of 800 attempts ended by the infrastructure (bound 2\%),
+its held-out-task evaluation not run & the cards were needed for the loop; the result is reported with this breach, and a repeat
+could add passes \\
+2026-11-27 & primary estimand: exam passes per generation of the outcome-first loop, per model size (\cref{sec:m-loop});
+27B learner not run & set as the goal by the user before any generation-2 exam result; a 27B generation could not finish
+twice before the lease ended \\
 \bottomrule
 \end{tabular}
 \end{center}

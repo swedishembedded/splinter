@@ -174,11 +174,11 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 413259d2): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit c3eb1ecd): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
-- Private HF model `swedishembedded/vim-manual-transfer-adapters` (commit 96e33e51): the 15 adapters with their
+- Private HF model `swedishembedded/vim-manual-transfer-adapters` (commit ffc4aea4): the 15 adapters with their
   candidate and training records.
 - Tasks and trajectories: private `swedishembedded/vim-headless-mastery-manual`, `vim-headless-mastery-sft-manual`.
 - Per-task exam outcomes (item level) stay in `~/project/shared/bench-private/evidence/source-to-transfer-2026-11-27/`.
@@ -186,7 +186,14 @@ Claim as supported: one step of the loop in a second task family, not continuous
 Not claimed: anything about other tools or domains (T3), retention on non-Vim tasks (no anchor was run), or stability
 under another authoring seed of the material.
 
-Open: arm S; generation 2; a forgetting gate; an unattended restart from the recipe.
+Student-only arm S (2026-11-27, decided outside the registered family, `results/student-only/`): B's selection on the
+4B's own verified successes (660 train records, 200 tasks), 3 seeds: 0 of 1166 counted exam attempts, paired base 0 of
+1184; generation 1's exam gain comes from the teacher's trajectories. Two of its evaluation stages exceeded the 2%
+infrastructure bound (21 and 19 of 800) and were not repeated; its held-out evaluation was not run. Loop estimand
+(`loop.py`, `results/loop.json`): Qwen3-4B generation 1 = arm G seed 3, 17 / 400 exam attempts against its base's 0 / 393,
+12 / 0 exams won/lost, p 0.00024.
+
+Open: generation 2; a forgetting gate; an unattended restart from the recipe.
 
 ## Transfer experiment support (2026-11-26)
 

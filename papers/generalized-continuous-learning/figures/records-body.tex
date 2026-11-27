@@ -1,16 +1,23 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 %
-% Figure: who made the training records of each Vim arm (train split, by each record's model field). Data:
-% generated/vim-records.csv.
+% Figure: who made the training records of each Vim arm (train split, by each record's model field), and the arm's exam
+% pass rate pooled over three seeds with the task-bootstrap interval of its difference from the paired base; the
+% student-only arm trains on the 4B's own verified successes alone. Data: generated/vim-records.csv.
 \begin{tikzpicture}
-\begin{axis}[paper, width=120mm, height=50mm, xbar stacked, /pgf/bar width=4mm, xmin=0, xmax=3900,
-    ytick={1,2,3,4,5}, y dir=reverse, ymin=0.4, ymax=5.6, ymajorgrids=false, xmajorgrids,
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=6mm}, paper, height=58mm, ytick={1,...,6},
+    y dir=reverse, ymin=0.4, ymax=6.6, ymajorgrids=false, xmajorgrids]
+\nextgroupplot[width=88mm, xbar stacked, /pgf/bar width=3.6mm, xmin=0, xmax=3600,
     yticklabels from table={generated/vim-records.csv}{arm}, xlabel={training records},
-    legend style={at={(0.5,1.03)}, anchor=south}, legend columns=2, legend cell align=left]
+    legend style={at={(0.5,1.03)}, anchor=south}, legend columns=2]
   \addplot[draw=black!70, fill=okOrange!80] table[x=teacher, y=y] {generated/vim-records.csv};
   \addlegendentry{teacher (Qwen3.8-27B-FP8)}
   \addplot[draw=black!70, fill=okBlue!70] table[x=student, y=y] {generated/vim-records.csv};
   \addlegendentry{student (Qwen3-4B)}
-\end{axis}
+\nextgroupplot[width=52mm, xmin=0, xmax=5.5, yticklabels={}, xlabel={exam attempts passed (\%)},
+    title={pooled over 3 seeds}]
+  \addplot[only marks, mark=diamond*, mark size=2.6pt, okVermillion, error bars/.cd, x dir=both, x explicit]
+    table[y=y, x=exam_pct, x error plus expr=\thisrow{hi_pct}-\thisrow{exam_pct},
+      x error minus expr=\thisrow{exam_pct}-\thisrow{lo_pct}] {generated/vim-records.csv};
+\end{groupplot}
 \end{tikzpicture}

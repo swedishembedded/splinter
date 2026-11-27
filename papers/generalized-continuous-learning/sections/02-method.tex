@@ -14,9 +14,9 @@ separate examiner, and, if promoted, the champion that proposes the next generat
 are those of the Vim generation~1 run.}\label{fig:method}
 \end{figure}
 
-\subsection{An executable environment as the only teacher}\label{sec:m-teacher}
+\subsection{An executable environment as the only judge of correctness}\label{sec:m-teacher}
 
-No human writes a training task, a label or a solution. In the Lua family the pinned Lua~5.1 interpreter runs every program
+No human writes a training task, a label or a solution, and nothing but the environment decides what is correct. In the Lua family the pinned Lua~5.1 interpreter runs every program
 and its output is the label. In the Vim family the agent has one tool that runs Ex commands in a fresh Vim on the task's files
 and returns Vim's output, and a hidden check grades the files the agent leaves; a training record is admitted only if that
 check passed. The models are Qwen3-4B (the learner) and, in the Vim family, Qwen3.8-27B-FP8 (author and teacher), served and
@@ -89,3 +89,16 @@ $d_t\neq0$. Comparison family, Holm at $\alpha=0.05$: each of all verified, one 
 greater than the base. Trajectories teach transferable skills when at least one of the first three beats the base in the family
 and the same arm beats the shuffled-request control (one-sided sign test, $\alpha=0.05$). Comparisons between arms, the
 held-out authored tasks and per-seed rates are secondary, reported with task-bootstrap 95\% intervals.
+
+\subsection{The iterated loop}\label{sec:m-loop}
+
+Each generation of the Vim loop authors new outcome-first tasks from the manual under that generation's fixed authoring rule
+(generation~2's rule asks for jobs that combine ideas from at least two other chapters). The current champion and the teachers
+(the 27B; Inkling-2-Mini from generation~2) attempt them, every record labelled with the model that made it; the verified
+records train the next candidate from the base, with earlier generations' records as replay; the candidate is promoted only on
+held-out authored tasks of its own generation and of the previous one (the forgetting gate). The exams never select, stop,
+filter or author anything. Generation~1 of Qwen3-4B is the outcome-first adapter of seed~3, chosen as the one with the lowest
+validation loss of the three seeds. Test (registered): per size, each generation's champion against the base and against the
+previous champion on the 100 exams, 4 attempts, exact one-sided sign test over exams with Holm over the generations of a size,
+and a one-sided Cochran--Armitage trend test of the exam pass rate over generations; retention as each candidate against the
+previous champion on the previous generation's held-out tasks and against the base on the course's hand-written practice tasks.
