@@ -5,8 +5,8 @@ We measure whether a loop of authoring tasks, attempting them and training on th
 generation after generation, with no human-written training tasks or labels and every generation judged on exams no stage
 reads. The registered estimand is the exam pass rate per generation, per model size. On 100 hand-written Vim exams, the first
 generation of Qwen3-4B, trained on verified trajectories of tasks that a 27B model authored from Vim's user manual, passes 17 of
-400 attempts against its base's 0 of 393 (12 exams won, 0 lost, one-sided sign test $p=0.00024$); generation~2 of the 4B and
-generations 1 and 2 of Qwen3-8B are running, and a 27B learner is not run. The steps that lead there were each measured: an
+400 attempts against its base's 0 of 393 (12 exams won, 0 lost, one-sided sign test $p=0.00024$), and the first generation
+of Qwen3-8B 22 of 400 against 0 of 381 (16 won, 0 lost); generation~2 of both sizes is running, and a 27B learner is not run. The steps that lead there were each measured: an
 executable environment as the only judge of correctness (a Lua~5.1 interpreter, in a first family, raised a 4B model's share
 of a 2040-item sealed exam from 5.1\% to 13.2\% over four generations, +8.2 points [+5.1, +11.5], +3.3 [+0.7, +7.1] on program
 families no exam had used); oracle admission that replays every reference in the task image; outcome-first authoring (start and

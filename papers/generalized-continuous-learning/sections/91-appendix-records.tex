@@ -45,6 +45,12 @@ could add passes \\
 2026-11-27 & primary estimand: exam passes per generation of the outcome-first loop, per model size (\cref{sec:m-loop});
 27B learner not run & set as the goal by the user before any generation-2 exam result; a 27B generation could not finish
 twice before the lease ended \\
+2026-11-27 & Qwen3-8B generation~1: 581 of 3736 of its own attempt slots ended as model errors when the node's servers were
+restarted, not repeated (3155 counted, 81 passed) & repeating the stage would have changed its identity and the run's time \\
+2026-11-27 & Inkling-2-Mini removed as a second teacher from generations 2 and 3 & its stage would have taken about 3 hours
+at the concurrency its cards hold \\
+2026-11-27 & Qwen3-8B generation-1 exam evaluation kept with 19 of 400 base slots uncounted (above the 2\% bound) & the lease
+leaves no time to repeat it before generation~2; the candidate arm counted all 400 \\
 \bottomrule
 \end{tabular}
 \end{center}

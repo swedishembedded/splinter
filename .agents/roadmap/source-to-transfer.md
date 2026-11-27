@@ -177,11 +177,11 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 7a0277c2): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 20a363c0): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
-- Private HF model `swedishembedded/vim-manual-transfer-adapters` (commit ffc4aea4): the 15 adapters with their
+- Private HF model `swedishembedded/vim-manual-transfer-adapters` (commit 0485d8a1): the 15 adapters with their
   candidate and training records.
 - Tasks and trajectories: private `swedishembedded/vim-headless-mastery-manual`, `vim-headless-mastery-sft-manual`.
 - Per-task exam outcomes (item level) stay in `~/project/shared/bench-private/evidence/source-to-transfer-2026-11-27/`.
@@ -201,6 +201,11 @@ candidates against the base on the course's 228 hand-written practice tasks (168
 on), 4 attempts each: G seed 3 (4B generation 1) 378 / 912 against 138 / 912, 120 tasks won / 16 lost, one-sided p 3.5e-21,
 +0.263 [+0.213, +0.315]; D seed 1 360 / 912 against 141 / 910, 109 / 13; C seed 1 336 / 912 against 142 / 912, 103 / 17.
 No net regression; nearly all the gain is on the exercises (composites stay near zero for all).
+
+Qwen3-8B generation 1 (2026-11-27, `loop.py`): seed 3, 22 / 400 exam attempts against its paired base's 0 / 381, 16
+exams won / 0 lost (task level), one-sided p 1.5e-5; base calibrations 4B 0 / 1156, 8B 0 / 1118. `export-results.py`
+now skips evaluations a fork inherited (the candidate must be the run's own adapter) and `analyse.product_attempts` takes a
+fork's own (newest) product: before, a fork's export could read its parent's evaluation.
 
 Open: generation 2; a forgetting gate; an unattended restart from the recipe.
 

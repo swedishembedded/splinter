@@ -93,8 +93,8 @@ held-out authored tasks and per-seed rates are secondary, reported with task-boo
 \subsection{The iterated loop}\label{sec:m-loop}
 
 Each generation of the Vim loop authors new outcome-first tasks from the manual under that generation's fixed authoring rule
-(generation~2's rule asks for jobs that combine ideas from at least two other chapters). The current champion and the teachers
-(the 27B; Inkling-2-Mini from generation~2) attempt them, every record labelled with the model that made it; the verified
+(generation~2's rule asks for jobs that combine ideas from at least two other chapters). The current champion and the 27B teacher attempt them
+(a second teacher, Inkling-2-Mini, was planned from generation~2 and removed; \cref{app:deviations}), every record labelled with the model that made it; the verified
 records train the next candidate from the base, with earlier generations' records as replay; the candidate is promoted only on
 held-out authored tasks of its own generation and of the previous one (the forgetting gate). The exams never select, stop,
 filter or author anything. Generation~1 of Qwen3-4B is the outcome-first adapter of seed~3, chosen as the one with the lowest

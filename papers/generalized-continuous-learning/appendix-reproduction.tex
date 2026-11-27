@@ -15,7 +15,7 @@ This appendix is the procedure a third party runs, from a fresh machine, to repe
 \subsection{What is published and what each step needs}\label{app:repro-vim-scope}
 
 \begin{center}\footnotesize
-\begin{tabular}{p{38mm}p{56mm}p{50mm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{38mm}>{\raggedright\arraybackslash}p{56mm}>{\raggedright\arraybackslash}p{50mm}}
 \toprule
 Step & Inputs & Reproducible from the published material \\
 \midrule
@@ -155,12 +155,12 @@ cd "$REPRO"
 }
 
 \begin{sloppypar}
-\texttt{vim-headless-mastery-manual} holds the practice tasks (\texttt{train-forward/}, 1026; \texttt{train-backward/}, 467);
-\texttt{vim-headless-mastery} the course, whose \texttt{eval/} side is the 100 exams; \texttt{source-to-transfer-evidence} the
+\nolinkurl{vim-headless-mastery-manual} holds the practice tasks (\nolinkurl{train-forward/}, 1026; \nolinkurl{train-backward/}, 467);
+\nolinkurl{vim-headless-mastery} the course, whose \nolinkurl{eval/} side is the 100 exams; \nolinkurl{source-to-transfer-evidence} the
 arm datasets exactly as trained, the runs' recipes, locks and revisions, every material stage's product manifest, the aggregates
-and the analysis code; \texttt{vim-manual-transfer-adapters} the 15 adapters with their training reports;
-\texttt{vim-headless-mastery-sft-manual} the same trajectories as chat records for other trainers (arm B's and G's seed-1 train
-and validation records with repeated solutions moved to \texttt{duplicates}, the T1 records in \texttt{heldout}, and
+and the analysis code; \nolinkurl{vim-manual-transfer-adapters} the 15 adapters with their training reports;
+\nolinkurl{vim-headless-mastery-sft-manual} the same trajectories as chat records for other trainers (arm B's and G's seed-1 train
+and validation records with repeated solutions moved to \nolinkurl{duplicates}, the T1 records in \nolinkurl{heldout}, and
 policy-gradient records). The procedure below does not need the last one.
 \end{sloppypar}
 
@@ -566,7 +566,7 @@ run.
 \caption{What the full procedure produces, what the published run measured (in the evidence file named), and the run's wall
 clock on 16 GH200, read from the commit times of its stages' products.}
 \label{tab:repro-vim-outputs}
-\begin{tabular}{p{30mm}p{80mm}p{34mm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{30mm}>{\raggedright\arraybackslash}p{80mm}>{\raggedright\arraybackslash}p{34mm}}
 \toprule
 Product & Published run & Wall clock (run) \\
 \midrule

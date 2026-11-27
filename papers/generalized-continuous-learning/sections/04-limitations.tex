@@ -14,13 +14,14 @@ whose gain comes from the teacher's trajectories; not continuous self-improvemen
 Part of the definition & Lua, Qwen3-4B (4 generations) & Vim, Qwen3-4B & Vim, Qwen3-8B \\
 \midrule
 (a) each generation beats its predecessor on sealed exams & generations 1 and 2 hold, 3 and 4 do not & generation~1 holds
-against the base; generation~2 running & generation~1 running \\
+against the base; generation~2 running & generation~1 holds against the base (\LoopEightGOneWins{} exams won,
+\LoopEightGOneLosses{} lost; one seed); generation~2 running \\
 (b) no forgetting of earlier skills & not measured & against the base on 228 hand-written practice tasks, no net regression for generation~1 (\RetainWins{} tasks won, \RetainLosses{} lost); against the previous champion: running & running \\
 (c) robust over seeds or lineages, above the shuffled-request control & generation~4 above the base in all four lineages; no
 control run & holds for generation~1 (every seed; every arm beats the control); the learner's own attempts alone give no gain
-& not yet measured \\
+& seeds 1 and 2 running; no control run \\
 (d) unattended restart from the recipe and frozen binaries & not measured & not met: the material run was forked by hand
-after a node failure & not yet measured \\
+after a node failure & not met: the same material run \\
 \bottomrule
 \end{tabular}
 \caption{Verdict against the operational definition, per family and model size; a Qwen3.8-27B learner was not run. No row
@@ -33,3 +34,8 @@ is low (3.5\% of exam attempts for the best arm, against the teacher's 63\% firs
 learner's own attempts is not shown; the comparison of authoring modes is confounded with passes per record and task difficulty; the 100 exams come
 from one course and are public, so a model trained on data gathered after their publication could have seen them; the per-seed intervals of \cref{fig:vim-seeds} treat attempts as independent. Other tools and domains, and
 stability under another authoring seed, are not measured.
+
+\paragraph{Reproducibility.} Authoring tasks from the manual needs bench (its authoring operators, prompts and schemas, the
+manual's text and the recipes); bench is not published. Everything after authoring (oracle admission, attempts, the training
+sets, training, the exam and held-out evaluations and the analysis) runs from the published repositories of \cref{tab:artifacts}
+and splinter, as the reproduction procedure in the appendix shows.

@@ -29,15 +29,16 @@ recipe and the frozen binaries with no manual step. A part that was not measured
 \paragraph{Primary estimand.} The exam pass rate per generation of the autonomous outcome-first loop
 (\cref{sec:m-loop}), per model size, each generation against the base and against the previous champion on the 100 Vim exams,
 registered before any generation-2 exam result existed (\cref{app:registrations}). \Cref{fig:loop} shows what has been
-measured so far: generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts against its
-base's \LoopFourGOneBasePasses{} of \LoopFourGOneBaseAttempts{}. Later generations are running and are not estimated.
+measured so far: generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts and
+generation~1 of Qwen3-8B \LoopEightGOnePasses{} of \LoopEightGOneAttempts{}, where both bases pass none. Later generations are
+running and are not estimated.
 
 \begin{figure}[htbp]
 \centering
 \input{figures/loop-body}
 \caption{The headline: exam pass rate by generation of the loop, per model size (Wilson 95\% intervals over attempts; base
-at generation~0). Generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} attempts, its paired base
-none; the 27B teacher passes \TeacherExamPct\% of its attempts on the same exams. The shaded generations are running and have
+at generation~0). Generation~1 of Qwen3-4B passes \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} attempts and of Qwen3-8B
+\LoopEightGOnePasses{} of \LoopEightGOneAttempts{}, their paired bases none; the 27B teacher passes \TeacherExamPct\% of its attempts on the same exams. The shaded generations are running and have
 no measurement yet.}\label{fig:loop}
 \end{figure}
 

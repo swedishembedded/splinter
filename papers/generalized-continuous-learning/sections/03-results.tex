@@ -70,7 +70,7 @@ Authoring & Model & Counted attempts & Pass rate & Tasks & Tasks solved \\
 \bottomrule
 \end{tabular}
 \caption{Attempts on the authored tasks (\nolinkurl{material/funnel.json} of the evidence). For comparison, on the 100 exams
-the teacher's first-attempt pass rate is 0.63 and the base student passed none of 1012 counted attempts.}\label{tab:vim-attempts}
+the teacher's first-attempt pass rate is 0.63 and the base student passed none of \BaseCalFourAttempts{} counted attempts.}\label{tab:vim-attempts}
 \end{table}
 
 \begin{figure}[htbp]
@@ -189,16 +189,24 @@ trained on the 4B's own verified successes, passes no exam.}\label{fig:records}
 
 \subsection{The iterated loop per model size}\label{sec:r-loop}
 
-\paragraph{Tested on.} Qwen3-4B and Qwen3-8B, each from its own base. A Qwen3.8-27B learner was not started: one 27B
+\paragraph{Tested on.} Qwen3-4B and Qwen3-8B, each from its own base. Generation~2's tasks follow a rule that combines a
+section's idea with ideas of at least two other chapters: 573 were admitted and the oracle solved 572; the 4B's generation-1
+champion passed 0.223 of its 4576 counted attempts on them and solved 280 of the 572. A Qwen3.8-27B learner was not started: one 27B
 generation would have ended at about 08:30 on 2026-11-27, leaving no time for a second before the compute lease ended, and by
 the registered rule a size is run only if its generations can finish.
 
-\paragraph{Measured.} Qwen3-4B, generation~1: \LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts against its
-paired base's \LoopFourGOneBasePasses{} of \LoopFourGOneBaseAttempts{}; \LoopFourGOneWins{} exams won, \LoopFourGOneLosses{}
-lost (one-sided sign test $p=\LoopFourGOneP$); \LoopFourGOneSolved{} exams solved at least once. It was promoted on its own
-held-out tasks, where it passes \LoopFourGOneHeldout{} of attempts against the base's \LoopFourGOneHeldoutBase. Generation~2 of
-the 4B and generations 1 and 2 of the 8B are running; the trend test needs at least two generations and has not been
-computed. Evidence: \nolinkurl{loop/loop.json}.
+\paragraph{Measured.} Both bases pass none of the exams: Qwen3-4B none of \BaseCalFourAttempts{} counted attempts and
+Qwen3-8B none of \BaseCalEightAttempts{} in a calibration of 12 attempts per exam. Qwen3-4B, generation~1:
+\LoopFourGOnePasses{} of \LoopFourGOneAttempts{} exam attempts against its paired base's \LoopFourGOneBasePasses{} of
+\LoopFourGOneBaseAttempts{}; \LoopFourGOneWins{} exams won, \LoopFourGOneLosses{} lost (one-sided sign test
+$p=\LoopFourGOneP$); \LoopFourGOneSolved{} exams solved at least once. It was promoted on its own held-out tasks, where it
+passes \LoopFourGOneHeldout{} of attempts against the base's \LoopFourGOneHeldoutBase. Qwen3-8B, generation~1 (trained from the
+8B base on the outcome-first tasks with the 8B's own verified attempts and the teacher's, seed~3, step 520 kept): \LoopEightGOnePasses{}
+of \LoopEightGOneAttempts{} exam attempts against its paired base's \LoopEightGOneBasePasses{} of \LoopEightGOneBaseAttempts{};
+\LoopEightGOneWins{} exams won, \LoopEightGOneLosses{} lost (one-sided sign test, $p$ = \LoopEightGOneP); \LoopEightGOneSolved{} exams solved. Its base
+arm left 19 of 400 slots uncounted, above the registered 2\% bound, and the stage was not repeated
+(\cref{app:deviations}); its other two seeds, its held-out-task evaluation and its release are running. Generation~2 of both
+sizes is running; the trend test needs at least two generations and has not been computed. Evidence: \nolinkurl{loop/loop.json}.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 

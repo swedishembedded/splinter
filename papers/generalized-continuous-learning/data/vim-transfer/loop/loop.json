@@ -22,6 +22,22 @@
      "base_attempts": 204
     }
    }
+  ],
+  "8B": [
+   {
+    "generation": 1,
+    "fork": "loop-g1-8b",
+    "passes": 22,
+    "attempts": 400,
+    "exams_solved": 16,
+    "base_passes": 0,
+    "base_attempts": 381,
+    "vs_base": {
+     "wins": 16,
+     "losses": 0,
+     "p_one_sided": 1.52587890625e-05
+    }
+   }
   ]
  },
  "running": {
@@ -29,12 +45,23 @@
    2
   ],
   "8B": [
-   1,
    2
   ]
  },
  "not_run": {
   "27B": "one generation would end about 08:30 on 2026-11-27, leaving no time for a second before the lease ends, so by the registered rule it was not started"
+ },
+ "base_calibration": {
+  "4B": {
+   "passes": 0,
+   "attempts": 1156,
+   "exams_solved": 0
+  },
+  "8B": {
+   "passes": 0,
+   "attempts": 1118,
+   "exams_solved": 0
+  }
  },
  "teacher_exam": {
   "model": "Qwen3.8-27B-FP8",
