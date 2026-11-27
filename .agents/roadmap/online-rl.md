@@ -117,6 +117,10 @@ identity when it is the default.
       13 sessions merged, 35 stayed per call (not exact: replies the output bound cut), 1 group of merged sessions
       trained. A per-call record longer than `max_block` is refused by brain whole, as before: the block must hold the
       longest call, so `longer_than_block` falls back usefully only for multi-call sessions.
+- [x] **Stream client resends.** A hold or result the server does not answer (a closed keep-alive) is sent again,
+      as a finish is (`a_hold_or_result_the_server_does_not_answer_is_asked_again`); brain withdraws a version leaving
+      the retention outside the bank's lock (c76fa4353). A rolled-back epoch's watchdog report is kept in
+      `watchdog.rolled_back_epochs`.
 - [x] **The GPU bench run, prepared.** `make test/online/bench` (scripts/online/bench-task-set.sh): 12 training, 8
       monitor and 4 confirm tasks, disjoint, from a bench environment's training folders (a path naming an exam is
       refused; sealed folders are refused on import), train.online with `agent: sven` and the environment file,
@@ -134,11 +138,13 @@ identity when it is the default.
 
 ## Open
 
-- [ ] A7 (c): a CPU fault-injection run on the real stack (a reward-sign flip or poisoned grader on a task subset
-      after warm-up, past brain's step guard) that must go alarm -> evaluation -> rollback -> recovery, and a clean run
-      that must not roll back. The pieces are tested GPU-free (above); the toy stack's tasks (`tasks/toy-answers`) need
-      monitor and confirm collections and a grader that can be poisoned by a run parameter. Command once built:
-      `make test/online` with a recipe carrying `watchdog` and `monitor`/`confirm` inputs.
+- [ ] A7 (c): the CPU fault-injection run, skipped by decision 2026-11-27. Built and documented, not recorded as
+      evidence: `make test/online/watchdog` (`test/online/watchdog/fault` and `test/online/watchdog/clean`,
+      scripts/online/cpu-watchdog.sh; `BRAIN_BIN`, `QWEN3_BIN`, `ONLINE_WORK`, `ONLINE_PORT` outside the shared ports).
+      Fault: a fixture family (4 training tasks graded "a brief reply", 96 monitor, 8 confirm) whose training grader
+      flips gradings 49..328; it must alarm, evaluate, roll back to the anchor, finish in a later epoch with no second
+      rollback and a higher honest pass rate after the window than inside it. Clean: the same without the flip, never
+      rolled back. Fixture design: knowledge 253.
 - [ ] The end-to-end check as "a bench environment's task set + splinter train.online" on a served model: a recipe
       `tasks.pin` of the bench task set -> `train.online` with `agent: { agent: sven, environment:
       environments/<env>/environment.yaml }` (bench's environment file), run with `splinter run <recipe> --brain-endpoint

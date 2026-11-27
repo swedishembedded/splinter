@@ -4,14 +4,17 @@
 
 #
 # The online watchdog on the real stack, on the CPU: a toy qwen3 checkpoint served by `brain serve --openai
-# --training`, and `train.online` with a watchdog over a fixture task family made here (a reply that starts with a
-# letter: four training tasks, a held-out monitor pool and a sealed confirm set, every one graded by its own
-# test.sh).
+# --training`, and `train.online` with a watchdog over a fixture task family made here (a brief reply, not blank and at
+# most 400 characters: four training tasks, a held-out monitor pool and a sealed confirm set, every one graded by its
+# own test.sh). The criterion is one a toy model learns and that about half its replies meet at the start: how long
+# it writes is the one logit of stopping, where which characters it writes is not.
 #
-#   fault  - the training tasks' grader is poisoned for a window of gradings after a warm-up: inside it the reward
-#            is flipped (a reply that does not start with a letter passes). The policy trained on it regresses on
-#            the honest held-out tasks; the run must raise an alarm, evaluate, roll back to the anchor and recover
-#            (finish in a later epoch), with the audit in the group log and the report.
+#   fault  - the training tasks' grader is poisoned for a window of gradings after a short warm-up (while the
+#            replies still vary, so the flipped rewards train): inside it the reward is flipped (a long reply
+#            passes). The policy trained on it regresses on the honest held-out tasks; the run must raise an alarm,
+#            evaluate, roll back to the anchor and recover: finish in a later epoch with no second rollback, the
+#            training tasks' honest pass rate after the window above the one inside it. The audit is in the group
+#            log and the report.
 #   clean  - the same with no poisoned window: it must evaluate and never roll back.
 #   pinned - no watchdog, every episode pinned to the version it started on under publish_every 1: every rollout's
 #            span must be one version, and every request asks a version's own id.
@@ -69,41 +72,42 @@ done
 [ -f "$work/ready" ] || fail "brain serve did not get ready"
 stamp "brain serve is ready (pid $brain_pid)"
 
-# The fixture family. The poisoned window counts the training tasks' gradings of a reply (a check of the starting
-# files, which hold no reply, is not counted): gradings warm..warm+window are flipped in fault mode.
+# The fixture family. The poisoned window counts the training tasks' gradings (the check of their starting files
+# among the first, inside the warm-up): gradings warm..warm+window are flipped in fault mode, a reply never written
+# included.
 repo="$work/repo"
-warm=160
-window=$([ "$mode" = fault ] && echo 160 || echo 0)
+warm=48
+window=$([ "$mode" = fault ] && echo 280 || echo 0)
 task() {
     local split=$1 name=$2 poisoned=$3 dir="$repo/tasks/fault/$1/$2"
     mkdir -p "$dir/tests" "$dir/workspace" "$dir/solution"
-    printf 'Name a letter of the alphabet (%s).\n' "$name" > "$dir/instruction.md"
+    printf 'Reply briefly (%s).\n' "$name" > "$dir/instruction.md"
     printf 'Replies are written to answer.txt.\n' > "$dir/workspace/README.md"
     printf 'schema_version = "1.4"\n[task]\nname = "fault/%s-%s"\n[agent]\ntimeout_sec = 120.0\nanswer_file = "answer.txt"\n[verifier]\ntimeout_sec = 30.0\n' \
         "$split" "$name" > "$dir/task.toml"
     printf '#!/bin/bash\necho a > "$WORKSPACE_DIR/answer.txt"\n' > "$dir/solution/solve.sh"
     {
         echo '#!/bin/bash'
-        echo 'first=$(head -c 1 "$WORKSPACE_DIR/answer.txt" 2> /dev/null | LC_ALL=C tr -cd "A-Za-z")'
-        echo 'reward=0; [ -n "$first" ] && reward=1'
+        echo 'written=$(LC_ALL=C tr -d "[:space:]" < "$WORKSPACE_DIR/answer.txt" 2> /dev/null | head -c 1)'
+        echo 'length=$(wc -c < "$WORKSPACE_DIR/answer.txt" 2> /dev/null || echo 0)'
+        echo 'reward=0; [ -n "$written" ] && [ "$length" -le 400 ] && reward=1'
         if [ "$poisoned" = yes ]; then
-            echo "if [ -f \"\$WORKSPACE_DIR/answer.txt\" ]; then"
-            echo "    n=\$(flock '$work/fault/lock' bash -c 'n=\$((\$(cat \"$work/fault/count\" 2> /dev/null || echo 0) + 1)); echo \$n > \"$work/fault/count\"; echo \$n')"
-            echo "    if [ \"\$n\" -gt $warm ] && [ \"\$n\" -le $((warm + window)) ]; then reward=\$((1 - reward)); echo \$n >> '$work/fault/flipped'; fi"
-            echo 'fi'
+            echo "n=\$(flock '$work/fault/lock' bash -c 'n=\$((\$(cat \"$work/fault/count\" 2> /dev/null || echo 0) + 1)); echo \$n > \"$work/fault/count\"; echo \$n')"
+            echo "echo \"\$n \$reward\" >> '$work/fault/graded'"
+            echo "if [ \"\$n\" -gt $warm ] && [ \"\$n\" -le $((warm + window)) ]; then reward=\$((1 - reward)); echo \$n >> '$work/fault/flipped'; fi"
         fi
         echo 'echo "$reward" > "$LOGS_DIR/reward.txt"'
     } > "$dir/tests/test.sh"
     chmod +x "$dir/tests/test.sh" "$dir/solution/solve.sh"
 }
 for i in 1 2 3 4; do task train "t$i" yes; done
-for i in $(seq 1 64); do task monitor "m$i" no; done
+for i in $(seq 1 96); do task monitor "m$i" no; done
 for i in $(seq 1 8); do task confirm "c$i" no; done
 mkdir -p "$repo/collections"
 printf 'schema: splinter.collection/v1\nname: fault\nroot: tasks/fault\n' > "$repo/collections/fault.yaml"
 printf 'connections:\n  brain: { protocol: openai, url: "%s" }\n' "$endpoint" > "$repo/connections.yaml"
 
-params="lr: 0.002"
+params="lr: 0.02"
 if [ "$mode" = pinned ]; then
     watched="      pin_episodes: true"
     inputs='{ tasks: $stages.tasks.tasks }'
@@ -120,9 +124,9 @@ else
     watched="      watchdog:
         bounds: { guard_skip_rate: 1.0, ratio_max: 1000, truncation_rate: 1.0, infra_failure_rate: 1.0, window: 8, min_rollouts: 4 }
         drift: { slack: 0.05, threshold: 0.3, reference_window: 3 }
-        test: { delta: 0.3, alpha: 0.1, beta: 0.2, max_discordant: 64 }
-        evaluate_every: 6
-        monitor_size: 64
+        test: { delta: 0.25, alpha: 0.05, beta: 0.2, max_discordant: 96 }
+        evaluate_every: 10
+        monitor_size: 96
         max_uses: 100
         max_rollbacks: 2
         cooldown: 0.5"
@@ -193,12 +197,14 @@ if mode == "pinned":
     print(f"pinned: {len(spans)} rollouts, every span one version; {len(ids)} versions each served under its own id")
     sys.exit(0)
 flips = len(open(flipped).read().split()) if os.path.exists(flipped) else 0
-for h in watchdog.get("history", []):
-    c = h["comparison"]
-    print(f"{mode}: comparison {c['index']}: version {h['candidate']} against {h['anchor']}{' (confirm)' if h['confirming'] else ''}: "
-          f"{c['candidate_wins']}:{c['anchor_wins']} discordant of {c['pairs']}, {c['decision']}")
-print(f"{mode}: {watchdog.get('comparisons')} comparisons, promotions {[p['version'] for p in watchdog.get('promotions', [])]}, "
-      f"{len(audits)} rollbacks, {flips} gradings flipped")
+epochs = watchdog.get("rolled_back_epochs", []) + [{"epoch": (watchdog.get("epochs") or {}).get("epoch", 0), "watchdog": watchdog}]
+for e in epochs:
+    for h in e["watchdog"].get("history", []):
+        c = h["comparison"]
+        print(f"{mode}: epoch {e['epoch']} comparison {c['index']}: version {h['candidate']} against {h['anchor']}"
+              f"{' (confirm)' if h['confirming'] else ''}: {c['candidate_wins']}:{c['anchor_wins']} discordant of {c['pairs']}, {c['decision']}")
+    print(f"{mode}: epoch {e['epoch']}: promotions {[p['version'] for p in e['watchdog'].get('promotions', [])]}")
+print(f"{mode}: {watchdog.get('comparisons')} comparisons, {len(audits)} rollbacks, {flips} gradings flipped")
 check(watchdog.get("comparisons", 0) >= 1, "the watchdog evaluated")
 if mode == "clean":
     check(not audits and not watchdog.get("audits"), "a clean run never rolls back")
@@ -209,10 +215,23 @@ a = audits[0]
 e = a["evidence"]
 print(f"fault: rollback in epoch {a['epoch']}: candidate version {a['candidate']['version']} against anchor "
       f"{a['anchor']['version']}, {e['anchor_wins']} anchor wins to {e['candidate_wins']} on {e['pairs']} pairs, "
-      f"regression e-value {e['regression_e']:.1f} (threshold {(e['index'] + 1) ** 2 * 3.14159265 ** 2 / 6 / 0.1:.0f}), "
+      f"regression e-value {e['regression_e']:.1f} (threshold {(e['index'] + 1) ** 2 * 3.14159265 ** 2 / 6 / 0.05:.0f}), "
       f"trigger {a['trigger']}, {a['groups_discarded']} groups discarded, alarms {len(a['alarms'])}")
 check(e["decision"] == "regressed", "the evaluation found the regression")
 check(watchdog["epochs"]["epoch"] >= 1, "the run recovered: it finished in a later epoch")
+check(len(audits) == 1, "the run recovered: it never rolled back again")
+# The training tasks' honest pass rate (what the grader would have said unpoisoned) before, inside and after the
+# poisoned window: the policy the poison trained fails them, the one the rollback restored and trained on passes again.
+graded = [tuple(map(int, l.split())) for l in open(os.path.join(os.path.dirname(flipped), "graded"))]
+lo, hi = min(int(n) for n in open(flipped).read().split()), max(int(n) for n in open(flipped).read().split())
+def rate(sel):
+    got = [r for n, r in graded if sel(n)]
+    return (round(sum(got) / len(got), 3) if got else None), len(got)
+before, inside, after = rate(lambda n: n < lo), rate(lambda n: lo <= n <= hi), rate(lambda n: n > hi)
+print(f"fault: honest pass rate of the training gradings: before the window {before[0]} ({before[1]}), "
+      f"inside {inside[0]} ({inside[1]}), after {after[0]} ({after[1]})")
+check(after[0] is not None and inside[0] is not None and after[0] > inside[0],
+      "the run recovered: the training tasks pass more after the poisoned window than inside it")
 rolled = [l for l in lines if l.get("state") == "rolled_back"]
 print(f"fault: recovered, finished in epoch {watchdog['epochs']['epoch']}; {len(rolled)} groups rolled back")
 PY
