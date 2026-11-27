@@ -16,7 +16,7 @@ SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex)
 # directory; the paper reads them as generated/* through TEXINPUTS, so a build writes nothing into this directory.
 GENERATED := $(BUILD)/generated
 VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decision/secondary-eval-exam.json \
-	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json decision/per-seed-eval-unseen-b.json \
+	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json \
 	material/funnel.json
 export TEXINPUTS := $(BUILD):
 

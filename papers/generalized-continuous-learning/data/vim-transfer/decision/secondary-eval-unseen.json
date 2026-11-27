@@ -1,6 +1,42 @@
 {
  "eval": "eval-unseen",
  "per_seed": {
+  "arm-b-s1": {
+   "candidate": {
+    "passes": 226,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 37,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-b-s2": {
+   "candidate": {
+    "passes": 224,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 47,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
+  "arm-b-s3": {
+   "candidate": {
+    "passes": 255,
+    "attempts": 376,
+    "infrastructure": 0
+   },
+   "baseline": {
+    "passes": 42,
+    "attempts": 376,
+    "infrastructure": 0
+   }
+  },
   "arm-c-s1": {
    "candidate": {
     "passes": 219,
@@ -146,7 +182,44 @@
    }
   }
  },
- "secondary": {},
+ "secondary": {
+  "g-vs-b": {
+   "tasks": 0,
+   "wins": 0,
+   "losses": 0,
+   "p": 1.0,
+   "diff": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "p_two_sided": 1.0
+  },
+  "d-vs-b": {
+   "tasks": 94,
+   "wins": 37,
+   "losses": 24,
+   "p": 0.06186572126904608,
+   "diff": 0.015957446808510637,
+   "ci95": [
+    -0.01773049645390071,
+    0.04964539007092199
+   ],
+   "p_two_sided": 0.12373144253809217
+  },
+  "c-vs-b": {
+   "tasks": 94,
+   "wins": 24,
+   "losses": 42,
+   "p": 0.9906713698229895,
+   "diff": -0.05585106382978723,
+   "ci95": [
+    -0.09840425531914894,
+    -0.015957446808510637
+   ],
+   "p_two_sided": 0.03558272445223169
+  }
+ },
  "exploratory": {
   "f-vs-base": {
    "tasks": 94,
@@ -155,8 +228,8 @@
    "p": 0.9999998919665813,
    "diff": -0.1099290780141844,
    "ci95": [
-    -0.1622340425531915,
-    -0.06205673758865248
+    -0.16312056737588654,
+    -0.06382978723404255
    ],
    "p_two_sided": 3.032386302947998e-06
   }

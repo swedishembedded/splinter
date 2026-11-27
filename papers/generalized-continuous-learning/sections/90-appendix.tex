@@ -78,8 +78,10 @@ Comparison & Wins/losses & $p$ & Pass-rate difference [95\% interval] \\
 \end{center}
 
 Masking all-error actions changed nothing measurable; keeping one solution per task taught less than keeping all verified
-solutions, on fewer records, so diversity is not separated from volume. On the held-out authored tasks the shuffled-request
-control passes 9 of 1128 attempts against its base's 133 (2 tasks won, 26 lost, two-sided $p=3.0\times10^{-6}$; exploratory,
+solutions, on fewer records, so diversity is not separated from volume. On the held-out authored tasks
+(\nolinkurl{decision/secondary-eval-unseen.json}) productive actions against all verified won 37 tasks and lost 24 (two-sided
+$p=0.12$), and one per task against all verified won 24 and lost 42 ($p=0.036$, $-0.056$ $[-0.098, -0.016]$). There the
+shuffled-request control passes 9 of 1128 attempts against its base's 133 (2 tasks won, 26 lost, two-sided $p=3.0\times10^{-6}$; exploratory,
 outside the registration): trained on actions paired with other tasks' requests, it acts without regard to the request.
 
 \section{Defects found and fixed during the Vim run}\label{app:failures}
