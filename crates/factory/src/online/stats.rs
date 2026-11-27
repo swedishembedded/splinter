@@ -68,6 +68,11 @@ pub struct Stats {
     pub filtered_not_exact: u64,
     /// Groups with no scored rollout at all.
     pub filtered_unscored: u64,
+    /// Groups whose trainable rewards do not differ once the rollouts that
+    /// straddle a publication are left out (a run that pins versions).
+    pub filtered_version_mixed: u64,
+    /// Groups of an epoch the run rolled back, never trained.
+    pub groups_rolled_back: u64,
     /// Groups dropped here as more than `max_staleness` versions behind.
     pub dropped_stale: u64,
     /// Groups the learner dropped as too old.
@@ -91,6 +96,9 @@ pub struct Stats {
     /// Finished rollouts without exact ids and behaviour log-probabilities:
     /// never sent.
     pub rollouts_not_exact: u64,
+    /// Finished rollouts that straddle a publication in a run that pins
+    /// versions: scored, never trained.
+    pub rollouts_version_mixed: u64,
     /// Finished rollouts that hit a length limit: counted in the reward
     /// statistics, never sent (a learner trains none of them).
     pub rollouts_truncated: u64,

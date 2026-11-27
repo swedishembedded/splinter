@@ -706,6 +706,12 @@ compiles its collection evaluates on the same compiled tasks:
             queue_tokens: 65536, seed: 1,
             agent: { agent: sven, environment: environments/vim/environment.yaml } }
   ```
+  `pin_versions: true` trains only rollouts one policy version decoded from their first request
+  to their last (a rollout that straddles a publication is scored and counted in
+  `rollouts.version_mixed`, never trained); size `publish_every` so a version outlives a
+  rollout. Every group belongs to the run's epoch it was created in, and a group of an epoch
+  the run rolled back is `rolled_back`, never sent.
+
   A rollout a limit ended (the served context, a reply's own token limit, the run's output
   budget, the turn cap, the deadline) is a scored failure (reward 0) counted by cause in the
   report's `rollouts.truncations`, never retried as an infrastructure failure; its completed

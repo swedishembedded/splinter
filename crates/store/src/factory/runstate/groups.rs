@@ -10,6 +10,9 @@
 //! its rollouts' outcomes, and the records the learner is sent, in the
 //! run's one database under the controller's fence.
 //!
+//! Each group carries the run's epoch it was created in (`epoch`, a column
+//! added to ledgers written before it and read there as epoch 0).
+//!
 //! A rollout's records (JSON lines from its model requests) are kept in its
 //! row until the group is terminal (`filtered`, `stale`, `committed`): until
 //! then a resumed controller may need to send them again. The outcomes stay,
@@ -63,6 +66,24 @@ pub struct GroupRecord {
     pub staleness: Option<u64>,
     /// When it last changed, in Unix seconds.
     pub updated_at: u64,
+    /// The run's epoch it was created in.
+    pub epoch: u64,
+}
+
+/// A group to record: the `seq`-th of the run, `size` rollouts of `task` in
+/// the run's epoch `epoch`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NewGroup<'a> {
+    /// Its key.
+    pub key: &'a GroupKey,
+    /// Its place in the run's order of groups.
+    pub seq: u64,
+    /// The task its rollouts attempt.
+    pub task: &'a str,
+    /// How many rollouts it has.
+    pub size: u32,
+    /// The run's epoch it belongs to.
+    pub epoch: u64,
 }
 
 /// One rollout of a group as stored.
@@ -102,6 +123,7 @@ type RawGroup = (
     Option<String>,
     Option<u64>,
     u64,
+    Option<u64>,
 );
 
 fn group_row(row: &Row<'_>) -> rusqlite::Result<RawGroup> {
@@ -114,11 +136,12 @@ fn group_row(row: &Row<'_>) -> rusqlite::Result<RawGroup> {
         row.get(5)?,
         row.get(6)?,
         row.get(7)?,
+        row.get(8)?,
     ))
 }
 
 fn decode_group(raw: RawGroup) -> Result<GroupRecord, RunStateError> {
-    let (key, seq, task, size, state, reason, staleness, updated_at) = raw;
+    let (key, seq, task, size, state, reason, staleness, updated_at, epoch) = raw;
     Ok(GroupRecord {
         key: GroupKey::new(key).map_err(corrupt)?,
         seq,
@@ -128,10 +151,23 @@ fn decode_group(raw: RawGroup) -> Result<GroupRecord, RunStateError> {
         reason,
         staleness,
         updated_at,
+        epoch: epoch.unwrap_or(0),
     })
 }
 
-const GROUP_COLUMNS: &str = "key, seq, task, size, state, reason, staleness, updated_at";
+const GROUP_COLUMNS: &str = "key, seq, task, size, state, reason, staleness, updated_at, epoch";
+
+/// Adds what later code records to a ledger written before it: the
+/// `epoch` column (null, read as epoch 0).
+pub(super) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    let has_epoch = conn
+        .prepare("SELECT 1 FROM pragma_table_info('groups') WHERE name = 'epoch'")?
+        .exists([])?;
+    if !has_epoch {
+        conn.execute_batch("ALTER TABLE groups ADD COLUMN epoch INTEGER")?;
+    }
+    Ok(())
+}
 
 fn fetch_group(conn: &Connection, key: &GroupKey) -> Result<GroupRecord, RunStateError> {
     optional(conn.query_row(
@@ -193,22 +229,25 @@ fn illegal(subject: String, from: impl ToString, to: impl ToString) -> RunStateE
 }
 
 impl RunState {
-    /// Records the group `key`, the `seq`-th of the run, as `size` pending
-    /// rollouts of `task`. True when it was created; recording the same
-    /// group again is a no-op (false), and a different group under the same
-    /// key or seq is refused.
+    /// Records `group` with its rollouts pending. True when it was created;
+    /// recording the same group again is a no-op (false), and a different
+    /// group under the same key or seq is refused.
     ///
     /// # Errors
     /// The fence is stale, or the key or seq is another group's.
     pub fn create_group(
         &self,
         fence: &Fence,
-        key: &GroupKey,
-        seq: u64,
-        task: &str,
-        size: u32,
+        group: &NewGroup<'_>,
         now: u64,
     ) -> Result<bool, RunStateError> {
+        let NewGroup {
+            key,
+            seq,
+            task,
+            size,
+            epoch,
+        } = *group;
         let conn = self.conn();
         let tx = super::begin_fenced(&conn, fence)?;
         let existing: Option<(String, u64, String, u32)> = optional(tx.query_row(
@@ -229,9 +268,9 @@ impl RunState {
             });
         }
         tx.execute(
-            "INSERT INTO groups (key, seq, task, size, state, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'pending', ?5)",
-            params![key.as_str(), seq, task, size, now],
+            "INSERT INTO groups (key, seq, task, size, state, updated_at, epoch)
+             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6)",
+            params![key.as_str(), seq, task, size, now, epoch],
         )?;
         for index in 0..size {
             tx.execute(
@@ -245,7 +284,7 @@ impl RunState {
             now,
             "group.created",
             key.to_string(),
-            serde_json::json!({ "seq": seq, "task": task, "size": size }),
+            serde_json::json!({ "seq": seq, "task": task, "size": size, "epoch": epoch }),
         )?;
         Ok(true)
     }

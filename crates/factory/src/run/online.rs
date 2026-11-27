@@ -135,6 +135,13 @@ pub struct OnlineParams {
     pub max_failures: u32,
     /// The seed every rollout's draws derive from.
     pub seed: u64,
+    /// Train only rollouts that one policy version decoded from their first
+    /// request to their last; a rollout that straddles a publication is
+    /// scored and counted (`rollouts.version_mixed`), never trained. Size
+    /// `publish_every` so a version outlives a rollout, or most rollouts
+    /// straddle one.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pin_versions: bool,
     /// Run each rollout on the execution worker, in its task's own
     /// environment, with this agent: the tools, configuration and sandbox
     /// the task declares, exactly as an attempt pass runs it. Unset, each
@@ -218,6 +225,8 @@ impl OnlineParams {
             max_failures: self.max_failures,
             send_retry_ms: 1_000,
             poll_ms: 200,
+            epoch: 0,
+            pin_versions: self.pin_versions,
         }
     }
 
@@ -615,13 +624,15 @@ fn report(trained: &Trained, started: Instant) -> Value {
             "applied": stats.groups_applied, "committed": stats.groups_committed,
             "dropped_stale": stats.dropped_stale, "dropped_by_learner": stats.dropped_by_learner,
             "filtered": {"zero_variance": stats.filtered_zero_variance, "not_exact": stats.filtered_not_exact,
-                         "unscored": stats.filtered_unscored},
+                         "unscored": stats.filtered_unscored, "version_mixed": stats.filtered_version_mixed},
+            "rolled_back": stats.groups_rolled_back,
             "resends": stats.resends,
         },
         "rollouts": {
             "finished": stats.rollouts_finished, "unscored": stats.rollouts_unscored,
             "not_exact": stats.rollouts_not_exact, "truncated": stats.rollouts_truncated,
             "truncations": stats.truncations,
+            "version_mixed": stats.rollouts_version_mixed,
             "failures": stats.rollout_failures, "abandoned": stats.rollouts_abandoned,
         },
         "backpressure_seconds": stats.backpressure_ms as f64 / 1000.0,

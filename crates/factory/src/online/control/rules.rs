@@ -32,6 +32,7 @@ pub(super) fn trainable(rollouts: &[Rollout]) -> impl Iterator<Item = (u32, &Rol
     rollouts
         .iter()
         .zip(0u32..)
+        .filter(|(r, _)| r.admitted)
         .filter_map(|(r, i)| r.outcome.as_ref().filter(|o| o.trainable()).map(|o| (i, o)))
 }
 
@@ -44,7 +45,14 @@ pub(super) fn verdict(rollouts: &[Rollout], learner_version: u64, max_staleness:
         return Verdict::Filtered(reasons::ZERO_VARIANCE);
     }
     if !differ(trainable(rollouts).filter_map(|(_, o)| o.reward)) {
-        return Verdict::Filtered(reasons::NOT_EXACT);
+        let pinned_out = rollouts
+            .iter()
+            .any(|r| !r.admitted && r.outcome.as_ref().is_some_and(RolloutOutcome::trainable));
+        return Verdict::Filtered(if pinned_out {
+            reasons::VERSION_MIXED
+        } else {
+            reasons::NOT_EXACT
+        });
     }
     let staleness = trainable(rollouts)
         .map(|(_, o)| o.span.staleness(learner_version))

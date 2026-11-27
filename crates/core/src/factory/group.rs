@@ -19,9 +19,13 @@
 //!                              -> sent -> applied -> committed
 //!                                      -> stale       (the learner dropped it as too old)
 //!                                         applied -> sent (re-sent: the learner lost an update it had not committed)
+//! any state but a terminal one -> rolled_back (its epoch was rolled back: never trained)
 //! ```
 //!
-//! `filtered`, `stale` and `committed` are terminal. A group is durable at
+//! `filtered`, `stale`, `committed` and `rolled_back` are terminal. Every
+//! group belongs to the run's epoch it was created in: a run that rolls its
+//! policy back to an earlier version starts a new epoch, and a group of
+//! another epoch is never sent. A group is durable at
 //! the learner only once `committed` (in a checkpoint); until then a resumed
 //! controller sends it again, and the learner deduplicates by [`GroupKey`].
 //!
@@ -176,6 +180,8 @@ state_enum! {
         Applied = "applied",
         /// In a durable checkpoint of the learner; terminal.
         Committed = "committed",
+        /// Of an epoch the run rolled back, never trained; terminal.
+        RolledBack = "rolled_back",
     }
 }
 
@@ -183,13 +189,18 @@ impl GroupState {
     /// Whether a group leaves this state no more.
     #[must_use]
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Filtered | Self::Stale | Self::Committed)
+        matches!(
+            self,
+            Self::Filtered | Self::Stale | Self::Committed | Self::RolledBack
+        )
     }
 
     /// Whether a group may go from this state to `to`.
     #[must_use]
     pub fn may_become(self, to: Self) -> bool {
-        use GroupState::{Applied, Committed, Filtered, Pending, Running, Scored, Sent, Stale};
+        use GroupState::{
+            Applied, Committed, Filtered, Pending, RolledBack, Running, Scored, Sent, Stale,
+        };
         matches!(
             (self, to),
             (Pending, Running)
@@ -197,6 +208,7 @@ impl GroupState {
                 | (Scored, Filtered | Stale | Sent)
                 | (Sent, Applied | Stale)
                 | (Applied, Committed | Sent)
+                | (Pending | Running | Scored | Sent | Applied, RolledBack)
         )
     }
 }
@@ -423,7 +435,7 @@ mod tests {
     fn a_group_moves_only_along_its_drawn_lifecycle() {
         use GroupState::*;
         let all = [
-            Pending, Running, Scored, Filtered, Stale, Sent, Applied, Committed,
+            Pending, Running, Scored, Filtered, Stale, Sent, Applied, Committed, RolledBack,
         ];
         let allowed = [
             (Pending, Running),
@@ -435,6 +447,11 @@ mod tests {
             (Sent, Stale),
             (Applied, Committed),
             (Applied, Sent),
+            (Pending, RolledBack),
+            (Running, RolledBack),
+            (Scored, RolledBack),
+            (Sent, RolledBack),
+            (Applied, RolledBack),
         ];
         for from in all {
             for to in all {

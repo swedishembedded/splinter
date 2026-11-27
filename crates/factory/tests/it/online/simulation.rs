@@ -70,6 +70,8 @@ fn world(rng: &mut SplitMix64) -> World {
             max_failures: u32::try_from(rng.between(0, 3)).unwrap(),
             send_retry_ms: rng.between(1, 2_000),
             poll_ms: rng.between(1, 500),
+            epoch: 0,
+            pin_versions: false,
         },
         plan: LearnerPlan {
             step_tokens,

@@ -15,7 +15,7 @@
 use splinter_core::factory::group::{
     GroupKey, GroupState, RolloutOutcome, RolloutState, VersionSpan,
 };
-use splinter_store::factory::runstate::{RunState, RunStateError};
+use splinter_store::factory::runstate::{NewGroup, RunState, RunStateError};
 
 fn outcome(reward: f64) -> RolloutOutcome {
     RolloutOutcome {
@@ -35,13 +35,49 @@ fn a_group_is_recorded_through_its_life_and_reopened_as_it_was_left() {
     let fence = state.acquire("alpha", 60, 0).unwrap();
     let key = GroupKey::numbered("pass", 0).unwrap();
 
-    assert!(state.create_group(&fence, &key, 0, "task-a", 2, 1).unwrap());
+    assert!(state
+        .create_group(
+            &fence,
+            &NewGroup {
+                key: &key,
+                seq: 0,
+                task: "task-a",
+                size: 2,
+                epoch: 0
+            },
+            1
+        )
+        .unwrap());
     assert!(
-        !state.create_group(&fence, &key, 0, "task-a", 2, 2).unwrap(),
+        !state
+            .create_group(
+                &fence,
+                &NewGroup {
+                    key: &key,
+                    seq: 0,
+                    task: "task-a",
+                    size: 2,
+                    epoch: 0
+                },
+                2
+            )
+            .unwrap(),
         "creating it again is a no-op"
     );
     assert!(
-        state.create_group(&fence, &key, 0, "task-b", 2, 2).is_err(),
+        state
+            .create_group(
+                &fence,
+                &NewGroup {
+                    key: &key,
+                    seq: 0,
+                    task: "task-b",
+                    size: 2,
+                    epoch: 0
+                },
+                2
+            )
+            .is_err(),
         "the same key for another group is refused"
     );
 
@@ -150,7 +186,19 @@ fn a_rollout_abandoned_past_its_budget_ends_without_an_outcome_and_a_stale_fence
     let state = RunState::open(dir.path()).unwrap();
     let old = state.acquire("alpha", 10, 0).unwrap();
     let key = GroupKey::numbered("pass", 3).unwrap();
-    state.create_group(&old, &key, 3, "t", 2, 1).unwrap();
+    state
+        .create_group(
+            &old,
+            &NewGroup {
+                key: &key,
+                seq: 3,
+                task: "t",
+                size: 2,
+                epoch: 0,
+            },
+            1,
+        )
+        .unwrap();
     state.start_rollout(&old, &key, 0, 1).unwrap();
     state
         .fail_rollout(&old, &key, 0, true, "verifier down", 2)
@@ -177,4 +225,55 @@ fn a_rollout_abandoned_past_its_budget_ends_without_an_outcome_and_a_stale_fence
     );
     state.start_rollout(&new, &key, 1, 101).unwrap();
     state.start_rollout(&new, &key, 1, 102).unwrap(); // a resumed controller starts a running rollout again
+}
+
+#[test]
+fn a_ledger_written_before_epochs_reads_its_groups_as_epoch_zero_and_records_epochs_after() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("state")).unwrap();
+    {
+        // The ledger's table as a run before epochs wrote it, with one group in it.
+        let conn = rusqlite::Connection::open(dir.path().join("state/controller.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE groups (key TEXT PRIMARY KEY, seq INTEGER NOT NULL UNIQUE, task TEXT NOT NULL,
+               size INTEGER NOT NULL, state TEXT NOT NULL, reason TEXT, staleness INTEGER, updated_at INTEGER NOT NULL);
+             INSERT INTO groups (key, seq, task, size, state, updated_at) VALUES ('pass:0', 0, 't', 0, 'pending', 1);",
+        )
+        .unwrap();
+    }
+    let state = RunState::open(dir.path()).unwrap();
+    let fence = state.acquire("alpha", 60, 0).unwrap();
+    let later = GroupKey::numbered("pass", 1).unwrap();
+    state
+        .create_group(
+            &fence,
+            &NewGroup {
+                key: &later,
+                seq: 1,
+                task: "t",
+                size: 2,
+                epoch: 3,
+            },
+            2,
+        )
+        .unwrap();
+    let entries = state.group_entries().unwrap();
+    let epochs: Vec<u64> = entries.iter().map(|e| e.group.epoch).collect();
+    assert_eq!(epochs, [0, 3]);
+    state
+        .set_group_state(
+            &fence,
+            &later,
+            GroupState::RolledBack,
+            Some("epoch"),
+            None,
+            4,
+        )
+        .unwrap();
+    assert!(
+        state
+            .set_group_state(&fence, &later, GroupState::Sent, None, None, 5)
+            .is_err(),
+        "a rolled-back group is never sent"
+    );
 }

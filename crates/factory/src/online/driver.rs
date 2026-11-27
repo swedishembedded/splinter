@@ -17,7 +17,7 @@
 //! committed, which the learner deduplicates by group key.
 
 use splinter_core::factory::group::GroupKey;
-use splinter_store::factory::runstate::{Fence, GroupEntry, RunState};
+use splinter_store::factory::runstate::{Fence, GroupEntry, NewGroup, RunState};
 
 use super::control::{Change, ControlError, Controller};
 use super::seams::{
@@ -238,8 +238,19 @@ impl GroupLedger for RunLedger<'_> {
                 seq,
                 task,
                 size,
+                epoch,
             } => state
-                .create_group(fence, key, *seq, task, *size, now)
+                .create_group(
+                    fence,
+                    &NewGroup {
+                        key,
+                        seq: *seq,
+                        task,
+                        size: *size,
+                        epoch: *epoch,
+                    },
+                    now,
+                )
                 .map(drop),
             Change::Start { key, index, .. } => state.start_rollout(fence, key, *index, now),
             Change::Finish {

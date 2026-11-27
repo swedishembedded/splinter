@@ -65,6 +65,15 @@ pub struct Settings {
     /// How long the driver waits for a rollout before polling the learner
     /// again, in milliseconds.
     pub poll_ms: u64,
+    /// The run's epoch: every group it creates belongs to it, and a group
+    /// of another epoch (one a rollback ended) is never sent. 0 for a run
+    /// that never rolled back.
+    pub epoch: u64,
+    /// Train only rollouts whose every request one policy version decoded
+    /// (a span of width 0); a rollout that straddles a publication is
+    /// scored and counted, never trained. Off, a rollout's oldest version
+    /// bounds its staleness.
+    pub pin_versions: bool,
 }
 
 impl Settings {

@@ -41,7 +41,7 @@ mod model;
 mod rollouts;
 mod stages;
 
-pub use groups::{GroupEntry, GroupRecord, GroupRolloutRecord};
+pub use groups::{GroupEntry, GroupRecord, GroupRolloutRecord, NewGroup};
 pub use model::{
     AttemptId, AttemptRecord, AttemptState, SlotKey, SlotRecord, SlotState, StageOutcome,
     StageRecord, StageState,
@@ -248,6 +248,7 @@ impl RunState {
         }
         conn.execute_batch(SCHEMA)?;
         conn.execute_batch(groups::SCHEMA)?;
+        groups::migrate(&conn)?;
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         Ok(Self {
             conn: Mutex::new(conn),

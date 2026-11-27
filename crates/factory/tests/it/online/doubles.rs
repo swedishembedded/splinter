@@ -414,6 +414,7 @@ impl GroupLedger for MemoryLedger {
                 seq,
                 task,
                 size,
+                epoch,
             } => {
                 if self.seq_of.contains_key(key) {
                     return Ok(());
@@ -440,6 +441,7 @@ impl GroupLedger for MemoryLedger {
                             reason: None,
                             staleness: None,
                             updated_at: at,
+                            epoch: *epoch,
                         },
                         rollouts,
                     },

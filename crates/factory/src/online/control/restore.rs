@@ -22,7 +22,9 @@ impl Controller {
     /// state, with the changes that bring the ledger up to date (groups the
     /// learner committed, groups completed or dropped while it was down).
     /// Running rollouts are started again; scored, sent and applied groups
-    /// the learner has not committed are sent again. Reward and rollout
+    /// the learner has not committed are sent again, unless they belong to
+    /// another epoch than the settings' (one a rollback ended): those are
+    /// rolled back, never sent. Reward and rollout
     /// statistics are rebuilt from the ledger; backpressure time and the
     /// step estimate start afresh.
     ///
@@ -52,6 +54,17 @@ impl Controller {
         changes: &mut Vec<Change>,
     ) -> Result<(), ControlError> {
         let GroupEntry { group, rollouts } = entry;
+        self.next_seq = self.next_seq.max(group.seq + 1);
+        // Another stage's group shares the run's ledger and its order of
+        // groups, nothing else.
+        if !group
+            .key
+            .as_str()
+            .strip_prefix(self.settings.namespace.as_str())
+            .is_some_and(|rest| rest.starts_with(':'))
+        {
+            return Ok(());
+        }
         let size = usize::try_from(group.size).unwrap_or(usize::MAX);
         if rollouts.len() != size || rollouts.iter().zip(0u32..).any(|(r, i)| r.index != i) {
             return Err(ControlError(format!(
@@ -61,7 +74,6 @@ impl Controller {
                 group.size
             )));
         }
-        self.next_seq = self.next_seq.max(group.seq + 1);
         self.stats.groups_started += 1;
         let mut live = Live {
             key: group.key.clone(),
@@ -87,21 +99,45 @@ impl Controller {
                     other => other,
                 },
                 failures: record.failures,
+                admitted: record.outcome.as_ref().is_none_or(|o| self.admits(o)),
                 outcome: record.outcome,
             });
         }
         let seq = group.seq;
         let state = group.state;
+        // A group of another epoch (one the run rolled back) teaches the
+        // selector nothing about the policy it now trains.
+        let this_epoch = group.epoch == self.settings.epoch;
         if state != GroupState::Pending && state != GroupState::Running {
             self.stats.groups_scored += 1;
-            selector.observe(&live.task, &scored_rewards(&live.rollouts));
+            if this_epoch {
+                selector.observe(&live.task, &scored_rewards(&live.rollouts));
+            }
             self.ingest_rewards(&live.rollouts);
+        }
+        if !this_epoch && !state.is_terminal() {
+            // Never sent: it was drawn from, or trained toward, a policy the
+            // run no longer trains.
+            self.seq_of.insert(live.key.clone(), seq);
+            self.live.insert(seq, live);
+            self.stats.groups_rolled_back += 1;
+            self.walk(
+                seq,
+                GroupState::RolledBack,
+                Some(reasons::ROLLED_BACK),
+                changes,
+            );
+            return Ok(());
         }
         if let Some(staleness) = group.staleness {
             self.stats.groups_sent += 1;
             *self.stats.staleness.entry(staleness).or_default() += 1;
         }
         match state {
+            GroupState::RolledBack => {
+                self.stats.groups_rolled_back += 1;
+                return Ok(());
+            }
             GroupState::Filtered => {
                 self.count_filtered(group.reason.as_deref().unwrap_or(""));
                 return Ok(());

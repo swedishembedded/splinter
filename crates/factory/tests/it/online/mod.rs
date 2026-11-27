@@ -11,6 +11,7 @@
 
 mod brain;
 mod doubles;
+mod epochs;
 mod simulation;
 mod worker;
 
@@ -39,6 +40,8 @@ fn settings() -> Settings {
         max_failures: 0,
         send_retry_ms: 500,
         poll_ms: 50,
+        epoch: 0,
+        pin_versions: false,
     }
 }
 
@@ -654,6 +657,7 @@ fn a_resent_applied_group_the_learner_already_holds_is_followed_until_the_learne
             reason: None,
             staleness: Some(0),
             updated_at: 0,
+            epoch: 0,
         },
         rollouts: (0..2)
             .map(|index| GroupRolloutRecord {

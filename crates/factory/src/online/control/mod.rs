@@ -68,6 +68,11 @@ pub mod reasons {
     pub const STALE_HERE: &str = "stale";
     /// Dropped by the learner as too old.
     pub const STALE_AT_LEARNER: &str = "stale-at-learner";
+    /// Its trainable rollouts' rewards do not differ once the rollouts that
+    /// straddle a publication are left out (the run pins versions).
+    pub const VERSION_MIXED: &str = "version-mixed";
+    /// Of an epoch the run rolled back.
+    pub const ROLLED_BACK: &str = "rolled-back";
 }
 
 /// One durable change, in the order the controller made it.
@@ -83,6 +88,8 @@ pub enum Change {
         task: String,
         /// Its rollouts.
         size: u32,
+        /// The run's epoch it belongs to.
+        epoch: u64,
     },
     /// A rollout starts (its group with it); start it after recording.
     Start {
@@ -151,6 +158,9 @@ struct Rollout {
     state: RolloutState,
     failures: u32,
     outcome: Option<RolloutOutcome>,
+    /// Whether the run may train it: false for a rollout that straddles a
+    /// publication in a run that pins versions.
+    admitted: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -258,6 +268,7 @@ impl Controller {
                         state: RolloutState::Pending,
                         failures: 0,
                         outcome: None,
+                        admitted: true,
                     };
                     usize::try_from(size).unwrap_or(0)
                 ],
@@ -271,6 +282,7 @@ impl Controller {
             seq,
             task,
             size,
+            epoch: self.settings.epoch,
         }];
         changes.extend(self.start(seq, 0));
         Some(changes)
@@ -295,8 +307,16 @@ impl Controller {
         }]
     }
 
+    /// Whether a rollout that ended so may be trained: in a run that pins
+    /// versions, only one that a single version decoded.
+    fn admits(&self, outcome: &RolloutOutcome) -> bool {
+        !self.settings.pin_versions || outcome.span.oldest() == outcome.span.newest()
+    }
+
     fn count_finished(&mut self, outcome: &RolloutOutcome) {
+        let mixed = !self.admits(outcome);
         let stats = &mut self.stats;
+        stats.rollouts_version_mixed += u64::from(mixed);
         stats.rollouts_finished += 1;
         stats.tokens_generated += outcome.tokens;
         stats.rollouts_unscored += u64::from(outcome.reward.is_none());
@@ -326,6 +346,7 @@ impl Controller {
         match reason {
             reasons::UNSCORED => self.stats.filtered_unscored += 1,
             reasons::ZERO_VARIANCE => self.stats.filtered_zero_variance += 1,
+            reasons::VERSION_MIXED => self.stats.filtered_version_mixed += 1,
             _ => self.stats.filtered_not_exact += 1,
         }
     }
@@ -350,6 +371,10 @@ impl Controller {
             .get(&key)
             .ok_or_else(|| ControlError(format!("an end for {key}/{index}, which is not live")))?;
         let max_failures = self.settings.max_failures;
+        let admitted = match &result {
+            Ok(done) => self.admits(&done.outcome),
+            Err(_) => true,
+        };
         let group = self
             .live
             .get_mut(&seq)
@@ -368,6 +393,7 @@ impl Controller {
                 done.outcome
                     .validate()
                     .map_err(|e| ControlError(format!("{key}/{index}: {e}")))?;
+                rollout.admitted = admitted;
                 rollout.state = RolloutState::Finished;
                 rollout.outcome = Some(done.outcome.clone());
                 group.tokens += done.outcome.tokens;
