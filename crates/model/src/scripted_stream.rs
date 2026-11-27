@@ -61,10 +61,10 @@ pub struct StreamScript {
     /// not finished"), as brain answers while a finished run writes its
     /// outputs.
     pub result_pending: u32,
-    /// The first this many `finish` calls are dropped unanswered (the
-    /// connection closed), as a server that dropped an idle connection the
-    /// client reused does.
-    pub unanswered_finishes: u32,
+    /// The first this many calls of each of `finish`, `hold` and `result`
+    /// are dropped unanswered (the connection closed), as a server that
+    /// dropped an idle connection the client reused does.
+    pub unanswered_calls: u32,
 }
 
 /// One group waiting in the queue.
@@ -114,7 +114,8 @@ pub struct Streams {
     trained: Mutex<Vec<String>>,
     finished: Mutex<usize>,
     results_pending: Mutex<u32>,
-    finishes_dropped: Mutex<u32>,
+    /// Calls dropped unanswered so far, by the route they asked for.
+    dropped: Mutex<BTreeMap<&'static str, u32>>,
 }
 
 impl Streams {
@@ -565,6 +566,17 @@ pub(crate) fn route(
         let _ = respond(stream, "200 OK", "text/event-stream", &sse);
         return true;
     }
+    for route in ["/result", "/hold", "/finish"] {
+        if request_line.contains(route) {
+            let mut dropped = streams.dropped.lock().unwrap();
+            let count = dropped.entry(route).or_default();
+            if *count < script.unanswered_calls {
+                *count += 1;
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+                return true;
+            }
+        }
+    }
     if request_line.contains("/result") {
         let Some(run) = live.as_ref() else {
             return false;
@@ -617,14 +629,6 @@ pub(crate) fn route(
     let finish = request_line.contains("/finish");
     if !finish && !request_line.contains("/records") {
         return false;
-    }
-    if finish {
-        let mut dropped = streams.finishes_dropped.lock().unwrap();
-        if *dropped < script.unanswered_finishes {
-            *dropped += 1;
-            let _ = stream.shutdown(std::net::Shutdown::Both);
-            return true;
-        }
     }
     let Some(run) = addressed(stream, &mut live, &durable_map, request_line) else {
         return true;

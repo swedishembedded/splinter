@@ -97,7 +97,8 @@ impl StreamJob {
     /// SHA-256, which the artifact store does not name.
     ///
     /// A run that was told to finish ends after its last receipts (it still writes its outputs, and brain answers
-    /// 409 until it has): the result is asked for again until it exists, for at most ten minutes.
+    /// 409 until it has): the result is asked for again until it exists, for at most ten minutes. A read the
+    /// server does not answer is sent again, as a finish is.
     ///
     /// # Errors
     /// The run has not ended within the wait, restarted, or the endpoint failed.
@@ -105,16 +106,8 @@ impl StreamJob {
         let url = format!("{}/jobs/{}/result", self.url, self.id);
         let started = std::time::Instant::now();
         let (status, text) = loop {
-            let sent = self.runtime.block_on(async {
-                self.client
-                    .get(&url)
-                    .bearer_auth(&self.key)
-                    .timeout(CALL)
-                    .send()
-                    .await
-            });
-            let response =
-                sent.map_err(|e| StreamError::Transport(format!("{}: {e}", self.url)))?;
+            let (response, _) =
+                self.answered("result", || self.client.get(&url).bearer_auth(&self.key))?;
             let status = response.status().as_u16();
             let text = self.runtime.block_on(response.text()).unwrap_or_default();
             if status != 409 || started.elapsed() >= RESULT_WAIT {
@@ -142,49 +135,20 @@ impl StreamJob {
     /// The run restarted, or the endpoint did not answer within the wait.
     pub fn finish(&mut self) -> Result<(), StreamError> {
         let url = format!("{}/jobs/{}/finish?epoch={}", self.url, self.id, self.epoch);
-        let started = std::time::Instant::now();
-        let mut unanswered = false;
-        loop {
-            let sent = self.runtime.block_on(async {
-                self.client
-                    .post(&url)
-                    .bearer_auth(&self.key)
-                    .timeout(CALL)
-                    .send()
-                    .await
-            });
-            let response = match sent {
-                Ok(response) => response,
-                Err(e) if started.elapsed() < START_WAIT => {
-                    eprintln!(
-                        "splinter: the streaming run's finish got no answer ({}); sending it again",
-                        with_sources(&e)
-                    );
-                    unanswered = true;
-                    std::thread::sleep(DEFAULT_RETRY);
-                    continue;
-                }
-                Err(e) => {
-                    return Err(StreamError::Transport(format!(
-                        "{}: no answer to finish for {}s: {}",
-                        self.url,
-                        START_WAIT.as_secs(),
-                        with_sources(&e)
-                    )))
-                }
-            };
-            let status = response.status().as_u16();
-            let text = self.runtime.block_on(response.text()).unwrap_or_default();
-            if (200..300).contains(&status) || (unanswered && status == 410) {
-                return Ok(());
-            }
-            return Err(self.refusal(status, &text));
+        let (response, unanswered) =
+            self.answered("finish", || self.client.post(&url).bearer_auth(&self.key))?;
+        let status = response.status().as_u16();
+        let text = self.runtime.block_on(response.text()).unwrap_or_default();
+        if (200..300).contains(&status) || (unanswered && status == 410) {
+            return Ok(());
         }
+        Err(self.refusal(status, &text))
     }
 
     /// Keeps the version `version` the run retains served under its own id
     /// past the retention while the caller refers to it (`held`), or lets it
-    /// go; the version's id.
+    /// go; the version's id. Holding is idempotent: a hold the server does
+    /// not answer is sent again, as a finish is.
     ///
     /// # Errors
     /// The run restarted, the version is no longer served, or the endpoint
@@ -192,18 +156,12 @@ impl StreamJob {
     pub fn hold(&mut self, version: u64, held: bool) -> Result<String, StreamError> {
         let url = format!("{}/jobs/{}/hold?epoch={}", self.url, self.id, self.epoch);
         let body = serde_json::json!({"version": version, "held": held});
-        let sent = self.runtime.block_on(async {
+        let (response, _) = self.answered("hold", || {
             self.client
                 .post(&url)
                 .bearer_auth(&self.key)
                 .header("content-type", "application/json")
                 .body(body.to_string())
-                .timeout(CALL)
-                .send()
-                .await
-        });
-        let response = sent.map_err(|e| {
-            StreamError::Transport(format!("{}: hold: {}", self.url, with_sources(&e)))
         })?;
         let status = response.status().as_u16();
         let text = self.runtime.block_on(response.text()).unwrap_or_default();
@@ -217,5 +175,46 @@ impl StreamJob {
             .as_str()
             .unwrap_or_default()
             .to_string())
+    }
+
+    /// Sends the idempotent call `what` built by `request` and returns the
+    /// server's answer, and whether an earlier send went unanswered. A send
+    /// the server does not answer (a connection it closed, an idle keep-alive
+    /// it dropped, a server restarting) is sent again for as long as a new
+    /// job is asked for.
+    ///
+    /// # Errors
+    /// The endpoint did not answer within the wait.
+    fn answered(
+        &self,
+        what: &str,
+        request: impl Fn() -> reqwest::RequestBuilder,
+    ) -> Result<(reqwest::Response, bool), StreamError> {
+        let started = std::time::Instant::now();
+        let mut unanswered = false;
+        loop {
+            match self
+                .runtime
+                .block_on(async { request().timeout(CALL).send().await })
+            {
+                Ok(response) => return Ok((response, unanswered)),
+                Err(e) if started.elapsed() < START_WAIT => {
+                    eprintln!(
+                        "splinter: the streaming run's {what} got no answer ({}); sending it again",
+                        with_sources(&e)
+                    );
+                    unanswered = true;
+                    std::thread::sleep(DEFAULT_RETRY);
+                }
+                Err(e) => {
+                    return Err(StreamError::Transport(format!(
+                        "{}: no answer to {what} for {}s: {}",
+                        self.url,
+                        START_WAIT.as_secs(),
+                        with_sources(&e)
+                    )))
+                }
+            }
+        }
     }
 }

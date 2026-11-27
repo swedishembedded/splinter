@@ -272,7 +272,7 @@ fn a_finish_the_server_does_not_answer_is_made_again() {
     let rig = rig();
     let service = ScriptedEndpoint::start(vec![]).with_training(JobScript {
         stream: StreamScript {
-            unanswered_finishes: 2,
+            unanswered_calls: 2,
             ..StreamScript::default()
         },
         ..JobScript::over(rig.store.clone())
@@ -290,4 +290,25 @@ fn a_finish_the_server_does_not_answer_is_made_again() {
         1,
         "the run was finished once"
     );
+}
+
+#[test]
+fn a_hold_or_result_the_server_does_not_answer_is_asked_again() {
+    // Both are idempotent: a hold sets whether a version is held, a result reads what the ended run wrote. A
+    // connection closed under them (an idle keep-alive the server dropped) is asked again, as a finish is.
+    let rig = rig();
+    let service = ScriptedEndpoint::start(vec![]).with_training(JobScript {
+        stream: StreamScript {
+            unanswered_calls: 2,
+            ..StreamScript::default()
+        },
+        ..JobScript::over(rig.store.clone())
+    });
+    let brain = endpoints(&service, &rig);
+    let mut job = StreamJob::start(&brain, &spec(10, 20)).unwrap();
+    job.offer(&group("g0")).unwrap();
+    assert!(job.hold(1, true).unwrap().ends_with("-v1"));
+    job.finish().unwrap();
+    let outputs = job.result().unwrap();
+    assert!(outputs["adapter_digest"].is_string(), "{outputs}");
 }
