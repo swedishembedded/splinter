@@ -105,6 +105,34 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
         "the adapter, not the base: {served}"
     );
 
+    // A supervised candidate that names a start continues that adapter: brain
+    // is sent it, and no rank or alpha of its own (brain keeps the adapter's).
+    let start = trainer.train(&request).unwrap().adapter.unwrap();
+    let out_continued = dir.path().join("lora-r4-continued");
+    std::fs::create_dir_all(&out_continued).unwrap();
+    trainer
+        .train(&TrainRequest {
+            out: &out_continued,
+            resume_key: "lora-r4-continued",
+            start: Some(&start),
+            ..request.clone()
+        })
+        .unwrap();
+    let created = service.jobs().created();
+    let continued = created.last().unwrap();
+    let data: serde_json::Value =
+        serde_json::from_str(continued["data"].as_str().unwrap()).unwrap();
+    let digest = ArtifactStore::open(&store)
+        .unwrap()
+        .publish(&start)
+        .unwrap();
+    assert_eq!(
+        data["start_adapter"]["digest"].as_str(),
+        Some(digest.hex()),
+        "the start adapter is sent: {continued}"
+    );
+    assert!(continued.get("rank").is_none(), "{continued}");
+
     let bf16 = json!({"rank": 4, "steps": 3, "base_precision": "bf16"});
     let out_bf16 = dir.path().join("lora-r4-bf16");
     std::fs::create_dir_all(&out_bf16).unwrap();
@@ -149,7 +177,7 @@ fn a_variant_is_a_resumable_brain_job_whose_adapter_is_served_before_it_counts()
     assert!(refused.to_string().contains("rnak"), "{refused}");
     assert_eq!(
         service.jobs().created().len(),
-        jobs.len() + 4,
+        jobs.len() + 6,
         "the refused request reached no job"
     );
 

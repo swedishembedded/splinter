@@ -612,7 +612,9 @@ impl Trainer for BrainTrainer {
             replay_share: request.replay_share,
             weighted_replay: &[],
             grad_accum: params.grad_accum,
-            continue_from: None,
+            // A named start is continued here as in every other regime: the
+            // stage's identity already names it.
+            continue_from: request.start,
             cancel: None,
             base: match &params.base_precision {
                 Some(text) => text

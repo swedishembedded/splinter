@@ -954,7 +954,8 @@ stages:
 
 A candidate may also *continue* the champion's adapter: `model.train` with
 `start: champion` begins from the champion's weights rather than from the base,
-which is how a preference objective (`loss`, `beta`, `nll_weight`) refines an
+in every regime: supervised (`sft`, `cpt`) training continues it on the new
+data, and a preference objective (`loss`, `beta`, `nll_weight`) refines an
 adapter that already works. The champion must be served from the candidate's
 base model.
 

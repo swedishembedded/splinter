@@ -70,9 +70,10 @@ regime:
 - `policy-gradient` and `distill` datasets by brain's clipped policy gradient, below.
 
 A stage trains a fresh adapter on the base unless it names `start:`, a champion role (see
-[the learning factory](learning-factory.md)) served from the same base, whose adapter a preference, feedback or
-policy-gradient run continues: a preference run polishes the policy that made its pairs. A stage with no
-`start:` does not continue any earlier release. The validation records are what the held-out scores and the
+[the learning factory](learning-factory.md)) served from the same base, whose adapter the run continues in every
+regime: an `sft` or `cpt` run trains on from it, and a preference run polishes the policy that made its pairs.
+A continued adapter keeps its own rank and alpha. A stage with no `start:` does not continue any earlier
+release. The validation records are what the held-out scores and the
 step choice are read over; a dataset with none is scored on its training records, which the candidate's
 report records as `held_out`.
 

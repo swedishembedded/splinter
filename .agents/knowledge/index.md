@@ -225,3 +225,4 @@ in the same commit.
 | [237](237-validation-drawn-from-the-new-generation-alone-selects-checkpoints-that-imitate-the-champion.md) | Validation drawn from the new generation alone selects checkpoints that imitate the champion |
 | [238](238-an-authoring-prompt-whose-worked-example-breaks-its-own-size-rule-produces-tasks-at-the-example-size.md) | An authoring prompt whose worked example breaks its own size rule produces tasks at the example's size |
 | [239](239-stages-run-at-once-produced-a-shared-stage-identity-twice.md) | Stages run at once produced a stage identity they share twice, and offered one adapter over each other |
+| [240](240-start-champion-was-ignored-by-supervised-training-while-the-stage-identity-named-it.md) | `start: champion` was ignored by supervised training while the stage identity named it |
