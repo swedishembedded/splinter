@@ -216,16 +216,30 @@ def main(data: str, out: str) -> None:
     write_csv(os.path.join(out, "vim-records.csv"),
               ["y", "arm", "teacher", "student", "exam_pct", "lo_pct", "hi_pct", "passes", "attempts"], rec)
 
-    # The headline: exam pass rate per generation of the loop, per model size, with Wilson intervals over attempts, and
-    # the teacher's level for reference.
+    # The headline: exam pass rate per generation of the loop, per model size, and the teacher's level for reference. A
+    # generation examined in one seed carries the Wilson 95% interval over its attempts; one examined in several seeds
+    # (the champion and its replicates) carries the mean over seeds and their range, and its seeds are plotted too.
+    # Generation 0 is the base, pooled over the paired base runs of that generation's seeds.
     loop = json.load(open(os.path.join(ev, "loop", "loop.json")))
-    lrows = []
+    lrows, srows = [], []
     for size, gens in loop["sizes"].items():
-        g0 = gens[0]
-        for g, k, n in [(0, g0["base_passes"], g0["base_attempts"])] + [(e["generation"], e["passes"], e["attempts"]) for e in gens]:
-            lo, hi = wilson(k, n)
-            lrows.append([size, g, k, n, 100 * k / n, 100 * lo, 100 * hi])
-    write_csv(os.path.join(out, "loop.csv"), ["size", "generation", "passes", "attempts", "pct", "lo", "hi"], lrows)
+        first = [gens[0]] + gens[0]["replicates"]
+        k0, n0 = sum(e["base_passes"] for e in first), sum(e["base_attempts"] for e in first)
+        lo, hi = wilson(k0, n0)
+        lrows.append([size, 0, k0, n0, 100 * k0 / n0, 100 * lo, 100 * hi, 1])
+        for e in gens:
+            seeds = [e] + e["replicates"]
+            rates = [100 * x["passes"] / x["attempts"] for x in seeds]
+            k, n = sum(x["passes"] for x in seeds), sum(x["attempts"] for x in seeds)
+            if len(seeds) == 1:
+                lo, hi = wilson(k, n)
+                lo, hi = 100 * lo, 100 * hi
+            else:
+                lo, hi = min(rates), max(rates)
+            lrows.append([size, e["generation"], k, n, sum(rates) / len(rates), lo, hi, len(seeds)])
+            srows += [[size, e["generation"], r] for r in rates]
+    write_csv(os.path.join(out, "loop.csv"), ["size", "generation", "passes", "attempts", "pct", "lo", "hi", "seeds"], lrows)
+    write_csv(os.path.join(out, "loop-seeds.csv"), ["size", "generation", "pct"], srows)
     teacher = loop["teacher_exam"]
     g1 = loop["sizes"]["4B"][0]
     e1 = loop["sizes"]["8B"][0]
@@ -291,6 +305,11 @@ def main(data: str, out: str) -> None:
               "LoopEightGOneBasePasses": e1["base_passes"], "LoopEightGOneBaseAttempts": e1["base_attempts"],
               "LoopEightGOneWins": e1["vs_base"]["wins"], "LoopEightGOneLosses": e1["vs_base"]["losses"],
               "LoopEightGOneP": fmt_p(e1["vs_base"]["p_one_sided"]), "LoopEightGOneSolved": e1["exams_solved"],
+              "LoopEightRepOnePasses": e1["replicates"][0]["passes"], "LoopEightRepOneBaseAttempts": e1["replicates"][0]["base_attempts"],
+              "LoopEightRepOneWins": e1["replicates"][0]["vs_base"]["wins"], "LoopEightRepOneSolved": e1["replicates"][0]["exams_solved"],
+              "LoopEightRepTwoPasses": e1["replicates"][1]["passes"], "LoopEightRepTwoBaseAttempts": e1["replicates"][1]["base_attempts"],
+              "LoopEightRepTwoWins": e1["replicates"][1]["vs_base"]["wins"], "LoopEightRepTwoSolved": e1["replicates"][1]["exams_solved"],
+              "LoopEightMeanPct": f"{sum(100 * x['passes'] / x['attempts'] for x in [e1] + e1['replicates']) / 3:.1f}",
               "BaseCalFourAttempts": cal["4B"]["attempts"], "BaseCalFourPasses": cal["4B"]["passes"],
               "BaseCalEightAttempts": cal["8B"]["attempts"], "BaseCalEightPasses": cal["8B"]["passes"],
               "StudentOnlyPasses": s_only["passes"], "StudentOnlyAttempts": s_only["attempts"],

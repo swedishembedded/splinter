@@ -178,7 +178,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 20a363c0): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 4c394661): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
@@ -207,6 +207,12 @@ Qwen3-8B generation 1 (2026-11-27, `loop.py`): seed 3, 22 / 400 exam attempts ag
 exams won / 0 lost (task level), one-sided p 1.5e-5; base calibrations 4B 0 / 1156, 8B 0 / 1118. `export-results.py`
 now skips evaluations a fork inherited (the candidate must be the run's own adapter) and `analyse.product_attempts` takes a
 fork's own (newest) product: before, a fork's export could read its parent's evaluation.
+
+Qwen3-8B generation 1 over three training seeds (`loop.py`, replicates `loop-g1-8b-seed{1,2}` converted by
+`attempts-to-results.py`): seed 1 28 / 400 against 0 / 379, 20 / 0 exams, p 9.5e-7, +0.071 [+0.042, +0.104]; seed 2 24 / 400
+against 0 / 385, 16 / 0, p 1.5e-5; held-out authored tasks 53 / 204 and 54 / 204 against 0 / 203 and 0 / 200. Not promoted
+(release inconclusive); base arms 21 and 15 of 400 slots uncounted (server rejections, cause not determinable). The 8B curve
+continues on seed 3.
 
 Open: generation 2; a forgetting gate; an unattended restart from the recipe.
 

@@ -10,17 +10,27 @@
     "exams_solved": 12,
     "base_passes": 0,
     "base_attempts": 393,
+    "base_infrastructure": 7,
     "vs_base": {
      "wins": 12,
      "losses": 0,
-     "p_one_sided": 0.000244140625
+     "p_one_sided": 0.000244140625,
+     "diff": 0.043256997455470736,
+     "ci95": [
+      0.02030456852791878,
+      0.07106598984771574
+     ]
     },
     "release_heldout": {
      "passes": 42,
      "attempts": 204,
      "base_passes": 6,
-     "base_attempts": 204
-    }
+     "base_attempts": 204,
+     "wins": 20,
+     "losses": 0,
+     "p_one_sided": 9.5367431640625e-07
+    },
+    "replicates": []
    }
   ],
   "8B": [
@@ -32,11 +42,75 @@
     "exams_solved": 16,
     "base_passes": 0,
     "base_attempts": 381,
+    "base_infrastructure": 19,
     "vs_base": {
      "wins": 16,
      "losses": 0,
-     "p_one_sided": 1.52587890625e-05
-    }
+     "p_one_sided": 1.52587890625e-05,
+     "diff": 0.05249343832020997,
+     "ci95": [
+      0.02857142857142857,
+      0.08031088082901554
+     ]
+    },
+    "replicates": [
+     {
+      "fork": "loop-g1-8b-seed1",
+      "passes": 28,
+      "attempts": 400,
+      "exams_solved": 21,
+      "base_passes": 0,
+      "base_attempts": 379,
+      "base_infrastructure": 21,
+      "vs_base": {
+       "wins": 20,
+       "losses": 0,
+       "p_one_sided": 9.5367431640625e-07,
+       "diff": 0.0712401055408971,
+       "ci95": [
+        0.041884816753926704,
+        0.10362694300518134
+       ]
+      },
+      "release_heldout": {
+       "passes": 53,
+       "attempts": 204,
+       "base_passes": 0,
+       "base_attempts": 203,
+       "wins": 26,
+       "losses": 0,
+       "p_one_sided": 1.4901161193847656e-08
+      }
+     },
+     {
+      "fork": "loop-g1-8b-seed2",
+      "passes": 24,
+      "attempts": 400,
+      "exams_solved": 18,
+      "base_passes": 0,
+      "base_attempts": 385,
+      "base_infrastructure": 15,
+      "vs_base": {
+       "wins": 16,
+       "losses": 0,
+       "p_one_sided": 1.52587890625e-05,
+       "diff": 0.05714285714285714,
+       "ci95": [
+        0.02894736842105263,
+        0.08997429305912596
+       ]
+      },
+      "release_heldout": {
+       "passes": 54,
+       "attempts": 204,
+       "base_passes": 0,
+       "base_attempts": 200,
+       "wins": 30,
+       "losses": 0,
+       "p_one_sided": 9.313225746154785e-10
+      }
+     }
+    ]
    }
   ]
  },

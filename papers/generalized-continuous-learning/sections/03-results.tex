@@ -203,9 +203,15 @@ $p=\LoopFourGOneP$); \LoopFourGOneSolved{} exams solved at least once. It was pr
 passes \LoopFourGOneHeldout{} of attempts against the base's \LoopFourGOneHeldoutBase. Qwen3-8B, generation~1 (trained from the
 8B base on the outcome-first tasks with the 8B's own verified attempts and the teacher's, seed~3, step 520 kept): \LoopEightGOnePasses{}
 of \LoopEightGOneAttempts{} exam attempts against its paired base's \LoopEightGOneBasePasses{} of \LoopEightGOneBaseAttempts{};
-\LoopEightGOneWins{} exams won, \LoopEightGOneLosses{} lost (one-sided sign test, $p$ = \LoopEightGOneP); \LoopEightGOneSolved{} exams solved. Its base
-arm left 19 of 400 slots uncounted, above the registered 2\% bound, and the stage was not repeated
-(\cref{app:deviations}); its other two seeds, its held-out-task evaluation and its release are running. Generation~2 of both
+\LoopEightGOneWins{} exams won, \LoopEightGOneLosses{} lost (one-sided sign test, $p$ = \LoopEightGOneP); \LoopEightGOneSolved{} exams solved. The gain
+replicates over two more training seeds of the same generation: seed~1 passes \LoopEightRepOnePasses{} of 400 against its base's
+0 of \LoopEightRepOneBaseAttempts{} (\LoopEightRepOneWins{} exams won, none lost, \LoopEightRepOneSolved{} solved), seed~2
+\LoopEightRepTwoPasses{} of 400 against 0 of \LoopEightRepTwoBaseAttempts{} (\LoopEightRepTwoWins{} won, none lost,
+\LoopEightRepTwoSolved{} solved); on the held-out authored tasks they pass 53 and 54 of 204 attempts against their bases' 0 of
+203 and 0 of 200. In all three seeds the base arm left more slots uncounted than the registered 2\% bound (19, 21 and 15 of
+400; the two replicates' were requests the server rejected, whose cause could not be determined afterwards), and the stages
+were not repeated (\cref{app:deviations}). The release gate of seeds 1 and 2 was inconclusive, so neither was promoted, and the
+8B curve continues on seed~3, whose held-out-task evaluation and release are running. Generation~2 of both
 sizes is running; the trend test needs at least two generations and has not been computed. Evidence: \nolinkurl{loop/loop.json}.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
