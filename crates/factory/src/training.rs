@@ -520,7 +520,11 @@ impl Trainer for BrainTrainer {
     fn records_per_step(&self, method: &str, params: &Value) -> Result<u64, TrainError> {
         // What a step consumes does not depend on how many steps run: the
         // budget asks before it has a step count.
+        // The epochs are the factory's budget, not a parameter brain takes: they are dropped here.
         let mut sized = params.clone();
+        if let Some(object) = sized.as_object_mut() {
+            object.remove(crate::budget::EPOCHS);
+        }
         if sized.get(crate::budget::STEPS).is_none() {
             sized[crate::budget::STEPS] = Value::from(1);
         }

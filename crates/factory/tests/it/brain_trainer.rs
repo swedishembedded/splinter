@@ -338,6 +338,13 @@ fn a_step_consumes_grad_accum_records_on_every_rank() {
             .unwrap(),
         1
     );
+    // A budget in epochs is the case the factory asks about: the epochs are not a parameter brain takes.
+    assert_eq!(
+        trainer(TrainSpan::OneCard)
+            .records_per_step("lora", &json!({"rank": 4, "grad_accum": 4, "epochs": 1.9}))
+            .unwrap(),
+        4
+    );
     assert!(trainer(TrainSpan::OneCard)
         .records_per_step("lora", &json!({"rank": 4, "grad_accum": 0}))
         .is_err());
