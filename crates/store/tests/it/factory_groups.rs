@@ -25,6 +25,7 @@ fn outcome(reward: f64) -> RolloutOutcome {
         exact: true,
         truncated: false,
         truncation: None,
+        behaviour: None,
     }
 }
 

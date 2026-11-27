@@ -56,6 +56,7 @@ use super::training::CANDIDATE_FILE;
 use super::{io, stage_error, write_json, Factory, RunError, LEASE_SECONDS};
 use crate::online::driver::{run, Ended, OnlineError, Report, RunLedger, Seams};
 use crate::online::group_log::{GroupLog, LoggedLedger, GROUPS_FILE};
+use crate::online::health::VersionSeries;
 use crate::online::seams::{
     GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RoundRobin, RunClock,
     StreamLearner, SystemRunClock,
@@ -378,6 +379,8 @@ struct Trained {
     telemetry: LearnerTelemetry,
     learner: Box<dyn StreamLearner>,
     restarts: u32,
+    /// The rollouts each policy version decoded, as the group log saw them.
+    series: VersionSeries,
 }
 
 pub(crate) fn produce(
@@ -460,6 +463,7 @@ pub(crate) fn produce(
             .map_err(|e| fail(e.to_string()))?;
         let served = learner.served_as();
         let mut outcome: Option<Result<Report, OnlineError>> = None;
+        let mut series = VersionSeries::default();
         rollouts
             .run(
                 &RolloutsRequest {
@@ -508,6 +512,7 @@ pub(crate) fn produce(
                             cancel: &cancel,
                         },
                     ));
+                    series = ledger.log().series().clone();
                 },
             )
             .map_err(fail)?;
@@ -521,6 +526,7 @@ pub(crate) fn produce(
                     telemetry: learner.telemetry(),
                     learner,
                     restarts,
+                    series,
                 }
             }
             Some(Err(OnlineError::Learner(e))) if e.restarted && restarts < RESTARTS => {
@@ -663,6 +669,14 @@ fn report(trained: &Trained, started: Instant) -> Value {
         // Which run-level identity served each version: the weights every
         // rollout of that version was drawn from, named across servers.
         "versions": telemetry.published,
+        // Training health: each step's figures as the learner reported them,
+        // the steps whose update it skipped, and what each policy version's
+        // rollouts came to (rates over what was measured; absent when nothing was).
+        "health": {
+            "steps": telemetry.step_health,
+            "skipped_steps": telemetry.skipped_steps,
+            "versions": trained.series.summary(),
+        },
     })
 }
 

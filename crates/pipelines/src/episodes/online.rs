@@ -42,6 +42,7 @@ use std::time::Duration;
 
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
+use splinter_core::factory::group::Behaviour;
 use splinter_core::factory::truncation;
 use splinter_core::harness::RecordedCalls;
 use splinter_core::model_ref::ModelRef;
@@ -228,7 +229,7 @@ impl Shared<'_> {
             // its calls cannot be paired, so it is a failure that trains
             // nothing.
             return match truncation {
-                Some(cause) => rollout_of(reward, Some(cause), &CallProjection::default()),
+                Some(cause) => rollout_of(reward, Some(cause), None, &CallProjection::default()),
                 None => Err("a graded episode kept no experience".into()),
             };
         };
@@ -242,7 +243,12 @@ impl Shared<'_> {
             .and_then(|recorded| recorded.calls())
             .unwrap_or_default();
         let projection = project_calls(trajectory, &calls, &self.sampler);
-        rollout_of(reward, truncation, &projection)
+        rollout_of(
+            reward,
+            truncation,
+            Some(Behaviour::of(trajectory)),
+            &projection,
+        )
     }
 }
 

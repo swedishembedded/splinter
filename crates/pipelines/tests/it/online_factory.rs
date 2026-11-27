@@ -358,6 +358,34 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
         "every group not trained was filtered: {report:#}"
     );
     assert!(report["frac_zero_std"].is_number() && report["reward_mean"].is_number());
+    // Training health: each step the learner reported, and per policy version what its rollouts came to,
+    // the same figures `splinter observe` shows of the run.
+    let health = &report["health"];
+    assert!(
+        health["steps"].as_array().is_some_and(|s| !s.is_empty()),
+        "{health:#}"
+    );
+    let versions = health["versions"].as_object().unwrap();
+    assert!(!versions.is_empty(), "{health:#}");
+    for summary in versions.values() {
+        assert!(summary["false_completion_rate"].is_number(), "{summary}");
+        assert!(summary["repeated_call_rate"].is_number(), "{summary}");
+    }
+    let observed = splinter_factory::observe::observe(
+        &run,
+        // seed: the bootstrap intervals of evaluations, not read here.
+        &splinter_factory::observe::Options {
+            seed: 1,
+            utilisation: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(observed.online.len(), 1);
+    assert!(observed.online[0].finished);
+    assert_eq!(
+        serde_json::to_value(&observed.online[0].versions).unwrap(),
+        health["versions"]
+    );
     assert!(report["experience_utilisation"].as_f64().unwrap() > 0.0);
     // Every published version names the run-level identity that served it, and
     // the report carries the run's revision manifest: the server it reached (its

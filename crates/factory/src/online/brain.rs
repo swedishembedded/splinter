@@ -123,6 +123,9 @@ impl BrainLearner {
         let tokens = count(&pg["policy_tokens"]).unwrap_or(0);
         let t = &mut self.telemetry;
         t.steps += 1;
+        let version = t.published.last().map_or(0, |p| p.version);
+        t.step_health
+            .push(super::health::StepHealth::from_pg(pg, t.steps, version));
         t.trained_tokens += tokens;
         if let Some(dropped) = count(&pg["dropped_stale"]) {
             t.dropped_stale = t.dropped_stale.max(dropped);
@@ -197,9 +200,16 @@ impl Learner for BrainLearner {
         let mut events = std::mem::take(&mut self.pending);
         for event in self.job.events().map_err(error)? {
             match event {
-                StreamEvent::Applied { groups, .. } => events.push(LearnerEvent::Applied {
-                    groups: keys(groups)?,
-                }),
+                StreamEvent::Applied {
+                    groups, skipped, ..
+                } => {
+                    if let Some(why) = skipped {
+                        self.telemetry.skipped_steps.push(why);
+                    }
+                    events.push(LearnerEvent::Applied {
+                        groups: keys(groups)?,
+                    });
+                }
                 StreamEvent::Published {
                     version,
                     digest,

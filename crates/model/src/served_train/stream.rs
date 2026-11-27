@@ -174,6 +174,10 @@ pub enum StreamEvent {
         step: u64,
         /// The groups.
         groups: Vec<String>,
+        /// Why the step's update was not taken, when the trainer skipped it
+        /// (its guard judged the step unsafe); its groups are consumed all
+        /// the same. Absent from a trainer that does not say.
+        skipped: Option<String>,
     },
     /// `version` is published and routable.
     Published {
@@ -590,6 +594,7 @@ impl StreamJob {
                 "applied" => events.push(StreamEvent::Applied {
                     step: number("step"),
                     groups: groups(),
+                    skipped: frame["skipped"].as_str().map(str::to_owned),
                 }),
                 "published" => {
                     self.version = self.version.max(number("version"));

@@ -351,6 +351,49 @@ impl fmt::Display for Truncation {
     }
 }
 
+/// What an agent did in a rollout, read from its trajectory the same way
+/// whatever the task or environment: how its run ended and whether it
+/// repeated itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Behaviour {
+    /// The agent ended the run itself: its last step calls no tool (it
+    /// answered or declared the work done).
+    pub stopped: bool,
+    /// Tool calls it made.
+    pub tool_calls: u32,
+    /// Tool calls identical (the same tool, the same arguments) to an
+    /// earlier call of the same rollout.
+    pub repeated_calls: u32,
+}
+
+impl Behaviour {
+    /// The behaviour `trajectory` records: of the agent's own steps.
+    #[must_use]
+    pub fn of(trajectory: &atif::Trajectory) -> Self {
+        let agent: Vec<&atif::TraceStep> = trajectory
+            .steps
+            .iter()
+            .filter(|s| s.source == atif::StepOrigin::Agent)
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        let mut behaviour = Self {
+            stopped: agent
+                .last()
+                .is_some_and(|s| s.tool_calls.as_ref().is_none_or(Vec::is_empty)),
+            ..Self::default()
+        };
+        for call in agent.iter().flat_map(|s| s.tool_calls.iter().flatten()) {
+            behaviour.tool_calls += 1;
+            // serde_json orders object keys, so equal arguments print equal.
+            let identity = (call.function_name.clone(), call.arguments.to_string());
+            if !seen.insert(identity) {
+                behaviour.repeated_calls += 1;
+            }
+        }
+        behaviour
+    }
+}
+
 /// How one finished rollout ended. An infrastructure failure is not an
 /// outcome: it is retried or abandoned, never scored.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -374,6 +417,21 @@ pub struct RolloutOutcome {
     /// did (absent from outcomes recorded before causes were).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub truncation: Option<Truncation>,
+    /// What the agent did, when its trajectory was read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behaviour: Option<Behaviour>,
+}
+
+impl RolloutOutcome {
+    /// A false completion: the agent ended the run itself, no limit ended
+    /// it, and the verifier failed it. Absent (`None`) when the rollout is
+    /// unscored or its behaviour was not read.
+    #[must_use]
+    pub fn false_completion(&self) -> Option<bool> {
+        let behaviour = self.behaviour?;
+        let reward = self.reward?;
+        Some(behaviour.stopped && self.truncation.is_none() && reward <= 0.0)
+    }
 }
 
 /// The unchecked wire form of a [`RolloutOutcome`].
@@ -387,6 +445,8 @@ struct RawOutcome {
     truncated: bool,
     #[serde(default)]
     truncation: Option<Truncation>,
+    #[serde(default)]
+    behaviour: Option<Behaviour>,
 }
 
 impl TryFrom<RawOutcome> for RolloutOutcome {
@@ -399,6 +459,7 @@ impl TryFrom<RawOutcome> for RolloutOutcome {
             exact: raw.exact,
             truncated: raw.truncated,
             truncation: raw.truncation,
+            behaviour: raw.behaviour,
         };
         outcome.validate()?;
         Ok(outcome)
@@ -506,7 +567,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&outcome).unwrap(), old);
         let cut = RolloutOutcome {
             truncation: Some(Truncation::Turns),
-            ..outcome
+            ..outcome.clone()
         };
         let line = serde_json::to_string(&cut).unwrap();
         assert!(line.ends_with(r#""truncation":"turns"}"#), "{line}");
@@ -515,11 +576,81 @@ mod tests {
             cut.trainable(),
             "a rollout a turn cap ended is a failure whose completed calls are samples of the policy"
         );
+        assert_eq!(
+            outcome.false_completion(),
+            None,
+            "unmeasured is absent, never false"
+        );
         for cause in Truncation::ALL {
             assert_eq!(
                 serde_json::to_value(cause).unwrap(),
                 serde_json::json!(cause.as_str())
             );
         }
+    }
+
+    #[test]
+    fn behaviour_is_read_from_the_agents_steps_and_a_false_completion_is_a_failed_self_ended_run() {
+        let call = |id: &str, args: serde_json::Value| {
+            let mut c = atif::ToolInvocation::new(id, "edit");
+            c.arguments = args;
+            c
+        };
+        let step = |source, calls: Vec<atif::ToolInvocation>| {
+            let mut s: atif::TraceStep = serde_json::from_value(serde_json::json!(
+                {"step_id": 1, "source": source, "message": ""}
+            ))
+            .unwrap();
+            s.tool_calls = (!calls.is_empty()).then_some(calls);
+            s
+        };
+        let mut trajectory: atif::Trajectory = serde_json::from_value(serde_json::json!({
+            "schema_version": "ATIF-v1.4", "session_id": "s", "agent": {"name": "a", "version": "1"}, "steps": []
+        }))
+        .unwrap();
+        trajectory.steps = vec![
+            step("user", vec![]),
+            step(
+                "agent",
+                vec![call("1", serde_json::json!({"a": 1, "b": 2}))],
+            ),
+            step(
+                "agent",
+                vec![
+                    call("2", serde_json::json!({"b": 2, "a": 1})),
+                    call("3", serde_json::json!({})),
+                ],
+            ),
+            step("agent", vec![]),
+        ];
+        let behaviour = Behaviour::of(&trajectory);
+        assert_eq!(
+            behaviour,
+            Behaviour {
+                stopped: true,
+                tool_calls: 3,
+                repeated_calls: 1
+            }
+        );
+        let failed = RolloutOutcome {
+            reward: Some(0.0),
+            tokens: 1,
+            span: VersionSpan::at(0),
+            exact: true,
+            truncated: false,
+            truncation: None,
+            behaviour: Some(behaviour),
+        };
+        assert_eq!(failed.false_completion(), Some(true));
+        let cut = RolloutOutcome {
+            truncation: Some(Truncation::Turns),
+            ..failed.clone()
+        };
+        assert_eq!(cut.false_completion(), Some(false), "a limit ended it");
+        let passed = RolloutOutcome {
+            reward: Some(1.0),
+            ..failed
+        };
+        assert_eq!(passed.false_completion(), Some(false));
     }
 }

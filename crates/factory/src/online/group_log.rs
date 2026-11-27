@@ -32,6 +32,7 @@ use splinter_core::factory::group::{GroupKey, GroupState, RolloutOutcome, Rollou
 use splinter_store::factory::runstate::GroupEntry;
 
 use super::control::Change;
+use super::health::VersionSeries;
 use super::seams::{GroupLedger, LedgerError};
 
 /// The log's file name.
@@ -72,6 +73,7 @@ pub struct GroupLog {
     written: HashSet<(String, GroupState)>,
     groups: HashMap<GroupKey, Group>,
     learner_version: u64,
+    series: VersionSeries,
 }
 
 fn io(path: &Path) -> impl Fn(std::io::Error) -> LedgerError + '_ {
@@ -126,6 +128,7 @@ impl GroupLog {
             written,
             groups: HashMap::new(),
             learner_version: 0,
+            series: VersionSeries::default(),
         };
         for entry in entries {
             let group = &entry.group;
@@ -149,6 +152,11 @@ impl GroupLog {
             );
         }
         for entry in entries {
+            if !matches!(entry.group.state, GroupState::Pending | GroupState::Running) {
+                log.scored(&entry.group.key);
+            }
+        }
+        for entry in entries {
             let group = &entry.group;
             if LOGGED.contains(&group.state) {
                 log.transition(
@@ -168,6 +176,24 @@ impl GroupLog {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// What the scored groups' rollouts came to, per policy version.
+    #[must_use]
+    pub fn series(&self) -> &VersionSeries {
+        &self.series
+    }
+
+    fn scored(&mut self, key: &GroupKey) {
+        if let Some(group) = self.groups.get(key) {
+            let outcomes: Vec<&RolloutOutcome> = group
+                .rollouts
+                .iter()
+                .filter_map(|r| r.outcome.as_ref())
+                .collect();
+            let failures = group.rollouts.iter().map(|r| u64::from(r.failures)).sum();
+            self.series.add_group(&outcomes, failures);
+        }
     }
 
     /// The learner published `version`: what later lines name as the
@@ -253,6 +279,9 @@ impl GroupLog {
                 reason,
                 staleness,
             } => {
+                if *to == GroupState::Scored {
+                    self.scored(key);
+                }
                 if LOGGED.contains(to) {
                     self.transition(key, *to, *reason, *staleness, now_ms, false)?;
                 }
@@ -319,6 +348,7 @@ impl GroupLog {
                     "span": o.map(|o| o.span),
                     "exact": o.map(|o| o.exact),
                     "truncation": o.and_then(|o| o.truncation),
+                    "outcome": o,
                 })
             })
             .collect();

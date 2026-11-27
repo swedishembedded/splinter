@@ -45,6 +45,7 @@ use serde::{Deserialize, Serialize};
 use splinter_core::digest::digest_of;
 use splinter_core::factory::attempt::AttemptReport;
 use splinter_core::factory::execution::{ModelBinding, SlotKey, BRAIN_DRIVER};
+use splinter_core::factory::group::Behaviour;
 use splinter_core::factory::trial::{grade, GradingPolicy, RunBudget, TimeoutPolicy};
 use splinter_core::factory::truncation;
 use splinter_core::harness::RecordedCalls;
@@ -376,16 +377,22 @@ impl Shared<'_, '_, '_> {
         let reward = graded.passed.map(|passed| if passed { 1.0 } else { 0.0 });
         Ending::Rollout(
             self.projection(report, out)
-                .and_then(|projection| rollout_of(reward, truncation, &projection)),
+                .and_then(|(projection, behaviour)| {
+                    rollout_of(reward, truncation, behaviour, &projection)
+                }),
         )
     }
 
-    /// The projection of `report`'s calls: its trajectory with its own
-    /// request log filed on it. A trial that left no trajectory projects to
-    /// nothing (an inexact rollout, never trained).
-    fn projection(&self, report: &AttemptReport, out: &Path) -> Result<CallProjection, String> {
+    /// The projection of `report`'s calls (its trajectory with its own
+    /// request log filed on it) and its agent's behaviour. A trial that left
+    /// no trajectory projects to nothing (an inexact rollout, never trained).
+    fn projection(
+        &self,
+        report: &AttemptReport,
+        out: &Path,
+    ) -> Result<(CallProjection, Option<Behaviour>), String> {
         let Some(trace) = &report.trace else {
-            return Ok(CallProjection::default());
+            return Ok((CallProjection::default(), None));
         };
         let path = out.join(trace);
         let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -399,7 +406,10 @@ impl Shared<'_, '_, '_> {
         let calls = RecordedCalls::of(&trajectory)
             .and_then(|recorded| recorded.calls())
             .unwrap_or_default();
-        Ok(project_calls(&trajectory, &calls, &self.sampler))
+        Ok((
+            project_calls(&trajectory, &calls, &self.sampler),
+            Some(Behaviour::of(&trajectory)),
+        ))
     }
 }
 

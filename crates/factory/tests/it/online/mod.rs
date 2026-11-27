@@ -62,6 +62,7 @@ fn outcome(reward: Option<f64>, tokens: u64, version: u64, exact: bool) -> Rollo
         exact,
         truncated: false,
         truncation: None,
+        behaviour: None,
     }
 }
 

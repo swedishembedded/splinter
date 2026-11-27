@@ -332,6 +332,13 @@ pub struct LearnerTelemetry {
     pub committed_step: Option<u64>,
     /// `sha256:<hex>` of the base's tokenizer, as the learner named it.
     pub tokenizer_digest: Option<String>,
+    /// Each step's figures, in order (reported as the run's health).
+    #[serde(skip)]
+    pub step_health: Vec<super::health::StepHealth>,
+    /// Steps whose update the trainer skipped (its guard judged them
+    /// unsafe), with why, in order (reported as the run's health).
+    #[serde(skip)]
+    pub skipped_steps: Vec<String>,
 }
 
 /// One version a learner published: the serving-local version, the adapter's

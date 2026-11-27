@@ -325,6 +325,9 @@ impl Report for Observed {
                 }
             }
             attempts(&mut out, &run.attempts);
+            for stage in &run.online {
+                online(&mut out, stage);
+            }
             let s = &run.solvability;
             let _ = writeln!(
                 out,
@@ -333,6 +336,38 @@ impl Report for Observed {
             );
         }
         out
+    }
+}
+
+/// An online training stage's health: one line per policy version.
+fn online(out: &mut String, stage: &splinter_sdk::factory::observe::online::OnlineStage) {
+    let _ = writeln!(
+        out,
+        "  online {} ({})",
+        stage.stage,
+        if stage.finished {
+            "finished"
+        } else {
+            "running"
+        }
+    );
+    let rate = |v: &serde_json::Value, key: &str| num(v[key].as_f64(), 3);
+    for (version, v) in &stage.versions {
+        let _ = writeln!(
+            out,
+            "    version {version}: {} rollouts, reward {}, zero-variance {}, truncated {}, infra failures {}, \
+             false completions {}, repeated calls {}",
+            v["rollouts"],
+            rate(v, "reward_mean"),
+            rate(v, "zero_variance_share"),
+            rate(v, "truncation_rate"),
+            rate(v, "infra_failure_rate"),
+            rate(v, "false_completion_rate"),
+            rate(v, "repeated_call_rate"),
+        );
+    }
+    for note in &stage.notes {
+        let _ = writeln!(out, "    {note}");
     }
 }
 

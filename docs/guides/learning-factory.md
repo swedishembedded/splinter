@@ -716,6 +716,17 @@ compiles its collection evaluates on the same compiled tasks:
   rollout. Every group belongs to the run's epoch it was created in, and a group of an epoch
   the run rolled back is `rolled_back`, never sent.
 
+  `report.json` `health` holds the run's training health: `steps`, each optimiser step's
+  figures as brain reported them (KL, entropy, clip fractions, ratio minimum, maximum and mean,
+  gradient norm, staleness, the learner's wait and queue); `skipped_steps`, why the trainer's
+  guard skipped a step's update; and `versions`, per policy version (a rollout belongs to the
+  oldest version among its requests) the reward and the shares of zero-variance groups,
+  truncated rollouts, infrastructure failures, false completions (a scored rollout whose agent
+  ended the run itself, no limit ending it, that the verifier failed) and repeated tool calls
+  (the same tool with the same arguments as an earlier call of the rollout). `splinter observe`
+  shows the same per-version lines for every online stage of a run, read from its group log
+  while it runs.
+
   A rollout a limit ended (the served context, a reply's own token limit, the run's output
   budget, the turn cap, the deadline) is a scored failure (reward 0) counted by cause in the
   report's `rollouts.truncations`, never retried as an infrastructure failure; its completed

@@ -11,13 +11,14 @@
 //! in-process episode, an attempt on the execution worker), so both make the
 //! same records and the same outcome of the same calls.
 
-use splinter_core::factory::group::{RolloutOutcome, Truncation, VersionSpan};
+use splinter_core::factory::group::{Behaviour, RolloutOutcome, Truncation, VersionSpan};
 use splinter_data::calls::CallProjection;
 
 use super::seams::FinishedRollout;
 
 /// The rollout `projection` is, rewarded `reward`, ended early by
-/// `truncation` when a limit ended it. Its records (one JSON line per model
+/// `truncation` when a limit ended it, its agent having behaved as
+/// `behaviour` says when its trajectory was read. Its records (one JSON line per model
 /// call) are written only when every call is exact; a rollout with no
 /// version span is not exact, and its span is then only a placeholder.
 ///
@@ -26,6 +27,7 @@ use super::seams::FinishedRollout;
 pub fn rollout_of(
     reward: Option<f64>,
     truncation: Option<Truncation>,
+    behaviour: Option<Behaviour>,
     projection: &CallProjection,
 ) -> Result<FinishedRollout, String> {
     let exact = projection.exact();
@@ -58,6 +60,7 @@ pub fn rollout_of(
             exact,
             truncated: projection.truncated,
             truncation,
+            behaviour,
         },
         records,
     })
@@ -79,7 +82,7 @@ mod tests {
 
     #[test]
     fn a_rollout_a_limit_ended_is_a_scored_failure_with_its_cause() {
-        let done = rollout_of(Some(1.0), None, &projection(false)).unwrap();
+        let done = rollout_of(Some(1.0), None, None, &projection(false)).unwrap();
         assert_eq!(
             (done.outcome.reward, done.outcome.truncation),
             (Some(1.0), None)
@@ -89,16 +92,17 @@ mod tests {
             (2, 3)
         );
 
-        let cut = rollout_of(Some(1.0), Some(Truncation::Turns), &projection(false)).unwrap();
+        let cut = rollout_of(Some(1.0), Some(Truncation::Turns), None, &projection(false)).unwrap();
         assert_eq!(
             (cut.outcome.reward, cut.outcome.truncation),
             (Some(0.0), Some(Truncation::Turns)),
             "a limit fails the rollout whatever the verifier found"
         );
-        let unscored = rollout_of(None, Some(Truncation::Deadline), &projection(false)).unwrap();
+        let unscored =
+            rollout_of(None, Some(Truncation::Deadline), None, &projection(false)).unwrap();
         assert_eq!(unscored.outcome.reward, Some(0.0));
 
-        let long = rollout_of(Some(1.0), None, &projection(true)).unwrap();
+        let long = rollout_of(Some(1.0), None, None, &projection(true)).unwrap();
         assert_eq!(long.outcome.truncation, Some(Truncation::OutputLength));
         assert!(
             long.outcome.truncated && !long.outcome.trainable(),

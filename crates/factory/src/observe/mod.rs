@@ -30,11 +30,14 @@
 //!   stage's and arm's failures divide into interface, policy and
 //!   infrastructure classes, how the agents' claims of completion agreed
 //!   with the grader, whether each task set is known to be solvable, and the
-//!   pace of every attempt stage.
+//!   pace of every attempt stage;
+//! - **online training** ([`online`]): each online training stage's health,
+//!   per optimiser step and per policy version, live while it runs.
 
 pub mod capability;
 pub mod conduct;
 pub mod data;
+pub mod online;
 pub mod probe;
 mod records;
 pub mod system;
@@ -158,6 +161,8 @@ pub struct RunObservation {
     pub attempts: Vec<AttemptStage>,
     /// Whether every task its reference solutions ran on is solvable.
     pub solvability: Solvability,
+    /// Its online training stages' health, finished or running.
+    pub online: Vec<online::OnlineStage>,
 }
 
 /// The tasks' witnesses: for each task a stage that runs no model attempted
@@ -395,5 +400,6 @@ pub fn observe(run: &Path, options: &Options) -> Result<RunObservation, ObserveE
         generations,
         attempts,
         solvability: Solvability::of(&all_tasks, &witnesses),
+        online: online::observe(&records, run),
     })
 }
