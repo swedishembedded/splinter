@@ -50,7 +50,9 @@ $(BUILD)/previews/fig-%.png: $(BUILD)/figures/fig-%.pdf
 .PHONY: previews
 previews: $(PREVIEWS)
 
-$(PDF): $(SOURCES) $(wildcard figures/*.tex) $(GENERATED)/.stamp $(PREVIEWS)
+# The paper typesets the figure bodies itself; the previews are published with the figure data (make previews), so
+# the PDF does not wait for them, nor for a Ghostscript the build host may confine.
+$(PDF): $(SOURCES) $(wildcard figures/*.tex) $(GENERATED)/.stamp
 	$(call latexmk-pdf,$(PAPER).tex)
 
 .PHONY: vim-data
