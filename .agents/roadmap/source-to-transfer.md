@@ -327,6 +327,29 @@ broken `:put text` form before its fix); after a first error the student re-read
 against the teacher's 27%. The tool keeping a failed command's edits is Vim's own behaviour, which the agent must learn to
 recover from: the training target is the recovery, not the failure.
 
+## Rerun of generations 1-3 on the fixed loop: registration (2026-11-27 15:10, before any result of the rerun)
+
+All earlier runs are superseded (old Vim tool, old recipes) and not comparable with these. Fixed in place before the rerun:
+bench b147c21b (vim tool `diff` and `reset`: the agent's version control), 26b12413 and d971e5df (loop recipes: teacher-only
+new data, the champion's records one per task in replay, `supervise: productive`, continuing the champion, `params.epochs:
+1.9`, a retention gate with the 2% uncounted bound on every release, per-generation champion roles, generation 3 also checks
+generation 1's held-out tasks, sven capped at the registered 60 tool rounds); splinter b0d85c4d6 (concurrent stages),
+88f8333f0 (`params.epochs`), and fixes in flight for SFT continuing the champion, a champion resolving a run's newest
+promoted release, a retention gate that is inconclusive without pairs, and item retries; brain eb2164937 on every card
+(KV-pool sizing and back-off recovery, adaptive residency). One authoring run serves both sizes (Qwen3-4B, Qwen3-8B).
+
+Measurement, every exam at the registered 4 attempts per task (no other exam sensor gates or claims):
+1. Primary, per generation step and size: the paired task-level sign test of the two arms of the same `eval-exam-gK` stage
+   (candidate against its champion, measured together).
+2. Secondary, named now: the step test pooled over sizes (exams won and lost summed); generation 3 against generation 1;
+   a trend over generations at exam level (a permutation over exams); generation 1 against the base.
+3. Promotion is decided on held-out authored tasks only (target) and retention (previous generations' held-out tasks); the
+   exam never selects. A generation not promoted is reported as measured; the next continues the latest promoted champion,
+   which is then its predecessor.
+4. Evaluations with more than 2% uncounted slots are reported and excluded from claims.
+5. Known limits, stated now: one training seed per generation; no shuffled-request control under the new tool; a baseline
+   arm reused by identity when the champion is unchanged (not re-measured under the same load).
+
 ## Further mitigation (2026-11-27; planned, not run)
 
 In order of effect per hour:
