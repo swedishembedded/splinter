@@ -134,6 +134,10 @@ pub struct Evaluation {
     pub unpaired_slots: Option<u64>,
     /// Of the slots, the share either arm never counted.
     pub uncounted_share: Option<f64>,
+    /// The candidate arm's pass rate per task: what a probe pairs two
+    /// candidates on.
+    #[serde(skip)]
+    pub candidate_tasks: BTreeMap<String, f64>,
 }
 
 /// The pass rate per task of counted attempts.
@@ -147,6 +151,24 @@ fn task_rates(trials: &[TrialResult]) -> BTreeMap<String, f64> {
     by.into_iter()
         .map(|(k, (n, p))| (k.to_owned(), p as f64 / n as f64))
         .collect()
+}
+
+/// The paired bootstrap interval of the mean per-task difference `b - a`
+/// over the tasks both hold, and how many tasks it rests on.
+#[must_use]
+pub fn paired(
+    a: &BTreeMap<String, f64>,
+    b: &BTreeMap<String, f64>,
+    seed: u64,
+) -> (Option<Interval>, usize) {
+    let differences: Vec<f64> = b
+        .iter()
+        .filter_map(|(task, y)| a.get(task).map(|x| y - x))
+        .collect();
+    (
+        bootstrap_interval(&differences, BOOTSTRAP_ITERATIONS, INTERVAL_LEVEL, seed),
+        differences.len(),
+    )
 }
 
 /// How the attempts of `product` went.
@@ -277,10 +299,7 @@ pub(super) fn observe(
     let (baseline, base_trials) = arm(cx, &format!("{id}/baseline"), &result, "baseline");
     let (candidate_arm, cand_trials) = arm(cx, &format!("{id}/candidate"), &result, "candidate");
     let (base_rates, cand_rates) = (task_rates(&base_trials), task_rates(&cand_trials));
-    let differences: Vec<f64> = cand_rates
-        .iter()
-        .filter_map(|(task, c)| base_rates.get(task).map(|b| c - b))
-        .collect();
+    let (interval, interval_tasks) = paired(&base_rates, &cand_rates, cx.seed);
     let stats = &result["statistics"];
     let pairs = stats["pairs"].as_u64();
     let unpaired = stats["unpaired_slots"].as_u64();
@@ -304,11 +323,12 @@ pub(super) fn observe(
         pairs,
         p: stats["p"].as_f64(),
         difference: stats["difference"].as_f64(),
-        interval: bootstrap_interval(&differences, BOOTSTRAP_ITERATIONS, INTERVAL_LEVEL, cx.seed),
-        interval_tasks: differences.len(),
+        interval,
+        interval_tasks,
         unpaired_slots: unpaired,
         uncounted_share: pairs
             .zip(unpaired)
             .and_then(|(p, u)| (p + u > 0).then(|| u as f64 / (p + u) as f64)),
+        candidate_tasks: cand_rates,
     })
 }

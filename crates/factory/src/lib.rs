@@ -54,6 +54,7 @@ pub mod graph;
 pub mod harness_op;
 pub mod hint;
 mod holdout;
+pub mod knobs;
 pub mod knowledge_ops;
 pub mod machine_config;
 pub mod observe;

@@ -1118,6 +1118,40 @@ recipe's (`recipe.yaml` of the run), never a stage's name. For each generation i
   time (its local times read `--utilisation-utc-offset` minutes east of UTC) to each
   attempt stage's span and each training stage's running time.
 
+## Probing a knob
+
+A recipe declares its knobs in a top-level `knobs:` section, each with the parameter it
+sets and the state variable (an `observe` reading) it is meant to move:
+
+```yaml
+knobs:
+  epochs:
+    set: lora-g2.params.epochs      # STAGE.PATH in the stage's `with`
+    clears: [params.steps]          # what it replaces, removed when it is set
+    moves: training.epochs_at_selected
+    min_change: 0.05                # the least change that counts (any change when unset)
+```
+
+The variables a knob may name are `training.epochs_at_selected`, `training.epochs_completed`,
+`training.steps`, `training.selected_step`, `training.draws_per_epoch`, `training.tokens`,
+`data.train_records`, `data.own_share_records`, `data.own_share_characters`,
+`data.validation_own_share_records`, `data.frontier_share`, `data.action_sequences`,
+`data.own_pass_rate` and `data.other_pass_rate`, each of the first candidate of the generation
+the knob's stage feeds. Declaring a knob changes no stage identity.
+
+```sh
+splinter probe runs/vim-g2 --knob epochs=1.89 --out runs/vim-g2-epochs
+```
+
+`splinter probe` sets that knob alone in the run's recipe, runs the result as a fork of the
+run (every stage upstream of the knob is reused, so the probe costs what reads it: point it
+at a run of a cheap slice, a few tasks and a short training), observes both runs and
+reports whether the variable moved (its change beyond `min_change`) and, for each
+evaluation of that generation, the candidate's pass rate before and after with a 95% paired
+bootstrap interval of the mean per-task difference; capability followed when the interval
+lies above zero. A knob whose variable did not move is a defect of the knob, and the command
+exits 1.
+
 ## Guided sessions
 
 An attempt stage with `interactive: true` is never run unattended. `splinter play` starts

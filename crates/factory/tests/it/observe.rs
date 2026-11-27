@@ -16,6 +16,7 @@
 use serde_json::json;
 use splinter_factory::observe::conduct::FailureClass;
 use splinter_factory::observe::data::Policy;
+use splinter_factory::observe::probe::{probe, Verdict};
 use splinter_factory::observe::{observe, Options};
 
 use crate::factory_run::{decisive, resolved, run};
@@ -248,4 +249,129 @@ fn a_generations_state_is_read_back_from_its_records_alone() {
     assert_eq!(sv.judged, 4);
     assert_eq!(sv.claimed_passed + sv.unclaimed_passed, 1);
     assert_eq!(local.pace.trials, 4);
+}
+
+/// The reference recipe with a step budget on `lora-r8` and two knobs that
+/// both claim to move the passes over the data: the budget, and the rank.
+fn knobbed() -> String {
+    format!(
+        "{}knobs:\n  epochs:\n    set: lora-r8.params.epochs\n    clears: [params.steps]\n    \
+         moves: training.epochs_at_selected\n  rank:\n    set: lora-r8.params.rank\n    \
+         moves: training.epochs_at_selected\n",
+        RECIPE
+            .replace("params: { rank: 8 }", "params: { rank: 8, steps: 2 }")
+            .replace(
+                "with: { promote: false }",
+                "with: { promote: true, requires: [target] }"
+            )
+    )
+}
+
+#[test]
+fn a_probe_turns_one_knob_and_reports_a_knob_that_does_not_move_its_variable_as_a_defect() {
+    let repo = Repo::new();
+    let backend = FakeBackend {
+        candidate: Some(Outcome::Pass),
+        ..FakeBackend::with(Outcome::Pass)
+    };
+    let trainer = FakeTrainer {
+        curve_to_the_last_step: true,
+        ..FakeTrainer::default()
+    };
+    let control = tempfile::tempdir().unwrap();
+    run(
+        &resolved(&repo, &knobbed()),
+        control.path(),
+        &backend,
+        &trainer,
+    )
+    .unwrap();
+    // seed: the interval's seed; every arm passes, so the interval is the point whatever it is.
+    let options = Options {
+        seed: 5,
+        utilisation: None,
+    };
+    let resolve = |root: &std::path::Path, text: &str| {
+        splinter_factory::resolve::resolve(root, text, crate::repo::connections())
+            .map_err(|e| e.0.join("; "))
+    };
+    let execute = |resolved: &splinter_factory::resolve::Resolved, out: &std::path::Path| {
+        run(resolved, out, &backend, &trainer)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    };
+
+    let epochs = tempfile::tempdir().unwrap();
+    let report = probe(
+        control.path(),
+        epochs.path(),
+        "epochs",
+        &json!(3),
+        &options,
+        resolve,
+        execute,
+    )
+    .unwrap();
+    assert_eq!(report.generation, 1);
+    assert_eq!(report.verdict, Verdict::Moved, "{report:#?}");
+    assert!(!report.defect);
+    assert!(
+        (report.probed.unwrap() - 3.0).abs() < 1e-9,
+        "three passes at the last step: {report:#?}"
+    );
+    assert!(report.control.unwrap() < report.probed.unwrap());
+    assert_eq!(
+        report.capability.len(),
+        2,
+        "both evaluations of the generation"
+    );
+    for c in &report.capability {
+        assert_eq!(
+            (c.control.unwrap().value, c.probed.unwrap().value),
+            (1.0, 1.0)
+        );
+        assert_ne!(
+            c.followed,
+            Some(true),
+            "every arm passed before and after: {c:?}"
+        );
+    }
+
+    let rank = tempfile::tempdir().unwrap();
+    let resolve = |root: &std::path::Path, text: &str| {
+        splinter_factory::resolve::resolve(root, text, crate::repo::connections())
+            .map_err(|e| e.0.join("; "))
+    };
+    let execute = |resolved: &splinter_factory::resolve::Resolved, out: &std::path::Path| {
+        run(resolved, out, &backend, &trainer)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    };
+    let report = probe(
+        control.path(),
+        rank.path(),
+        "rank",
+        &json!(16),
+        &options,
+        resolve,
+        execute,
+    )
+    .unwrap();
+    assert_eq!(report.verdict, Verdict::DidNotMove, "{report:#?}");
+    assert!(
+        report.defect,
+        "the rank does not move the passes over the data"
+    );
+    assert_eq!(report.change, Some(0.0));
+
+    let refused = probe(
+        control.path(),
+        tempfile::tempdir().unwrap().path(),
+        "nope",
+        &json!(1),
+        &options,
+        |_, _| Ok(()),
+        |_: &(), _| Ok(()),
+    );
+    assert!(refused.unwrap_err().to_string().contains("no knob"));
 }

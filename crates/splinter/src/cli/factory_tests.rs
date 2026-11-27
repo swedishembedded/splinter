@@ -101,3 +101,15 @@ fn several_runs_are_observed_with_an_optional_seed_and_utilisation_log() {
         "observe needs a run"
     );
 }
+
+#[test]
+fn a_knob_of_a_run_is_probed_into_a_new_run_directory() {
+    assert!(matches!(
+        command(&["probe", "runs/g2", "--knob", "epochs=1.89", "--out", "runs/g2-epochs"]),
+        Command::Probe(a) if a.knob == "epochs=1.89" && a.seed.is_none()
+    ));
+    assert!(
+        Cli::try_parse_from(["splinter", "probe", "runs/g2", "--out", "runs/p"]).is_err(),
+        "a probe needs a knob"
+    );
+}

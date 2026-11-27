@@ -35,9 +35,13 @@
 pub mod capability;
 pub mod conduct;
 pub mod data;
+pub mod probe;
 mod records;
 pub mod system;
 pub mod training;
+
+pub use splinter_eval::pilot::Share;
+pub use splinter_model::stats::Interval;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

@@ -96,6 +96,12 @@ pub enum Command {
     /// interval and the release's reasons, how attempts failed and whether
     /// their claims of completion agreed with the grader, and each stage's pace.
     Observe(ObserveArgs),
+    /// Turn one knob a factory run's recipe declares (`knobs:`) to another
+    /// value, run the recipe so changed as a fork of the run, and report
+    /// whether the state variable the knob says it moves did, and whether
+    /// held-out capability followed, with intervals. Exits 1 when the knob
+    /// did not move its variable.
+    Probe(ProbeArgs),
     /// Print a factory run's report.
     Report(RunDirArgs),
     /// Write a factory run's products as a portable bundle.
@@ -558,8 +564,8 @@ pub use eval::{EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseCom
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
-    ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, ObserveArgs, PlayArgs, RecipeArgs,
-    RunArgs, RunDirArgs, ViewArgs,
+    ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, ObserveArgs, PlayArgs, ProbeArgs,
+    RecipeArgs, RunArgs, RunDirArgs, ViewArgs,
 };
 pub use global::Global;
 pub use goal::GoalCommand;

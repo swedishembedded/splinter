@@ -25,7 +25,7 @@ use splinter_sdk::{Config, Error};
 
 use crate::cli::{
     Command, EvalArgs, ExportArgs, ForkArgs, InitArgs, InspectArgs, ObserveArgs, PlayArgs,
-    RecipeArgs, RunArgs, RunStatusArgs, VerifyArgs,
+    ProbeArgs, RecipeArgs, RunArgs, RunStatusArgs, VerifyArgs,
 };
 use crate::output::{emit, Report};
 use crate::session::Exit;
@@ -58,6 +58,7 @@ pub fn route(
         Command::View(args) => crate::view_session::view(&args),
         Command::Fork(args) => fork(config, json, &args),
         Command::Observe(args) => observe(json, &args),
+        Command::Probe(args) => probe(config, json, &args),
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),
         Command::Play(args) => play(config, json, &args),
@@ -248,6 +249,41 @@ fn services(config: &Config) -> (Box<dyn ExecutionBackend>, Option<BrainTrainer>
 
 /// Run `resolved` into `dir`.
 fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Result<Exit, Error> {
+    match carry_out(config, resolved, dir)? {
+        Ok(manifest) => {
+            emit(
+                json,
+                &Ran {
+                    run: dir,
+                    manifest: &manifest,
+                },
+            );
+            Ok(Exit::Ok)
+        }
+        Err(RunError::Cancelled) => {
+            eprintln!(
+                "splinter: the run was cancelled; `splinter resume {}` continues it",
+                dir.display()
+            );
+            Ok(Exit::Failed)
+        }
+        Err(e) => {
+            eprintln!(
+                "splinter: {e}\nwhat is committed stays; `splinter resume {}` continues",
+                dir.display()
+            );
+            Ok(Exit::Failed)
+        }
+    }
+}
+
+/// Carries out `resolved` in the run directory `dir` with this machine's
+/// worker and trainer: the run's manifest, or why it stopped.
+fn carry_out(
+    config: &Config,
+    resolved: &Resolved,
+    dir: &Path,
+) -> Result<Result<RunManifest, RunError>, Error> {
     // Training, evaluating and serving a champion go through brain.
     let needs_trainer = !resolved.champions.is_empty()
         || resolved.plan.stages.iter().any(|s| {
@@ -289,32 +325,7 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
     if let Some(bound) = config.factory.concurrent_stages {
         factory = factory.with_concurrent_stages(bound);
     }
-    match factory.run() {
-        Ok(manifest) => {
-            emit(
-                json,
-                &Ran {
-                    run: dir,
-                    manifest: &manifest,
-                },
-            );
-            Ok(Exit::Ok)
-        }
-        Err(RunError::Cancelled) => {
-            eprintln!(
-                "splinter: the run was cancelled; `splinter resume {}` continues it",
-                dir.display()
-            );
-            Ok(Exit::Failed)
-        }
-        Err(e) => {
-            eprintln!(
-                "splinter: {e}\nwhat is committed stays; `splinter resume {}` continues",
-                dir.display()
-            );
-            Ok(Exit::Failed)
-        }
-    }
+    Ok(factory.run())
 }
 
 /// `run`.
@@ -467,6 +478,40 @@ pub fn observe(json: bool, args: &ObserveArgs) -> Result<Exit, Error> {
         .collect::<Result<Vec<_>, _>>()?;
     emit(json, &crate::observe_output::Observed(runs));
     Ok(Exit::Ok)
+}
+
+/// `probe RUN --knob NAME=VALUE --out DIR`: the run's recipe with one knob
+/// set, forked from the run and carried out, both observed and compared.
+/// Exits 1 when the knob did not move its variable (a defect of the knob).
+pub fn probe(config: &Config, json: bool, args: &ProbeArgs) -> Result<Exit, Error> {
+    use splinter_sdk::factory::observe::{probe, Options};
+    let (knob, value) = splinter_sdk::factory::knobs::assignment(&args.knob).map_err(refused)?;
+    let options = Options {
+        seed: splinter_sdk::seed::resolve("seed", args.seed),
+        utilisation: None,
+    };
+    let report = probe::probe(
+        &args.run,
+        &args.out,
+        &knob,
+        &value,
+        &options,
+        |repository, text| {
+            splinter_sdk::factory::resolve_text(config, repository, text).map_err(|e| e.to_string())
+        },
+        |resolved, out| match carry_out(config, resolved, out) {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(format!(
+                "the probe run stopped: {e}; `splinter resume {}` continues it",
+                out.display()
+            )),
+            Err(e) => Err(e.to_string()),
+        },
+    )
+    .map_err(refused)?;
+    let defect = report.defect;
+    emit(json, &crate::observe_output::Probed(report));
+    Ok(if defect { Exit::Failed } else { Exit::Ok })
 }
 
 /// `report RUN`.

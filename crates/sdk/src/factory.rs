@@ -28,8 +28,9 @@ use splinter_orchestrator::config::credential;
 use splinter_orchestrator::config::Config;
 
 pub use splinter_factory::{
-    backend, collection, connections, environment, eval_plan, execute, graph, machine_config,
-    observe, ops, plan, recipe, registry, resolve as resolution, run, templates, training, tree,
+    backend, collection, connections, environment, eval_plan, execute, graph, knobs,
+    machine_config, observe, ops, plan, recipe, registry, resolve as resolution, run, templates,
+    training, tree,
 };
 
 /// The models a run's computed stages call in process: each binding's
@@ -206,6 +207,24 @@ pub fn resolve_run(config: &Config, run: &Path) -> Result<Resolved, SetupError> 
         &repository,
         &text,
         connections_of(config, &repository)?,
+        &grants_of(config)?,
+    )?)
+}
+
+/// The recipe `text` resolved in the task repository `repository` with this
+/// machine's connections and grants: what a probe of a run's knob runs.
+///
+/// # Errors
+/// The connections or grants cannot be read, or the recipe does not resolve.
+pub fn resolve_text(
+    config: &Config,
+    repository: &Path,
+    text: &str,
+) -> Result<Resolved, SetupError> {
+    Ok(resolve_in(
+        repository,
+        text,
+        connections_of(config, repository)?,
         &grants_of(config)?,
     )?)
 }

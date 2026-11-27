@@ -172,6 +172,25 @@ impl RunRecords {
             .collect()
     }
 
+    /// The stage `id` and every stage that reads it, directly or through
+    /// others.
+    pub(super) fn downstream(&self, id: &str) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::from([id.to_owned()]);
+        // A stage reads only stages declared above it, so one pass in order
+        // closes the set.
+        for stage in &self.recipe.stages {
+            let reads = stage.inputs.keys().any(|port| {
+                self.upstream(&stage.id, port)
+                    .iter()
+                    .any(|u| out.contains(u))
+            });
+            if reads {
+                out.insert(stage.id.clone());
+            }
+        }
+        out
+    }
+
     /// The parameter `name` the recipe gives the stage `id`.
     pub(super) fn param(&self, id: &str, name: &str) -> Option<&Value> {
         self.stage(id).and_then(|s| s.params.get(name))

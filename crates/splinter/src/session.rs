@@ -261,6 +261,7 @@ impl Session {
             | Command::View(_)
             | Command::Fork(_)
             | Command::Observe(_)
+            | Command::Probe(_)
             | Command::Report(_)
             | Command::Export(_)
             | Command::Verify(_)

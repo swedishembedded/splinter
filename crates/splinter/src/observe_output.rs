@@ -15,6 +15,7 @@ use serde::Serialize;
 use splinter_sdk::factory::observe::capability::Evaluation;
 use splinter_sdk::factory::observe::conduct::Conduct;
 use splinter_sdk::factory::observe::data::{Data, Policy};
+use splinter_sdk::factory::observe::probe::{ProbeReport, Verdict};
 use splinter_sdk::factory::observe::training::Training;
 use splinter_sdk::factory::observe::{AttemptStage, RunObservation};
 
@@ -329,6 +330,60 @@ impl Report for Observed {
                 out,
                 "  tasks pinned: {} witnessed, {} refuted, {} without a reference run",
                 s.witnessed, s.refuted, s.unknown
+            );
+        }
+        out
+    }
+}
+
+/// What a probe of one knob found.
+#[derive(Serialize)]
+#[serde(transparent)]
+pub struct Probed(pub ProbeReport);
+
+impl Report for Probed {
+    fn human(&self) -> String {
+        let r = &self.0;
+        let mut out = String::new();
+        let _ = writeln!(
+            out,
+            "knob {} ({} = {}) moves {}: generation {}, control {}, probe {}, change {} (least {}): {}",
+            r.knob,
+            r.set,
+            r.value,
+            r.moves,
+            r.generation,
+            num(r.control, 4),
+            num(r.probed, 4),
+            r.change.map_or("-".to_owned(), |c| format!("{c:+.4}")),
+            r.min_change,
+            match r.verdict {
+                Verdict::Moved => "moved",
+                Verdict::DidNotMove => "did not move: the knob is a defect",
+                Verdict::Unmeasured => "unmeasured",
+            }
+        );
+        let share = |s: Option<splinter_sdk::factory::observe::Share>| {
+            s.map_or("-".to_owned(), |p| {
+                format!("{}/{} {:.3}", p.successes, p.total, p.value)
+            })
+        };
+        for c in &r.capability {
+            let _ = writeln!(
+                out,
+                "  {:<18} {:<12} {:<26} control {:>14}  probe {:>14}  probe - control {} over {} tasks: {}",
+                c.evaluation,
+                c.purpose.as_deref().unwrap_or("measurement"),
+                c.task_set,
+                share(c.control),
+                share(c.probed),
+                c.interval.map_or("-".to_owned(), |i| format!("{:+.3} [{:+.3},{:+.3}]", i.mean, i.low, i.high)),
+                c.tasks,
+                match c.followed {
+                    Some(true) => "followed",
+                    Some(false) => "did not follow",
+                    None => "no interval",
+                }
             );
         }
         out

@@ -97,6 +97,7 @@ Every command takes these.
 - [splinter view](#splinter-view) - Open a factory run in the browser
 - [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
 - [splinter observe](#splinter-observe) - Read a factory run's generational state from its records alone
+- [splinter probe](#splinter-probe) - Turn one knob a factory run's recipe declares (`knobs:`) to another value, run the recipe so changed as a fork of the run, and report whether the state variable the knob says it moves did, and whether held-out capability followed, with intervals
 - [splinter report](#splinter-report) - Print a factory run's report
 - [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
 - [splinter index](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -248,6 +249,7 @@ Subcommands:
 - [`view`](#splinter-view) - Open a factory run in the browser
 - [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
 - [`observe`](#splinter-observe) - Read a factory run's generational state from its records alone
+- [`probe`](#splinter-probe) - Turn one knob a factory run's recipe declares (`knobs:`) to another value, run the recipe so changed as a fork of the run, and report whether the state variable the knob says it moves did, and whether held-out capability followed, with intervals
 - [`report`](#splinter-report) - Print a factory run's report
 - [`export`](#splinter-export) - Write a factory run's products as a portable bundle
 - [`index`](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -502,6 +504,24 @@ Options:
 - `--seed <N>`: The seed of the evaluations' bootstrap intervals; a fresh one is drawn and printed when none is given.
 - `--utilisation <FILE>`: A card utilisation log written by `nvidia-smi dmon -o DT`, joined to each stage by time (a run records no card use)
 - `--utilisation-utc-offset <MINUTES>`: How many minutes east of UTC the utilisation log's local times are. Default: `0`.
+
+### splinter probe
+
+Turn one knob a factory run's recipe declares (`knobs:`) to another value, run the recipe so changed as a fork of the run, and report whether the state variable the knob says it moves did, and whether held-out capability followed, with intervals. Exits 1 when the knob did not move its variable
+
+```text
+splinter probe [OPTIONS] --knob <NAME=VALUE> --out <DIR> <RUN>
+```
+
+Arguments:
+
+- `<RUN>` (required): The control run: its recipe declares the knob, and the probe forks it.
+
+Options:
+
+- `--knob <NAME=VALUE>` (required): The knob and the value to set it to, `NAME=VALUE` (the value read as YAML); every other parameter stays as the run has it.
+- `--out <DIR>` (required): The probe's run directory.
+- `--seed <N>`: The seed of the capability intervals; a fresh one is drawn and printed when none is given.
 
 ### splinter report
 

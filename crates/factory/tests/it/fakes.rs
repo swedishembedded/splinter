@@ -509,6 +509,9 @@ pub struct FakeTrainer {
     /// The validation curve its report states, as brain's trainer writes it
     /// (`points`, `selected_step`, `steps_completed`, `stopped_early`), if any.
     pub curve: Option<serde_json::Value>,
+    /// Report a curve that ran and selected the last of the steps it was
+    /// given (what a trainer whose validation never plateaus does).
+    pub curve_to_the_last_step: bool,
 }
 
 impl Trainer for FakeTrainer {
@@ -575,6 +578,13 @@ impl Trainer for FakeTrainer {
                 let mut report = json!({"records": records, "base_digest": format!("sha256:{}", "e".repeat(64))});
                 if let Some(curve) = &self.curve {
                     report["curve"] = curve.clone();
+                }
+                if self.curve_to_the_last_step {
+                    let steps = request.params["steps"].as_u64().unwrap_or(1);
+                    report["curve"] = json!({
+                        "points": [{"step": steps, "monitor_loss": 0.5}],
+                        "selected_step": steps, "steps_completed": steps, "stopped_early": false
+                    });
                 }
                 report
             },

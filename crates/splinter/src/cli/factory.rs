@@ -120,6 +120,25 @@ pub struct ObserveArgs {
     pub utilisation_utc_offset: i64,
 }
 
+/// `probe`.
+#[derive(Debug, Args)]
+pub struct ProbeArgs {
+    /// The control run: its recipe declares the knob, and the probe forks it.
+    #[arg(value_name = "RUN")]
+    pub run: PathBuf,
+    /// The knob and the value to set it to, `NAME=VALUE` (the value read as
+    /// YAML); every other parameter stays as the run has it.
+    #[arg(long, value_name = "NAME=VALUE")]
+    pub knob: String,
+    /// The probe's run directory.
+    #[arg(long, value_name = "DIR")]
+    pub out: PathBuf,
+    /// The seed of the capability intervals; a fresh one is drawn and printed
+    /// when none is given.
+    #[arg(long, value_name = "N")]
+    pub seed: Option<u64>,
+}
+
 /// `export`.
 #[derive(Debug, Args)]
 pub struct ExportArgs {

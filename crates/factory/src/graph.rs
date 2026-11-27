@@ -145,6 +145,11 @@ pub struct RecipeV2 {
     /// always refused) unless the recipe says `required`.
     #[serde(default)]
     pub contract: ContractPolicy,
+    /// Its knobs, by name: each a parameter of one stage and the state
+    /// variable it is meant to move. Not part of the plan, so declaring one
+    /// changes no stage identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub knobs: BTreeMap<String, crate::knobs::KnobSpec>,
 }
 
 /// How strictly a run holds its brain servers to the training-record
@@ -703,7 +708,8 @@ pub fn compile_partly(
     load: &dyn Fn(&str) -> Result<String, String>,
 ) -> Result<(CompiledPlan, Vec<String>), RecipeError> {
     let recipe = parse(text)?;
-    let mut problems = Vec::new();
+    let ids: Vec<&str> = recipe.stages.iter().map(|s| s.id.as_str()).collect();
+    let mut problems = crate::knobs::problems(&recipe.knobs, &ids);
     for name in recipe
         .inputs
         .keys()
