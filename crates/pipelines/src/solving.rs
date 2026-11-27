@@ -534,9 +534,9 @@ struct Recording<'a> {
 }
 
 /// Whether the server refused the request because it needs more tokens than
-/// the context it serves (brain's `context_length_exceeded`).
+/// the context it serves: the one truncation classifier's reading of it.
 fn outgrew_context(error: &SolveError) -> bool {
-    error.to_string().contains("context_length_exceeded")
+    splinter_core::factory::truncation::of_error(&error.to_string()).is_some()
 }
 
 /// Stores the experience of a finished attempt, with its report, the moment

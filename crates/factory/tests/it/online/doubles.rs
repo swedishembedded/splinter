@@ -150,6 +150,7 @@ impl RolloutExecutor for Executor {
                     span: VersionSpan::new(version_at_start, self.served.get()).unwrap(),
                     exact,
                     truncated: false,
+                    truncation: None,
                 },
                 records: format!("{tokens},{version_at_start}"),
             });

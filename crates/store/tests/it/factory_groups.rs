@@ -24,6 +24,7 @@ fn outcome(reward: f64) -> RolloutOutcome {
         span: VersionSpan::at(0),
         exact: true,
         truncated: false,
+        truncation: None,
     }
 }
 

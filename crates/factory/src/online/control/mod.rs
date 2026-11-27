@@ -302,6 +302,12 @@ impl Controller {
         stats.rollouts_unscored += u64::from(outcome.reward.is_none());
         stats.rollouts_not_exact += u64::from(!outcome.exact);
         stats.rollouts_truncated += u64::from(outcome.truncated);
+        if let Some(cause) = outcome.truncation {
+            *stats
+                .truncations
+                .entry(cause.as_str().to_string())
+                .or_default() += 1;
+        }
     }
 
     fn ingest_rewards(&mut self, rollouts: &[Rollout]) {

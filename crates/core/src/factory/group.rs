@@ -288,6 +288,57 @@ impl From<VersionSpan> for [u64; 2] {
     }
 }
 
+/// Which limit ended a rollout before its agent finished. A rollout a limit
+/// ended is a scored failure (reward 0) recorded with its cause, never an
+/// infrastructure failure, and never run again: running it again meets the
+/// same limit. Whether it is training material is the call records' to say
+/// ([`RolloutOutcome::trainable`]): every completed call of it is a sample of
+/// the policy, except a reply cut at its own token limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Truncation {
+    /// The conversation outgrew the context the server serves: it refused
+    /// the next request.
+    Context,
+    /// A reply stopped at its own token limit.
+    OutputLength,
+    /// The run's output-token budget was spent.
+    OutputBudget,
+    /// The agent reached its cap on tool calls or rounds.
+    Turns,
+    /// A time limit ended the agent.
+    Deadline,
+}
+
+impl Truncation {
+    /// Every cause, in a fixed order.
+    pub const ALL: [Self; 5] = [
+        Self::Context,
+        Self::OutputLength,
+        Self::OutputBudget,
+        Self::Turns,
+        Self::Deadline,
+    ];
+
+    /// The cause's name, as stored and reported.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Context => "context",
+            Self::OutputLength => "output_length",
+            Self::OutputBudget => "output_budget",
+            Self::Turns => "turns",
+            Self::Deadline => "deadline",
+        }
+    }
+}
+
+impl fmt::Display for Truncation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// How one finished rollout ended. An infrastructure failure is not an
 /// outcome: it is retried or abandoned, never scored.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -307,6 +358,10 @@ pub struct RolloutOutcome {
     pub exact: bool,
     /// Whether some request stopped at its length limit.
     pub truncated: bool,
+    /// The limit that ended the rollout before its agent finished, if one
+    /// did (absent from outcomes recorded before causes were).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncation: Option<Truncation>,
 }
 
 /// The unchecked wire form of a [`RolloutOutcome`].
@@ -318,6 +373,8 @@ struct RawOutcome {
     span: VersionSpan,
     exact: bool,
     truncated: bool,
+    #[serde(default)]
+    truncation: Option<Truncation>,
 }
 
 impl TryFrom<RawOutcome> for RolloutOutcome {
@@ -329,6 +386,7 @@ impl TryFrom<RawOutcome> for RolloutOutcome {
             span: raw.span,
             exact: raw.exact,
             truncated: raw.truncated,
+            truncation: raw.truncation,
         };
         outcome.validate()?;
         Ok(outcome)
@@ -420,5 +478,31 @@ mod tests {
             !unscored.trainable(),
             "an unscored rollout is not training material"
         );
+    }
+
+    #[test]
+    fn a_truncation_cause_is_read_when_present_and_absent_when_not() {
+        // Outcomes recorded before causes were read as no cause, and an outcome without one is written as before.
+        let old = r#"{"reward":0.0,"tokens":3,"span":[1,1],"exact":true,"truncated":false}"#;
+        let outcome: RolloutOutcome = serde_json::from_str(old).unwrap();
+        assert_eq!(outcome.truncation, None);
+        assert_eq!(serde_json::to_string(&outcome).unwrap(), old);
+        let cut = RolloutOutcome {
+            truncation: Some(Truncation::Turns),
+            ..outcome
+        };
+        let line = serde_json::to_string(&cut).unwrap();
+        assert!(line.ends_with(r#""truncation":"turns"}"#), "{line}");
+        assert_eq!(serde_json::from_str::<RolloutOutcome>(&line).unwrap(), cut);
+        assert!(
+            cut.trainable(),
+            "a rollout a turn cap ended is a failure whose completed calls are samples of the policy"
+        );
+        for cause in Truncation::ALL {
+            assert_eq!(
+                serde_json::to_value(cause).unwrap(),
+                serde_json::json!(cause.as_str())
+            );
+        }
     }
 }

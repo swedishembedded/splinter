@@ -14,6 +14,8 @@ use splinter_agent::work::WorkProtocol;
 use splinter_agent::CancelToken;
 use splinter_core::digest::{canonical_json, Digest};
 use splinter_core::experience::Provenance;
+use splinter_core::factory::group::Truncation;
+use splinter_core::factory::truncation;
 use splinter_core::model_ref::ModelRef;
 use splinter_eval::verifiers::verify_and_annotate;
 use splinter_factory::run::corpus::file_calls;
@@ -291,6 +293,15 @@ impl Run<'_> {
         }
         let (mut solution, report) = match solved {
             Ok(solved) => solved,
+            // A conversation that outgrew the served context is not the
+            // infrastructure's failure: running it again outgrows it again.
+            Err(e) if truncation::of_error(&e.to_string()).is_some() => {
+                record.outcome = EpisodeOutcome::Ungraded {
+                    status: Truncation::Context.as_str().into(),
+                    detail: e.to_string(),
+                };
+                return Ok(Some(record));
+            }
             Err(e) => return infrastructure(record, e.to_string()),
         };
         if let Some(path) = log {

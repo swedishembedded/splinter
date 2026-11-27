@@ -20,6 +20,8 @@
 //! * [`group`] - a group of rollouts of one task in an online run: its key,
 //!   lifecycle and rollout outcomes.
 //! * [`trial`] - how one executed trial ended: the one outcome classifier.
+//! * [`truncation`] - which limit ended an agent's run early, wherever it
+//!   ran: the one truncation classifier.
 //! * [`product`] - trial results, datasets, model candidates and evaluation
 //!   results.
 //! * [`schemas`] - the JSON Schema of every contract, by its schema name.
@@ -36,3 +38,4 @@ pub mod product;
 pub mod schemas;
 pub mod task;
 pub mod trial;
+pub mod truncation;

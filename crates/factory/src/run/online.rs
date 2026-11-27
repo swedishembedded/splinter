@@ -584,6 +584,7 @@ fn report(trained: &Trained, started: Instant) -> Value {
         "rollouts": {
             "finished": stats.rollouts_finished, "unscored": stats.rollouts_unscored,
             "not_exact": stats.rollouts_not_exact, "truncated": stats.rollouts_truncated,
+            "truncations": stats.truncations,
             "failures": stats.rollout_failures, "abandoned": stats.rollouts_abandoned,
         },
         "backpressure_seconds": stats.backpressure_ms as f64 / 1000.0,

@@ -94,6 +94,9 @@ pub struct Stats {
     /// Finished rollouts that hit a length limit: counted in the reward
     /// statistics, never sent (a learner trains none of them).
     pub rollouts_truncated: u64,
+    /// Finished rollouts a limit ended before their agent finished, by cause
+    /// (scored failures, never retried).
+    pub truncations: BTreeMap<String, u64>,
     /// Infrastructure failures of rollouts (each retried or abandoned).
     pub rollout_failures: u64,
     /// Rollouts abandoned after their retry budget.

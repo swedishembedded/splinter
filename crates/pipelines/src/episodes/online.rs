@@ -42,10 +42,11 @@ use std::time::Duration;
 
 use splinter_agent::CancelToken;
 use splinter_core::digest::Digest;
-use splinter_core::factory::group::{RolloutOutcome, VersionSpan};
+use splinter_core::factory::truncation;
 use splinter_core::harness::RecordedCalls;
 use splinter_core::model_ref::ModelRef;
 use splinter_data::calls::{project_calls, CallProjection, Sampler};
+use splinter_factory::online::rollout::rollout_of;
 use splinter_factory::online::seams::{
     ExecutorError, FinishedRollout, OnlineRollouts, RolloutEnd, RolloutExecutor, RolloutRequest,
     RolloutsRequest, RunClock, SystemRunClock,
@@ -195,8 +196,18 @@ impl Shared<'_> {
         }
     }
 
-    /// How a recorded episode ended, as a rollout's result.
+    /// How a recorded episode ended, as a rollout's result. An episode a
+    /// limit ended (its conclusion, or a server that refused its context) is
+    /// a scored failure with its cause, never an infrastructure failure.
     fn finished(&self, record: &EpisodeRecord) -> Result<FinishedRollout, String> {
+        let truncation = record
+            .conclusion
+            .as_deref()
+            .and_then(truncation::of_conclusion)
+            .or_else(|| match &record.outcome {
+                EpisodeOutcome::Ungraded { detail, .. } => truncation::of_error(detail),
+                _ => None,
+            });
         let reward = match &record.outcome {
             EpisodeOutcome::Passed | EpisodeOutcome::Failed | EpisodeOutcome::Exposed => {
                 record.outcome.reward()
@@ -212,10 +223,15 @@ impl Shared<'_> {
                 return Err(format!("the episode could not run: {detail}"))
             }
         };
-        let id = record
-            .experience
-            .as_ref()
-            .ok_or("a graded episode kept no experience")?;
+        let Some(id) = record.experience.as_ref() else {
+            // A run the server refused for its context kept no trajectory:
+            // its calls cannot be paired, so it is a failure that trains
+            // nothing.
+            return match truncation {
+                Some(cause) => rollout_of(reward, Some(cause), &CallProjection::default()),
+                None => Err("a graded episode kept no experience".into()),
+            };
+        };
         let experience = self
             .ctx
             .experiences()
@@ -226,37 +242,8 @@ impl Shared<'_> {
             .and_then(|recorded| recorded.calls())
             .unwrap_or_default();
         let projection = project_calls(trajectory, &calls, &self.sampler);
-        rollout_of(reward, &projection)
+        rollout_of(reward, truncation, &projection)
     }
-}
-
-/// The rollout `projection` is, rewarded `reward`.
-fn rollout_of(reward: Option<f64>, projection: &CallProjection) -> Result<FinishedRollout, String> {
-    let exact = projection.exact();
-    // A rollout with no span is not exact and is never sent; its span is
-    // then only a placeholder.
-    let span = match projection.span {
-        Some((oldest, newest)) => VersionSpan::new(oldest, newest).map_err(|e| e.to_string())?,
-        None => VersionSpan::at(0),
-    };
-    let mut records = String::new();
-    if exact {
-        for record in &projection.records {
-            let line = serde_json::to_string(record).map_err(|e| format!("a call record: {e}"))?;
-            records.push_str(&line);
-            records.push('\n');
-        }
-    }
-    Ok(FinishedRollout {
-        outcome: RolloutOutcome {
-            reward,
-            tokens: projection.tokens,
-            span,
-            exact,
-            truncated: projection.truncated,
-        },
-        records,
-    })
 }
 
 /// The online run's executor: rollouts on threads of `scope`, their ends on

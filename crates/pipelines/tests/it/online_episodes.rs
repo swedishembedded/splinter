@@ -60,6 +60,9 @@ struct Served {
     drop_last_identity: bool,
     /// Never answer: the rollout runs until it is cancelled.
     hang: bool,
+    /// Refuse every request after a rollout's first as longer than the
+    /// served context, as a server does a conversation that outgrew it.
+    refuse_context: bool,
     asked: AtomicU64,
     saw_top: AtomicBool,
     temperatures: std::sync::Mutex<Vec<Option<f64>>>,
@@ -72,6 +75,7 @@ impl Served {
             publish_mid_rollout: false,
             drop_last_identity: false,
             hang: false,
+            refuse_context: false,
             asked: AtomicU64::new(0),
             saw_top: AtomicBool::new(false),
             temperatures: std::sync::Mutex::new(Vec::new()),
@@ -97,6 +101,11 @@ impl ModelProvider for Served {
             tokio::time::sleep(Duration::from_secs(600)).await;
         }
         let first = tool_calls(&req).is_empty() && request_of(&req).contains("greeting.txt");
+        if self.refuse_context && !first {
+            anyhow::bail!(
+                "server error (context_length_exceeded): the request needs 9000 tokens of a 8192 context"
+            );
+        }
         let version = self.version.load(Ordering::SeqCst);
         let answer = if first {
             if self.publish_mid_rollout {
@@ -433,5 +442,39 @@ fn a_cutting_sampler_is_refused_and_a_cancelled_run_stops_its_rollouts() {
     assert!(
         started.elapsed() < Duration::from_secs(60),
         "the run returned once cancelled"
+    );
+}
+
+#[test]
+fn a_conversation_that_outgrew_the_context_is_a_scored_failure_never_retried() {
+    let s = setup(
+        "online-context",
+        Served {
+            refuse_context: true,
+            ..Served::new(2)
+        },
+        false,
+    );
+    let ends = run_online(
+        &s.ctx,
+        s.tasks.clone(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
+        settings(&s.work, OnlineSampling::untruncated(1.0)),
+        &SystemRunClock,
+        |executor| rollouts(executor, &s.tasks[0], 1),
+    )
+    .unwrap();
+    let done = ends[0]
+        .result
+        .as_ref()
+        .expect("a limit is an outcome, not an infrastructure failure the controller retries");
+    assert_eq!(done.outcome.reward, Some(0.0), "{done:?}");
+    assert_eq!(
+        done.outcome.truncation,
+        Some(splinter_core::factory::group::Truncation::Context)
+    );
+    assert!(
+        !done.outcome.exact && done.records.is_empty(),
+        "the refused run kept no trajectory to pair its calls with: {done:?}"
     );
 }

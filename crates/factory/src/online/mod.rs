@@ -19,10 +19,13 @@
 //!   it takes effect, resumable after a crash at any point.
 //! * [`stats`] - what a run reports.
 //! * [`brain`] - the learner on brain's streaming policy-gradient job.
+//! * [`rollout`] - a finished rollout from its projected model calls, the
+//!   same for every executor.
 
 pub mod brain;
 pub mod control;
 pub mod driver;
+pub mod rollout;
 pub mod seams;
 pub mod stats;
 

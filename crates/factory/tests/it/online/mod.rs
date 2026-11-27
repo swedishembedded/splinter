@@ -56,6 +56,7 @@ fn outcome(reward: Option<f64>, tokens: u64, version: u64, exact: bool) -> Rollo
         span: VersionSpan::at(version),
         exact,
         truncated: false,
+        truncation: None,
     }
 }
 
