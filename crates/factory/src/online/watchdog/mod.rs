@@ -101,6 +101,10 @@ pub struct Version {
     /// it: what an evaluation asks.
     #[serde(default)]
     pub id: Option<String>,
+    /// Its adapter in the learner's artifact store: what a rollback to it
+    /// starts the next run from.
+    #[serde(default)]
+    pub artifact: Option<String>,
 }
 
 /// One task attempted by both policies of a comparison.
@@ -285,6 +289,7 @@ impl<'a> Watchdog<'a> {
             version: latest.version,
             digest: latest.digest.clone(),
             id: latest.version_id.clone(),
+            artifact: latest.artifact.clone(),
         };
         if self.anchor.is_none() {
             self.anchor = Some(latest.clone());

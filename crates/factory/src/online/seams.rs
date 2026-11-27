@@ -382,6 +382,10 @@ pub struct PublishedVersion {
     /// it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_id: Option<String>,
+    /// Its adapter in the learner's artifact store, while the learner keeps
+    /// it: what a later run can start from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<String>,
 }
 
 impl LearnerTelemetry {

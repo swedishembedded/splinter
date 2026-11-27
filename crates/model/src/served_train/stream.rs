@@ -200,6 +200,9 @@ pub enum StreamEvent {
         /// The id this version alone is served under while brain retains
         /// it, when the run asked it to retain versions.
         version_id: Option<String>,
+        /// The version's adapter in the artifact store (BLAKE3 hex), when
+        /// brain retains it.
+        artifact_digest: Option<String>,
     },
     /// These groups were too far behind and dropped unapplied.
     Dropped {
@@ -621,6 +624,7 @@ impl StreamJob {
                         step: number("step"),
                         lineage,
                         version_id: frame["version_id"].as_str().map(str::to_owned),
+                        artifact_digest: frame["artifact_digest"].as_str().map(str::to_owned),
                     });
                 }
                 "dropped" => events.push(StreamEvent::Dropped { groups: groups() }),

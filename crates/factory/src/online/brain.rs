@@ -216,6 +216,7 @@ impl Learner for BrainLearner {
                     step,
                     lineage,
                     version_id,
+                    artifact_digest,
                 } => {
                     // A job that continues the run publishes, before it trains, the policy its checkpoint
                     // holds: that version is committed.
@@ -232,6 +233,7 @@ impl Learner for BrainLearner {
                         step,
                         lineage,
                         version_id,
+                        artifact: artifact_digest,
                     });
                     events.push(LearnerEvent::Published { version });
                 }

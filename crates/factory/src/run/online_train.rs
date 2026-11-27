@@ -225,10 +225,16 @@ fn train_in<'s, 'e>(
             Some(anchor) if epoch > 0 => {
                 let path = stage.work().join(format!("anchor-e{epoch}.safetensors"));
                 if !path.is_file() {
+                    let artifact = anchor.artifact.as_deref().ok_or_else(|| {
+                        stage.fail(format!(
+                            "the anchor, version {}, is in no artifact store: the learner kept no versions",
+                            anchor.version
+                        ))
+                    })?;
                     stage
                         .trainer
-                        .published_adapter(&anchor.digest, &path)
-                        .map_err(|e| stage.fail(format!("the anchor {}: {e}", anchor.digest)))?;
+                        .published_adapter(artifact, &path)
+                        .map_err(|e| stage.fail(format!("the anchor {artifact}: {e}")))?;
                 }
                 Some(path)
             }

@@ -125,6 +125,7 @@ impl World {
             step: version,
             lineage: None,
             version_id: None,
+            artifact: None,
         });
     }
 
@@ -231,6 +232,7 @@ fn an_invariant_pauses_intake_and_never_rolls_back_and_drift_asks_for_an_evaluat
         version: 1,
         digest: String::new(),
         id: None,
+        artifact: None,
     });
 
     // Version 3 is not yet due for an evaluation (every 2 after version 2),

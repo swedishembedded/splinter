@@ -489,6 +489,7 @@ fn advance(
                     run.doc["publish_adapter"].as_str().unwrap_or_default(),
                     durable.version
                 ));
+                frame["artifact_digest"] = json!(digest.hex());
             }
             push(run, frame);
         }

@@ -56,6 +56,7 @@ impl Learner for Telemetered<'_> {
                     step: *version,
                     lineage: None,
                     version_id: None,
+                    artifact: None,
                 });
             }
         }
