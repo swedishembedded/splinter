@@ -84,9 +84,10 @@ pub struct ViewArgs {
 /// `fork`.
 #[derive(Debug, Args)]
 pub struct ForkArgs {
-    /// The run whose products are reused.
-    #[arg(value_name = "RUN")]
-    pub run: PathBuf,
+    /// The runs whose products are reused: a stage is taken from the first
+    /// run that committed its identity, in the order given.
+    #[arg(value_name = "RUN", required = true, num_args = 1..)]
+    pub runs: Vec<PathBuf>,
     /// The changed recipe, relative to the task repository.
     #[arg(long, value_name = "RECIPE")]
     pub recipe: PathBuf,

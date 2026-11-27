@@ -954,6 +954,27 @@ base model.
 splinter fork runs/vim-g1 --recipe recipes/vim-g2.yaml --out runs/vim-g2
 ```
 
+A fork may reuse the products of several runs: `splinter fork RUN [RUN ...]
+--recipe R --out OUT`. Each stage of the recipe whose identity one of the runs
+committed is reused from the first run, in the order given, that holds it;
+every other stage is computed. This lets a generation's material (authored
+tasks, teacher attempts), which does not depend on the champion before it, be
+produced in a run of its own, in parallel with the generation it follows,
+and then joined with that generation's lineage:
+
+```sh
+splinter fork runs/vim-g1 runs/vim-g2-material --recipe recipes/vim-g2.yaml --out runs/vim-g2
+```
+
+The new run's `fork.json` names, for every product the fork brought in, its
+stage identity, its stage key and the run it came from. A product's digest
+(which includes when it was committed) is an input of every stage
+downstream of it, so the runs must share their upstream products: start the
+material run as a fork of a run the lineage descends from too. A stage the
+runs computed apart (a task pin each made for itself) is taken from the first,
+and the fork warns that the stages a later run computed downstream of it are
+not reused.
+
 `champion:RUN` names the run directory, relative to the task repository or
 absolute. The champion is served from its base and adapter wherever an agent's
 model role goes, and it is never trained from (a `model.train` base or a

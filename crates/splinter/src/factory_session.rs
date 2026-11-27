@@ -338,23 +338,29 @@ pub fn cancel(dir: &Path) -> Result<Exit, Error> {
 /// `fork`.
 pub fn fork(config: &Config, json: bool, args: &ForkArgs) -> Result<Exit, Error> {
     let resolved = resolve_recipe(config, &args.recipe).map_err(refused)?;
-    let forked = run::fork(&args.run, &args.out).map_err(refused)?;
-    report_fork(&forked, &args.run);
+    let sources: Vec<&Path> = args.runs.iter().map(PathBuf::as_path).collect();
+    let forked = run::fork_from(&sources, &args.out).map_err(refused)?;
+    report_fork(&forked, &sources);
     execute(config, json, &resolved, &args.out)
 }
 
-/// Says what a fork brought over; copying is said, as it is the slow path.
-fn report_fork(forked: &run::Forked, source: &Path) {
-    eprintln!(
-        "reusing {} products of {} ({} blobs linked)",
-        forked.products,
-        source.display(),
-        forked.blobs_linked
-    );
+/// Says what a fork brought over from each source; copying is said, as it
+/// is the slow path, and so is a stage two sources computed apart, as what
+/// is downstream of it in the later one is not reused.
+fn report_fork(forked: &run::Forked, sources: &[&Path]) {
+    for (source, products) in sources.iter().zip(&forked.per_source) {
+        eprintln!("reusing {products} products of {}", source.display());
+    }
+    eprintln!("{} blobs linked", forked.blobs_linked);
     if forked.blobs_copied > 0 {
         eprintln!(
-            "warning: {} blobs could not be linked and were copied (is the output on another file system than {}?)",
+            "warning: {} blobs could not be linked and were copied (is the output on another file system than its sources?)",
             forked.blobs_copied,
+        );
+    }
+    for (stage, source) in &forked.conflicts {
+        eprintln!(
+            "warning: {} holds another product of stage {stage} than the one reused; the stages it computed downstream of {stage} are not reused (fork the sources from a common run so they share it)",
             source.display()
         );
     }
@@ -372,7 +378,7 @@ pub fn eval(
     let resolved =
         splinter_sdk::factory::resolve_run_under_plan(config, dir, plan).map_err(refused)?;
     let forked = run::fork(dir, out).map_err(refused)?;
-    report_fork(&forked, dir);
+    report_fork(&forked, &[dir]);
     execute(config, json, &resolved, out)
 }
 

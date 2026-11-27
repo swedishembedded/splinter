@@ -87,8 +87,8 @@ pub enum Command {
     /// Open a factory run in the browser: every stage's product, item and file, and decisions written to
     /// a review file (--reviews)
     View(ViewArgs),
-    /// Start a factory run on a changed recipe, reusing the products of an
-    /// earlier run that the change leaves unchanged.
+    /// Start a factory run on a changed recipe, reusing the products of one
+    /// or more earlier runs that the change leaves unchanged.
     Fork(ForkArgs),
     /// Print a factory run's report.
     Report(RunDirArgs),

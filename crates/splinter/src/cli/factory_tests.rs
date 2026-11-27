@@ -47,6 +47,14 @@ fn a_run_directory_is_resumed_cancelled_inspected_forked_reported_and_exported()
         command(&["fork", "runs/x", "--recipe", "r.yaml", "--out", "runs/y"]),
         Command::Fork(_)
     ));
+    assert!(matches!(
+        command(&["fork", "runs/x", "runs/m", "--recipe", "r.yaml", "--out", "runs/y"]),
+        Command::Fork(a) if a.runs.len() == 2
+    ));
+    assert!(
+        Cli::try_parse_from(["splinter", "fork", "--recipe", "r.yaml", "--out", "runs/y"]).is_err(),
+        "a fork needs a run"
+    );
     assert!(matches!(command(&["report", "runs/x"]), Command::Report(_)));
     assert!(matches!(command(&["index", "runs/x"]), Command::Index(_)));
     assert!(matches!(

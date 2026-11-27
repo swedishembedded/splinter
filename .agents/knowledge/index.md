@@ -219,3 +219,4 @@ in the same commit.
 | [231](231-a-shuffled-request-control-separates-trajectory-content-from-tool-format-exposure.md) | A shuffled-request control separates what trajectories teach from exposure to the tool's format |
 | [232](232-a-request-log-that-is-not-one-conversation-was-trained-as-a-context-the-model-never-saw.md) | A request log that did not read as one conversation was trained as a context the model never saw |
 | [233](233-a-run-stopped-during-an-evaluation-could-not-be-continued-by-the-same-command.md) | A run stopped during an evaluation could not be continued by the same command: the dead batch kept its sandbox |
+| [234](234-a-stage-computed-again-in-another-run-is-not-the-product-its-downstream-stages-were-keyed-on.md) | A stage computed again in another run is another product, so the stages downstream of it were not reused by a fork |

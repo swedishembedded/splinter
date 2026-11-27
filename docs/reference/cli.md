@@ -94,7 +94,7 @@ Every command takes these.
 - [splinter cancel](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
 - [splinter inspect](#splinter-inspect) - Show a factory run's products and reports, or open its trials
 - [splinter view](#splinter-view) - Open a factory run in the browser
-- [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+- [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
 - [splinter report](#splinter-report) - Print a factory run's report
 - [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
 - [splinter index](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -244,7 +244,7 @@ Subcommands:
 - [`cancel`](#splinter-cancel) - Ask a running factory run to stop at its next stage or batch
 - [`inspect`](#splinter-inspect) - Show a factory run's products and reports, or open its trials
 - [`view`](#splinter-view) - Open a factory run in the browser
-- [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+- [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
 - [`report`](#splinter-report) - Print a factory run's report
 - [`export`](#splinter-export) - Write a factory run's products as a portable bundle
 - [`index`](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -467,15 +467,15 @@ Options:
 
 ### splinter fork
 
-Start a factory run on a changed recipe, reusing the products of an earlier run that the change leaves unchanged
+Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
 
 ```text
-splinter fork [OPTIONS] --recipe <RECIPE> --out <DIR> <RUN>
+splinter fork [OPTIONS] --recipe <RECIPE> --out <DIR> <RUN>...
 ```
 
 Arguments:
 
-- `<RUN>` (required): The run whose products are reused.
+- `<RUN>...` (required): The runs whose products are reused: a stage is taken from the first run that committed its identity, in the order given.
 
 Options:
 
