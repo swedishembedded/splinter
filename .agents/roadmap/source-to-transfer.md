@@ -316,6 +316,17 @@ Exams, held-out tasks and the champion are as registered; promotion is decided o
 Runs: 4B loop-g2-v2 (n547), 8B loop-g2-8b-v2 (n541), started 14:15-14:20; generation 3 v2 follows from generation 2 v2's
 release under the same rules.
 
+## Loop v2, generation 3: failed actions unsupervised (2026-11-27 14:45, recorded before any generation-3 v2 result)
+
+Generation 3 v2's two new datasets (teacher-only, and the champion's one per task) project with `supervise: productive`: an
+action whose tool calls all failed stays in the record as context, unsupervised; the action that recovers and the final answer
+stay supervised. Generation 2 v2 was already training with every action supervised and stays as recorded. Why, measured on the
+8B datasets and exam trajectories (`building-blocks.py`): 70-80% of training records contain a tool error and recover from it,
+so recovery is in the data, but with every action supervised the failed attempts are trained too (19-30 records teach the
+broken `:put text` form before its fix); after a first error the student re-reads the file in 9-10% of exam trajectories
+against the teacher's 27%. The tool keeping a failed command's edits is Vim's own behaviour, which the agent must learn to
+recover from: the training target is the recovery, not the failure.
+
 ## Further mitigation (2026-11-27; planned, not run)
 
 In order of effect per hour:
