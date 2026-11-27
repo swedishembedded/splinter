@@ -246,11 +246,16 @@ pub(crate) fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
         .collect()
 }
 
-/// The prompt and generated ids an agent step trains, from its `extra.sven`
-/// facts `sven` and its trace's `prompt` and `completion` ids: the server's
-/// record of what it sampled (`sampled`, the exact text the server sent)
-/// when the step kept one, else the trace's. `None` when the step has
-/// neither.
+/// The prompt and generated ids an agent step trains: its trace's `prompt`
+/// and `completion` ids, when the server's record of what it sampled
+/// (`sampled` in its `extra.sven` facts `sven`, the exact text the server
+/// sent) names them too, or the step kept no record. `None` when the step
+/// traced no ids.
+///
+/// The record names the generated ids (`token_ids`) and the prompt by its
+/// length (`context_len`), its digest (`context_hash`, the sha256 of the ids
+/// as little-endian u32) and the generation header it ends with
+/// (`prefill_token_ids`).
 ///
 /// # Errors
 /// [`ProxyReason::SampledDiffers`] when the record cannot be read or names
@@ -261,12 +266,12 @@ pub(crate) fn trained_ids(
     prompt: Option<&[i64]>,
     completion: Option<&[i64]>,
 ) -> Result<Option<StepIds>, ProxyReason> {
-    let traced = match (prompt, completion) {
-        (Some(prompt), Some(completion)) => Some((token_ids(prompt)?, token_ids(completion)?)),
-        _ => None,
+    let (Some(prompt), Some(completion)) = (prompt, completion) else {
+        return Ok(None);
     };
+    let ids = (token_ids(prompt)?, token_ids(completion)?);
     let Some(record) = sven.and_then(|s| s.get("sampled")) else {
-        return Ok(traced);
+        return Ok(Some(ids));
     };
     let record: Value = match record {
         Value::String(text) => {
@@ -274,24 +279,35 @@ pub(crate) fn trained_ids(
         }
         other => other.clone(),
     };
-    let ids = |key: &str| {
-        record
-            .get(key)
-            .and_then(Value::as_str)
-            .ok_or(ProxyReason::SampledDiffers)
-            .and_then(|text| decode_ids(text).map_err(|_| ProxyReason::SampledDiffers))
-    };
-    let sampled = (ids("prefill_token_ids")?, ids("token_ids")?);
-    match traced {
-        Some(traced) if traced != sampled => Err(ProxyReason::SampledDiffers),
-        _ => Ok(Some(sampled)),
+    if names(&record, &ids).unwrap_or(false) {
+        Ok(Some(ids))
+    } else {
+        Err(ProxyReason::SampledDiffers)
     }
+}
+
+/// Whether the server's sampled `record` names the step's `(prompt,
+/// generated)` ids; `None` when it lacks a field.
+fn names(record: &Value, (prompt, generated): &StepIds) -> Option<bool> {
+    use sha2::Digest as _;
+    let ids = |key: &str| decode_ids(record.get(key)?.as_str()?).ok();
+    let mut hasher = sha2::Sha256::new();
+    for id in prompt {
+        hasher.update(id.to_le_bytes());
+    }
+    let hash = format!("sha256:{:x}", hasher.finalize());
+    Some(
+        ids("token_ids")? == *generated
+            && prompt.ends_with(&ids("prefill_token_ids")?)
+            && record.get("context_len")?.as_u64()? == prompt.len() as u64
+            && record.get("context_hash")?.as_str()? == hash,
+    )
 }
 
 /// The ids of a reply's `sampled` record (a brain server's `token_ids` and
 /// `prefill_token_ids`): each id an unsigned LEB128 varint, the run
-/// base64-encoded. These are the ids a merged session trains, the ones the
-/// server spliced into every later prompt.
+/// base64-encoded. The generated ids are the ones the server splices into
+/// every later prompt.
 ///
 /// # Errors
 /// The text is not base64, a varint is cut off or longer than an id.

@@ -397,16 +397,19 @@ fn a_sampled_records_ids_decode() {
     );
 }
 
-/// A call trains the ids the server's `sampled` record names (kept as the
-/// exact text it sent): ids the record agrees with are exact, and a record
-/// naming other ids than the call's trace leaves the call untrained.
+/// A call trains its traced ids when the server's `sampled` record (kept as
+/// the exact text it sent) names them too: generated ids, and the prompt by
+/// length, digest and generation header. A record naming other ids leaves
+/// the call untrained.
 #[test]
 fn a_call_trains_the_ids_its_sampled_record_names() {
+    // The sha256 of the prompt ids 1, 2, 7, 8, 9 as little-endian u32.
+    const CONTEXT_HASH: &str = "4e4166f2e43c7b261d18887d3b23b1b3d61cfa5c19e39b2f76d37c0d55bf70a6";
     let project = |token_ids: &str| {
         let first = request(&[1, 2], &[7, 8], "4");
         let mut second = request(&[1, 2, 7, 8, 9], &[5], "3");
         second["sampled"] = json!(format!(
-            r#"{{"token_ids":"{token_ids}","prefill_token_ids":"AQIHCAk=","finish":"stop"}}"#
+            r#"{{"token_ids":"{token_ids}","prefill_token_ids":"CQ==","context_len":5,"context_hash":"sha256:{CONTEXT_HASH}","finish":"stop"}}"#
         ));
         let trajectory = with_span(
             trajectory(vec![

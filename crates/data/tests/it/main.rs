@@ -11,6 +11,7 @@
 mod common;
 
 mod attempt_pairs;
+mod brain_session;
 mod chat_tools;
 mod corrections;
 mod dataset;
