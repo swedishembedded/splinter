@@ -717,6 +717,53 @@ compiles its collection evaluates on the same compiled tasks:
   `selector` holds each task's posterior. The default, `round_robin`, takes the tasks in turn.
   Its statistics are the run's own rollouts of the current epoch alone.
 
+  `watchdog` (off by default) watches the training and rolls it back when it moves the policy
+  the wrong way; it needs two held-out task inputs, `monitor` (the pool its evaluations draw
+  from) and `confirm` (sealed, read only before a promotion), neither of which the task
+  selector sees. Three layers: `bounds` are fixed invariants (a non-finite step figure, the
+  share of the last `window` steps the trainer's guard skipped, the largest importance ratio, a
+  version's truncation and infrastructure-failure rates once it has `min_rollouts`); a new
+  breach pauses intake and asks for an evaluation, never rolls back by itself. `drift` runs a
+  one-sided cumulative sum per signal (entropy falling, false completions or repeated calls
+  rising, reward falling) on each version's change from the mean of the promoted versions
+  (`reference_window` of them, `slack` absorbed per version, an alarm past `threshold`); an
+  alarm asks for an evaluation at once. Evaluations run every `evaluate_every` published
+  versions: the newest version and the anchor (the last promoted, at first the version the
+  epoch started from), each a frozen copy of its published adapter served by digest, attempt
+  the same `monitor_size` tasks drawn afresh (a task at most `max_uses` times per epoch); a test
+  martingale on the discordant pairs rolls back on evidence of a regression larger than
+  `test.delta` (error `test.alpha`), and promotes on evidence the candidate is not worse by
+  `delta` (error `test.beta`) once the confirm set shows no regression; each comparison
+  spends half of what is left of `alpha` and `beta`, and one that reads `max_discordant`
+  pairs undecided decides nothing. A rollback ends the epoch: the epoch's untrained groups are
+  rolled back, never trained, the next learner starts from the anchor's adapter with fresh
+  optimiser state and its `params.lr` multiplied by `cooldown` per rollback, and the stage
+  halts after `max_rollbacks`. Each rollback's audit (trigger, evidence, anchor, groups
+  discarded) is a line of `groups.jsonl` and is in `report.json` `watchdog.audits`; the epochs
+  are kept in `work/<stage>/epochs.json`.
+  ```yaml
+  - id: online
+    uses: train.online
+    inputs: { tasks: $stages.tasks.tasks, monitor: $stages.monitor.tasks, confirm: $stages.confirm.tasks }
+    with:
+      base: student
+      groups: 256
+      rollout_tokens: 4096
+      step_tokens: 16384
+      queue_tokens: 65536
+      seed: 1
+      watchdog:
+        bounds: { guard_skip_rate: 0.25, ratio_max: 10, truncation_rate: 0.5, infra_failure_rate: 0.3,
+                  window: 8, min_rollouts: 16 }
+        drift: { slack: 0.05, threshold: 0.3, reference_window: 3 }
+        test: { delta: 0.2, alpha: 0.05, beta: 0.1, max_discordant: 60 }
+        evaluate_every: 4
+        monitor_size: 32
+        max_uses: 3
+        max_rollbacks: 2
+        cooldown: 0.5
+  ```
+
   `pin_versions: true` trains only rollouts one policy version decoded from their first request
   to their last (a rollout that straddles a publication is scored and counted in
   `rollouts.version_mixed`, never trained); size `publish_every` so a version outlives a

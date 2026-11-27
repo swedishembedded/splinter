@@ -40,7 +40,6 @@ use std::time::Instant;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use splinter_core::clock::unix_now;
 use splinter_core::factory::execution::{FileRef, Isolation};
 use splinter_core::factory::group::GroupState;
 use splinter_core::factory::identity::StageIdentity;
@@ -51,27 +50,21 @@ use splinter_core::factory::product::{CandidateKind, ModelCandidate, CANDIDATE_S
 use splinter_core::revision::{ModelDigests, REVISIONS_FILE};
 use splinter_store::factory::products::Staging;
 
+use super::online_train::{self, Trained};
 use super::online_worker::{self, OnlineAgent};
 use super::training::CANDIDATE_FILE;
-use super::{io, stage_error, write_json, Factory, RunError, LEASE_SECONDS};
-use crate::online::driver::{run, Ended, OnlineError, Report, RunLedger, Seams};
-use crate::online::frontier::{Selector, SelectorKind};
-use crate::online::group_log::{GroupLog, LoggedLedger, GROUPS_FILE};
-use crate::online::health::VersionSeries;
-use crate::online::seams::{
-    GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RunClock, StreamLearner,
-    SystemRunClock,
-};
+use super::{io, stage_error, write_json, Factory, RunError};
+use crate::online::frontier::SelectorKind;
+use crate::online::group_log::GROUPS_FILE;
+use crate::online::seams::{LearnerTelemetry, OnlineRollouts};
+use crate::online::watchdog::WatchdogSettings;
 use crate::online::Settings;
 use crate::plan::PlannedStage;
 use crate::registry::OperationSpec;
-use crate::training::{sha256, OnlineTrain};
+use crate::training::sha256;
 
 /// The operation's name.
 pub const ONLINE: &str = "train.online";
-
-/// How many times a restarted job is started again before the stage fails.
-const RESTARTS: u32 = 8;
 
 fn one() -> u32 {
     1
@@ -153,6 +146,13 @@ pub struct OnlineParams {
     /// straddle one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pin_versions: bool,
+    /// Watch the training and roll it back when it moves the policy the
+    /// wrong way: invariants pause intake, drift asks for an evaluation,
+    /// and a paired evaluation of the newest version against the anchor on
+    /// the held-out `monitor` tasks (the `confirm` tasks before a promotion)
+    /// decides. Unset, nothing watches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watchdog: Option<WatchdogSettings>,
     /// Run each rollout on the execution worker, in its task's own
     /// environment, with this agent: the tools, configuration and sandbox
     /// the task declares, exactly as an attempt pass runs it. Unset, each
@@ -218,13 +218,16 @@ impl OnlineParams {
         if let Some(agent) = &p.agent {
             agent.check()?;
         }
+        if let Some(watchdog) = &p.watchdog {
+            watchdog.validate().map_err(|e| format!("watchdog: {e}"))?;
+        }
         if p.groups == 0 || p.publish_every == 0 {
             return Err("groups and publish_every are at least 1".into());
         }
         Ok(p)
     }
 
-    fn settings(&self, namespace: &str) -> Settings {
+    pub(super) fn settings(&self, namespace: &str) -> Settings {
         Settings {
             namespace: namespace.to_string(),
             group_size: self.group_size,
@@ -243,7 +246,7 @@ impl OnlineParams {
 
     /// The learner's settings beside the stream: the estimator and what the
     /// recipe named.
-    fn learner_params(&self) -> Map<String, Value> {
+    pub(super) fn learner_params(&self) -> Map<String, Value> {
         let mut params = self.params.clone();
         params.insert("estimator".into(), json!(self.estimator));
         // The rollouts ask the policy for no reasoning block, so each answer was sampled after the template's closed
@@ -266,6 +269,17 @@ impl OperationSpec for Online {
                 Port {
                     optional: true,
                     ..port("start", ArtifactKind::Model)
+                },
+                // The watchdog's held-out tasks: the monitor pool its
+                // evaluations draw from, the confirm set read before a
+                // promotion.
+                Port {
+                    optional: true,
+                    ..port("monitor", ArtifactKind::Tasks)
+                },
+                Port {
+                    optional: true,
+                    ..port("confirm", ArtifactKind::Tasks)
                 },
             ],
             outputs: vec![port("model", ArtifactKind::Model)],
@@ -293,7 +307,18 @@ fn inputs_of(
     stage: &PlannedStage,
 ) -> Result<Vec<(String, splinter_core::digest::Digest)>, RunError> {
     let mut inputs = Vec::new();
-    for key in std::iter::once(tasks_key(stage)?).chain(stage.source("start").map(str::to_owned)) {
+    let held_out = ["monitor", "confirm"].map(|port| stage.source(port).map(str::to_owned));
+    let params = OnlineParams::of(&stage.params).map_err(|e| stage_error(&stage.key, e))?;
+    if params.watchdog.is_some() && held_out.iter().any(Option::is_none) {
+        return Err(stage_error(
+            &stage.key,
+            "a watchdog evaluates on held-out tasks: give the stage monitor and confirm inputs",
+        ));
+    }
+    for key in std::iter::once(tasks_key(stage)?)
+        .chain(stage.source("start").map(str::to_owned))
+        .chain(held_out.into_iter().flatten())
+    {
         inputs.push((key.clone(), factory.product(&key)?.1.digest()));
     }
     Ok(inputs)
@@ -380,18 +405,6 @@ pub(crate) fn identity(
     ))
 }
 
-/// What the stage's learner and controller came to.
-struct Trained {
-    report: Report,
-    telemetry: LearnerTelemetry,
-    learner: Box<dyn StreamLearner>,
-    restarts: u32,
-    /// The rollouts each policy version decoded, as the group log saw them.
-    series: VersionSeries,
-    /// What the task selector knew at the end.
-    selector: Value,
-}
-
 pub(crate) fn produce(
     factory: &Factory<'_>,
     stage: &PlannedStage,
@@ -421,7 +434,6 @@ pub(crate) fn produce(
     let scratch = factory.work(&stage.key).join("rollouts");
     let groups_log = factory.work(&stage.key).join(GROUPS_FILE);
     std::fs::create_dir_all(&scratch).map_err(io(&scratch))?;
-    let learner_params = params.learner_params();
     let start = start_adapter(factory, stage, &base)?;
     let arm = match &params.agent {
         Some(agent) => Some(online_worker::arm(
@@ -449,114 +461,28 @@ pub(crate) fn produce(
             .online
             .ok_or_else(|| fail("no online rollouts".into()))?,
     };
-    let mut restarts = 0;
-    let trained = loop {
-        let mut learner = trainer
-            .stream(&OnlineTrain {
-                base: &base,
-                params: &learner_params,
-                resume_key: &tag,
-                checkpoint_every: params.checkpoint_every,
-                publish_adapter: &publish,
-                publish_every: params.publish_every,
-                step_tokens: params.step_tokens,
-                queue_tokens: params.queue_tokens,
-                max_staleness: params.max_staleness,
-                max_steps: params.max_updates,
-                top_k: params
-                    .top_logprobs
-                    .filter(|_| params.estimator == "score-centred"),
-                start: start.as_deref(),
-                job_place: &factory.work(&stage.key).join("stream-job.json"),
-            })
-            .map_err(|e| fail(e.to_string()))?;
-        let served = learner.served_as();
-        let mut outcome: Option<Result<Report, OnlineError>> = None;
-        let mut series = VersionSeries::default();
-        let mut selected: Option<Value> = None;
-        rollouts
-            .run(
-                &RolloutsRequest {
-                    tasks: &tasks,
-                    policy: &served,
-                    temperature: params.temperature,
-                    top_logprobs: params.top_logprobs,
-                    max_output_tokens: params.max_output_tokens,
-                    seed: params.seed,
-                    scratch: &scratch,
-                },
-                &mut |executor, task_ids| {
-                    let selector = Selector::new(
-                        params.selector,
-                        task_ids.to_vec(),
-                        params.groups,
-                        params.seed,
-                    );
-                    let mut selector = match selector {
-                        Ok(selector) => selector,
-                        Err(e) => {
-                            outcome = Some(Err(OnlineError::Control(
-                                crate::online::control::ControlError(e.to_string()),
-                            )));
-                            return;
-                        }
-                    };
-                    let mut ledger = RunLedger::new(
-                        &factory.state,
-                        factory.fence.clone(),
-                        LEASE_SECONDS,
-                        unix_now(),
-                    );
-                    let log = match open_group_log(&groups_log, &mut ledger, &tag) {
-                        Ok(log) => log,
-                        Err(e) => {
-                            outcome = Some(Err(OnlineError::Ledger(e)));
-                            return;
-                        }
-                    };
-                    let mut ledger = LoggedLedger::new(&mut ledger, log);
-                    let cancel = || factory.cancelled().is_err();
-                    outcome = Some(run(
-                        params.settings(&tag),
-                        Seams {
-                            executor,
-                            learner: learner.as_mut(),
-                            selector: &mut selector,
-                            ledger: &mut ledger,
-                            clock: &SystemRunClock,
-                            cancel: &cancel,
-                        },
-                    ));
-                    series = ledger.log().series().clone();
-                    selected = Some(selector.report());
-                },
-            )
-            .map_err(fail)?;
-        match outcome {
-            Some(Ok(report)) if report.ended == Ended::Cancelled => {
-                return Err(RunError::Cancelled)
-            }
-            Some(Ok(report)) => {
-                break Trained {
-                    report,
-                    telemetry: learner.telemetry(),
-                    learner,
-                    restarts,
-                    series,
-                    selector: selected.unwrap_or(Value::Null),
-                }
-            }
-            Some(Err(OnlineError::Learner(e))) if e.restarted && restarts < RESTARTS => {
-                restarts += 1;
-                eprintln!(
-                    "{}: the learner restarted ({}); resuming against it",
-                    stage.key, e.message
-                );
-            }
-            Some(Err(e)) => return Err(fail(e.to_string())),
-            None => return Err(fail("the rollouts never ran".into())),
-        }
+    let held_out = match (stage.source("monitor"), stage.source("confirm")) {
+        (Some(monitor), Some(confirm)) => Some(online_train::HeldOut {
+            monitor: factory.view(monitor),
+            confirm: factory.view(confirm),
+        }),
+        _ => None,
     };
+    let trained = online_train::train(&online_train::Stage {
+        factory,
+        stage,
+        params: &params,
+        base: &base,
+        trainer,
+        rollouts,
+        tasks: &tasks,
+        tag: &tag,
+        publish: &publish,
+        scratch: &scratch,
+        groups_log: &groups_log,
+        start: start.as_deref(),
+        held_out,
+    })?;
     let mut trained = trained;
     let candidate = candidate(factory, stage, &params, &base, &mut trained, staging)?;
     // The code, servers, data and configuration of the run, with the base and
@@ -684,6 +610,7 @@ fn report(trained: &Trained, started: Instant) -> Value {
         "wall_seconds": wall,
         "learner_restarts": trained.restarts,
         "selector": trained.selector,
+        "watchdog": trained.watchdog,
         // Which run-level identity served each version: the weights every
         // rollout of that version was drawn from, named across servers.
         "versions": telemetry.published,
@@ -696,22 +623,6 @@ fn report(trained: &Trained, started: Instant) -> Value {
             "versions": trained.series.summary(),
         },
     })
-}
-
-/// The live log of the stage's groups at `path`, brought up to date with
-/// the ledger's groups of the namespace `namespace`.
-fn open_group_log(
-    path: &std::path::Path,
-    ledger: &mut RunLedger<'_>,
-    namespace: &str,
-) -> Result<GroupLog, crate::online::seams::LedgerError> {
-    let prefix = format!("{namespace}:");
-    let entries: Vec<_> = ledger
-        .load()?
-        .into_iter()
-        .filter(|e| e.group.key.as_str().starts_with(&prefix))
-        .collect();
-    GroupLog::open(path, &entries, SystemRunClock.now_ms())
 }
 
 /// One line per committed group of the stage's namespace.

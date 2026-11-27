@@ -15,6 +15,7 @@ mod epochs;
 mod group_log;
 mod selector;
 mod simulation;
+mod watchdog;
 mod worker;
 
 use splinter_core::factory::group::{

@@ -157,6 +157,20 @@ pub trait Trainer: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// The adapter an online run published under `digest` (a version's, as
+    /// its learner named it), copied to `to`: a frozen copy of that version,
+    /// to serve or to continue from.
+    ///
+    /// # Errors
+    /// The trainer keeps no published adapters, or none under `digest`.
+    fn published_adapter(&self, digest: &str, to: &Path) -> Result<(), TrainError> {
+        let _ = (digest, to);
+        Err(TrainError(format!(
+            "{} keeps no published adapters",
+            self.identity()
+        )))
+    }
+
     /// Start (or continue, under the same resume key) an online
     /// policy-gradient run that takes groups while it trains and serves every
     /// version it publishes.
@@ -175,40 +189,7 @@ pub trait Trainer: Send + Sync {
     }
 }
 
-/// An online policy-gradient run to start.
-#[derive(Clone, Debug)]
-pub struct OnlineTrain<'a> {
-    /// The base model.
-    pub base: &'a ModelRef,
-    /// The run's policy-gradient settings (`estimator`, `max_block`, ...),
-    /// as the recipe wrote them.
-    pub params: &'a serde_json::Map<String, Value>,
-    /// The run's durable identity: asked again under it, a restarted run
-    /// continues from its last checkpoint.
-    pub resume_key: &'a str,
-    /// Steps between durable checkpoints.
-    pub checkpoint_every: Option<u32>,
-    /// The id every published version is served under.
-    pub publish_adapter: &'a str,
-    /// Steps between two published versions.
-    pub publish_every: u32,
-    /// Policy tokens a step trains.
-    pub step_tokens: u64,
-    /// Policy tokens the learner's queue holds at most.
-    pub queue_tokens: u64,
-    /// Versions a group may lag before the learner drops it.
-    pub max_staleness: u64,
-    /// Steps after which the run ends.
-    pub max_steps: Option<u32>,
-    /// The sampler's top-K a score-centred estimator centres over.
-    pub top_k: Option<u32>,
-    /// The adapter the run continues, if it continues one.
-    pub start: Option<&'a Path>,
-    /// Where the run's job is recorded (the endpoint that placed it and its id), beside the run's state: a job a
-    /// stopped controller left running is cancelled before the run is asked for again, since brain starts no other
-    /// job of the run while one runs.
-    pub job_place: &'a Path,
-}
+pub use crate::online::seams::OnlineTrain;
 
 /// The LoRA parameters brain's fine-tune takes, from a recipe's `params`.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -650,6 +631,17 @@ impl Trainer for BrainTrainer {
             report,
             record: Some(trained.training_record),
         })
+    }
+
+    fn published_adapter(&self, digest: &str, to: &Path) -> Result<(), TrainError> {
+        let store = self.endpoints.artifact_store().map_err(error)?;
+        let parsed = if digest.contains(':') {
+            splinter_core::digest::Digest::parse(digest)
+        } else {
+            splinter_core::digest::Digest::from_content_hex(digest)
+        }
+        .map_err(|e| TrainError(format!("adapter digest {digest}: {e}")))?;
+        store.fetch(&parsed, to).map_err(error)
     }
 
     fn stream(

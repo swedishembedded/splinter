@@ -38,6 +38,8 @@ pub mod harness_search;
 pub mod import;
 mod lease;
 pub mod online;
+mod online_eval;
+mod online_train;
 pub mod online_worker;
 pub use lease::controller_owner;
 mod models;

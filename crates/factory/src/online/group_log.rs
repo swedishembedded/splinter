@@ -409,4 +409,8 @@ impl GroupLedger for LoggedLedger<'_> {
         self.log.learner_version(version);
         self.inner.learner_version(version);
     }
+
+    fn series(&self) -> Option<&VersionSeries> {
+        Some(self.log.series())
+    }
 }

@@ -22,6 +22,8 @@
 //!   transitions.
 //! * [`health`] - the run's training health, per step and per version.
 //! * [`frontier`] - the frontier selector: groups drawn where they teach.
+//! * [`watchdog`] - detects training that moves the policy the wrong way,
+//!   and rolls it back on evidence.
 //! * [`brain`] - the learner on brain's streaming policy-gradient job.
 //! * [`rollout`] - a finished rollout from its projected model calls, the
 //!   same for every executor.
@@ -35,6 +37,7 @@ pub mod health;
 pub mod rollout;
 pub mod seams;
 pub mod stats;
+pub mod watchdog;
 
 use splinter_core::factory::group::GroupKey;
 

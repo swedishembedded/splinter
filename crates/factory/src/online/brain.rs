@@ -262,16 +262,16 @@ impl Learner for BrainLearner {
     fn finish(&mut self) -> Result<(), LearnerError> {
         self.job.finish().map_err(error)
     }
-}
 
-impl StreamLearner for BrainLearner {
     fn telemetry(&self) -> LearnerTelemetry {
         LearnerTelemetry {
             tokenizer_digest: self.job.tokenizer_digest().map(str::to_owned),
             ..self.telemetry.clone()
         }
     }
+}
 
+impl StreamLearner for BrainLearner {
     fn final_adapter(&mut self, to: &Path) -> Result<(), LearnerError> {
         let outputs = self.job.result().map_err(error)?;
         let hex = outputs["adapter_digest"].as_str().ok_or_else(|| {

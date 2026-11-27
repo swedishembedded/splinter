@@ -25,6 +25,7 @@ use super::seams::{
     OutgoingGroup, RolloutExecutor, RolloutRequest, RunClock, SendOutcome, TaskSelector,
 };
 use super::stats::Stats;
+use super::watchdog::Verdict;
 use super::Settings;
 
 /// Why an online run stopped short.
@@ -45,12 +46,15 @@ pub enum OnlineError {
 }
 
 /// How a run ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Ended {
     /// Every group it asked for is committed, filtered or dropped.
     Finished,
     /// It was cancelled; resuming continues it.
     Cancelled,
+    /// Its watchdog rolled it back: the epoch ends here, and the run goes on
+    /// in the next one from the anchor.
+    RolledBack(Box<super::watchdog::Audit>),
 }
 
 /// What a run did.
@@ -85,6 +89,20 @@ pub struct Seams<'a> {
 /// A seam failed or broke its contract; what is recorded stays, and a
 /// resume continues from it.
 pub fn run(settings: Settings, seams: Seams<'_>) -> Result<Report, OnlineError> {
+    run_watched(settings, seams, None)
+}
+
+/// [`run`], judged by `watchdog` after every turn: a breached invariant
+/// holds new groups back while it lasts, and a rollback stops every running
+/// rollout and ends the run [`Ended::RolledBack`].
+///
+/// # Errors
+/// As [`run`].
+pub fn run_watched(
+    settings: Settings,
+    seams: Seams<'_>,
+    mut watchdog: Option<&mut super::watchdog::Watchdog<'_>>,
+) -> Result<Report, OnlineError> {
     let Seams {
         executor,
         learner,
@@ -125,7 +143,24 @@ pub fn run(settings: Settings, seams: Seams<'_>) -> Result<Report, OnlineError> 
                 break;
             }
         }
-        while let Some(changes) = control.admit(now, selector) {
+        let paused = match watchdog.as_deref_mut() {
+            Some(watchdog) => {
+                let empty = super::health::VersionSeries::default();
+                match watchdog.verdict(&learner.telemetry(), ledger.series().unwrap_or(&empty)) {
+                    Verdict::Continue => false,
+                    Verdict::Pause => true,
+                    Verdict::Rollback(audit) => {
+                        executor.cancel();
+                        return Ok(Report {
+                            ended: Ended::RolledBack(audit),
+                            stats: control.stats(clock.now_ms()),
+                        });
+                    }
+                }
+            }
+            None => false,
+        };
+        while let Some(changes) = (!paused).then(|| control.admit(now, selector)).flatten() {
             apply(ledger, executor, now, changes)?;
         }
         if control.done() {

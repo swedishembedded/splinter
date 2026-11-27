@@ -213,6 +213,12 @@ pub trait Learner {
     /// # Errors
     /// The learner failed.
     fn finish(&mut self) -> Result<(), LearnerError>;
+
+    /// What it measured so far; a learner that measures nothing reports
+    /// nothing.
+    fn telemetry(&self) -> LearnerTelemetry {
+        LearnerTelemetry::default()
+    }
 }
 
 /// Which task each group attempts.
@@ -282,6 +288,12 @@ pub trait GroupLedger {
     /// # Errors
     /// The ledger cannot be read.
     fn records(&mut self, key: &GroupKey) -> Result<Vec<(u32, String)>, LedgerError>;
+
+    /// What the scored groups' rollouts came to per policy version, when
+    /// the ledger keeps it.
+    fn series(&self) -> Option<&super::health::VersionSeries> {
+        None
+    }
 
     /// The learner published `version`: a ledger that records the learner's
     /// version beside what it logs takes it from here.
@@ -373,9 +385,6 @@ impl LearnerTelemetry {
 
 /// A learner that reports its own side and hands back what it published.
 pub trait StreamLearner: Learner {
-    /// What it measured so far.
-    fn telemetry(&self) -> LearnerTelemetry;
-
     /// The adapter the ended run left (its final, committed version),
     /// copied to `to`.
     ///
@@ -424,4 +433,39 @@ pub trait OnlineRollouts: Sync {
         request: &RolloutsRequest<'_>,
         body: &mut dyn FnMut(&mut dyn RolloutExecutor, &[String]),
     ) -> Result<(), String>;
+}
+
+/// An online policy-gradient run to start.
+#[derive(Clone, Debug)]
+pub struct OnlineTrain<'a> {
+    /// The base model.
+    pub base: &'a crate::recipe::ModelRef,
+    /// The run's policy-gradient settings (`estimator`, `max_block`, ...),
+    /// as the recipe wrote them.
+    pub params: &'a serde_json::Map<String, serde_json::Value>,
+    /// The run's durable identity: asked again under it, a restarted run
+    /// continues from its last checkpoint.
+    pub resume_key: &'a str,
+    /// Steps between durable checkpoints.
+    pub checkpoint_every: Option<u32>,
+    /// The id every published version is served under.
+    pub publish_adapter: &'a str,
+    /// Steps between two published versions.
+    pub publish_every: u32,
+    /// Policy tokens a step trains.
+    pub step_tokens: u64,
+    /// Policy tokens the learner's queue holds at most.
+    pub queue_tokens: u64,
+    /// Versions a group may lag before the learner drops it.
+    pub max_staleness: u64,
+    /// Steps after which the run ends.
+    pub max_steps: Option<u32>,
+    /// The sampler's top-K a score-centred estimator centres over.
+    pub top_k: Option<u32>,
+    /// The adapter the run continues, if it continues one.
+    pub start: Option<&'a std::path::Path>,
+    /// Where the run's job is recorded (the endpoint that placed it and its id), beside the run's state: a job a
+    /// stopped controller left running is cancelled before the run is asked for again, since brain starts no other
+    /// job of the run while one runs.
+    pub job_place: &'a std::path::Path,
 }
