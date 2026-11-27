@@ -294,6 +294,28 @@ was archived first (~/project/shared/runs-archive/2026-11-27/, one zstd tar per 
 committed stage is reused once the task repository's operator code matches the old runs byte for byte (bench 83e1b4f8:
 operators pin benchlib, environments, sandbox and pyproject.toml; HEAD's environments changed every operator digest).
 
+## Loop v2 for generations 2 and 3 (2026-11-27 14:20, recorded before any v2 result)
+
+The user's goal changed at 14:10: no generation 4; show that generations 1, 2 and 3 each improve, every exam at the
+registered 4 attempts per task (the 16-attempt re-measurements were stopped unfinished and are not reported). Findings that
+determined the change: generation 3 under the epoch rule did not gain on the exam at 4B (13 / 381 and, fixed cap, 16 / 400
+against the generation-1 champion's 11 / 400), and generation 2 retrained at 1.89 epochs did not either (6 / 399, not
+promoted), so the training budget alone is not what stalls the loop. Loop v2 changes what the two analyses measured as the
+causes, generator `gen-v2.py`:
+
+1. The new generation's training dataset is the teacher's verified records only, so validation is teacher-only (knowledge
+   237); the champion's records enter as replay at one per task, drawn at random (45% of generation 2's new records were the
+   champion's own, mostly on tasks it already mastered).
+2. The LoRA continues the champion's adapter (`start: champion`) instead of training from the base, at half the learning rate
+   (1e-4), with replay at half the draws (`replay_share: 0.5`); steps = ceil(E * N_teacher / (grad_accum * 0.5)), E the
+   size's generation-1 epochs (4B 1.891: 1226 records, 1160 steps; 8B 1.92: 1226 records, 1179 steps).
+3. The forgetting evaluation is a retention test and the release requires target and retention, with the registered 2% bound
+   on uncounted slots (knowledge 236: two superiority tests promoted a real 1.25-fold step about one time in five).
+
+Exams, held-out tasks and the champion are as registered; promotion is decided on held-out tasks only; exams are measured.
+Runs: 4B loop-g2-v2 (n547), 8B loop-g2-8b-v2 (n541), started 14:15-14:20; generation 3 v2 follows from generation 2 v2's
+release under the same rules.
+
 ## Further mitigation (2026-11-27; planned, not run)
 
 In order of effect per hour:
