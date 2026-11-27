@@ -59,6 +59,15 @@
       "description": "Always [`DATASET_SCHEMA`].",
       "type": "string"
     },
+    "sessions": {
+      "description": "How a policy-gradient dataset built with merged sessions wrote them:\n`merged` (sessions written as one record each), `merged_tokens` and\n`per_call_tokens` (the ids those records forward, and the ids their\nper-call records would), `untraced` (sessions without sampled tokens,\npacked as text) and `per_call:<reason>` (sessions written one record\nper call, by why); absent for any other dataset.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0
+      }
+    },
     "sources": {
       "description": "The rollout products it was built from.",
       "type": "array",

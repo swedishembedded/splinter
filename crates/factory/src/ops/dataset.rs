@@ -167,6 +167,25 @@ pub enum Prefer {
     Random,
 }
 
+/// How a policy-gradient dataset writes an attempt's agent session.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Sessions {
+    /// One record per action (per model call), each in the context its call
+    /// was sent.
+    #[default]
+    PerCall,
+    /// One record per session when it is append-only and every action
+    /// carries its exact sampled tokens (every later prompt the earlier
+    /// prompt, its sampled answer and the turns between): the shared context
+    /// is forwarded once and, trained with `pack_answers`, the gradient is
+    /// the per-call records' under `loss_agg: token-sum` (`seq-mean` weighs
+    /// sessions alike). A session that is not, or whose merged sequence is
+    /// longer than `max_block`, is written one record per action and counted
+    /// under why.
+    Merged,
+}
+
 /// A negative control an SFT dataset is built as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -232,6 +251,10 @@ pub struct ProjectParams {
     /// Build the SFT dataset as a negative control (`shuffled-requests`).
     #[serde(default)]
     pub control: Option<Control>,
+    /// How a policy-gradient dataset writes an attempt's session:
+    /// `per-call` (the default) or `merged`.
+    #[serde(default)]
+    pub sessions: Sessions,
     /// The seed of the split and of every draw the projection makes.
     pub seed: u64,
 }

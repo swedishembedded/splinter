@@ -217,6 +217,12 @@ pub(crate) fn projection_problems(
             params.objective
         ));
     }
+    if params.sessions != ops::Sessions::PerCall && params.objective != "policy-gradient" {
+        out.push(format!(
+            "sessions: merged is a policy-gradient dataset's; a {} dataset is projected by its own view",
+            params.objective
+        ));
+    }
     if params.supervise != ops::Supervise::All {
         if params.objective != "sft" {
             out.push(format!(

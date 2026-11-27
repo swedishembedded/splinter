@@ -51,6 +51,7 @@ fn projection_of(record: Record) -> Projection {
         partial_credit: None,
         pairing: None,
         feedback: None,
+        sessions: Default::default(),
     }
 }
 

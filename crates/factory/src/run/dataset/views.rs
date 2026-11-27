@@ -102,10 +102,15 @@ fn view_of<'s>(
             let shape = splinter_data::RewardShape::unshaped()
                 .penalising(penalties)
                 .map_err(|e| e.to_string())?;
-            Ok((
-                Box::new(PolicyGradient::new(strength).rewards(shape)),
-                Objective::PolicyGradient,
-            ))
+            // Merged, an attempt's append-only session is one record, and
+            // one longer than the dataset's block is written per call
+            // instead of being left out whole.
+            let merged = dataset.sessions == crate::ops::Sessions::Merged;
+            let view = PolicyGradient::new(strength)
+                .rewards(shape)
+                .packed(merged)
+                .session_block(dataset.max_block.filter(|_| merged));
+            Ok((Box::new(view), Objective::PolicyGradient))
         }
         // Every attempt, with what only a teacher is shown beside it: the
         // task's reference solution, and the checks that failed.
@@ -203,6 +208,24 @@ fn supervised(record: &Record) -> usize {
         }
         _ => 0,
     }
+}
+
+/// What [`DatasetProduct::sessions`] holds of `report`: nothing when no
+/// session was counted.
+fn session_counts(report: &splinter_data::session::SessionReport) -> BTreeMap<String, u64> {
+    if report.is_empty() {
+        return BTreeMap::new();
+    }
+    let mut counts = BTreeMap::from([
+        ("merged".to_owned(), report.merged),
+        ("merged_tokens".to_owned(), report.merged_tokens),
+        ("per_call_tokens".to_owned(), report.per_call_tokens),
+        ("untraced".to_owned(), report.untraced),
+    ]);
+    for (why, n) in &report.per_call {
+        counts.insert(format!("per_call:{}", why.name()), *n);
+    }
+    counts
 }
 
 /// Where an experience of the corpus came from.
@@ -544,6 +567,7 @@ pub(super) fn produce(
         thinking: dataset.thinking,
         control: None,
         composition: None,
+        sessions: session_counts(&projection.sessions),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let mut report = format!(
@@ -554,6 +578,23 @@ pub(super) fn produce(
         train.len(),
         validation.len()
     );
+    if !projection.sessions.is_empty() {
+        let sessions = &projection.sessions;
+        let fell_back: Vec<String> = sessions
+            .per_call
+            .iter()
+            .map(|(why, n)| format!("{n} {}", why.name()))
+            .collect();
+        report.push_str(&format!(
+            "Sessions: {} merged into one record each ({} ids forwarded where their per-call records forward {}); {} without sampled tokens packed as text; {} written one record per call ({}).\n\n",
+            sessions.merged,
+            sessions.merged_tokens,
+            sessions.per_call_tokens,
+            sessions.untraced,
+            sessions.per_call.values().sum::<u64>(),
+            if fell_back.is_empty() { "none".to_owned() } else { fell_back.join(", ") },
+        ));
+    }
     if !dataset.thinking && reasoning_removed > 0 {
         report.push_str(&format!(
             "No-think mode: the reasoning of {reasoning_removed} turns was taken out.\n\n"

@@ -472,6 +472,7 @@ pub(crate) fn produce(
         // Records added to a control's leave it a control.
         control: base.control.clone(),
         composition: None,
+        sessions: BTreeMap::new(),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let new_tasks: Vec<&String> = train_tasks

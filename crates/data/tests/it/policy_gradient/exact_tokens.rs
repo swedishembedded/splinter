@@ -12,7 +12,8 @@
 //! re-rendered and the trainer weighs the tokens that were sampled. An action
 //! without a usable trace is still written, without per-token fields, and the
 //! projection counts why. Ids decode to the unscrubbed text, so a conversation
-//! the scrub would change carries none.
+//! the scrub would change carries none. Packed, a session is one record only
+//! when it is append-only and every action exact.
 
 use super::*;
 use std::collections::BTreeSet;
@@ -439,4 +440,75 @@ fn a_record_whose_system_prompt_is_replaced_carries_no_ids() {
         replaced.tokens.proxy.get(&ProxyReason::PromptReplaced),
         Some(&4)
     );
+}
+
+/// Packed, a trial's session is one record only when it is a session brain
+/// trains exactly (rule `session_not_append_only`): every action exact and
+/// every later prompt the session so far. Any other is written one record
+/// per action, each with its own exact tokens, and counted under why; a
+/// merged sequence longer than the session block falls back too.
+#[test]
+fn a_packed_session_merges_only_when_append_only_and_exact_else_one_record_per_action() {
+    use splinter_data::session::FallbackReason;
+    let (call_step, answer) = good();
+    let merged = view()
+        .packed(true)
+        .project(&traced(call_step.clone(), answer.clone(), None))
+        .unwrap();
+    assert_eq!(lines(&merged).len(), 2, "one record per trial");
+    assert_eq!(
+        (
+            merged.sessions.merged,
+            merged.sessions.merged_tokens,
+            merged.sessions.per_call_tokens
+        ),
+        (2, 2 * 9, 2 * (5 + 9)),
+        "the second call's 9 ids forwarded once, not 5 + 9"
+    );
+    assert!(merged.sessions.per_call.is_empty());
+
+    let one_each = |projection: &Projection, reason: FallbackReason| {
+        let written = lines(projection);
+        assert_eq!(written.len(), 4, "{reason:?}: one record per action");
+        assert_eq!(
+            projection.sessions.per_call.get(&reason),
+            Some(&2),
+            "{reason:?}"
+        );
+        assert_eq!(projection.sessions.merged, 0, "{reason:?}");
+        written
+    };
+    // The second request holds the first answer otherwise than it was
+    // sampled (a template that drops its reasoning): not append-only.
+    let rewritten = trace(
+        &[1, 2, 3, 11, 4],
+        &[12, 13, 14],
+        &[-1.0, -2.0, -0.125],
+        "policy",
+    );
+    let projection = view()
+        .packed(true)
+        .project(&traced(call_step.clone(), rewritten, None))
+        .unwrap();
+    for pair in one_each(&projection, FallbackReason::NotAppendOnly).chunks(2) {
+        assert_exact(&pair[0], &[(&[1, 2, 3], &[10, 11], &[-0.5, -0.25])]);
+        assert_exact(
+            &pair[1],
+            &[(&[1, 2, 3, 11, 4], &[12, 13, 14], &[-1.0, -2.0, -0.125])],
+        );
+    }
+
+    let sampler = trace(&[1, 2, 3], &[10, 11], &[-0.5, -0.25], "sampler");
+    let projection = view()
+        .packed(true)
+        .project(&traced(sampler, answer.clone(), None))
+        .unwrap();
+    one_each(&projection, FallbackReason::NotExact);
+
+    let projection = view()
+        .packed(true)
+        .session_block(Some(8))
+        .project(&traced(call_step, answer, None))
+        .unwrap();
+    one_each(&projection, FallbackReason::LongerThanBlock);
 }

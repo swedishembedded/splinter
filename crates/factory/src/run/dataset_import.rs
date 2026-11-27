@@ -298,6 +298,7 @@ pub(crate) fn produce(
         thinking: import.params.thinking,
         control: None,
         composition: None,
+        sessions: std::collections::BTreeMap::new(),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let held = splits[1].1.len();

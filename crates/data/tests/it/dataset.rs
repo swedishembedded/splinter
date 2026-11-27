@@ -250,6 +250,7 @@ fn objectives_without_a_chat_or_preference_shape_are_exported() {
             partial_credit: None,
             pairing: None,
             feedback: None,
+            sessions: Default::default(),
         };
         assert_eq!(objective.line_format(), Format::SplinterExportV1);
         let path = scratch.0.join(format!("{objective:?}.jsonl"));
@@ -309,6 +310,7 @@ fn a_text_corpus_is_written_as_chat_lines_whose_one_assistant_turn_is_supervised
         partial_credit: None,
         pairing: None,
         feedback: None,
+        sessions: Default::default(),
     };
     assert_eq!(Objective::Cpt.line_format(), Format::GenericMessagesV2);
     let scratch = Scratch::new("cpt-text-lines");

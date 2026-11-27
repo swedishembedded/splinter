@@ -316,6 +316,10 @@ pub struct Projection {
     /// ([`FeedbackBalance`]); `None` for any other view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback: Option<FeedbackBalance>,
+    /// How a packed policy-gradient view wrote each session (merged, or one
+    /// record per action and why); empty for any other view.
+    #[serde(default, skip_serializing_if = "session::SessionReport::is_empty")]
+    pub sessions: session::SessionReport,
 }
 
 /// What a record's size was counted by when a projection was bounded to a
@@ -378,6 +382,7 @@ impl Projection {
             partial_credit: None,
             pairing: None,
             feedback: None,
+            sessions: session::SessionReport::default(),
         }
     }
 

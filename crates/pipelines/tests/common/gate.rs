@@ -277,6 +277,7 @@ fn dataset_made(
         partial_credit: None,
         pairing: None,
         feedback: None,
+        sessions: Default::default(),
     };
     let projection = match prompt {
         Some(prompt) => projection.with_system_prompt(prompt),
@@ -342,6 +343,7 @@ pub fn preference_dataset(ctx: &Context, topic: &str, n: usize) -> DatasetId {
         partial_credit: None,
         pairing: None,
         feedback: None,
+        sessions: Default::default(),
     };
     store_dataset(ctx, &projection, false).unwrap().id
 }

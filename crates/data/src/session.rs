@@ -434,24 +434,45 @@ pub struct SessionReport {
     pub merged_tokens: u64,
     /// The ids the same sessions' per-call records would have forwarded.
     pub per_call_tokens: u64,
+    /// Sessions none of whose answers carried sampled tokens, written as one
+    /// text record each (the trainer tokenises the text and weighs it
+    /// against its start-of-run proxy).
+    pub untraced: u64,
 }
 
 impl SessionReport {
-    /// Counts a merged session.
-    pub fn merged(&mut self, session: &SessionRecord) {
+    /// Counts a merged session whose record forwards `tokens` ids where its
+    /// per-call records would forward `per_call_tokens`.
+    pub fn merged(&mut self, tokens: u64, per_call_tokens: u64) {
         self.merged += 1;
-        self.merged_tokens += session.tokens();
-        self.per_call_tokens += session.per_call_tokens;
+        self.merged_tokens += tokens;
+        self.per_call_tokens += per_call_tokens;
     }
 
     /// Counts a session written one record per call, for `why`.
-    pub fn fell_back(&mut self, why: &Unmergeable) {
-        *self.per_call.entry(why.reason()).or_insert(0) += 1;
+    pub fn fell_back(&mut self, why: FallbackReason) {
+        *self.per_call.entry(why).or_insert(0) += 1;
+    }
+
+    /// Counts a session none of whose answers carried sampled tokens.
+    pub fn untraced(&mut self) {
+        self.untraced += 1;
     }
 
     /// Whether no session was counted.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.merged == 0 && self.per_call.is_empty()
+        self.merged == 0 && self.untraced == 0 && self.per_call.is_empty()
     }
+}
+
+/// The ids a session of the sampled answers `turns` (in call order)
+/// forwards merged (the last call's prompt and generated ids) and one record
+/// per call (every call's).
+#[must_use]
+pub fn forwarded(turns: &[&SampledTurn]) -> (u64, u64) {
+    (
+        turns.last().map_or(0, |t| sequence(t)),
+        turns.iter().map(|t| sequence(t)).sum(),
+    )
 }

@@ -71,7 +71,8 @@ use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;
 use super::{io, stage_error, write_json, write_lines, Factory, RunError};
 use crate::ops::{
-    Control, Prefer, PreferenceOptions, ProjectParams, RewardOptions, Supervise, ValidationSplit,
+    Control, Prefer, PreferenceOptions, ProjectParams, RewardOptions, Sessions, Supervise,
+    ValidationSplit,
 };
 use crate::plan::PlannedStage;
 use crate::recipe::ModelRef;
@@ -142,6 +143,8 @@ struct Dataset {
     /// The most trials kept per task, and which.
     per_task: Option<(usize, Prefer)>,
     control: Option<Control>,
+    /// How a policy-gradient dataset writes a session.
+    sessions: Sessions,
     seed: u64,
 }
 
@@ -198,6 +201,7 @@ fn section(factory: &Factory<'_>, stage: &PlannedStage) -> Result<Dataset, RunEr
         thinking: params.thinking,
         validation: params.validation,
         supervise: params.supervise,
+        sessions: params.sessions,
         per_task: params
             .per_task
             .map(|limit| (limit, params.prefer.unwrap_or_default())),
@@ -275,6 +279,9 @@ pub(crate) fn identity(
     }
     if let Some(control) = dataset.control {
         parameters["control"] = json!(control);
+    }
+    if dataset.sessions != Sessions::PerCall {
+        parameters["sessions"] = json!(dataset.sessions);
     }
     Ok(super::identity_of(
         &stage.versioned_operation(),
@@ -736,6 +743,7 @@ pub(crate) fn produce(
         thinking: dataset.thinking,
         control: dataset.control.map(|c| c.name().to_owned()),
         composition: Some(file_ref(staging, COMPOSITION_FILE)?),
+        sessions: BTreeMap::new(),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let report = report::Report {

@@ -505,3 +505,72 @@ fn an_earlier_dataset_is_replayed_beside_the_new_records() {
     .unwrap_or_default();
     assert!(refused.contains("replay"), "{refused}");
 }
+
+/// Opt-in: `sessions: merged` writes each attempt's session as one record
+/// (every action supervised, its reward and group once) and says in
+/// `dataset.json` how each session was written; a recipe that does not name
+/// it keeps one record per action, and only a policy-gradient dataset takes
+/// it. These attempts recorded no sampled tokens, so each session is packed
+/// as text and counted as untraced.
+#[test]
+fn a_policy_gradient_dataset_merges_sessions_only_when_asked() {
+    let repo = repo();
+    let merged = RECIPE.to_owned()
+        + "  - id: merged\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: policy-gradient, sessions: merged, target: student, seed: 13 }\n";
+    let resolved = resolve(&repo.root, &merged, connections()).unwrap();
+    let backend = FakeBackend {
+        vary_failures: true,
+        ..FakeBackend::with(Outcome::Fail)
+    };
+    for task in ["train/001-first", "train/002-second"] {
+        backend.script(task, &[Outcome::Pass, Outcome::Fail]);
+    }
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: None,
+        variables: None,
+        online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    Factory::open(&resolved, dir.path(), services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let per_action = lines(&dir.path().join("rewarded/train.jsonl"));
+    let sessions = lines(&dir.path().join("merged/train.jsonl"));
+    assert_eq!(sessions.len(), 4, "one record per attempt: {sessions:#?}");
+    assert!(per_action.len() > sessions.len());
+    let supervised = |records: &[Value]| -> usize {
+        records
+            .iter()
+            .flat_map(|r| r["messages"].as_array().unwrap())
+            .filter(|m| m["train"] == true)
+            .count()
+    };
+    assert_eq!(supervised(&sessions), supervised(&per_action));
+    let product = |stage: &str| -> Value {
+        serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join(stage).join("dataset.json")).unwrap(),
+        )
+        .unwrap()
+    };
+    assert_eq!(product("merged")["sessions"]["untraced"], 4);
+    assert_eq!(product("merged")["sessions"]["merged"], 0);
+    assert!(product("rewarded").get("sessions").is_none());
+
+    let refused = resolve(
+        &repo.root,
+        &(RECIPE.to_owned()
+            + "  - id: odd\n    uses: dataset.project\n    inputs: { attempts: [$stages.local.attempts] }\n    with: { objective: sft, sessions: merged, target: student, seed: 13 }\n"),
+        connections(),
+    )
+    .err()
+    .map(|e| format!("{e:?}"))
+    .unwrap_or_default();
+    assert!(
+        refused.contains("sessions: merged is a policy-gradient dataset's"),
+        "{refused}"
+    );
+}

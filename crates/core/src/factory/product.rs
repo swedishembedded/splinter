@@ -189,6 +189,14 @@ pub struct DatasetProduct {
     /// (`composition.json`); absent for another objective's dataset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composition: Option<FileRef>,
+    /// How a policy-gradient dataset built with merged sessions wrote them:
+    /// `merged` (sessions written as one record each), `merged_tokens` and
+    /// `per_call_tokens` (the ids those records forward, and the ids their
+    /// per-call records would), `untraced` (sessions without sampled tokens,
+    /// packed as text) and `per_call:<reason>` (sessions written one record
+    /// per call, by why); absent for any other dataset.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sessions: BTreeMap<String, u64>,
 }
 
 /// The form a trained model takes.

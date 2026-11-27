@@ -83,6 +83,7 @@ fn projection(records: Vec<Record>) -> Projection {
         partial_credit: None,
         pairing: None,
         feedback: None,
+        sessions: Default::default(),
     }
 }
 

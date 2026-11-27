@@ -96,7 +96,10 @@ use super::privileged::teacher_context;
 use super::rendering::{Judgement, Rendering};
 use super::rewards::{AdvantageKind, GroupKind, GroupReport, RewardShape, TrialReport};
 use crate::curation::HistoryCuration;
-use crate::sampled::{agreeing, trace_of, turns_of, ProxyReason, SampledTurns, TokenReport};
+use crate::sampled::{
+    agreeing, trace_of, turns_of, ProxyReason, SampledTurn, SampledTurns, TokenReport,
+};
+use crate::session::{check_turns, forwarded, FallbackReason};
 use crate::trajectory::{Action, Conversation};
 use crate::{render, RecordBody, RolloutOutcome};
 use crate::{Corpus, Entry, Exclusion, Objective, Projection, Provenance, Strip, View, ViewError};
@@ -180,6 +183,7 @@ pub struct PolicyGradient {
     advantage: AdvantageKind,
     distill: Distill,
     sampled_only: bool,
+    session_block: Option<u64>,
 }
 
 impl PolicyGradient {
@@ -200,6 +204,7 @@ impl PolicyGradient {
             advantage: AdvantageKind::default(),
             distill: Distill::Off,
             sampled_only: false,
+            session_block: None,
         }
     }
 
@@ -272,11 +277,29 @@ impl PolicyGradient {
     /// one per action ([`SftStep::packed`](super::SftStep::packed)): every
     /// action supervised, the context once. Each record still carries its
     /// trial's reward, group and rollout, so the trainer counts the trial once
-    /// in its group either way.
+    /// in its group either way. A rewarded conversation whose actions carry
+    /// the tokens the policy sampled is one record only when its session is
+    /// append-only and every action exact (a session-merged record, which
+    /// brain trains to exactly its per-action records' gradient under
+    /// `token-sum`); any other is written one record per action, counted in
+    /// [`Projection::sessions`] under why
+    /// ([`crate::session::FallbackReason`]).
     #[must_use]
     pub fn packed(mut self, packed: bool) -> Self {
         self.rendering.packed = packed;
         self
+    }
+
+    /// The same view writing a packed session one record per action when its
+    /// merged sequence holds more than `block` ids
+    /// ([`crate::session::FallbackReason::LongerThanBlock`]); any length
+    /// when `None`.
+    #[must_use]
+    pub fn session_block(self, block: Option<u64>) -> Self {
+        Self {
+            session_block: block,
+            ..self
+        }
     }
 
     /// The same view reading a run exported as one agent step as one call per
@@ -398,6 +421,151 @@ fn sampled_tokens(
         report.count(trace);
     }
     turns_of(traces)
+}
+
+impl PolicyGradient {
+    /// The rewarded records of a trial's `conversations`, each carrying
+    /// `outcome` and the tokens the policy sampled: one per action, or,
+    /// packed, one per conversation whose session merges
+    /// ([`Self::merged_session`]) and one per action of any other, counted
+    /// under why in [`Projection::sessions`]. Under `sampled_only` an action
+    /// record without its exact tokens is left out.
+    fn rewarded(
+        &self,
+        trajectory: &atif::Trajectory,
+        conversations: &[Conversation],
+        outcome: &RolloutOutcome,
+        projection: &mut Projection,
+    ) -> Vec<RecordBody> {
+        let one_each = Rendering {
+            packed: false,
+            ..self.rendering.clone()
+        };
+        let singles = one_each.records_of_actions(conversations, projection, |_| Judgement::Admit);
+        // Requests that are not one conversation were read request by
+        // request: the session's later requests do not extend the earlier.
+        let one_conversation = conversations.len() == 1;
+        if self.rendering.packed && !one_conversation && !singles.is_empty() {
+            projection
+                .sessions
+                .fell_back(FallbackReason::MessagesDiverge);
+        }
+        let mut records = Vec::new();
+        let mut at = 0;
+        while at < singles.len() {
+            let conversation = singles[at].2;
+            let end = at
+                + singles[at..]
+                    .iter()
+                    .take_while(|(_, _, c)| std::ptr::eq(*c, conversation))
+                    .count();
+            let group = &singles[at..end];
+            at = end;
+            let traced: Vec<Option<SampledTurns>> = group
+                .iter()
+                .map(|(_, actions, c)| {
+                    sampled_tokens(trajectory, c, actions, &mut projection.tokens)
+                })
+                .collect();
+            if self.rendering.packed && one_conversation {
+                if let Some(merged) = self.merged_session(conversation, group, &traced, projection)
+                {
+                    records.push(
+                        merged.with_outcome(outcome.clone().with_sampled(merged_turns(&traced))),
+                    );
+                    continue;
+                }
+            }
+            for ((record, _, _), sampled) in group.iter().zip(traced) {
+                let exact = sampled
+                    .as_ref()
+                    .is_some_and(|s| s.turns.iter().all(Option::is_some));
+                if self.sampled_only && !exact {
+                    projection.exclude(Exclusion::ProxyTokens);
+                    continue;
+                }
+                records.push(
+                    record
+                        .clone()
+                        .with_outcome(outcome.clone().with_sampled(sampled)),
+                );
+            }
+        }
+        records
+    }
+
+    /// The one record of `conversation`'s admitted actions `group` (each
+    /// with its sampled tokens `traced`), when the session merges: every
+    /// action exact under one tokenizer, every later request's prompt ids
+    /// extending the session so far (brain's rule `session_not_append_only`),
+    /// one tool list, and a sequence within the block when one is set.
+    /// `None` when it does not, counted under why; a session none of whose
+    /// actions carries sampled tokens is packed as a text record, as before,
+    /// and counted as untraced.
+    fn merged_session(
+        &self,
+        conversation: &Conversation,
+        group: &[(RecordBody, Vec<Action>, &Conversation)],
+        traced: &[Option<SampledTurns>],
+        projection: &mut Projection,
+    ) -> Option<RecordBody> {
+        let actions: Vec<&Action> = group.iter().flat_map(|(_, a, _)| a).collect();
+        // One record holds one list of tools.
+        let one_tool_list = actions.iter().all(|a| a.tools == actions[0].tools);
+        if one_tool_list && traced.iter().all(Option::is_none) {
+            projection.sessions.untraced();
+            return conversation.packed_record(&actions);
+        }
+        let turns: Option<Vec<(&str, &SampledTurn)>> = traced
+            .iter()
+            .map(|s| {
+                let s = s.as_ref()?;
+                let [Some(turn)] = s.turns.as_slice() else {
+                    return None;
+                };
+                Some((s.tokenizer_digest.as_str(), turn))
+            })
+            .collect();
+        let why = match turns {
+            None if !one_tool_list => Some(FallbackReason::ToolsDiffer),
+            None => Some(FallbackReason::NotExact),
+            Some(_) if !one_tool_list => Some(FallbackReason::ToolsDiffer),
+            Some(turns) => match check_turns(&turns) {
+                Err(why) => Some(why.reason()),
+                Ok(()) => {
+                    let sampled: Vec<&SampledTurn> = turns.iter().map(|(_, t)| *t).collect();
+                    let (tokens, per_call) = forwarded(&sampled);
+                    if self.session_block.is_some_and(|block| tokens > block) {
+                        Some(FallbackReason::LongerThanBlock)
+                    } else {
+                        projection.sessions.merged(tokens, per_call);
+                        None
+                    }
+                }
+            },
+        };
+        match why {
+            Some(why) => {
+                projection.sessions.fell_back(why);
+                None
+            }
+            None => conversation.packed_record(&actions),
+        }
+    }
+}
+
+/// The sampled tokens of a merged session: each action's one turn, in
+/// order, under their one tokenizer.
+fn merged_turns(traced: &[Option<SampledTurns>]) -> Option<SampledTurns> {
+    let first = traced.iter().flatten().next()?;
+    Some(SampledTurns {
+        tokenizer_digest: first.tokenizer_digest.clone(),
+        turns: traced
+            .iter()
+            .flatten()
+            .flat_map(|s| s.turns.iter().cloned())
+            .collect(),
+    })
 }
 
 impl View for PolicyGradient {
@@ -563,30 +731,24 @@ impl View for PolicyGradient {
                 projection.exclude(Exclusion::NoAction);
                 continue;
             }
-            for (record, actions, conversation) in
-                self.rendering
-                    .records_of_actions(&conversations, &mut projection, |_| Judgement::Admit)
-            {
-                let record = match (treatment, &teacher) {
-                    (Treatment::Reward(outcome), _) => {
-                        let sampled = sampled_tokens(
-                            &entry.experience.trajectory,
-                            conversation,
-                            &actions,
-                            &mut projection.tokens,
-                        );
-                        let exact = sampled
-                            .as_ref()
-                            .is_some_and(|s| s.turns.iter().all(Option::is_some));
-                        if self.sampled_only && !exact {
-                            projection.exclude(Exclusion::ProxyTokens);
-                            continue;
-                        }
-                        record.with_outcome(outcome.clone().with_sampled(sampled))
-                    }
-                    (_, Some(context)) => record.with_teacher_context(context.clone()),
-                    _ => record,
-                };
+            let records = match (treatment, &teacher) {
+                (Treatment::Reward(outcome), _) => self.rewarded(
+                    &entry.experience.trajectory,
+                    &conversations,
+                    outcome,
+                    &mut projection,
+                ),
+                (_, context) => self
+                    .rendering
+                    .records(&conversations, &mut projection, |_| Judgement::Admit)
+                    .into_iter()
+                    .map(|record| match context {
+                        Some(context) => record.with_teacher_context(context.clone()),
+                        None => record,
+                    })
+                    .collect(),
+            };
+            for record in records {
                 projection.push(record, Provenance::of(vec![entry.id.clone()]));
                 *written = true;
             }

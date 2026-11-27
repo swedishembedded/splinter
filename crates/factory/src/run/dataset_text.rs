@@ -281,6 +281,7 @@ pub(crate) fn produce(
         thinking: false,
         control: None,
         composition: None,
+        sessions: BTreeMap::new(),
     };
     write_json(&staging.path().join(DATASET_FILE), &product)?;
     let mut report = format!(
