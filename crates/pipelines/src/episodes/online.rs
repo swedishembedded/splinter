@@ -138,6 +138,8 @@ pub struct OnlineSettings {
 /// What every rollout of a run shares.
 struct Shared<'c> {
     ctx: &'c Context,
+    /// Reaches the policy version a pinned rollout names.
+    resolve: Option<&'c Resolve<'c>>,
     tasks: Vec<PracticeTask>,
     reference: Option<ModelRef>,
     model: splinter_agent::solve::Model,
@@ -149,13 +151,48 @@ struct Shared<'c> {
     cancel: CancelToken,
 }
 
+/// How a policy served under an id is reached.
+pub type Resolve<'c> = dyn Fn(&str) -> Result<OnlinePolicy, String> + Send + Sync + 'c;
+
+/// The policy one rollout asks: the run's, or the version it is pinned to.
+struct Asked {
+    reference: Option<ModelRef>,
+    model: splinter_agent::solve::Model,
+    policy: PolicyIdentity,
+}
+
 impl Shared<'_> {
-    fn run(&self) -> attempt::Run<'_> {
+    /// The policy `request` asks.
+    fn asked(&self, request: &RolloutRequest) -> Result<Option<Asked>, String> {
+        let Some(id) = &request.policy else {
+            return Ok(None);
+        };
+        let resolve = self
+            .resolve
+            .ok_or("this run cannot reach a pinned policy version: nothing resolves its id")?;
+        let (reference, model) = match resolve(id)? {
+            OnlinePolicy::Reference(reference) => {
+                let model = self.ctx.model(&reference).map_err(|e| e.to_string())?;
+                (Some(reference), model)
+            }
+            OnlinePolicy::Model(model) => (None, model),
+        };
+        Ok(Some(Asked {
+            policy: PolicyIdentity {
+                model: model.identity.clone(),
+                adapter: None,
+            },
+            reference,
+            model,
+        }))
+    }
+
+    fn run<'a>(&'a self, asked: Option<&'a Asked>) -> attempt::Run<'a> {
         attempt::Run {
             ctx: self.ctx,
-            reference: self.reference.as_ref(),
-            model: &self.model,
-            policy: &self.policy,
+            reference: asked.map_or(self.reference.as_ref(), |a| a.reference.as_ref()),
+            model: asked.map_or(&self.model, |a| &a.model),
+            policy: asked.map_or(&self.policy, |a| &a.policy),
             config: &self.config,
             settings: &self.settings,
             cancel: &self.cancel,
@@ -172,9 +209,13 @@ impl Shared<'_> {
             index: request.index,
             result,
         };
+        let asked = match self.asked(request) {
+            Ok(asked) => asked,
+            Err(e) => return Some(end(Err(e))),
+        };
         let key = match attempt::key(
             task,
-            &self.policy,
+            asked.as_ref().map_or(&self.policy, |a| &a.policy),
             &self.config,
             self.settings.seed,
             Some(group),
@@ -189,7 +230,7 @@ impl Shared<'_> {
             group: Some(group),
             key,
         };
-        match self.run().attempt(&planned) {
+        match self.run(asked.as_ref()).attempt(&planned) {
             Ok(Done::Ran(record) | Done::Reused(record)) => Some(end(self.finished(&record))),
             Ok(Done::NotStarted) => None,
             Err(EpisodeError::Cancelled) if self.cancel.is_cancelled() => None,
@@ -338,6 +379,23 @@ pub fn run_online<R>(
     clock: &dyn RunClock,
     body: impl FnOnce(&mut OnlineEpisodes<'_, '_>) -> R,
 ) -> Result<R, EpisodeError> {
+    run_online_resolving(ctx, tasks, policy, None, settings, clock, body)
+}
+
+/// [`run_online`], a rollout pinned to a policy version (its request names
+/// the version's id) reaching it as `resolve` says.
+///
+/// # Errors
+/// As [`run_online`].
+pub fn run_online_resolving<R>(
+    ctx: &Context,
+    tasks: Vec<PracticeTask>,
+    policy: &OnlinePolicy,
+    resolve: Option<&Resolve<'_>>,
+    settings: OnlineSettings,
+    clock: &dyn RunClock,
+    body: impl FnOnce(&mut OnlineEpisodes<'_, '_>) -> R,
+) -> Result<R, EpisodeError> {
     let sampler = settings.sampling.sampler()?;
     std::fs::create_dir_all(&settings.scratch).map_err(|e| {
         EpisodeError::Settings(format!(
@@ -355,6 +413,7 @@ pub fn run_online<R>(
     };
     let shared = Shared {
         ctx,
+        resolve,
         tasks,
         reference,
         policy: PolicyIdentity {
@@ -399,7 +458,7 @@ pub struct FactoryRollouts<'c> {
 }
 
 /// How the policy a learner serves under an id is reached.
-type PolicyOf<'c> = dyn Fn(&str) -> Result<OnlinePolicy, String> + Send + Sync + 'c;
+type PolicyOf<'c> = Resolve<'c>;
 
 impl<'c> FactoryRollouts<'c> {
     /// Rollouts in `ctx`, each bounded as `episode` says (its seed and
@@ -448,10 +507,11 @@ impl OnlineRollouts for FactoryRollouts<'_> {
             scratch: request.scratch.to_path_buf(),
         };
         let policy = (self.policy)(request.policy)?;
-        run_online(
+        run_online_resolving(
             self.ctx,
             tasks,
             &policy,
+            Some(&*self.policy),
             settings,
             &SystemRunClock,
             |executor| {

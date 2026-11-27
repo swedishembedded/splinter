@@ -112,10 +112,18 @@ pub fn run_watched(
         cancel,
     } = seams;
     let poll_ms = settings.poll_ms;
+    let pinned = settings.pin_episodes;
+    let pin = |learner: &dyn Learner| pinned.then(|| learner.version_now()).flatten();
     let learner_state = learner.state()?;
     let entries = ledger.load()?;
     let (mut control, changes) = Controller::restore(settings, entries, &learner_state, selector)?;
-    apply(ledger, executor, clock.now_ms(), changes)?;
+    apply(
+        ledger,
+        executor,
+        clock.now_ms(),
+        changes,
+        pin(learner).as_deref(),
+    )?;
     let mut finishing = false;
     loop {
         if cancel() {
@@ -131,14 +139,14 @@ pub fn run_watched(
                 ledger.learner_version(version);
             }
             let changes = control.learner_event(event);
-            apply(ledger, executor, now, changes)?;
+            apply(ledger, executor, now, changes, pin(learner).as_deref())?;
         }
         while let Some(draft) = control.next_send(now) {
             let records = ledger.records(&draft.key)?;
             let group = outgoing(draft, records)?;
             let answer = learner.send(&group)?;
             let changes = control.sent(now, &group.key, &answer)?;
-            apply(ledger, executor, now, changes)?;
+            apply(ledger, executor, now, changes, pin(learner).as_deref())?;
             if matches!(answer, SendOutcome::Full { .. }) {
                 break;
             }
@@ -161,7 +169,7 @@ pub fn run_watched(
             None => false,
         };
         while let Some(changes) = (!paused).then(|| control.admit(now, selector)).flatten() {
-            apply(ledger, executor, now, changes)?;
+            apply(ledger, executor, now, changes, pin(learner).as_deref())?;
         }
         if control.done() {
             return Ok(Report {
@@ -175,17 +183,25 @@ pub fn run_watched(
         }
         for end in executor.wait(now.saturating_add(poll_ms))? {
             let changes = control.rollout_ended(end, selector)?;
-            apply(ledger, executor, clock.now_ms(), changes)?;
+            apply(
+                ledger,
+                executor,
+                clock.now_ms(),
+                changes,
+                pin(learner).as_deref(),
+            )?;
         }
     }
 }
 
-/// Records each change, then starts the rollouts it asks for.
+/// Records each change, then starts the rollouts it asks for, each on
+/// `policy` when the run pins its episodes to a version.
 fn apply(
     ledger: &mut dyn GroupLedger,
     executor: &mut dyn RolloutExecutor,
     now: u64,
     changes: Vec<Change>,
+    policy: Option<&str>,
 ) -> Result<(), OnlineError> {
     for change in changes {
         ledger.apply(now, &change)?;
@@ -194,6 +210,7 @@ fn apply(
                 group: key,
                 task,
                 index,
+                policy: policy.map(str::to_owned),
             })?;
         }
     }

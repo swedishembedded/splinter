@@ -45,6 +45,7 @@ fn settings() -> Settings {
         poll_ms: 50,
         epoch: 0,
         pin_versions: false,
+        pin_episodes: false,
     }
 }
 

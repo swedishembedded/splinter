@@ -91,6 +91,12 @@ pub struct StreamDoc {
     /// store).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_adapter: Option<Value>,
+    /// How many of the newest versions brain also serves under an id of
+    /// their own (`<publish_adapter>-v<version>`), so an episode stays on
+    /// the version it started on; unset serves none (a brain that predates
+    /// it refuses the field).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retain_versions: Option<u32>,
 }
 
 /// A streaming run to create.
@@ -191,6 +197,9 @@ pub enum StreamEvent {
         /// run, epoch, update, base and adapter digests), when the server
         /// names it.
         lineage: Option<splinter_core::revision::PolicyLineage>,
+        /// The id this version alone is served under while brain retains
+        /// it, when the run asked it to retain versions.
+        version_id: Option<String>,
     },
     /// These groups were too far behind and dropped unapplied.
     Dropped {
@@ -611,6 +620,7 @@ impl StreamJob {
                         digest: frame["digest"].as_str().unwrap_or_default().to_string(),
                         step: number("step"),
                         lineage,
+                        version_id: frame["version_id"].as_str().map(str::to_owned),
                     });
                 }
                 "dropped" => events.push(StreamEvent::Dropped { groups: groups() }),

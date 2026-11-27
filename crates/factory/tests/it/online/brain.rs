@@ -140,6 +140,7 @@ fn groups_reach_the_streaming_job_and_a_restart_is_resumed_from_its_checkpoint()
         max_staleness: 4,
         max_steps: None,
         top_k: None,
+        retain_versions: None,
         start: None,
         job_place: &dir.path().join("stream-job.json"),
     };
@@ -250,6 +251,7 @@ fn a_resumed_controller_cancels_the_job_it_left_running_and_continues_the_run() 
         max_staleness: 4,
         max_steps: None,
         top_k: None,
+        retain_versions: None,
         start: None,
         job_place: &place,
     };

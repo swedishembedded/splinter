@@ -18,7 +18,7 @@
 //!    version's behaviour from the promoted versions'. A detector that
 //!    crosses raises an alarm and asks for an evaluation at once.
 //! 3. **Decisions** ([`sequential`]): only a paired evaluation decides. The
-//!    newest published version (a frozen copy, by its adapter's digest) and
+//!    newest published version (by the id it alone is served under) and
 //!    the anchor (the last promoted version, initially the one the epoch
 //!    started from) each attempt the same tasks of a fresh draw of the
 //!    held-out monitor pool ([`monitor`]); an anytime-valid test on the
@@ -97,6 +97,10 @@ pub struct Version {
     pub version: u64,
     /// The adapter's digest.
     pub digest: String,
+    /// The id this version alone is served under while the learner retains
+    /// it: what an evaluation asks.
+    #[serde(default)]
+    pub id: Option<String>,
 }
 
 /// One task attempted by both policies of a comparison.
@@ -280,6 +284,7 @@ impl<'a> Watchdog<'a> {
         let latest = Version {
             version: latest.version,
             digest: latest.digest.clone(),
+            id: latest.version_id.clone(),
         };
         if self.anchor.is_none() {
             self.anchor = Some(latest.clone());

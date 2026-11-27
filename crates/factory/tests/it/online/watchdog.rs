@@ -55,6 +55,7 @@ impl Learner for Telemetered<'_> {
                     digest: format!("blake3:{version:064}"),
                     step: *version,
                     lineage: None,
+                    version_id: None,
                 });
             }
         }

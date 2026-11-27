@@ -72,6 +72,7 @@ fn world(rng: &mut SplitMix64) -> World {
             poll_ms: rng.between(1, 500),
             epoch: 0,
             pin_versions: false,
+            pin_episodes: false,
         },
         plan: LearnerPlan {
             step_tokens,

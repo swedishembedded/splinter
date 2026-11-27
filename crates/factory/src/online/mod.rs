@@ -84,6 +84,10 @@ pub struct Settings {
     /// scored and counted, never trained. Off, a rollout's oldest version
     /// bounds its staleness.
     pub pin_versions: bool,
+    /// Run every request of an episode on the version it started on: each
+    /// rollout asks the id of the learner's newest version when it starts
+    /// (when the learner names one), so its span is one version.
+    pub pin_episodes: bool,
 }
 
 impl Settings {

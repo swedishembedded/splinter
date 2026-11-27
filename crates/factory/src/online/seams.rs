@@ -24,6 +24,10 @@ pub struct RolloutRequest {
     pub task: String,
     /// Its index in the group.
     pub index: u32,
+    /// The id of the one policy version every request of the rollout asks
+    /// (a run that pins its episodes); `None` asks the policy the run
+    /// serves, whichever version that is when each request is sent.
+    pub policy: Option<String>,
 }
 
 /// A finished rollout: how it ended and what it recorded.
@@ -219,6 +223,13 @@ pub trait Learner {
     fn telemetry(&self) -> LearnerTelemetry {
         LearnerTelemetry::default()
     }
+
+    /// The id its newest published version alone is served under, when it
+    /// retains versions: what a pinned episode asks from its first request
+    /// to its last.
+    fn version_now(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Which task each group attempts.
@@ -367,6 +378,10 @@ pub struct PublishedVersion {
     pub step: u64,
     /// Its run-level identity.
     pub lineage: Option<splinter_core::revision::PolicyLineage>,
+    /// The id this version alone is served under while the learner retains
+    /// it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version_id: Option<String>,
 }
 
 impl LearnerTelemetry {
@@ -462,6 +477,10 @@ pub struct OnlineTrain<'a> {
     pub max_steps: Option<u32>,
     /// The sampler's top-K a score-centred estimator centres over.
     pub top_k: Option<u32>,
+    /// How many of the newest versions the run also serves under ids of
+    /// their own (episode pinning, the watchdog's evaluations); `None`
+    /// serves none.
+    pub retain_versions: Option<u32>,
     /// The adapter the run continues, if it continues one.
     pub start: Option<&'a std::path::Path>,
     /// Where the run's job is recorded (the endpoint that placed it and its id), beside the run's state: a job a

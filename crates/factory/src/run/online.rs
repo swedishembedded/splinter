@@ -146,6 +146,12 @@ pub struct OnlineParams {
     /// straddle one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pin_versions: bool,
+    /// Run every request of an episode on the version it started on: the
+    /// learner serves its newest versions under ids of their own and each
+    /// rollout asks the one that was newest when it started, so its span is
+    /// one version (needs a brain that retains versions).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pin_episodes: bool,
     /// Watch the training and roll it back when it moves the policy the
     /// wrong way: invariants pause intake, drift asks for an evaluation,
     /// and a paired evaluation of the newest version against the anchor on
@@ -165,6 +171,10 @@ pub struct OnlineParams {
     #[serde(default)]
     pub params: Map<String, Value>,
 }
+
+/// The most versions a learner is asked to keep served under ids of their
+/// own (brain bounds it at 16: each holds a slot of its adapter bank).
+const RETAINED_VERSIONS: u32 = 16;
 
 fn one_u64() -> u64 {
     1
@@ -227,6 +237,18 @@ impl OnlineParams {
         Ok(p)
     }
 
+    /// How many of its newest versions the learner keeps served under ids
+    /// of their own: enough for a pinned episode to stay on its version as
+    /// long as its group may lag (and for the watchdog to evaluate them);
+    /// none when nothing addresses a version.
+    pub(super) fn retained_versions(&self) -> Option<u32> {
+        (self.pin_episodes || self.watchdog.is_some()).then(|| {
+            u32::try_from(self.max_staleness.saturating_add(2))
+                .unwrap_or(u32::MAX)
+                .min(RETAINED_VERSIONS)
+        })
+    }
+
     pub(super) fn settings(&self, namespace: &str) -> Settings {
         Settings {
             namespace: namespace.to_string(),
@@ -241,6 +263,7 @@ impl OnlineParams {
             poll_ms: 200,
             epoch: 0,
             pin_versions: self.pin_versions,
+            pin_episodes: self.pin_episodes,
         }
     }
 

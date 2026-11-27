@@ -480,11 +480,17 @@ fn advance(
             // The run-level identity brain names beside the serving version.
             let lineage = json!({"run": run.resume_key, "epoch": durable.epoch, "update": step,
                                  "base_digest": SCRIPTED_BASE_DIGEST, "adapter_digest": sha});
-            push(
-                run,
-                json!({"type": "published", "version": durable.version, "digest": sha, "step": step,
-                       "lineage": lineage}),
-            );
+            let mut frame = json!({"type": "published", "version": durable.version, "digest": sha,
+                                   "step": step, "lineage": lineage});
+            // As brain: a run that retains its versions names the id each is served under.
+            if run.doc["retain_versions"].as_u64().is_some_and(|n| n > 0) {
+                frame["version_id"] = json!(format!(
+                    "{}-v{}",
+                    run.doc["publish_adapter"].as_str().unwrap_or_default(),
+                    durable.version
+                ));
+            }
+            push(run, frame);
         }
         if step.is_multiple_of(run.checkpoint_every) {
             commit(run, durable, &mut push);

@@ -342,7 +342,14 @@ impl Shared<'_, '_, '_> {
             spec.seed,
             self.top_logprobs,
         ));
-        spec.model = Some(self.binding.clone());
+        // A pinned rollout asks the one version it started on.
+        spec.model = Some(ModelBinding {
+            model: request
+                .policy
+                .clone()
+                .unwrap_or_else(|| self.binding.model.clone()),
+            ..self.binding.clone()
+        });
         let reports = self
             .rollouts
             .backend

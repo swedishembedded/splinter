@@ -40,7 +40,7 @@ use splinter_factory::online::seams::{
 };
 use splinter_orchestrator::Context;
 use splinter_pipelines::episodes::online::{
-    run_online, OnlineEpisodes, OnlinePolicy, OnlineSampling, OnlineSettings,
+    run_online, run_online_resolving, OnlineEpisodes, OnlinePolicy, OnlineSampling, OnlineSettings,
 };
 use splinter_pipelines::episodes::{load_collection, EpisodeError, EpisodeSettings, PracticeTask};
 use sven_sdk::model::{
@@ -221,6 +221,7 @@ fn rollouts(
                 group: GroupKey::numbered("online", 0).unwrap(),
                 task: task.task.to_string(),
                 index,
+                policy: None,
             })
             .unwrap();
     }
@@ -429,6 +430,7 @@ fn a_cutting_sampler_is_refused_and_a_cancelled_run_stops_its_rollouts() {
                     group: GroupKey::numbered("online", 0).unwrap(),
                     task: s.tasks[0].task.to_string(),
                     index: 0,
+                    policy: None,
                 })
                 .unwrap();
             let early = executor.wait(SystemRunClock.now_ms() + 300).unwrap();
@@ -476,5 +478,68 @@ fn a_conversation_that_outgrew_the_context_is_a_scored_failure_never_retried() {
     assert!(
         !done.outcome.exact && done.records.is_empty(),
         "the refused run kept no trajectory to pair its calls with: {done:?}"
+    );
+}
+
+/// Spec: a rollout pinned to a version (its request names the version's own id) asks that version for every call of
+/// its episode, though the run's policy publishes a newer version between two calls: its span is one version.
+#[test]
+fn a_rollout_pinned_to_a_version_asks_it_for_every_call_of_its_episode() {
+    let s = setup(
+        "online-pinned",
+        Served {
+            publish_mid_rollout: true,
+            ..Served::new(3)
+        },
+        false,
+    );
+    // The pinned version: its own server, serving version 3 alone.
+    let pinned = Arc::new(Served::new(3));
+    let asked = std::sync::Mutex::new(Vec::new());
+    let resolve = |id: &str| {
+        asked.lock().unwrap().push(id.to_string());
+        Ok(OnlinePolicy::Model(Model::new(
+            pinned.clone(),
+            "scripted/policy-1-v3",
+        )))
+    };
+    let ends = run_online_resolving(
+        &s.ctx,
+        s.tasks.clone(),
+        &OnlinePolicy::Reference(ModelRef::policy_default()),
+        Some(&resolve),
+        settings(&s.work, OnlineSampling::untruncated(0.8)),
+        &SystemRunClock,
+        |executor| {
+            executor
+                .start(RolloutRequest {
+                    group: GroupKey::numbered("online", 0).unwrap(),
+                    task: s.tasks[0].task.to_string(),
+                    index: 0,
+                    policy: Some("policy-1-v3".into()),
+                })
+                .unwrap();
+            let mut ended = Vec::new();
+            while ended.is_empty() {
+                ended = executor.wait(SystemRunClock.now_ms() + 60_000).unwrap();
+            }
+            ended
+        },
+    )
+    .unwrap();
+    let done = ends[0].result.as_ref().unwrap();
+    assert!(done.outcome.exact, "{done:?}");
+    assert_eq!(
+        (done.outcome.span.oldest(), done.outcome.span.newest()),
+        (3, 3),
+        "every call of the episode asked the version it started on"
+    );
+    let versions: Vec<u64> = records(&ends[0]).iter().map(|r| r.policy_version).collect();
+    assert_eq!(versions, [3, 3], "two calls, one version");
+    assert_eq!(*asked.lock().unwrap(), ["policy-1-v3"]);
+    assert_eq!(
+        s.policy.asked.load(Ordering::SeqCst),
+        0,
+        "the run's moving policy was never asked"
     );
 }

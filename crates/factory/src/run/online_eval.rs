@@ -6,12 +6,11 @@
 // continuously trained models while they train, you can procure our services
 // by sending an email to info@swedishembedded.com.
 
-//! The watchdog's evaluations of an online stage, served: each version a
-//! frozen copy of its published adapter (fetched by its digest and served
-//! from the trainer as a model of its own, so the training that publishes on
-//! does not move it), its rollouts of the held-out tasks run by the stage's
-//! own rollouts, beside the training's and on their own groups, never seen
-//! by the task selector. A rollout whose infrastructure failed, or that was
+//! The watchdog's evaluations of an online stage: each version asked under
+//! the id the learner serves it alone under while it retains it (so the
+//! training that publishes on does not move it), its rollouts of the
+//! held-out tasks run by the stage's own rollouts, beside the training's and
+//! on their own groups, never seen by the task selector. A rollout whose infrastructure failed, or that was
 //! not graded, is not evidence: its pair is left out.
 
 use std::collections::BTreeMap;
@@ -25,8 +24,6 @@ use crate::online::seams::{
     OnlineRollouts, RolloutRequest, RolloutsRequest, RunClock, SystemRunClock,
 };
 use crate::online::watchdog::{Evaluator, Pair, Version};
-use crate::recipe::ModelRef;
-use crate::training::Trainer;
 
 /// How long one wait for a rollout of an evaluation lasts before it is
 /// asked again.
@@ -34,10 +31,6 @@ const WAIT_MS: u64 = 1_000;
 
 /// What every evaluation of a stage shares.
 pub(crate) struct Served<'a> {
-    /// Serves the frozen copies.
-    pub trainer: &'a dyn Trainer,
-    /// The stage's base.
-    pub base: &'a ModelRef,
     /// Runs the rollouts.
     pub rollouts: &'a dyn OnlineRollouts,
     /// The held-out task collections (the monitor pool, the confirm set),
@@ -64,25 +57,14 @@ impl Served<'_> {
         tasks: &[String],
         namespace: &str,
     ) -> Result<BTreeMap<String, bool>, String> {
-        let hex: String = version
-            .digest
-            .rsplit(':')
-            .next()
-            .unwrap_or_default()
-            .chars()
-            .take(24)
-            .collect();
-        let adapter = self.work.join(format!("frozen-{hex}.safetensors"));
-        if !adapter.is_file() {
-            std::fs::create_dir_all(&self.work).map_err(|e| e.to_string())?;
-            self.trainer
-                .published_adapter(&version.digest, &adapter)
-                .map_err(|e| e.to_string())?;
-        }
-        let id = self
-            .trainer
-            .serve(self.base, Some(&adapter))
-            .map_err(|e| e.to_string())?;
+        // The version itself, as the learner serves it while it retains it:
+        // never a copy offered under the id the training publishes on.
+        let id = version.id.clone().ok_or_else(|| {
+            format!(
+                "version {} is served under no id of its own: the learner retains no versions",
+                version.version
+            )
+        })?;
         let dir = self
             .task_sets
             .iter()
@@ -111,6 +93,7 @@ impl Served<'_> {
                         group,
                         task: task.clone(),
                         index: 0,
+                        policy: None,
                     }) {
                         Ok(()) => left += 1,
                         Err(e) => failure = Some(e.to_string()),

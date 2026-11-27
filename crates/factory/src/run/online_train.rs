@@ -192,8 +192,6 @@ pub(super) fn train(stage: &Stage<'_>) -> Result<Trained, RunError> {
             let confirm =
                 ids(stage.rollouts, &held.confirm, &request).map_err(|e| stage.fail(e))?;
             Some(Served {
-                trainer: stage.trainer,
-                base: stage.base,
                 rollouts: stage.rollouts,
                 task_sets: vec![
                     (held.monitor.clone(), monitor),
@@ -264,6 +262,7 @@ fn train_in<'s, 'e>(
                 top_k: params
                     .top_logprobs
                     .filter(|_| params.estimator == "score-centred"),
+                retain_versions: params.retained_versions(),
                 start: anchor_adapter.as_deref().or(stage.start),
                 job_place: &stage.work().join("stream-job.json"),
             })

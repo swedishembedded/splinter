@@ -672,6 +672,7 @@ impl Trainer for BrainTrainer {
                 max_staleness: Some(request.max_staleness),
                 max_steps: request.max_steps,
                 top_k: request.top_k,
+                retain_versions: request.retain_versions,
                 start_adapter,
             },
         };

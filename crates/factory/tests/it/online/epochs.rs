@@ -174,3 +174,80 @@ fn another_stages_groups_in_the_runs_ledger_only_move_the_order_of_groups_on() {
         "{created:?}"
     );
 }
+
+/// The scripted learner, naming the id its newest version alone is served under.
+struct Versioned<'a>(&'a mut super::doubles::ScriptedLearner);
+
+impl splinter_factory::online::seams::Learner for Versioned<'_> {
+    fn state(&mut self) -> Result<LearnerState, splinter_factory::online::seams::LearnerError> {
+        self.0.state()
+    }
+    fn send(
+        &mut self,
+        group: &splinter_factory::online::seams::OutgoingGroup,
+    ) -> Result<
+        splinter_factory::online::seams::SendOutcome,
+        splinter_factory::online::seams::LearnerError,
+    > {
+        self.0.send(group)
+    }
+    fn poll(
+        &mut self,
+    ) -> Result<
+        Vec<splinter_factory::online::seams::LearnerEvent>,
+        splinter_factory::online::seams::LearnerError,
+    > {
+        self.0.poll()
+    }
+    fn finish(&mut self) -> Result<(), splinter_factory::online::seams::LearnerError> {
+        self.0.finish()
+    }
+    fn version_now(&self) -> Option<String> {
+        Some(format!("policy-v{}", self.0.served.get()))
+    }
+}
+
+#[test]
+fn a_run_that_pins_its_episodes_starts_each_rollout_on_the_newest_versions_own_id() {
+    for pinned in [false, true] {
+        let clock = super::doubles::Clock::default();
+        let mut learner =
+            super::doubles::ScriptedLearner::new(clock.clone(), super::learner_plan());
+        let mut executor =
+            super::doubles::Executor::new(clock.clone(), learner.served.clone(), super::script(99));
+        let mut selector = RoundRobin::new(tasks(2), 12).unwrap();
+        let mut ledger = super::doubles::MemoryLedger::default();
+        let report = splinter_factory::online::driver::run(
+            splinter_factory::online::Settings {
+                pin_episodes: pinned,
+                max_staleness: 100,
+                rollout_slots: 2,
+                ..settings()
+            },
+            splinter_factory::online::driver::Seams {
+                executor: &mut executor,
+                learner: &mut Versioned(&mut learner),
+                selector: &mut selector,
+                ledger: &mut ledger,
+                clock: &clock,
+                cancel: &|| false,
+            },
+        )
+        .unwrap();
+        assert_eq!(report.stats.groups_started, 12);
+        let asked: Vec<Option<String>> = executor.starts.iter().map(|s| s.policy.clone()).collect();
+        if pinned {
+            assert!(asked.iter().all(Option::is_some), "{asked:?}");
+            assert!(
+                asked
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    > 1,
+                "later rollouts start on later versions: {asked:?}"
+            );
+        } else {
+            assert!(asked.iter().all(Option::is_none), "{asked:?}");
+        }
+    }
+}

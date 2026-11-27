@@ -729,7 +729,7 @@ compiles its collection evaluates on the same compiled tasks:
   (`reference_window` of them, `slack` absorbed per version, an alarm past `threshold`); an
   alarm asks for an evaluation at once. Evaluations run every `evaluate_every` published
   versions: the newest version and the anchor (the last promoted, at first the version the
-  epoch started from), each a frozen copy of its published adapter served by digest, attempt
+  epoch started from), each asked under the id the learner serves it alone under, attempt
   the same `monitor_size` tasks drawn afresh (a task at most `max_uses` times per epoch); a test
   martingale on the discordant pairs rolls back on evidence of a regression larger than
   `test.delta` (error `test.alpha`), and promotes on evidence the candidate is not worse by
@@ -763,6 +763,12 @@ compiles its collection evaluates on the same compiled tasks:
         max_rollbacks: 2
         cooldown: 0.5
   ```
+
+  `pin_episodes: true` runs every request of an episode on the version it started on: the
+  learner keeps its newest versions served under ids of their own (`retain_versions`, as many as
+  `max_staleness` plus two, at most 16; a brain from before 2026-11-27 refuses it), and each
+  rollout asks the id of the version that was newest when it started, so its span is one
+  version. The watchdog's evaluations ask versions by the same ids.
 
   `pin_versions: true` trains only rollouts one policy version decoded from their first request
   to their last (a rollout that straddles a publication is scored and counted in

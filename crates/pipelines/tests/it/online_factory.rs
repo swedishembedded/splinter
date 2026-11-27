@@ -461,6 +461,7 @@ stages:
       step_tokens: 8
       queue_tokens: 64
       checkpoint_every: 1
+      max_output_tokens: 48
       seed: 3
       watchdog:
         bounds: { guard_skip_rate: 1.0, ratio_max: 1000, truncation_rate: 1.0, infra_failure_rate: 1.0,

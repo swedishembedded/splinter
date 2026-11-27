@@ -215,6 +215,7 @@ impl Learner for BrainLearner {
                     digest,
                     step,
                     lineage,
+                    version_id,
                 } => {
                     // A job that continues the run publishes, before it trains, the policy its checkpoint
                     // holds: that version is committed.
@@ -230,6 +231,7 @@ impl Learner for BrainLearner {
                         digest,
                         step,
                         lineage,
+                        version_id,
                     });
                     events.push(LearnerEvent::Published { version });
                 }
@@ -261,6 +263,10 @@ impl Learner for BrainLearner {
 
     fn finish(&mut self) -> Result<(), LearnerError> {
         self.job.finish().map_err(error)
+    }
+
+    fn version_now(&self) -> Option<String> {
+        self.telemetry.published.last()?.version_id.clone()
     }
 
     fn telemetry(&self) -> LearnerTelemetry {

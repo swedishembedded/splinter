@@ -65,6 +65,7 @@ fn spec(step_tokens: u64, queue_tokens: u64) -> StreamSpec {
             max_staleness: Some(4),
             max_steps: None,
             top_k: None,
+            retain_versions: None,
             start_adapter: None,
         },
     }
