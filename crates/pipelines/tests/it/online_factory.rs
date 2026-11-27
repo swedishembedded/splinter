@@ -435,3 +435,128 @@ fn an_online_candidate_is_trained_killed_resumed_and_evaluated_with_no_group_tra
     assert!(view.join("adapter.safetensors").is_file());
     assert!(run.join("eval").is_dir(), "the candidate was evaluated");
 }
+
+// seed: a recipe states every seed; the scripted policy's choices follow the rollouts' own seeds.
+const WATCHED: &str = r#"
+schema: splinter.recipe/v2
+name: watched
+inputs:
+  course: { kind: files, path: collections/rl.yaml }
+models:
+  student: "brain:Qwen/Toy"
+stages:
+  - { id: tasks, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: train } }
+  - { id: monitor, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: monitor } }
+  - { id: confirm, uses: tasks.pin, inputs: { collection: $inputs.course }, with: { split: confirm } }
+  - id: online
+    uses: train.online
+    inputs: { tasks: $stages.tasks.tasks, monitor: $stages.monitor.tasks, confirm: $stages.confirm.tasks }
+    with:
+      base: student
+      groups: 6
+      group_size: 4
+      max_concurrent_attempts: 4
+      max_staleness: 100
+      rollout_tokens: 4
+      step_tokens: 8
+      queue_tokens: 64
+      checkpoint_every: 1
+      seed: 3
+      watchdog:
+        bounds: { guard_skip_rate: 1.0, ratio_max: 1000, truncation_rate: 1.0, infra_failure_rate: 1.0,
+                  window: 8, min_rollouts: 1000 }
+        drift: { slack: 0.05, threshold: 10, reference_window: 3 }
+        test: { delta: 0.25, alpha: 0.05, beta: 0.1, max_discordant: 4 }
+        evaluate_every: 1
+        monitor_size: 2
+        max_uses: 50
+        max_rollbacks: 1
+        cooldown: 0.5
+"#;
+
+#[test]
+fn a_watched_run_whose_policy_does_not_regress_is_evaluated_and_never_rolled_back() {
+    let scratch = Scratch::new("online-watched");
+    let root = scratch.0.join("repo");
+    repo(&root);
+    for (id, file) in [
+        ("monitor/one", "greeting.txt"),
+        ("monitor/two", "count.txt"),
+        ("confirm/sealed", "greeting.txt"),
+    ] {
+        let (instruction, check) = if file == "count.txt" {
+            (
+                "Make count.txt hold the number three.",
+                "grep -qx 3 count.txt",
+            )
+        } else {
+            (
+                "Write hello world into greeting.txt.",
+                "grep -q 'hello world' greeting.txt",
+            )
+        };
+        task(&root, id, instruction, file, check);
+    }
+    let store = scratch.0.join("artifacts");
+    let adapters = scratch.0.join("adapters");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&adapters).unwrap();
+    let service = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")])
+        .with_training(JobScript::over(store.clone()))
+        .serving_adapters(adapters.clone());
+    let endpoints = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap())
+        .with_adapter_directory(adapters)
+        .with_refused_wait(Duration::from_millis(50));
+    let trainer = BrainTrainer::new(endpoints, scratch.0.join("models"));
+    let connections = Connections::parse(&format!(
+        "connections:\n  brain: {{ protocol: openai, url: \"{}\" }}\n",
+        service.url()
+    ))
+    .unwrap();
+    let resolved = resolve(&root, WATCHED, connections).unwrap();
+    let policy = Arc::new(Policy);
+    let ctx = Context::new(config(&scratch), false)
+        .unwrap()
+        .with_clock(Box::new(FixedClock::new("2026-11-27T09:00:00.000Z")))
+        .with_model(
+            ModelRef::policy_default(),
+            Model::new(policy.clone(), "scripted/policy-1"),
+        );
+    // seed: episodes draw their own seeds from the stage's.
+    let rollouts = FactoryRollouts::new(&ctx, EpisodeSettings::new(1, 0), |_served| {
+        Ok(OnlinePolicy::Reference(ModelRef::policy_default()))
+    });
+    let backend = FakeBackend::with(Outcome::Fail);
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: None,
+        variables: None,
+        online: Some(&rollouts),
+        build: splinter_core::build::BuildInfo::this_executable(),
+    };
+    let run = scratch.0.join("run");
+    Factory::open(&resolved, &run, services, "test")
+        .unwrap()
+        .run()
+        .unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(run.join("online/report.json")).unwrap())
+            .unwrap();
+    let watchdog = &report["watchdog"];
+    assert!(
+        watchdog["comparisons"].as_u64().unwrap() >= 1,
+        "the published versions were evaluated against the anchor: {watchdog:#}"
+    );
+    assert_eq!(
+        watchdog["audits"],
+        serde_json::json!([]),
+        "a policy that does not regress is never rolled back: {watchdog:#}"
+    );
+    assert_eq!(watchdog["epochs"]["epoch"], 0);
+    assert!(lines(&run.join("online/groups.jsonl"))
+        .iter()
+        .all(|l| l["audit"].is_null()));
+}
