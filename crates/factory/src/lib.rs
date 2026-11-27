@@ -56,6 +56,7 @@ pub mod hint;
 mod holdout;
 pub mod knowledge_ops;
 pub mod machine_config;
+pub mod observe;
 pub mod online;
 pub mod ops;
 pub mod plan;

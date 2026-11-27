@@ -100,6 +100,9 @@ pub struct FakeBackend {
     /// How every attempt ended, as (pass, task, slot, outcome), in order:
     /// what a test recomputes the run's statistics from.
     pub returned: Mutex<Vec<(String, String, u32, Outcome)>>,
+    /// The outcome of an attempt that runs no model (a task's reference
+    /// solution) at a task, by task id, before any script.
+    pub reference_on: BTreeMap<String, Outcome>,
 }
 
 impl FakeBackend {
@@ -122,6 +125,11 @@ impl FakeBackend {
     }
 
     fn outcome(&self, spec: &ExecutionSpec) -> Outcome {
+        if spec.model.is_none() {
+            if let Some(outcome) = self.reference_on.get(&spec.task.id) {
+                return *outcome;
+            }
+        }
         if let Some(model) = &spec.model {
             if model.model.contains("candidate") {
                 let slot = format!("{}#{}", spec.task.id, spec.slot.slot);
@@ -498,6 +506,9 @@ pub struct FakeTrainer {
     pub replayed: Mutex<Vec<(usize, Option<f32>)>>,
     /// What its servers say they are.
     pub served: Vec<splinter_core::revision::ServedRevision>,
+    /// The validation curve its report states, as brain's trainer writes it
+    /// (`points`, `selected_step`, `steps_completed`, `stopped_early`), if any.
+    pub curve: Option<serde_json::Value>,
 }
 
 impl Trainer for FakeTrainer {
@@ -560,7 +571,13 @@ impl Trainer for FakeTrainer {
             files: vec![adapter.clone(), record.clone()],
             adapter: Some(adapter),
             params: request.params.clone(),
-            report: json!({"records": records, "base_digest": format!("sha256:{}", "e".repeat(64))}),
+            report: {
+                let mut report = json!({"records": records, "base_digest": format!("sha256:{}", "e".repeat(64))});
+                if let Some(curve) = &self.curve {
+                    report["curve"] = curve.clone();
+                }
+                report
+            },
             record: Some(record),
         })
     }

@@ -109,6 +109,44 @@ impl Clock for FixedClock {
     }
 }
 
+/// (year, month, day) to days since the epoch: the inverse of
+/// [`civil_from_days`], by the same algorithm.
+#[must_use]
+pub fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = if month > 2 { month - 3 } else { month + 9 };
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// Seconds since the Unix epoch of a UTC timestamp `YYYY-MM-DDTHH:MM:SS`,
+/// with any fraction of a second and a trailing `Z`; `None` for any other
+/// shape.
+#[must_use]
+pub fn parse_utc(stamp: &str) -> Option<f64> {
+    let stamp = stamp.strip_suffix('Z').unwrap_or(stamp);
+    let (date, time) = stamp.split_once('T')?;
+    let mut d = date.split('-').map(str::parse::<i64>);
+    let (year, month, day) = (d.next()?.ok()?, d.next()?.ok()?, d.next()?.ok()?);
+    let mut t = time.split(':');
+    let (hour, minute) = (
+        t.next()?.parse::<i64>().ok()?,
+        t.next()?.parse::<i64>().ok()?,
+    );
+    let second = t.next()?.parse::<f64>().ok()?;
+    if d.next().is_some()
+        || t.next().is_some()
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+    {
+        return None;
+    }
+    Some((days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60) as f64 + second)
+}
+
 /// Days-since-epoch to (year, month, day) - Howard Hinnant's algorithm, the
 /// same arithmetic a date library would apply, without the dependency.
 fn civil_from_days(z: i64) -> (i64, i64, i64) {
@@ -127,6 +165,22 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_timestamp_parses_to_the_seconds_it_names() {
+        for days in [0, 20_723, 20_784, -1, 11_016] {
+            let (y, m, d) = civil_from_days(days);
+            assert_eq!(days_from_civil(y, m, d), days);
+        }
+        assert_eq!(parse_utc("1970-01-01T00:00:00Z"), Some(0.0));
+        // 2026-11-27 is day 20_784.
+        assert_eq!(
+            parse_utc("2026-11-27T04:34:53.5Z"),
+            Some(20_784.0 * 86_400.0 + 16_493.5)
+        );
+        assert_eq!(parse_utc("2026-11-27 04:34:53"), None);
+        assert_eq!(parse_utc("2026-13-27T04:34:53Z"), None);
+    }
 
     #[test]
     fn the_epoch_and_a_pinned_date_render_exactly() {

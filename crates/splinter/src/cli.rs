@@ -90,6 +90,12 @@ pub enum Command {
     /// Start a factory run on a changed recipe, reusing the products of one
     /// or more earlier runs that the change leaves unchanged.
     Fork(ForkArgs),
+    /// Read a factory run's generational state from its records alone: per
+    /// generation, what its dataset is made of (whose records, the frontier,
+    /// task difficulty), the budget it trained, every evaluation with its
+    /// interval and the release's reasons, how attempts failed and whether
+    /// their claims of completion agreed with the grader, and each stage's pace.
+    Observe(ObserveArgs),
     /// Print a factory run's report.
     Report(RunDirArgs),
     /// Write a factory run's products as a portable bundle.
@@ -552,8 +558,8 @@ pub use eval::{EvalArgs, EvalCommand, ExperimentCommand, LineageArgs, ReleaseCom
 pub use exam::{ExamArgs, ExamReportCommand, ExamSetArgs, ExamSetCommand, PowerArgs, SelectArgs};
 pub use experiences::{CapabilitiesArgs, CompareArmsArgs, DiagnoseArgs, ImportArgs, StrataArgs};
 pub use factory::{
-    ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
-    RunDirArgs, ViewArgs,
+    ExportArgs, ForkArgs, GenerateArgs, InitArgs, InspectArgs, ObserveArgs, PlayArgs, RecipeArgs,
+    RunArgs, RunDirArgs, ViewArgs,
 };
 pub use global::Global;
 pub use goal::GoalCommand;

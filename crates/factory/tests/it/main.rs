@@ -32,6 +32,7 @@ mod interventions;
 mod knowledge;
 mod machine_config;
 mod native;
+mod observe;
 mod online;
 mod operator_security;
 mod practice;

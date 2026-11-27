@@ -85,3 +85,19 @@ fn a_run_directory_is_resumed_cancelled_inspected_forked_reported_and_exported()
         "play needs a task"
     );
 }
+
+#[test]
+fn several_runs_are_observed_with_an_optional_seed_and_utilisation_log() {
+    assert!(matches!(
+        command(&["observe", "runs/g1", "runs/g2", "--seed", "3"]),
+        Command::Observe(a) if a.runs.len() == 2 && a.seed == Some(3) && a.utilisation.is_none()
+    ));
+    assert!(matches!(
+        command(&["observe", "runs/g1", "--utilisation", "dmon.log", "--utilisation-utc-offset", "-60"]),
+        Command::Observe(a) if a.utilisation_utc_offset == -60
+    ));
+    assert!(
+        Cli::try_parse_from(["splinter", "observe"]).is_err(),
+        "observe needs a run"
+    );
+}

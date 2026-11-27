@@ -96,6 +96,7 @@ Every command takes these.
 - [splinter inspect](#splinter-inspect) - Show a factory run's products and reports, or open its trials
 - [splinter view](#splinter-view) - Open a factory run in the browser
 - [splinter fork](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
+- [splinter observe](#splinter-observe) - Read a factory run's generational state from its records alone
 - [splinter report](#splinter-report) - Print a factory run's report
 - [splinter export](#splinter-export) - Write a factory run's products as a portable bundle
 - [splinter index](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -246,6 +247,7 @@ Subcommands:
 - [`inspect`](#splinter-inspect) - Show a factory run's products and reports, or open its trials
 - [`view`](#splinter-view) - Open a factory run in the browser
 - [`fork`](#splinter-fork) - Start a factory run on a changed recipe, reusing the products of one or more earlier runs that the change leaves unchanged
+- [`observe`](#splinter-observe) - Read a factory run's generational state from its records alone
 - [`report`](#splinter-report) - Print a factory run's report
 - [`export`](#splinter-export) - Write a factory run's products as a portable bundle
 - [`index`](#splinter-index) - File a factory run's trials in the experience database (an optional index across runs
@@ -482,6 +484,24 @@ Options:
 
 - `--recipe <RECIPE>` (required): The changed recipe, relative to the task repository.
 - `--out <DIR>` (required): The new run directory.
+
+### splinter observe
+
+Read a factory run's generational state from its records alone: per generation, what its dataset is made of (whose records, the frontier, task difficulty), the budget it trained, every evaluation with its interval and the release's reasons, how attempts failed and whether their claims of completion agreed with the grader, and each stage's pace
+
+```text
+splinter observe [OPTIONS] <RUN>...
+```
+
+Arguments:
+
+- `<RUN>...` (required): The run directories, each observed on its own.
+
+Options:
+
+- `--seed <N>`: The seed of the evaluations' bootstrap intervals; a fresh one is drawn and printed when none is given.
+- `--utilisation <FILE>`: A card utilisation log written by `nvidia-smi dmon -o DT`, joined to each stage by time (a run records no card use)
+- `--utilisation-utc-offset <MINUTES>`: How many minutes east of UTC the utilisation log's local times are. Default: `0`.
 
 ### splinter report
 

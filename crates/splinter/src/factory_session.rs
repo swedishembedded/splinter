@@ -24,8 +24,8 @@ use splinter_sdk::factory::{
 use splinter_sdk::{Config, Error};
 
 use crate::cli::{
-    Command, EvalArgs, ExportArgs, ForkArgs, InitArgs, InspectArgs, PlayArgs, RecipeArgs, RunArgs,
-    RunStatusArgs, VerifyArgs,
+    Command, EvalArgs, ExportArgs, ForkArgs, InitArgs, InspectArgs, ObserveArgs, PlayArgs,
+    RecipeArgs, RunArgs, RunStatusArgs, VerifyArgs,
 };
 use crate::output::{emit, Report};
 use crate::session::Exit;
@@ -57,6 +57,7 @@ pub fn route(
         Command::Inspect(args) => inspect(config, &args),
         Command::View(args) => crate::view_session::view(&args),
         Command::Fork(args) => fork(config, json, &args),
+        Command::Observe(args) => observe(json, &args),
         Command::Report(args) => report(&args.run),
         Command::Export(args) => export(&args),
         Command::Play(args) => play(config, json, &args),
@@ -439,6 +440,33 @@ pub fn verify(json: bool, dir: &Path) -> Result<Exit, Error> {
     let failed = !problems.is_empty();
     emit(json, &Verified { problems });
     Ok(if failed { Exit::Failed } else { Exit::Ok })
+}
+
+/// `observe RUN [RUN ...]`.
+pub fn observe(json: bool, args: &ObserveArgs) -> Result<Exit, Error> {
+    use splinter_sdk::factory::observe::{self, system::Utilisation, Options};
+    let utilisation = match &args.utilisation {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .map_err(|e| refused(format!("{}: {e}", path.display())))?;
+            Some(
+                Utilisation::parse(&text, args.utilisation_utc_offset)
+                    .map_err(|e| refused(format!("{}: {e}", path.display())))?,
+            )
+        }
+        None => None,
+    };
+    let options = Options {
+        seed: splinter_sdk::seed::resolve("seed", args.seed),
+        utilisation,
+    };
+    let runs = args
+        .runs
+        .iter()
+        .map(|run| observe::observe(run, &options).map_err(refused))
+        .collect::<Result<Vec<_>, _>>()?;
+    emit(json, &crate::observe_output::Observed(runs));
+    Ok(Exit::Ok)
 }
 
 /// `report RUN`.

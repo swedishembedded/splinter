@@ -96,6 +96,30 @@ pub struct ForkArgs {
     pub out: PathBuf,
 }
 
+/// `observe`.
+#[derive(Debug, Args)]
+pub struct ObserveArgs {
+    /// The run directories, each observed on its own.
+    #[arg(value_name = "RUN", required = true, num_args = 1..)]
+    pub runs: Vec<PathBuf>,
+    /// The seed of the evaluations' bootstrap intervals; a fresh one is drawn
+    /// and printed when none is given.
+    #[arg(long, value_name = "N")]
+    pub seed: Option<u64>,
+    /// A card utilisation log written by `nvidia-smi dmon -o DT`, joined to
+    /// each stage by time (a run records no card use).
+    #[arg(long, value_name = "FILE")]
+    pub utilisation: Option<PathBuf>,
+    /// How many minutes east of UTC the utilisation log's local times are.
+    #[arg(
+        long,
+        value_name = "MINUTES",
+        default_value_t = 0,
+        allow_hyphen_values = true
+    )]
+    pub utilisation_utc_offset: i64,
+}
+
 /// `export`.
 #[derive(Debug, Args)]
 pub struct ExportArgs {

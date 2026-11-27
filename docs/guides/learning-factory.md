@@ -1052,6 +1052,72 @@ host and pid namespace, its process no longer running), and otherwise when the
 lease lapses (ten minutes). `splinter export RUN --out run.tar.zst` writes
 a bundle that `splinter verify` checks on another machine.
 
+## Observing a loop
+
+A generational loop is a control system: each generation's state is decided by its
+data, its training and its gate, and `splinter observe` reads that state back from a
+run's records alone, without changing them:
+
+```sh
+splinter observe runs/vim-g2 runs/vim-g3
+splinter --json observe runs/vim-g2 --utilisation dmon.log --utilisation-utc-offset 60
+```
+
+A generation is a `promotion` stage. The evaluations it reads name its candidates, each
+candidate's `model.train` names its `dataset` and `replay`, and the dataset's `attempts`
+and `tasks` name where its records and new tasks came from: every relation is the
+recipe's (`recipe.yaml` of the run), never a stage's name. For each generation it reports:
+
+- **Data**: records and supervised characters by source attempt stage, in training and
+  in validation, and the target's own share of each (a record is the target's own when
+  the model that made it is the dataset's target or an adapter served on it, the student
+  or a champion; any other is a teacher's). Each source's pass rate on the new tasks and
+  its mean per-task pass rate (task difficulty for that policy). The frontier: the new
+  tasks the target's own policy failed every attempt at, passed only sometimes, or
+  always passed, the records from each by policy, and the frontier share (records from
+  tasks it does not yet always pass). Distinct supervised action sequences. Supervised
+  tokens are absent: the records hold characters, not the trainer's tokens.
+- **Training**: steps given, run and selected, whether it stopped early, and the
+  passes over the data at the selected step:
+  `selected_step * records_per_step / draws_per_epoch`, with the epoch budget's
+  `records_per_step` and draws when the stage recorded them, else `grad_accum` on each
+  rank the trainer reported and the dataset's training records plus the replayed ones.
+  Tokens read, training throughput and the validation loss of the base, at the first
+  evaluation, at the selected step and at the last.
+- **Capability**: every evaluation of the candidate, labelled by the purpose its release
+  gave it (or `measurement` when no release reads it, as an exam) and by its task set
+  (`own held-out`, `held-out of generation N`, `recipe input NAME`, `tasks of STAGE`, `the
+  plan's tasks`), with both arms' pass rates and Wilson intervals, the paired sign test,
+  a 95% paired bootstrap interval of the mean per-task difference (tasks resampled; the
+  seed is `--seed`, drawn and printed when not given), and the share of slots either arm
+  never counted. The release's decision and each candidate's gates.
+- **Conduct**: for every attempt stage and every evaluation arm, each attempt that did
+  not pass in one class, by the first rule that holds: not counted is `infrastructure`;
+  `unsupported` is `missing_control`; a time, turn or token budget is `budget`; a reasoning
+  loop is `reasoning`; a task whose reference solution failed its own verifier is
+  `unreachable_goal`; no tool call is `action_selection`; a call repeated with the same
+  arguments that got the same result again is `failure_to_recover`; anything else, or an
+  unreadable trajectory, is `unattributed`, never a guess. The interface classes
+  (`missing_control`, `budget`, `unreachable_goal`), which call for fixing the
+  environment or the task, and the policy classes (`reasoning`, `action_selection`,
+  `failure_to_recover`), which call for training, are summed apart. `missing_observation`,
+  `ambiguous_predicate`, `wrong_environment_model` and `unused_evidence` have no rule the
+  records can decide yet and are listed as undecided.
+- **Self-verification**: an agent claims completion when its trajectory ends with an
+  answer of its own (the last step is the agent's and calls no tool) and no limit ended
+  it. A claim on an attempt that failed is an undetected failure; the report gives the
+  undetected-failure rate of the claims and the share of attempts whose claim disagreed
+  with the grader. Whether a success was read back before it was claimed is not
+  measured: that needs to know which calls change state.
+- **Solvability**: a stage that runs no model (`agent: oracle`, the task's reference
+  solution) witnesses each task it passes and refutes each it fails; every task set is
+  reported as witnessed, refuted and unknown.
+- **System**: per attempt stage and arm, attempts per hour over its span, the uncounted
+  attempts by cause, and the models' completion and prompt tokens per second. A run
+  records no card use: `--utilisation FILE` joins a `nvidia-smi dmon -o DT` log by
+  time (its local times read `--utilisation-utc-offset` minutes east of UTC) to each
+  attempt stage's span and each training stage's running time.
+
 ## Guided sessions
 
 An attempt stage with `interactive: true` is never run unattended. `splinter play` starts

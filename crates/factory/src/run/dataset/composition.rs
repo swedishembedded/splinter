@@ -15,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use splinter_core::chat::WireMessage;
 use splinter_core::digest::{digest_of, Digest};
 use splinter_data::RecordBody;
 
@@ -68,6 +69,48 @@ pub(super) struct Build<'a> {
     pub(super) control: Option<&'a str>,
 }
 
+/// What one record's conversation supervises: the measures
+/// [`Composition`] sums over a dataset, for one record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordMeasure {
+    /// Assistant messages the loss reads (`train: true`).
+    pub supervised_messages: u64,
+    /// Assistant messages kept as context (`train: false`).
+    pub masked_messages: u64,
+    /// The characters of the supervised messages: text, reasoning and each
+    /// call's name and arguments.
+    pub supervised_characters: u64,
+    /// The digest of the supervised tool calls in order, each by its name
+    /// and its arguments with their keys sorted and their spacing
+    /// normalised: two records with one digest teach one action sequence.
+    pub action_sequence: Digest,
+}
+
+/// The measures of the conversation `messages`.
+#[must_use]
+pub fn measure(messages: &[WireMessage]) -> RecordMeasure {
+    let mut sequence: Vec<(&str, String)> = Vec::new();
+    let (mut supervised, mut masked, mut characters) = (0u64, 0u64, 0u64);
+    for m in messages.iter().filter(|m| m.role == "assistant") {
+        if !m.train {
+            masked += 1;
+            continue;
+        }
+        supervised += 1;
+        characters += count(&m.content) + m.reasoning_content.as_deref().map_or(0, count);
+        for call in &m.tool_calls {
+            characters += count(&call.function.name) + count(&call.function.arguments);
+            sequence.push((&call.function.name, normalised(&call.function.arguments)));
+        }
+    }
+    RecordMeasure {
+        supervised_messages: supervised,
+        masked_messages: masked,
+        supervised_characters: characters,
+        action_sequence: digest_of(&sequence),
+    }
+}
+
 /// The composition of the records of `admitted`, built as `build` says.
 pub(super) fn composition(admitted: &[Admitted], build: &Build<'_>) -> Composition {
     let mut trials = BTreeSet::new();
@@ -80,20 +123,11 @@ pub(super) fn composition(admitted: &[Admitted], build: &Build<'_>) -> Compositi
         let RecordBody::Chat { messages, .. } = &a.record.body else {
             continue;
         };
-        let mut sequence: Vec<(&str, String)> = Vec::new();
-        for m in messages.iter().filter(|m| m.role == "assistant") {
-            if !m.train {
-                masked += 1;
-                continue;
-            }
-            supervised += 1;
-            characters += count(&m.content) + m.reasoning_content.as_deref().map_or(0, count);
-            for call in &m.tool_calls {
-                characters += count(&call.function.name) + count(&call.function.arguments);
-                sequence.push((&call.function.name, normalised(&call.function.arguments)));
-            }
-        }
-        sequences.insert(digest_of(&sequence));
+        let m = measure(messages);
+        supervised += m.supervised_messages;
+        masked += m.masked_messages;
+        characters += m.supervised_characters;
+        sequences.insert(m.action_sequence);
     }
     Composition {
         records: admitted.len(),

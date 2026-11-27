@@ -65,7 +65,7 @@ use splinter_data::{
 };
 use splinter_store::factory::products::Staging;
 
-pub use composition::{Composition, COMPOSITION_FILE};
+pub use composition::{measure, Composition, RecordMeasure, COMPOSITION_FILE};
 
 use super::corpus::{policy_calls, CALL_LOG};
 use super::rollout::trials_of;

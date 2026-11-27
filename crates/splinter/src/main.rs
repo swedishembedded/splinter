@@ -51,6 +51,7 @@ mod improve_session;
 mod jobs_session;
 mod lineage_output;
 mod objects_output;
+mod observe_output;
 mod output;
 mod panic_report;
 mod release_output;
