@@ -47,7 +47,7 @@ use splinter_core::factory::truncation;
 use splinter_core::harness::RecordedCalls;
 use splinter_core::model_ref::ModelRef;
 use splinter_data::calls::{project_calls, CallProjection, Sampler};
-use splinter_factory::online::rollout::rollout_of;
+use splinter_factory::online::rollout::{rollout_of, Sessions};
 use splinter_factory::online::seams::{
     ExecutorError, FinishedRollout, OnlineRollouts, RolloutEnd, RolloutExecutor, RolloutRequest,
     RolloutsRequest, RunClock, SystemRunClock,
@@ -133,6 +133,8 @@ pub struct OnlineSettings {
     /// Where running rollouts keep their request logs until they are filed
     /// on their trajectories: a private directory of the run's own.
     pub scratch: PathBuf,
+    /// How each rollout's session becomes records.
+    pub sessions: Sessions,
 }
 
 /// What every rollout of a run shares.
@@ -149,6 +151,7 @@ struct Shared<'c> {
     capture: Capture,
     sampler: Sampler,
     cancel: CancelToken,
+    sessions: Sessions,
 }
 
 /// How a policy served under an id is reached.
@@ -270,7 +273,13 @@ impl Shared<'_> {
             // its calls cannot be paired, so it is a failure that trains
             // nothing.
             return match truncation {
-                Some(cause) => rollout_of(reward, Some(cause), None, &CallProjection::default()),
+                Some(cause) => rollout_of(
+                    reward,
+                    Some(cause),
+                    None,
+                    &CallProjection::default(),
+                    self.sessions,
+                ),
                 None => Err("a graded episode kept no experience".into()),
             };
         };
@@ -289,6 +298,7 @@ impl Shared<'_> {
             truncation,
             Some(Behaviour::of(trajectory)),
             &projection,
+            self.sessions,
         )
     }
 }
@@ -429,6 +439,7 @@ pub fn run_online_resolving<R>(
         },
         sampler,
         cancel: CancelToken::new(),
+        sessions: settings.sessions,
     };
     let shared = &shared;
     Ok(std::thread::scope(|scope| {
@@ -505,6 +516,7 @@ impl OnlineRollouts for FactoryRollouts<'_> {
             sampling: OnlineSampling::untruncated(request.temperature),
             top_logprobs: request.top_logprobs,
             scratch: request.scratch.to_path_buf(),
+            sessions: request.sessions,
         };
         let policy = (self.policy)(request.policy)?;
         run_online_resolving(

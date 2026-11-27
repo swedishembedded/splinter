@@ -145,6 +145,7 @@ impl World {
                     tool_calls: 1,
                     repeated_calls: 0,
                 }),
+                session: None,
             })
             .collect();
         self.series
@@ -175,6 +176,11 @@ fn a_regressed_candidate_is_rolled_back_with_its_audit_and_an_equal_one_is_promo
     );
     assert_eq!(w.turn(), Verdict::Continue);
     assert_eq!(w.watchdog.anchor().map(|a| a.version), Some(3), "promoted");
+    assert_eq!(
+        w.watchdog.take_holds(),
+        [(1, true), (3, true), (1, false)],
+        "the candidate is held from its evaluation on, the old anchor let go once it is promoted"
+    );
     assert_eq!(
         *w.started.borrow(),
         [(3, 1, 200), (3, 1, 200)],

@@ -317,6 +317,7 @@ mod tests {
                 tool_calls: calls,
                 repeated_calls: repeats,
             }),
+            session: None,
         }
     }
 

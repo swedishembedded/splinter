@@ -63,6 +63,9 @@ struct Served {
     /// Refuse every request after a rollout's first as longer than the
     /// served context, as a server does a conversation that outgrew it.
     refuse_context: bool,
+    /// Render each request as the session so far: a later call's prompt ids
+    /// extend the earlier call's prompt and answer (an append-only session).
+    append_only: bool,
     asked: AtomicU64,
     saw_top: AtomicBool,
     temperatures: std::sync::Mutex<Vec<Option<f64>>>,
@@ -76,6 +79,7 @@ impl Served {
             drop_last_identity: false,
             hang: false,
             refuse_context: false,
+            append_only: false,
             asked: AtomicU64::new(0),
             saw_top: AtomicBool::new(false),
             temperatures: std::sync::Mutex::new(Vec::new()),
@@ -122,7 +126,16 @@ impl ModelProvider for Served {
                 ResponseEvent::Done,
             ]
         };
-        let prompt: Vec<i64> = (0..i64::try_from(req.messages.len()).unwrap() + 1).collect();
+        let prompt: Vec<i64> = if self.append_only {
+            // The first call reads [1, 2, 3]; a later one that and the first answer, then the tool's turn.
+            if first {
+                vec![1, 2, 3]
+            } else {
+                vec![1, 2, 3, 21, 22, 40, 41]
+            }
+        } else {
+            (0..i64::try_from(req.messages.len()).unwrap() + 1).collect()
+        };
         let mut events = vec![
             ResponseEvent::PromptTokens { ids: prompt },
             ResponseEvent::Tokens {
@@ -205,6 +218,7 @@ fn settings(work: &Path, sampling: OnlineSampling) -> OnlineSettings {
         sampling,
         top_logprobs: Some(2),
         scratch: work.to_path_buf(),
+        sessions: splinter_factory::online::rollout::Sessions::PerCall,
     }
 }
 
@@ -542,4 +556,49 @@ fn a_rollout_pinned_to_a_version_asks_it_for_every_call_of_its_episode() {
         0,
         "the run's moving policy was never asked"
     );
+}
+
+/// Spec: a run that merges sessions writes an exact, append-only session as one record, its every answer
+/// supervised where it stands, and says so; a session that is not append-only stays one record per call, and the
+/// outcome names why.
+#[test]
+fn a_merged_run_writes_an_append_only_session_as_one_record_and_names_why_another_is_not() {
+    for append_only in [true, false] {
+        let s = setup(
+            &format!("online-sessions-{append_only}"),
+            Served {
+                append_only,
+                ..Served::new(3)
+            },
+            false,
+        );
+        let mut settings = settings(&s.work, OnlineSampling::untruncated(0.8));
+        settings.sessions =
+            splinter_factory::online::rollout::Sessions::Merged { block: Some(4096) };
+        let ends = run_online(
+            &s.ctx,
+            s.tasks.clone(),
+            &OnlinePolicy::Reference(ModelRef::policy_default()),
+            settings,
+            &SystemRunClock,
+            |executor| rollouts(executor, &s.tasks[0], 1),
+        )
+        .unwrap();
+        let done = ends[0].result.as_ref().unwrap();
+        let lines: Vec<&str> = done.records.lines().collect();
+        if append_only {
+            assert_eq!(done.outcome.session.as_deref(), Some("merged"), "{done:?}");
+            assert_eq!(lines.len(), 1, "the session is one record");
+            let session: splinter_data::session::SessionRecord =
+                serde_json::from_str(lines[0]).unwrap();
+            assert_eq!(session.policy_version, 3);
+        } else {
+            assert_eq!(
+                done.outcome.session.as_deref(),
+                Some("not_append_only"),
+                "{done:?}"
+            );
+            assert_eq!(lines.len(), 2, "one record per call");
+        }
+    }
 }

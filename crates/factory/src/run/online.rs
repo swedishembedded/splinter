@@ -56,6 +56,7 @@ use super::training::CANDIDATE_FILE;
 use super::{io, stage_error, write_json, Factory, RunError};
 use crate::online::frontier::SelectorKind;
 use crate::online::group_log::GROUPS_FILE;
+use crate::online::rollout::Sessions;
 use crate::online::seams::{LearnerTelemetry, OnlineRollouts};
 use crate::online::watchdog::WatchdogSettings;
 use crate::online::Settings;
@@ -146,6 +147,15 @@ pub struct OnlineParams {
     /// straddle one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pin_versions: bool,
+    /// How each rollout's session becomes the learner's records:
+    /// `per_call` (one record per model call) or `merged` (an exact,
+    /// append-only session as one record, its answers packed, at most
+    /// `params.max_block` ids; any other stays one per call and is counted
+    /// in `rollouts.sessions` by why). `params.loss_agg` weighs them:
+    /// `token-sum` trains exactly what the per-call records train,
+    /// `seq-mean` weighs every episode alike.
+    #[serde(default, skip_serializing_if = "SessionsMode::is_default")]
+    pub sessions: SessionsMode,
     /// Run every request of an episode on the version it started on: the
     /// learner serves its newest versions under ids of their own and each
     /// rollout asks the one that was newest when it started, so its span is
@@ -170,6 +180,23 @@ pub struct OnlineParams {
     /// with thinking off, and the learner always trains that mode).
     #[serde(default)]
     pub params: Map<String, Value>,
+}
+
+/// How an online run's sessions become records.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionsMode {
+    /// One record per model call.
+    #[default]
+    PerCall,
+    /// An exact, append-only session as one record.
+    Merged,
+}
+
+impl SessionsMode {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// The most versions a learner is asked to keep served under ids of their
@@ -228,6 +255,13 @@ impl OnlineParams {
         if let Some(agent) = &p.agent {
             agent.check()?;
         }
+        if p.sessions == SessionsMode::Merged
+            && p.params.get("max_block").and_then(Value::as_u64).is_none()
+        {
+            return Err("sessions: merged trains a whole session as one sequence: set params.max_block to the \
+                 longest session the learner trains (a longer one stays one record per call)"
+                .into());
+        }
         if let Some(watchdog) = &p.watchdog {
             watchdog.validate().map_err(|e| format!("watchdog: {e}"))?;
         }
@@ -247,6 +281,16 @@ impl OnlineParams {
                 .unwrap_or(u32::MAX)
                 .min(RETAINED_VERSIONS)
         })
+    }
+
+    /// How the rollouts' sessions become records.
+    pub(super) fn sessions(&self) -> Sessions {
+        match self.sessions {
+            SessionsMode::PerCall => Sessions::PerCall,
+            SessionsMode::Merged => Sessions::Merged {
+                block: self.params.get("max_block").and_then(Value::as_u64),
+            },
+        }
     }
 
     pub(super) fn settings(&self, namespace: &str) -> Settings {
@@ -275,6 +319,10 @@ impl OnlineParams {
         // The rollouts ask the policy for no reasoning block, so each answer was sampled after the template's closed
         // think block; the learner renders the prompts it scores them in the same mode.
         params.insert("thinking".into(), json!(false));
+        // A merged session supervises every answer where it stands.
+        if self.sessions == SessionsMode::Merged {
+            params.insert("pack_answers".into(), json!(true));
+        }
         params
     }
 }
@@ -619,6 +667,7 @@ fn report(trained: &Trained, started: Instant) -> Value {
             "not_exact": stats.rollouts_not_exact, "truncated": stats.rollouts_truncated,
             "truncations": stats.truncations,
             "version_mixed": stats.rollouts_version_mixed,
+            "sessions": stats.sessions,
             "failures": stats.rollout_failures, "abandoned": stats.rollouts_abandoned,
         },
         "backpressure_seconds": stats.backpressure_ms as f64 / 1000.0,

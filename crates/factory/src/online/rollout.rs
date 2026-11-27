@@ -13,14 +13,31 @@
 
 use splinter_core::factory::group::{Behaviour, RolloutOutcome, Truncation, VersionSpan};
 use splinter_data::calls::CallProjection;
+use splinter_data::session::SessionRecord;
 
 use super::seams::FinishedRollout;
 
+/// How a rollout's session becomes records.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sessions {
+    /// One record per model call.
+    #[default]
+    PerCall,
+    /// The whole session as one record when it is exact, append-only and
+    /// holds at most `block` ids; else one per call, with why.
+    Merged {
+        /// The learner's training block, when it has one.
+        block: Option<u64>,
+    },
+}
+
 /// The rollout `projection` is, rewarded `reward`, ended early by
 /// `truncation` when a limit ended it, its agent having behaved as
-/// `behaviour` says when its trajectory was read. Its records (one JSON line per model
-/// call) are written only when every call is exact; a rollout with no
-/// version span is not exact, and its span is then only a placeholder.
+/// `behaviour` says when its trajectory was read. Its records are written
+/// only when every call is exact: one JSON line per model call, or, when
+/// `sessions` merges and the session merges, the session as one line (the
+/// outcome's `session` says which, and why not). A rollout with no version
+/// span is not exact, and its span is then only a placeholder.
 ///
 /// # Errors
 /// The projection's span is reversed or a record cannot be written.
@@ -29,6 +46,7 @@ pub fn rollout_of(
     truncation: Option<Truncation>,
     behaviour: Option<Behaviour>,
     projection: &CallProjection,
+    sessions: Sessions,
 ) -> Result<FinishedRollout, String> {
     let exact = projection.exact();
     let span = match projection.span {
@@ -36,7 +54,19 @@ pub fn rollout_of(
         None => VersionSpan::at(0),
     };
     let mut records = String::new();
-    if exact {
+    let mut session = None;
+    if let Sessions::Merged { block } = sessions {
+        match SessionRecord::merge(projection).and_then(|merged| merged.within(block)) {
+            Ok(merged) => {
+                records =
+                    serde_json::to_string(&merged).map_err(|e| format!("a session record: {e}"))?;
+                records.push('\n');
+                session = Some("merged".to_string());
+            }
+            Err(why) => session = Some(why.reason().name().to_string()),
+        }
+    }
+    if exact && session.as_deref() != Some("merged") {
         for record in &projection.records {
             let line = serde_json::to_string(record).map_err(|e| format!("a call record: {e}"))?;
             records.push_str(&line);
@@ -61,6 +91,7 @@ pub fn rollout_of(
             truncated: projection.truncated,
             truncation,
             behaviour,
+            session,
         },
         records,
     })
@@ -82,7 +113,8 @@ mod tests {
 
     #[test]
     fn a_rollout_a_limit_ended_is_a_scored_failure_with_its_cause() {
-        let done = rollout_of(Some(1.0), None, None, &projection(false)).unwrap();
+        let done =
+            rollout_of(Some(1.0), None, None, &projection(false), Sessions::PerCall).unwrap();
         assert_eq!(
             (done.outcome.reward, done.outcome.truncation),
             (Some(1.0), None)
@@ -92,17 +124,30 @@ mod tests {
             (2, 3)
         );
 
-        let cut = rollout_of(Some(1.0), Some(Truncation::Turns), None, &projection(false)).unwrap();
+        let cut = rollout_of(
+            Some(1.0),
+            Some(Truncation::Turns),
+            None,
+            &projection(false),
+            Sessions::PerCall,
+        )
+        .unwrap();
         assert_eq!(
             (cut.outcome.reward, cut.outcome.truncation),
             (Some(0.0), Some(Truncation::Turns)),
             "a limit fails the rollout whatever the verifier found"
         );
-        let unscored =
-            rollout_of(None, Some(Truncation::Deadline), None, &projection(false)).unwrap();
+        let unscored = rollout_of(
+            None,
+            Some(Truncation::Deadline),
+            None,
+            &projection(false),
+            Sessions::PerCall,
+        )
+        .unwrap();
         assert_eq!(unscored.outcome.reward, Some(0.0));
 
-        let long = rollout_of(Some(1.0), None, None, &projection(true)).unwrap();
+        let long = rollout_of(Some(1.0), None, None, &projection(true), Sessions::PerCall).unwrap();
         assert_eq!(long.outcome.truncation, Some(Truncation::OutputLength));
         assert!(
             long.outcome.truncated && !long.outcome.trainable(),

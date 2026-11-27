@@ -34,6 +34,9 @@ pub enum BackendError {
     /// The worker could not be started or failed itself.
     #[error("the execution worker failed: {0}")]
     Worker(String),
+    /// The batch was cancelled before it ended.
+    #[error("the batch was cancelled")]
+    Cancelled,
     /// A report is unreadable.
     #[error("{path}: {message}")]
     Report {
@@ -114,6 +117,22 @@ pub trait ExecutionBackend: Send + Sync {
     /// # Errors
     /// The output cannot be read.
     fn reconcile(&self, out: &Path) -> Result<Vec<AttemptReport>, BackendError>;
+
+    /// [`Self::execute`], stopped as soon as `cancelled` says so: the
+    /// attempts still running are killed with everything they started, and
+    /// none of them is reported ([`BackendError::Cancelled`]). A backend
+    /// that cannot stop a batch runs it to its end.
+    ///
+    /// # Errors
+    /// As [`Self::execute`]; the batch was cancelled.
+    fn execute_cancellable(
+        &self,
+        batch: Batch<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<AttemptReport>, BackendError> {
+        let _ = cancelled;
+        self.execute(batch)
+    }
 
     /// Report the trials of Harbor jobs run elsewhere as attempts of
     /// `import.tasks`, running nothing: each trial is matched to its task by
@@ -229,6 +248,9 @@ pub fn read_refusals(out: &Path) -> Result<Vec<ImportRefusal>, BackendError> {
         .collect()
 }
 
+/// How often a running worker is asked whether its batch was cancelled.
+const CANCEL_POLL: std::time::Duration = std::time::Duration::from_millis(200);
+
 /// The Harbor worker program.
 #[derive(Clone, Debug)]
 pub struct HarborWorker {
@@ -260,9 +282,31 @@ impl HarborWorker {
     }
 
     fn run(&self, command: &mut Command) -> Result<(), BackendError> {
-        let status = command
-            .status()
-            .map_err(|e| BackendError::Worker(format!("{}: {e}", self.program.display())))?;
+        self.run_until(command, &|| false)
+    }
+
+    /// Runs the worker until it exits, or kills it (its process group and
+    /// every descendant: the sandboxes of its attempts) once `cancelled`.
+    fn run_until(
+        &self,
+        command: &mut Command,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<(), BackendError> {
+        use std::os::unix::process::CommandExt;
+        let failed =
+            |e: std::io::Error| BackendError::Worker(format!("{}: {e}", self.program.display()));
+        let mut child = command.process_group(0).spawn().map_err(failed)?;
+        let status = loop {
+            if let Some(status) = child.try_wait().map_err(failed)? {
+                break status;
+            }
+            if cancelled() {
+                splinter_sandbox::process::kill_group(&child);
+                let _ = child.wait();
+                return Err(BackendError::Cancelled);
+            }
+            std::thread::sleep(CANCEL_POLL);
+        };
         if status.success() {
             Ok(())
         } else {
@@ -280,6 +324,14 @@ impl ExecutionBackend for HarborWorker {
     }
 
     fn execute(&self, batch: Batch<'_>) -> Result<Vec<AttemptReport>, BackendError> {
+        self.execute_cancellable(batch, &|| false)
+    }
+
+    fn execute_cancellable(
+        &self,
+        batch: Batch<'_>,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<AttemptReport>, BackendError> {
         std::fs::create_dir_all(batch.out).map_err(|e| BackendError::Worker(e.to_string()))?;
         let specs = batch.out.join("specs.jsonl");
         let mut lines = String::new();
@@ -290,7 +342,7 @@ impl ExecutionBackend for HarborWorker {
             lines.push('\n');
         }
         std::fs::write(&specs, lines).map_err(|e| BackendError::Worker(e.to_string()))?;
-        self.run(
+        self.run_until(
             Command::new(&self.program)
                 .arg("run")
                 .arg("--specs")
@@ -303,6 +355,7 @@ impl ExecutionBackend for HarborWorker {
                 .arg(batch.out)
                 .arg("--concurrency")
                 .arg(batch.concurrency.to_string()),
+            cancelled,
         )?;
         read_reports(batch.out)
     }

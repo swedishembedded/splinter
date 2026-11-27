@@ -30,9 +30,9 @@
 //! ([`ExecutionBackend::reconcile`]) and is answered with it; only a rollout
 //! with no finished attempt runs again.
 //!
-//! **Cancellation.** The worker cannot stop an attempt it is running: a
-//! cancelled run starts no new attempt and waits for the running ones to
-//! end, which a resumed run then reads back.
+//! **Cancellation.** A cancelled run (stopped, or rolled back) starts no new
+//! attempt and kills the ones running, with everything they started; they
+//! have no end, and a resumed run starts them again.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -56,7 +56,7 @@ use super::pass::{RolloutPass, TaskSelector};
 use super::rollout::{pin_files, Arm, Running};
 use super::{stage_error, Factory, RunError};
 use crate::backend::{Batch, ExecutionBackend};
-use crate::online::rollout::rollout_of;
+use crate::online::rollout::{rollout_of, Sessions};
 use crate::online::seams::{
     ExecutorError, FinishedRollout, OnlineRollouts, RolloutEnd, RolloutExecutor, RolloutRequest,
     RolloutsRequest, RunClock, SystemRunClock,
@@ -283,6 +283,7 @@ struct Shared<'w, 'a, 'r> {
     scratch: PathBuf,
     policy: GradingPolicy,
     cancelled: AtomicBool,
+    sessions: Sessions,
 }
 
 impl Shared<'_, '_, '_> {
@@ -315,11 +316,11 @@ impl Shared<'_, '_, '_> {
         if self.cancelled.load(Ordering::SeqCst) {
             return None;
         }
-        Some(end(self.attempt(
-            request,
-            &dir.join(next.to_string()),
-            next,
-        )))
+        match self.attempt(request, &dir.join(next.to_string()), next) {
+            // A cancelled run's attempt was killed: no end, it runs again on resume.
+            Err(_) if self.cancelled.load(Ordering::SeqCst) => None,
+            result => Some(end(result)),
+        }
     }
 
     /// One new attempt of `request` into `out`.
@@ -350,16 +351,20 @@ impl Shared<'_, '_, '_> {
                 .unwrap_or_else(|| self.binding.model.clone()),
             ..self.binding.clone()
         });
+        let cancelled = || self.cancelled.load(Ordering::SeqCst);
         let reports = self
             .rollouts
             .backend
-            .execute(Batch {
-                specs: std::slice::from_ref(&spec),
-                tasks: &running.arm.task_root,
-                files: &running.work.join("files"),
-                out,
-                concurrency: 1,
-            })
+            .execute_cancellable(
+                Batch {
+                    specs: std::slice::from_ref(&spec),
+                    tasks: &running.arm.task_root,
+                    files: &running.work.join("files"),
+                    out,
+                    concurrency: 1,
+                },
+                &cancelled,
+            )
             .map_err(|e| e.to_string())?;
         let report = reports
             .into_iter()
@@ -385,7 +390,7 @@ impl Shared<'_, '_, '_> {
         Ending::Rollout(
             self.projection(report, out)
                 .and_then(|(projection, behaviour)| {
-                    rollout_of(reward, truncation, behaviour, &projection)
+                    rollout_of(reward, truncation, behaviour, &projection, self.sessions)
                 }),
         )
     }
@@ -536,6 +541,7 @@ impl OnlineRollouts for WorkerRollouts<'_, '_> {
                 budget: self.running.arm.pass.budget,
             },
             cancelled: AtomicBool::new(false),
+            sessions: request.sessions,
         };
         let ids: Vec<String> = self
             .running

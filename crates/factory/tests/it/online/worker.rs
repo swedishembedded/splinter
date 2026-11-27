@@ -437,3 +437,68 @@ fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
     }
     found
 }
+
+/// A worker program that never ends a batch: it starts a process of its own
+/// (as a sandbox would) and both sleep; it answers `--version`.
+fn stuck_worker(dir: &Path) -> std::path::PathBuf {
+    let program = dir.join("worker");
+    let pids = dir.join("pids");
+    write(
+        &program,
+        &format!(
+            "#!/bin/bash\n[ \"$1\" = --version ] && {{ echo stuck 1; exit 0; }}\nsleep 600 &\necho $! >> '{}'\necho $$ >> '{}'\nwait\n",
+            pids.display(),
+            pids.display()
+        ),
+    );
+    std::fs::set_permissions(
+        &program,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    program
+}
+
+#[test]
+fn a_cancelled_batch_kills_the_worker_and_everything_it_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let worker = HarborWorker::new(stuck_worker(dir.path())).unwrap();
+    let out = dir.path().join("out");
+    let asked = std::time::Instant::now();
+    let cancelled = || asked.elapsed() > Duration::from_millis(500);
+    let result = splinter_factory::backend::ExecutionBackend::execute_cancellable(
+        &worker,
+        splinter_factory::backend::Batch {
+            specs: &[],
+            tasks: dir.path(),
+            files: dir.path(),
+            out: &out,
+            concurrency: 1,
+        },
+        &cancelled,
+    );
+    assert!(
+        matches!(
+            result,
+            Err(splinter_factory::backend::BackendError::Cancelled)
+        ),
+        "{result:?}"
+    );
+    assert!(asked.elapsed() < Duration::from_secs(10), "stopped at once");
+    let pids = std::fs::read_to_string(dir.path().join("pids")).unwrap();
+    // A killed process is gone (or a zombie) once the kernel has delivered the signal: bounded.
+    let alive = |pid: &str| {
+        let state = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+        !(state.is_empty() || state.split_whitespace().nth(2) == Some("Z"))
+    };
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while pids.split_whitespace().any(alive) && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    for pid in pids.split_whitespace() {
+        assert!(
+            !alive(pid),
+            "process {pid} of the batch outlived its cancel"
+        );
+    }
+}

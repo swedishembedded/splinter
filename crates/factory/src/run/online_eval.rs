@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use splinter_core::factory::group::GroupKey;
 
+use crate::online::rollout::Sessions;
 use crate::online::seams::{
     OnlineRollouts, RolloutRequest, RolloutsRequest, RunClock, SystemRunClock,
 };
@@ -82,6 +83,7 @@ impl Served<'_> {
                 max_output_tokens: self.max_output_tokens,
                 seed: self.seed,
                 scratch: &self.work,
+                sessions: Sessions::PerCall,
             },
             &mut |executor, _| {
                 let mut left = 0;
@@ -109,6 +111,9 @@ impl Served<'_> {
                     };
                     for end in ends {
                         left -= 1;
+                        if let Err(why) = &end.result {
+                            failure.get_or_insert_with(|| why.clone());
+                        }
                         let seq: Option<usize> = end
                             .group
                             .as_str()

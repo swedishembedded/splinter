@@ -32,6 +32,7 @@ use std::path::Path;
 use splinter_core::digest::Digest;
 use splinter_core::factory::group::GroupKey;
 use splinter_data::calls::CallRecord;
+use splinter_data::session::SessionRecord;
 use splinter_data::{dataset_line, Objective};
 use splinter_model::served_train::{ArtifactStore, Offered, StreamError, StreamEvent, StreamJob};
 
@@ -80,9 +81,13 @@ pub fn records_of(group: &OutgoingGroup) -> Result<String, LearnerError> {
     for member in &group.members {
         let rollout = format!("{key}/{}", member.index);
         for line in member.records.lines().filter(|l| !l.trim().is_empty()) {
-            let call: CallRecord = serde_json::from_str(line)
-                .map_err(|e| LearnerError::new(format!("{rollout}: a call record: {e}")))?;
-            let record = call.record(member.reward, key, &rollout);
+            // A merged session is one record; any other line is one call's.
+            let record = match serde_json::from_str::<SessionRecord>(line) {
+                Ok(session) => session.record(member.reward, key, &rollout),
+                Err(_) => serde_json::from_str::<CallRecord>(line)
+                    .map_err(|e| LearnerError::new(format!("{rollout}: a call record: {e}")))?
+                    .record(member.reward, key, &rollout),
+            };
             let line = dataset_line(Objective::PolicyGradient, &record)
                 .map_err(|e| LearnerError::new(format!("{rollout}: {e}")))?;
             body.push_str(&line);
@@ -265,6 +270,18 @@ impl Learner for BrainLearner {
 
     fn finish(&mut self) -> Result<(), LearnerError> {
         self.job.finish().map_err(error)
+    }
+
+    fn hold(&mut self, version: u64, held: bool) -> Result<(), LearnerError> {
+        if self
+            .telemetry
+            .published
+            .iter()
+            .all(|p| p.version_id.is_none())
+        {
+            return Ok(());
+        }
+        self.job.hold(version, held).map(drop).map_err(error)
     }
 
     fn version_now(&self) -> Option<String> {

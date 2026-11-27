@@ -181,4 +181,41 @@ impl StreamJob {
             return Err(self.refusal(status, &text));
         }
     }
+
+    /// Keeps the version `version` the run retains served under its own id
+    /// past the retention while the caller refers to it (`held`), or lets it
+    /// go; the version's id.
+    ///
+    /// # Errors
+    /// The run restarted, the version is no longer served, or the endpoint
+    /// refused.
+    pub fn hold(&mut self, version: u64, held: bool) -> Result<String, StreamError> {
+        let url = format!("{}/jobs/{}/hold?epoch={}", self.url, self.id, self.epoch);
+        let body = serde_json::json!({"version": version, "held": held});
+        let sent = self.runtime.block_on(async {
+            self.client
+                .post(&url)
+                .bearer_auth(&self.key)
+                .header("content-type", "application/json")
+                .body(body.to_string())
+                .timeout(CALL)
+                .send()
+                .await
+        });
+        let response = sent.map_err(|e| {
+            StreamError::Transport(format!("{}: hold: {}", self.url, with_sources(&e)))
+        })?;
+        let status = response.status().as_u16();
+        let text = self.runtime.block_on(response.text()).unwrap_or_default();
+        if status != 200 {
+            return Err(self.refusal(status, &text));
+        }
+        let answer: Value = serde_json::from_str(&text).map_err(|e| {
+            StreamError::Transport(format!("{}: a hold answer that is not JSON: {e}", self.url))
+        })?;
+        Ok(answer["version_id"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string())
+    }
 }

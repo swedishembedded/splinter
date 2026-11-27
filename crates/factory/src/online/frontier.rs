@@ -11,9 +11,10 @@
 //! A group teaches only when its rewards differ, which needs a task the
 //! policy passes sometimes, not always and not never. Each task's pass rate
 //! has a Beta posterior (a uniform prior; each scored rollout's reward,
-//! in `[0, 1]`, adds to its passes and the rest to its failures; earlier
-//! groups weigh [`DECAY`] of what the next one does, so the posterior follows
-//! a moving policy). A task is drawn with probability proportional to its
+//! in `[0, 1]`, adds to its passes and the rest to its failures). It follows
+//! a moving policy: evidence ages by [`DECAY`] for every policy version
+//! published since it was counted (by group, for a caller that names no
+//! version). A task is drawn with probability proportional to its
 //! learning signal, the posterior's expected reward variance
 //! `E[p (1 - p)] = a b / ((a + b) (a + b + 1))`, which is largest at the
 //! frontier and small at either end. A task never passed keeps at least
@@ -38,9 +39,9 @@ use splinter_eval::campaign::pass_rate::{PassRates, RETIRE_AT};
 use super::seams::TaskSelector;
 use super::SettingsError;
 
-/// How much a group's evidence weighs once the next group of its task is
-/// counted.
-pub const DECAY: f64 = 0.75;
+/// How much evidence weighs for every policy version published since it was
+/// counted (or, for a caller that names no version, every group since).
+pub const DECAY: f64 = 0.9;
 
 /// The share of the largest learning signal a task never passed keeps.
 pub const EXPLORATION_FLOOR: f64 = 0.1;
@@ -51,6 +52,8 @@ pub const RETIRE_AFTER: usize = 8;
 /// One task's posterior.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub struct Posterior {
+    /// The policy version its evidence was last counted at.
+    pub version: Option<u64>,
     /// Weighted passes.
     pub passes: f64,
     /// Weighted failures.
@@ -169,9 +172,26 @@ impl TaskSelector for Frontier {
     }
 
     fn observe(&mut self, task: &str, rewards: &[f64]) {
+        let at = self
+            .posteriors
+            .get(task)
+            .and_then(|p| p.version)
+            .map_or(0, |v| v + 1);
+        self.observe_at(task, rewards, at);
+    }
+
+    fn observe_at(&mut self, task: &str, rewards: &[f64], version: u64) {
         let posterior = self.posteriors.entry(task.to_string()).or_default();
-        posterior.passes *= DECAY;
-        posterior.failures *= DECAY;
+        // Evidence counted under an older policy weighs less for every
+        // version published since; a group of an older version than the
+        // newest counted ages nothing.
+        let elapsed = posterior
+            .version
+            .map_or(0, |last| version.saturating_sub(last));
+        let aged = DECAY.powi(i32::try_from(elapsed).unwrap_or(i32::MAX));
+        posterior.passes *= aged;
+        posterior.failures *= aged;
+        posterior.version = Some(posterior.version.map_or(version, |last| last.max(version)));
         for reward in rewards {
             let r = reward.clamp(0.0, 1.0);
             posterior.passes += r;
@@ -271,6 +291,13 @@ impl TaskSelector for Selector {
             Self::Frontier(s) => s.observe(task, rewards),
         }
     }
+
+    fn observe_at(&mut self, task: &str, rewards: &[f64], version: u64) {
+        match self {
+            Self::RoundRobin(s) => s.observe_at(task, rewards, version),
+            Self::Frontier(s) => s.observe_at(task, rewards, version),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -329,5 +356,34 @@ mod tests {
             s.select(0)
         };
         assert_eq!(all_retired, None, "nothing left to teach ends the run");
+    }
+
+    #[test]
+    fn evidence_ages_with_every_version_published_since_it_was_counted() {
+        // seed: no draw is read.
+        let mut selector = Frontier::new(tasks(), 10, 1).unwrap();
+        selector.observe_at("hard", &[0.0, 0.0], 3);
+        selector.observe_at("hard", &[1.0, 1.0], 3);
+        let same = selector.posteriors()["hard"];
+        assert!(
+            (same.failures - 2.0).abs() < 1e-12,
+            "the same version ages nothing: {same:?}"
+        );
+        selector.observe_at("hard", &[1.0, 1.0], 6);
+        let later = selector.posteriors()["hard"];
+        assert!(
+            (later.failures - 2.0 * DECAY.powi(3)).abs() < 1e-12,
+            "{later:?}"
+        );
+        assert!(
+            (later.passes - (2.0 * DECAY.powi(3) + 2.0)).abs() < 1e-12,
+            "{later:?}"
+        );
+        selector.observe_at("hard", &[0.0], 5);
+        assert_eq!(
+            selector.posteriors()["hard"].version,
+            Some(6),
+            "an older group ages nothing back"
+        );
     }
 }

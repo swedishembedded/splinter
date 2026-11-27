@@ -25,9 +25,11 @@
 //!   evidence it is not worse: it may become the anchor.
 //!
 //! Successive comparisons of one run spend the error rates: the `k`-th (from
-//! 0) is held to `alpha 2^-(k+1)` and `beta 2^-(k+1)`, so over every
-//! comparison the run makes the chance of a false rollback stays below
-//! `alpha` and of a false promotion below `beta`. Neither crossing within the
+//! 0) is held to `alpha 6 / (pi^2 (k+1)^2)` and the same share of `beta`
+//! (the shares sum to one), so over every comparison the run makes the
+//! chance of a false rollback stays below `alpha` and of a false promotion
+//! below `beta`, while a late comparison's bar grows only with the square of
+//! its place. Neither crossing within the
 //! comparison's pair budget decides nothing: training continues.
 
 use serde::{Deserialize, Serialize};
@@ -120,11 +122,8 @@ impl Comparison {
 
     /// The share of the run's error rates this comparison is held to.
     fn spent(&self) -> f64 {
-        0.5_f64.powi(
-            i32::try_from(self.index)
-                .unwrap_or(i32::MAX)
-                .saturating_add(1),
-        )
+        let place = f64::from(self.index) + 1.0;
+        6.0 / (std::f64::consts::PI * std::f64::consts::PI * place * place)
     }
 
     /// The level the regression martingale must reach.
@@ -251,13 +250,14 @@ mod tests {
             .filter(|s| decide(5_000 + *s, 0.5, 0.5, 0) == Decision::Regressed)
             .count();
         assert!(
-            false_rollbacks <= 2_000 * 5 / 100 / 2,
-            "{false_rollbacks} of 2000 under no difference, alpha spent 1/2"
+            false_rollbacks <= 2_000 * 5 * 61 / 100 / 100,
+            "{false_rollbacks} of 2000 under no difference, alpha's first share (6/pi^2)"
         );
         let first = Comparison::new(settings(), 0);
         let third = Comparison::new(settings(), 2);
-        assert!((first.regression_threshold() - 40.0).abs() < 1e-9);
-        assert!((third.regression_threshold() - 160.0).abs() < 1e-9);
+        let pi2 = std::f64::consts::PI * std::f64::consts::PI;
+        assert!((first.regression_threshold() - pi2 / 6.0 / 0.05).abs() < 1e-9);
+        assert!((third.regression_threshold() - 9.0 * pi2 / 6.0 / 0.05).abs() < 1e-9);
         assert!(TestSettings {
             delta: 0.5,
             ..settings()

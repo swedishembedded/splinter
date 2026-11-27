@@ -26,6 +26,7 @@ fn outcome(reward: f64) -> RolloutOutcome {
         truncated: false,
         truncation: None,
         behaviour: None,
+        session: None,
     }
 }
 

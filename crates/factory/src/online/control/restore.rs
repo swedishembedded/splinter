@@ -111,7 +111,11 @@ impl Controller {
         if state != GroupState::Pending && state != GroupState::Running {
             self.stats.groups_scored += 1;
             if this_epoch {
-                selector.observe(&live.task, &scored_rewards(&live.rollouts));
+                selector.observe_at(
+                    &live.task,
+                    &scored_rewards(&live.rollouts),
+                    super::newest_version(&live.rollouts),
+                );
             }
             self.ingest_rewards(&live.rollouts);
         }

@@ -594,6 +594,26 @@ pub(crate) fn route(
         );
         return true;
     }
+    if request_line.contains("/hold") {
+        // As brain: a retained version is held while the client refers to it; the double serves no versions, it
+        // answers with the version's id.
+        let asked: Value = serde_json::from_slice(body).unwrap_or_default();
+        let id = live.as_ref().map_or(String::new(), |run| {
+            format!(
+                "{}-v{}",
+                run.doc["publish_adapter"].as_str().unwrap_or_default(),
+                asked["version"]
+            )
+        });
+        let _ = respond(
+            stream,
+            "200 OK",
+            "application/json",
+            &json!({"version": asked["version"], "held": asked["held"], "version_id": id})
+                .to_string(),
+        );
+        return true;
+    }
     let finish = request_line.contains("/finish");
     if !finish && !request_line.contains("/records") {
         return false;

@@ -35,6 +35,7 @@ use crate::online::driver::{run_watched, Ended, OnlineError, Report, RunLedger, 
 use crate::online::frontier::Selector;
 use crate::online::group_log::{GroupLog, LoggedLedger};
 use crate::online::health::VersionSeries;
+use crate::online::rollout::Sessions;
 use crate::online::seams::{
     GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RunClock, StreamLearner,
     SystemRunClock,
@@ -186,6 +187,7 @@ pub(super) fn train(stage: &Stage<'_>) -> Result<Trained, RunError> {
                 max_output_tokens: params.max_output_tokens,
                 seed: params.seed,
                 scratch: stage.scratch,
+                sessions: Sessions::PerCall,
             };
             let monitor =
                 ids(stage.rollouts, &held.monitor, &request).map_err(|e| stage.fail(e))?;
@@ -246,9 +248,11 @@ fn train_in<'s, 'e>(
         } else {
             (
                 format!("{}-e{epoch}", stage.tag),
-                stage
-                    .publish
-                    .replace(":latest", &format!(":e{epoch}:latest")),
+                // The id's tag names the epoch (`<vendor>/<repo>:<owner>:<name>:<tag>`).
+                match stage.publish.rsplit_once(':') {
+                    Some((stem, _)) => format!("{stem}:e{epoch}"),
+                    None => format!("{}-e{epoch}", stage.publish),
+                },
             )
         };
         let learner_params = stage.learner_params(&epochs);
@@ -308,6 +312,7 @@ fn train_in<'s, 'e>(
                     max_output_tokens: params.max_output_tokens,
                     seed: params.seed,
                     scratch: stage.scratch,
+                    sessions: params.sessions(),
                 },
                 &mut |executor, task_ids| {
                     let mut selector = match Selector::new(

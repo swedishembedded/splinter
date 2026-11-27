@@ -28,6 +28,15 @@ pub(super) fn scored_rewards(rollouts: &[Rollout]) -> Vec<f64> {
         .collect()
 }
 
+/// The newest policy version among the rollouts' requests.
+pub(super) fn newest_version(rollouts: &[Rollout]) -> u64 {
+    rollouts
+        .iter()
+        .filter_map(|r| r.outcome.as_ref().map(|o| o.span.newest()))
+        .max()
+        .unwrap_or(0)
+}
+
 pub(super) fn trainable(rollouts: &[Rollout]) -> impl Iterator<Item = (u32, &RolloutOutcome)> {
     rollouts
         .iter()

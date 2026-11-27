@@ -190,6 +190,11 @@ pub struct Watchdog<'a> {
     /// An invariant was breached and no evaluation has ruled on the policy
     /// since: intake holds.
     unacknowledged: bool,
+    /// Every comparison that ended, with what it compared, in order.
+    history: Vec<Value>,
+    /// Versions to hold served (true) or let go (false), not yet asked of
+    /// the learner.
+    holds: Vec<(u64, bool)>,
 }
 
 impl<'a> Watchdog<'a> {
@@ -206,6 +211,10 @@ impl<'a> Watchdog<'a> {
         anchor: Option<Version>,
         comparisons: u32,
     ) -> Self {
+        let holds = anchor
+            .as_ref()
+            .map(|a| vec![(a.version, true)])
+            .unwrap_or_default();
         Self {
             drift: Drift::new(settings.drift),
             settings,
@@ -222,6 +231,8 @@ impl<'a> Watchdog<'a> {
             promotions: Vec::new(),
             promoted: None,
             unacknowledged: false,
+            history: Vec::new(),
+            holds,
         }
     }
 
@@ -229,6 +240,13 @@ impl<'a> Watchdog<'a> {
     #[must_use]
     pub fn comparisons(&self) -> u32 {
         self.comparisons
+    }
+
+    /// The versions to hold served while the watchdog refers to them (true)
+    /// or to let go (false), taken: the anchor, from when it becomes one
+    /// until another does.
+    pub fn take_holds(&mut self) -> Vec<(u64, bool)> {
+        std::mem::take(&mut self.holds)
     }
 
     /// The anchor.
@@ -244,6 +262,7 @@ impl<'a> Watchdog<'a> {
             "anchor": self.anchor,
             "comparisons": self.comparisons,
             "promotions": self.promotions,
+            "history": self.history,
             "alarms": self.alarms,
             "drift": self.drift,
         })
@@ -292,6 +311,7 @@ impl<'a> Watchdog<'a> {
             artifact: latest.artifact.clone(),
         };
         if self.anchor.is_none() {
+            self.holds.push((latest.version, true));
             self.anchor = Some(latest.clone());
             self.last_evaluated = latest.version;
         }
@@ -376,6 +396,8 @@ impl<'a> Watchdog<'a> {
                         .take()
                         .unwrap_or_else(|| json!({"schedule": latest.version}));
                     self.evaluator.start(latest, &anchor, tasks);
+                    // Held while it may become the anchor.
+                    self.holds.push((latest.version, true));
                     self.pending = Some(Pending {
                         candidate: latest.clone(),
                         comparison: Comparison::new(self.settings.test, self.comparisons),
@@ -394,10 +416,30 @@ impl<'a> Watchdog<'a> {
         if pending.comparison.decision == Decision::Undecided && self.evaluator.idle() {
             pending.comparison.close();
         }
+        if pending.comparison.decision != Decision::Undecided {
+            let c = &pending.comparison;
+            eprintln!(
+                "watchdog: version {} against the anchor {}{}: {} candidate and {} anchor wins of {} pairs: {:?}",
+                pending.candidate.version,
+                anchor.version,
+                if pending.confirming { " (confirm set)" } else { "" },
+                c.candidate_wins,
+                c.anchor_wins,
+                c.pairs,
+                c.decision
+            );
+            self.history.push(json!({
+                "candidate": pending.candidate.version,
+                "anchor": anchor.version,
+                "confirming": pending.confirming,
+                "comparison": pending.comparison,
+            }));
+        }
         match (pending.comparison.decision, pending.confirming) {
             (Decision::Undecided, _) => None,
             (Decision::Regressed, _) => {
                 let pending = self.pending.take()?;
+                self.holds.push((pending.candidate.version, false));
                 Some(Verdict::Rollback(Box::new(Audit {
                     trigger: pending.trigger,
                     evidence: pending.comparison,
@@ -425,6 +467,7 @@ impl<'a> Watchdog<'a> {
                 // The confirm set showed no regression: the candidate is the anchor.
                 self.unacknowledged = false;
                 let pending = self.pending.take()?;
+                self.holds.push((anchor.version, false));
                 self.anchor = Some(pending.candidate.clone());
                 self.promoted = Some(pending.candidate.version);
                 self.promotions.push(pending.candidate);
@@ -432,7 +475,9 @@ impl<'a> Watchdog<'a> {
             }
             (Decision::Inconclusive, false) => {
                 self.unacknowledged = false;
-                self.pending = None;
+                if let Some(pending) = self.pending.take() {
+                    self.holds.push((pending.candidate.version, false));
+                }
                 None
             }
         }

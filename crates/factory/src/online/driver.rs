@@ -154,7 +154,17 @@ pub fn run_watched(
         let paused = match watchdog.as_deref_mut() {
             Some(watchdog) => {
                 let empty = super::health::VersionSeries::default();
-                match watchdog.verdict(&learner.telemetry(), ledger.series().unwrap_or(&empty)) {
+                let verdict =
+                    watchdog.verdict(&learner.telemetry(), ledger.series().unwrap_or(&empty));
+                for (version, held) in watchdog.take_holds() {
+                    // A version the learner no longer serves cannot be evaluated against: said, not fatal.
+                    if let Err(e) = learner.hold(version, held) {
+                        eprintln!(
+                            "watchdog: the learner could not hold version {version} ({held}): {e}"
+                        );
+                    }
+                }
+                match verdict {
                     Verdict::Continue => false,
                     Verdict::Pause => true,
                     Verdict::Rollback(audit) => {

@@ -515,14 +515,15 @@ fn tree_resident_bytes(root: libc::pid_t) -> u64 {
         .sum()
 }
 
-/// Kills the run's whole process group and every descendant of its leader, so
+/// Kills `child`'s whole process group (it was spawned leading one, with
+/// `process_group(0)`) and every descendant of its leader, so
 /// a process it started cannot keep running, or keep its output open, past
 /// the run, even one that moved to a session or group of its own.
 ///
 /// The descendants are listed before anything is killed, and the group
 /// (leader included) is killed first: killing a leader's children first would
 /// let it finish on its own and be recorded as exited, not killed.
-fn kill_group(child: &Child) {
+pub fn kill_group(child: &Child) {
     let Ok(group) = libc::pid_t::try_from(child.id()) else {
         return;
     };

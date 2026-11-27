@@ -152,6 +152,7 @@ impl RolloutExecutor for Executor {
                     truncated: false,
                     truncation: None,
                     behaviour: None,
+                    session: None,
                 },
                 records: format!("{tokens},{version_at_start}"),
             });

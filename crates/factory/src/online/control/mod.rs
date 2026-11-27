@@ -179,7 +179,7 @@ mod allowance;
 mod restore;
 mod rules;
 
-use rules::{scored_rewards, trainable, verdict, Verdict};
+use rules::{newest_version, scored_rewards, trainable, verdict, Verdict};
 
 /// The online controller's state.
 #[derive(Debug)]
@@ -322,6 +322,9 @@ impl Controller {
         stats.rollouts_unscored += u64::from(outcome.reward.is_none());
         stats.rollouts_not_exact += u64::from(!outcome.exact);
         stats.rollouts_truncated += u64::from(outcome.truncated);
+        if let Some(session) = &outcome.session {
+            *stats.sessions.entry(session.clone()).or_default() += 1;
+        }
         if let Some(cause) = outcome.truncation {
             *stats
                 .truncations
@@ -446,7 +449,11 @@ impl Controller {
         group.state = GroupState::Scored;
         let key = group.key.clone();
         let rollouts = group.rollouts.clone();
-        selector.observe(&group.task, &scored_rewards(&rollouts));
+        selector.observe_at(
+            &group.task,
+            &scored_rewards(&rollouts),
+            newest_version(&rollouts),
+        );
         self.stats.groups_scored += 1;
         self.ingest_rewards(&rollouts);
         let mut changes = vec![Change::State {

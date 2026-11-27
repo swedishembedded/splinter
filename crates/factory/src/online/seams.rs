@@ -230,6 +230,17 @@ pub trait Learner {
     fn version_now(&self) -> Option<String> {
         None
     }
+
+    /// Keep its version `version` served under its own id while the run
+    /// refers to it (`held`: a watchdog's anchor), or let it go. A learner
+    /// that retains no versions holds nothing.
+    ///
+    /// # Errors
+    /// The learner failed, or no longer serves the version.
+    fn hold(&mut self, version: u64, held: bool) -> Result<(), LearnerError> {
+        let _ = (version, held);
+        Ok(())
+    }
 }
 
 /// Which task each group attempts.
@@ -244,6 +255,14 @@ pub trait TaskSelector {
     /// left out): what an adaptive selector learns from.
     fn observe(&mut self, task: &str, rewards: &[f64]) {
         let _ = (task, rewards);
+    }
+
+    /// [`Self::observe`], with the newest policy version that decoded the
+    /// group's rollouts: what a selector that ages its statistics by version
+    /// reads.
+    fn observe_at(&mut self, task: &str, rewards: &[f64], version: u64) {
+        let _ = version;
+        self.observe(task, rewards);
     }
 }
 
@@ -432,6 +451,8 @@ pub struct RolloutsRequest<'a> {
     pub seed: u64,
     /// Where running rollouts keep their scratch files.
     pub scratch: &'a std::path::Path,
+    /// How each rollout's session becomes records.
+    pub sessions: super::rollout::Sessions,
 }
 
 /// Runs an online run's rollouts: the agent runtime's side of an online

@@ -420,6 +420,10 @@ pub struct RolloutOutcome {
     /// What the agent did, when its trajectory was read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub behaviour: Option<Behaviour>,
+    /// In a run that merges sessions: `merged` when the rollout's records
+    /// are its session as one record, else why they stay one per call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 impl RolloutOutcome {
@@ -447,6 +451,8 @@ struct RawOutcome {
     truncation: Option<Truncation>,
     #[serde(default)]
     behaviour: Option<Behaviour>,
+    #[serde(default)]
+    session: Option<String>,
 }
 
 impl TryFrom<RawOutcome> for RolloutOutcome {
@@ -460,6 +466,7 @@ impl TryFrom<RawOutcome> for RolloutOutcome {
             truncated: raw.truncated,
             truncation: raw.truncation,
             behaviour: raw.behaviour,
+            session: raw.session,
         };
         outcome.validate()?;
         Ok(outcome)
@@ -640,6 +647,7 @@ mod tests {
             truncated: false,
             truncation: None,
             behaviour: Some(behaviour),
+            session: None,
         };
         assert_eq!(failed.false_completion(), Some(true));
         let cut = RolloutOutcome {
