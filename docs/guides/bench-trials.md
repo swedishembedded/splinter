@@ -244,4 +244,4 @@ refused.
 Records for supervised fine-tuning, preference pairs and policy-gradient groups are projected from attempts by a
 `dataset.project` stage, and a `model.train` stage trains them; the stages, their parameters and what each projection
 leaves out are in the [learning factory](learning-factory.md#what-each-stage-guarantees). See also the [datasets
-reference](../reference/datasets.md#policy-gradient).
+reference](../reference/datasets.md) (`dataset.project`, objective `policy-gradient`).
