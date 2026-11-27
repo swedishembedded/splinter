@@ -83,7 +83,9 @@ OUT_DIR/staged/                the staged tasks (network and image written into 
 ```
 
 Every path in a report is relative to `OUT_DIR`. A report is a pure function of its trial directory, so `reconcile`
-rewrites the missing ones byte for byte after a crash, runs nothing, and names the attempts with no finished trial.
+rewrites the missing ones byte for byte after a crash, runs nothing, and names the attempts with no finished trial;
+what the sandboxes of those attempts left in their trial directories (an image copy, an overlay, links into the host
+directories they mounted) is removed, so the output can be kept and published as it is.
 Running `run` again on the same `OUT_DIR` resumes the Harbor job: a trial that finished is not run again.
 
 ## What a specification is mapped to

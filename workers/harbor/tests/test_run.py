@@ -132,6 +132,38 @@ def test_reconcile_names_the_slots_whose_trial_never_finished(finished, capsys) 
         assert main(["reconcile", "--out", str(out)]) == 0
 
 
+def test_reconcile_removes_what_the_sandbox_of_an_unfinished_trial_left(tmp_path, capsys) -> None:
+    """A worker killed mid-trial leaves that trial's sandbox on disk: an image copy holding links into host
+    directories the sandbox mounted, and directories its overlay left unreadable. The controller then publishes the
+    batch's whole tree, so reconcile, which it runs on every interrupted batch, removes what the sandbox left; the
+    trial's own records stay."""
+    from splinter_harbor_worker.plan import trial_name
+    from splinter_harbor_worker.spec import ExecutionSpec
+
+    out = tmp_path / "out"
+    spec = make_spec(TASK, agent="nop")
+    write_specs(out.parent / "specs.jsonl", [spec])
+    (out / "harbor" / "job").mkdir(parents=True)
+    shutil.copy(out.parent / "specs.jsonl", out / "specs.jsonl")
+    trial = out / "harbor" / "job" / trial_name(ExecutionSpec.model_validate(spec))
+    (trial / "agent").mkdir(parents=True)
+    (trial / "trial.log").write_text("interrupted\n")
+    sandbox = trial / "sandbox-interrupted"
+    (sandbox / "overlay" / "upper" / "splinter" / "host").mkdir(parents=True)
+    (sandbox / "overlay" / "upper" / "splinter" / "host" / "ld.so").symlink_to("lib/ld-linux-aarch64.so.1")
+    (sandbox / "overlay" / "work" / "work").mkdir(parents=True)
+    (sandbox / "overlay" / "work" / "work").chmod(0)
+    try:
+        assert main(["reconcile", "--out", str(out)]) == 0
+        summary = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert summary["missing"] == [{"slot": spec["slot"], "attempt": 0}]
+        assert not sandbox.exists()
+        assert sorted(p.name for p in trial.iterdir()) == ["agent", "trial.log"]
+    finally:
+        if (sandbox / "overlay" / "work" / "work").exists():
+            (sandbox / "overlay" / "work" / "work").chmod(0o700)
+
+
 def test_a_task_pinned_read_only_is_staged_with_its_network_written(tmp_path) -> None:
     from splinter_harbor_worker.plan import stage_task
     from splinter_harbor_worker.spec import ExecutionSpec
