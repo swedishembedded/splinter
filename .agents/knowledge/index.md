@@ -234,3 +234,5 @@ in the same commit.
 | [246](246-twice-the-epochs-moved-the-training-budget-and-not-capability.md) | Twice the epochs moved the training budget and not capability |
 | [247](247-two-faults-in-one-project-are-different-tasks-however-alike-their-reports.md) | Two faults in one project are different tasks however alike their reports |
 | [248](248-a-flaky-suite-makes-a-generator-irreproducible.md) | A flaky suite makes a generator irreproducible, and a seed without an instance need not fail admission |
+| [249](249-a-limit-that-ends-a-rollout-is-not-an-infrastructure-failure.md) | A limit that ends a rollout is not an infrastructure failure |
+| [250](250-a-brain-server-reached-through-the-generic-driver-refuses-a-seed.md) | A brain server reached through the protocol's generic driver refuses every seeded request |
