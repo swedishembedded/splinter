@@ -95,6 +95,11 @@ is expected near zero (its band is measured on a policy that was trained on the 
 ## Admission
 
 Every sampled train and dev instance is held to the gates; the report records each.
+The train and dev seeds come from one stream drawn from the admission seed. A seed for
+which the plugin can make no valid instance (a project whose faults cannot be made to
+fail a few tests, or whose suite gives different results on two runs) is skipped and the
+next one drawn, at most eight per instance asked; the report counts them as
+`skipped_seeds`, and a plugin that exceeds the bound fails admission.
 
 - `structural`: a valid artifact; the solver is shown neither tests nor solution.
 - `reference-passes`: the reference solution is graded solved.
@@ -105,7 +110,9 @@ Every sampled train and dev instance is held to the gates; the report records ea
 - `reproducible`: the same request gives a byte-identical folder and the same rewards; a
   plugin's second oracle agrees.
 - `novel`: instances differ from each other, dev from train, and from everything already
-  trained on (the store remembers every instance it ever drew).
+  trained on (the store remembers every instance it ever drew). A fault-injected
+  instance is judged on its symptoms and the lines its fault changed, so two faults
+  in one project with the same short report are different tasks.
 - `red-team`: see below.
 - `base-band`: a base policy's measured pass rate on the dev instances lies inside the
   band (default 0.1 to 0.9, at least 16 attempts). Always failing or always passing

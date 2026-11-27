@@ -49,7 +49,7 @@ use super::DB_WORKFLOW;
 
 /// The plugin's version. Any change to the schema, the tool, the verifier,
 /// the generator or the instruction text is a new version.
-pub const VERSION: &str = "1";
+pub const VERSION: &str = "2";
 
 const KNOBS: &[Knob] = &[
     Knob {
@@ -138,7 +138,9 @@ fn build_goal(
     world: &mut World,
 ) -> Goal {
     let customer = 10 + index as i64;
-    let order = 200 + 7 * index as i64;
+    // Distinct across requests and varied across instances: an order number
+    // is what tells two small instances apart.
+    let order = 100 + 700 * index as i64 + between(rng, 0, 699);
     let name = format!(
         "{} {}",
         FIRST[(index * 3 + rng.below(3)) % FIRST.len()],

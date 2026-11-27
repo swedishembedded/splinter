@@ -157,6 +157,50 @@ impl Reference {
     }
 }
 
+/// What makes a fault-injected instance a different task from another fault
+/// in the same project: the symptoms its instruction states after `marker`,
+/// and the lines the fault changed. Two faults in one project can have the
+/// same report at a low detail level; their changed lines differ. The plugin
+/// records the faulty files in `solution/changed.txt` and the original of
+/// the `n`th one in `solution/files/{n}`.
+#[must_use]
+pub fn fault_novelty_text(instance: &Instance, marker: &str) -> String {
+    let text = instance.instruction();
+    let mut novel = text
+        .split_once(marker)
+        .map_or(text, |(_, rest)| rest)
+        .to_string();
+    let folder = instance.folder();
+    let workspace = instance.workspace();
+    for (n, path) in folder
+        .text("solution/changed.txt")
+        .unwrap_or_default()
+        .lines()
+        .enumerate()
+    {
+        novel.push_str(&changed_lines(
+            path,
+            folder
+                .text(&format!("solution/files/{n}"))
+                .unwrap_or_default(),
+            workspace.text(path).unwrap_or_default(),
+        ));
+    }
+    novel
+}
+
+/// The lines of `mutated` that differ from `original` at the same line
+/// number, each prefixed with its file and line.
+fn changed_lines(path: &str, original: &str, mutated: &str) -> String {
+    let before: Vec<&str> = original.lines().collect();
+    mutated
+        .lines()
+        .enumerate()
+        .filter(|(n, line)| before.get(*n) != Some(line))
+        .map(|(n, line)| format!("{path}:{}: {}\n", n + 1, line.trim()))
+        .collect()
+}
+
 /// A generator, a verifier and a difficulty knob for one kind of skill.
 pub trait Plugin: Send + Sync {
     /// The plugin's id, as an objective's classification names it.
@@ -240,6 +284,39 @@ mod tests {
             doc: "",
         },
     ];
+
+    /// An instance with one faulty file, `lib.py`, whose original is
+    /// `original` and whose workspace copy is `faulty`, reporting `report`.
+    fn faulted(report: &str, original: &str, faulty: &str) -> Instance {
+        use crate::factory::testing::{meta, parts};
+        let mut p = parts();
+        p.instruction = format!("Fix the project.\n\nSymptoms:\n{report}");
+        p.workspace.put_text("lib.py", faulty).unwrap();
+        p.solution.put_text("changed.txt", "lib.py\n").unwrap();
+        p.solution.put_text("files/0", original).unwrap();
+        Instance::assemble(meta(), p).unwrap()
+    }
+
+    #[test]
+    fn two_faults_with_the_same_report_have_different_novelty_texts() {
+        let original = "def f(x):\n    return x + 1\n";
+        let one = faulted(
+            "tests in lib fail",
+            original,
+            "def f(x):\n    return x - 1\n",
+        );
+        let two = faulted(
+            "tests in lib fail",
+            original,
+            "def f(x):\n    return x + 2\n",
+        );
+        let a = fault_novelty_text(&one, "Symptoms:\n");
+        let b = fault_novelty_text(&two, "Symptoms:\n");
+        assert_ne!(a, b);
+        assert!(a.starts_with("tests in lib fail"), "{a}");
+        assert!(a.contains("lib.py:2: return x - 1"), "{a}");
+        assert!(!a.contains("Fix the project"), "{a}");
+    }
 
     #[test]
     fn defaults_fill_the_knobs_a_caller_did_not_set() {

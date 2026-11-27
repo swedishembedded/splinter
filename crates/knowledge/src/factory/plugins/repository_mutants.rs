@@ -49,14 +49,14 @@ use crate::factory::attack::{Attack, AttackKind, Edit};
 use crate::factory::folder::Folder;
 use crate::factory::host::Host;
 use crate::factory::plugin::{
-    resolve_difficulty, InstanceRequest, Knob, Plugin, PluginError, Reference,
+    fault_novelty_text, resolve_difficulty, InstanceRequest, Knob, Plugin, PluginError, Reference,
 };
 
 use super::REPOSITORY_MUTANTS;
 
 /// The plugin's version. Any change to the mutation choice, the validation,
 /// the symptoms, the verifier or the instruction text is a new version.
-pub const VERSION: &str = "1";
+pub const VERSION: &str = "2";
 
 /// The repositories trained on, and the ones kept for dev. They never share
 /// one: a dev instance is a project the policy never practised on.
@@ -91,11 +91,25 @@ struct Failure {
 }
 
 /// What running a project's suite found.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct SuiteRun {
     ran: u32,
     failures: Vec<Failure>,
     broken: bool,
+}
+
+/// One result of two runs of the same suite on the same tree, or a broken
+/// one when they differ: a generator never decides on a result that varies.
+fn agreed(first: SuiteRun, second: SuiteRun) -> SuiteRun {
+    if first == second {
+        first
+    } else {
+        SuiteRun {
+            ran: 0,
+            failures: Vec::new(),
+            broken: true,
+        }
+    }
 }
 
 fn parse_suite(stderr: &str) -> SuiteRun {
@@ -220,7 +234,16 @@ impl RepositoryMutants {
         Ok(kept)
     }
 
+    /// The suite run twice: a result the two runs do not agree on is a flaky
+    /// one, and an instance built on it would not be reproducible.
     fn run_suite(&self, tree: &Folder) -> Result<SuiteRun, PluginError> {
+        Ok(agreed(
+            self.run_suite_once(tree)?,
+            self.run_suite_once(tree)?,
+        ))
+    }
+
+    fn run_suite_once(&self, tree: &Folder) -> Result<SuiteRun, PluginError> {
         let scratch = tempfile::tempdir().map_err(|e| PluginError::Generation(e.to_string()))?;
         let dir = scratch.path().join("tree");
         tree.write_to(&dir)?;
@@ -381,6 +404,8 @@ impl Plugin for RepositoryMutants {
             ));
         }
         solution.put_script("solve.sh", &solve)?;
+        let changed: String = chosen.iter().map(|(file, _)| format!("{file}\n")).collect();
+        solution.put_text("changed.txt", &changed)?;
 
         let mut symptoms = String::new();
         for failure in &combined.failures {
@@ -427,10 +452,7 @@ impl Plugin for RepositoryMutants {
     }
 
     fn novelty_text(&self, instance: &Instance) -> String {
-        let text = instance.instruction();
-        text.split_once("Symptoms:\n")
-            .map_or(text, |(_, rest)| rest)
-            .to_string()
+        fault_novelty_text(instance, "Symptoms:\n")
     }
 
     fn attacks(&self, instance: &Instance, reference: &Reference) -> Vec<Attack> {
@@ -490,6 +512,19 @@ mod tests {
         assert_eq!(run.failures[0].id, "tests.test_x.Case.test_a");
         assert_eq!(run.failures[0].message, "AssertionError: 3 != 4");
         assert_eq!(run.failures[1].message, "TypeError: bad");
+    }
+
+    #[test]
+    fn two_runs_that_disagree_are_a_broken_suite_and_two_that_agree_are_the_result() {
+        let report = |failing: &str| {
+            parse_suite(&format!("F\n======================================================================\nFAIL: {failing} (tests.test_x.Case.{failing})\n----------------------------------------------------------------------\nAssertionError: no\n\n----------------------------------------------------------------------\nRan 10 tests in 0.1s\n\nFAILED (failures=1)\n"))
+        };
+        let same = agreed(report("test_a"), report("test_a"));
+        assert!(!same.broken);
+        assert_eq!(same.failures.len(), 1);
+        let flaky = agreed(report("test_a"), report("test_b"));
+        assert!(flaky.broken);
+        assert!(flaky.failures.is_empty());
     }
 
     #[test]

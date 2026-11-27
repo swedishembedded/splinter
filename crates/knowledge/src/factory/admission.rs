@@ -148,6 +148,9 @@ pub struct AdmissionReport {
     pub status: Status,
     /// Why, in words.
     pub reasons: Vec<String>,
+    /// How many seeds the plugin could make no valid instance for.
+    #[serde(default)]
+    pub skipped_seeds: usize,
     /// The instances admission drew, by content version: what a later
     /// environment's novelty gate compares against.
     pub instances: Vec<InstanceRecord>,
@@ -241,25 +244,6 @@ fn label(split: Split, seed: u64) -> String {
     format!("{split}-{seed}")
 }
 
-/// Seeds for the train and dev samples, distinct from each other.
-fn draw_seeds(admission_seed: u64, per_split: usize) -> (Vec<u64>, Vec<u64>) {
-    let mut rng = SplitMix64::new(admission_seed);
-    let mut used = BTreeSet::new();
-    let mut take = |n: usize| {
-        let mut seeds = Vec::with_capacity(n);
-        while seeds.len() < n {
-            let seed = rng.next_u64();
-            if used.insert(seed) {
-                seeds.push(seed);
-            }
-        }
-        seeds
-    };
-    let train = take(per_split);
-    let dev = take(per_split);
-    (train, dev)
-}
-
 /// Collects one gate's failures.
 struct GateBuilder {
     name: &'static str,
@@ -334,24 +318,49 @@ pub fn admit(
 ) -> Result<(AdmissionReport, Vec<Instance>), AdmitError> {
     let difficulty = resolve_difficulty(plugin.id(), plugin.knobs(), difficulty)?;
     let environment = environment_id(plugin.id(), plugin.version(), &difficulty);
-    let (train, dev) = draw_seeds(admission_seed, policy.instances_per_split);
-
+    // Seeds come from one stream, each used once. A seed for which the
+    // plugin finds no valid instance (a repository whose faults cannot be
+    // made to fail a few tests) is skipped and the next one drawn; too many
+    // skips is the plugin's failure.
+    let mut stream = SplitMix64::new(admission_seed);
+    let mut used = BTreeSet::new();
+    let mut skipped = 0_usize;
+    let max_skipped = 8 * policy.instances_per_split.max(1);
     let mut samples = Vec::new();
-    for (split, seeds) in [(Split::Train, &train), (Split::Dev, &dev)] {
-        for &seed in seeds {
+    for split in [Split::Train, Split::Dev] {
+        let mut made = 0;
+        while made < policy.instances_per_split {
+            let seed = stream.next_u64();
+            if !used.insert(seed) {
+                continue;
+            }
             let request = InstanceRequest {
                 split,
                 seed,
                 difficulty: difficulty.clone(),
             };
-            let instance = plugin.generate(&request)?;
-            samples.push(Sample {
-                instance,
-                reference: Reference::default(),
-                request,
-            });
+            match plugin.generate(&request) {
+                Ok(instance) => {
+                    samples.push(Sample {
+                        instance,
+                        reference: Reference::default(),
+                        request,
+                    });
+                    made += 1;
+                }
+                Err(PluginError::Generation(_)) if skipped < max_skipped => skipped += 1,
+                Err(other) => return Err(other.into()),
+            }
         }
     }
+    let seeds_of = |split: Split| -> Vec<u64> {
+        samples
+            .iter()
+            .filter(|s| s.request.split == split)
+            .map(|s| s.request.seed)
+            .collect()
+    };
+    let (train, dev) = (seeds_of(Split::Train), seeds_of(Split::Dev));
 
     let mut structural = GateBuilder::new(
         "structural",
@@ -518,6 +527,7 @@ pub fn admit(
         band_policy: policy.band,
         status: Status::Rejected,
         reasons: Vec::new(),
+        skipped_seeds: skipped,
         instances: samples
             .iter()
             .map(|s| InstanceRecord {
@@ -733,19 +743,4 @@ fn check_novelty(
 
 fn digest_of_text(text: &str) -> Digest {
     Digest::of(text.as_bytes())
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used)] // a panic is the failure report
-mod tests {
-    use super::*;
-
-    #[test]
-    fn train_and_dev_seeds_are_distinct_and_follow_from_the_admission_seed() {
-        let (train, dev) = draw_seeds(9, 4); // seed: only distinctness and determinism are asserted
-        assert_eq!(draw_seeds(9, 4), (train.clone(), dev.clone()));
-        let all: BTreeSet<_> = train.iter().chain(&dev).collect();
-        assert_eq!(all.len(), 8);
-        assert_ne!(draw_seeds(10, 4).0, train);
-    }
 }

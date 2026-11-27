@@ -232,3 +232,5 @@ in the same commit.
 | [244](244-a-generation-whose-own-records-come-only-from-tasks-it-already-passes-stalls.md) | A generation whose own records come only from tasks it already passes stalls |
 | [245](245-a-champion-claims-completion-on-most-of-the-attempts-it-fails.md) | A champion claims completion on most of the attempts it fails |
 | [246](246-twice-the-epochs-moved-the-training-budget-and-not-capability.md) | Twice the epochs moved the training budget and not capability |
+| [247](247-two-faults-in-one-project-are-different-tasks-however-alike-their-reports.md) | Two faults in one project are different tasks however alike their reports |
+| [248](248-a-flaky-suite-makes-a-generator-irreproducible.md) | A flaky suite makes a generator irreproducible, and a seed without an instance need not fail admission |

@@ -474,3 +474,76 @@ fn a_difficulty_knob_gives_a_different_environment_that_is_admitted_on_its_own()
         2
     );
 }
+
+#[test]
+fn a_seed_the_plugin_cannot_make_an_instance_for_is_skipped_and_counted_not_fatal() {
+    // A plugin that finds no valid instance for half of all seeds.
+    struct Picky(Scripted);
+    impl Plugin for Picky {
+        fn id(&self) -> &'static str {
+            "control"
+        }
+        fn version(&self) -> &'static str {
+            "1"
+        }
+        fn verifier_class(&self) -> VerifierClass {
+            VerifierClass::Objective
+        }
+        fn knobs(&self) -> &'static [Knob] {
+            NO_KNOBS
+        }
+        fn novelty_text(&self, i: &Instance) -> String {
+            self.0.novelty_text(i)
+        }
+        fn generate(&self, request: &InstanceRequest) -> Result<Instance, PluginError> {
+            if request.seed.is_multiple_of(2) {
+                return Err(PluginError::Generation(
+                    "no valid instance for this seed".into(),
+                ));
+            }
+            self.0.generate(request)
+        }
+    }
+    let report = run(&Picky(control()), Some(&in_band()));
+    assert_eq!(report.status, Status::Admitted, "{:?}", report.reasons);
+    assert_eq!(report.train_seeds.len(), 2);
+    assert_eq!(report.dev_seeds.len(), 2);
+    assert!(report
+        .train_seeds
+        .iter()
+        .chain(&report.dev_seeds)
+        .all(|s| s % 2 == 1));
+    assert!(report.skipped_seeds > 0, "the skipped seeds are counted");
+
+    struct Hopeless;
+    impl Plugin for Hopeless {
+        fn id(&self) -> &'static str {
+            "hopeless"
+        }
+        fn version(&self) -> &'static str {
+            "1"
+        }
+        fn verifier_class(&self) -> VerifierClass {
+            VerifierClass::Objective
+        }
+        fn knobs(&self) -> &'static [Knob] {
+            NO_KNOBS
+        }
+        fn generate(&self, _: &InstanceRequest) -> Result<Instance, PluginError> {
+            Err(PluginError::Generation("never".into()))
+        }
+    }
+    let failed = admit(
+        &Hopeless,
+        &BTreeMap::new(),
+        &Host::default(),
+        &small_policy(),
+        3,
+        &BTreeSet::new(),
+        None,
+    ); // seed: any
+    assert!(
+        failed.is_err(),
+        "a plugin that never produces an instance fails admission"
+    );
+}

@@ -51,7 +51,7 @@ use super::FIRMWARE_EMULATOR;
 
 /// The plugin's version. Any change to the firmware, the model, the mutation
 /// choice, the verifier or the instruction text is a new version.
-pub const VERSION: &str = "1";
+pub const VERSION: &str = "2";
 
 /// The modules train faults are injected into.
 pub const TRAIN_MODULES: [&str; 3] = ["crc", "ring", "fixed"];
@@ -350,6 +350,8 @@ impl Plugin for FirmwareEmulator {
             ));
         }
         solution.put_script("solve.sh", &solve)?;
+        let changed: String = chosen.iter().map(|(file, _)| format!("{file}\n")).collect();
+        solution.put_text("changed.txt", &changed)?;
 
         let symptoms = match detail {
             3 => {
@@ -407,10 +409,7 @@ impl Plugin for FirmwareEmulator {
     }
 
     fn novelty_text(&self, instance: &Instance) -> String {
-        let text = instance.instruction();
-        text.split_once("Symptoms on the sample inputs:\n")
-            .map_or(text, |(_, rest)| rest)
-            .to_string()
+        crate::factory::plugin::fault_novelty_text(instance, "Symptoms on the sample inputs:\n")
     }
 
     fn attacks(&self, instance: &Instance, _reference: &Reference) -> Vec<Attack> {
