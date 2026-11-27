@@ -55,6 +55,18 @@ at the concurrency its cards hold \\
 (above the 2\% bound); in seeds 1 and 2 both requests of each such trial were rejected by the server, and the cause could not
 be determined after the trials' files were cleaned up & the lease leaves no time to repeat them; every candidate arm counted
 all 400 \\
+2026-11-27 & the loop's recipes fixed in place after the generation-2 analyses (teacher-only training and validation data,
+the champion's attempts as replay at one per task, warm start from the champion, 1.9 epochs, 60 tool rounds, 4 champion attempts
+per task, retention gate on every earlier generation) and the three 8B generations run again from the authoring run; the
+earlier generations' results are kept above & the defects were the recipe's, so the loop was repeated rather than continued;
+the exam, the tasks and the registered tests are unchanged \\
+2026-11-27 & 8B generation-1 exam kept with 9 of 400 base slots uncounted (above the 2\% bound): tool-call loops of the base
+recorded as HTTP 499 and classified as endpoint refusals; the classifier was fixed after the runs, not during them & one
+rule for all three generations; with the 9 counted as base wins the test gives $p=0.005$ \\
+2026-11-27 & the 4B chain stopped during generation~1 and resumed after the 8B's generation~3 & the user put every card on
+the 8B until its three generations were evaluated \\
+2026-11-27 & two further 8B generation-1 training seeds started and stopped; not used & a fork of a run whose LoRA was
+already trained reused that adapter despite the changed seed, so the replicate would not have been one \\
 2026-11-27 & brain's router changed during the loop, on two of the four nodes from 06:35 and 06:58 (brain
 \texttt{2104ee58f}): an idle card now takes a LoRA model once the cards holding it carry enough of its requests & it had kept every request for a LoRA model on the one card
 holding the base, so evaluations ran on one card of up to ten; it changes throughput, not what is measured \\

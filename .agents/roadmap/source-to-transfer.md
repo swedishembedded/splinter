@@ -350,6 +350,22 @@ Measurement, every exam at the registered 4 attempts per task (no other exam sen
 5. Known limits, stated now: one training seed per generation; no shuffled-request control under the new tool; a baseline
    arm reused by identity when the champion is unchanged (not re-measured under the same load).
 
+## Rerun on the fixed loop: 8B results (2026-11-27 17:16-23:58)
+
+Runs s8b-g1..g3 on n547 `/scratch/local/work/ws/runs` (splinter 578cfec9b, bench d971e5df), all three promoted, unattended.
+Paired, 4 attempts per task, one-sided sign test:
+
+| step | own held-out (target) | earlier held-out (retention) | exam (primary) |
+|---|---|---|---|
+| g1 vs base | 85/224 vs 9 (79/3, p 1.9e-20) | - | 25/400 vs 0/391 (25/0, p 3e-8), 9 base slots uncounted (2.25%): excluded by rule 4 |
+| g2 vs g1 | 55/188 vs 40 (29/14, p 0.016) | g1's: 92/224 vs 86 (29/23) | 30/400 vs 30 (17/17, p 0.57) |
+| g3 vs g2 | 59/196 vs 45 (25/11, p 0.014) | g2's: 49/188 vs 54 (14/19); g1's: 109/224 vs 105 (18/14) | 32/400 vs 32 (18/18, p 0.57) |
+
+Verdict: each generation improves on its own held-out authored tasks without forgetting; no claimable exam step (primary
+tests null; g1-vs-base excluded). The 9 uncounted slots were base tool-call loops misclassified as endpoint refusals
+(HTTP 499), fixed in 27372f64b after the runs. 4B resumed at 23:59 after the 8B finished, per the user. Two seed replicates
+of 8B g1 were stopped unused (one fork reused g1's adapter despite a changed seed: open defect).
+
 ## Further mitigation (2026-11-27; planned, not run)
 
 In order of effect per hour:

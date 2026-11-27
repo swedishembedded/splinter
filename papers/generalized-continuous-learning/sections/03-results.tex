@@ -302,7 +302,35 @@ $>15$ & 5/188 & 0.03 & 0/159 & 0.00 \\
 within each length is unchanged.}\label{tab:calls}
 \end{table}
 
-\paragraph{Next.} Generation~3 trains under the epoch rule at both sizes and is compared with generation~1 on the exams; generation~2 is retrained on its own records under the same rule, and generation~4 follows. The further measures these analyses support (a release gate powered for a 1.25-fold step, the registered 60-turn limit in sven, the teacher's and the champion's records projected separately, a warm-started candidate) are recorded in the ledger.
+\paragraph{Three generations after the fixes (Qwen3-8B).} The defects above were fixed in place in the loop's recipes
+(bench \texttt{d971e5df}, splinter \texttt{578cfec9b}) and the three generations were run again at 8B from the authoring run,
+unattended, from 17:16 to 23:58 on 2026-11-27 (\cref{app:deviations}). The changes: training and validation data are the
+teacher's verified attempts; the champion's are replay, one per task drawn at random, at half the draws; from generation~2
+the LoRA continues the champion at a learning rate of $10^{-4}$ with patience 8; the budget is 1.9 epochs at every
+generation; sven's tool rounds are capped at the registered 60 turns; the champion's attempts are 4 per task; and a release
+needs both its target (its own held-out tasks) and retention (every earlier generation's held-out tasks, margin 0.05) with at
+most 2\% unpaired slots. Every generation was promoted. Each comparison is paired, 4 attempts per task, one-sided sign test
+over tasks:
+\begin{itemize}
+\item \emph{Generation 1 against the base.} Own held-out tasks 85 of 224 against 9 (79 won, 3 lost, $p=1.9\times10^{-20}$,
+  difference $+0.339$ [$+0.237$, $+0.442$]); exams 25 of 400 against 0 of 391 (25 won, 0 lost, $p=3.0\times10^{-8}$).
+\item \emph{Generation 2 against generation 1.} Own held-out tasks 55 of 188 against 40 (29 won, 14 lost, $p=0.016$,
+  $+0.080$ [$+0.011$, $+0.154$]); generation~1's held-out tasks 92 of 224 against 86 (29/23, $p=0.24$); exams 30 of 400
+  against 30 (17/17, $p=0.57$).
+\item \emph{Generation 3 against generation 2.} Own held-out tasks 59 of 196 against 45 (25 won, 11 lost, $p=0.014$);
+  generation~2's held-out tasks 49 of 188 against 54 (14/19, within the retention margin); generation~1's 109 of 224 against
+  105 (18/14, $p=0.30$); exams 32 of 400 against 32 (18/18, $p=0.57$).
+\end{itemize}
+So each of the three generations improves on its predecessor on tasks it was not trained on, authored from the manual by its
+own generation's rule, and none forgets an earlier generation's tasks beyond the margin. On the 100 hand-written exams the
+registered primary tests (each generation against its champion in the same stage) find no step: 17/17 and 18/18. Generation~1
+against the base reads 25 of 400 against 0, but that evaluation left 9 of the base's 400 slots uncounted (2.25\%), and by the
+registration an evaluation above the 2\% bound is reported and excluded from claims. Exam transfer is therefore not claimed for
+this rerun; generations 2 and 3 pass 30 and 32 of 400, as many as the champion each was measured against. Every one of the 9 slots was a
+trial in which the base model repeated itself inside a tool call's arguments until sven ended the run; the worker recorded the
+hang-up as HTTP 499 and the classifier took it for an endpoint's refusal, retried it and left it uncounted (fixed in splinter
+\texttt{27372f64b}, after these runs; the live runs kept one rule throughout). Counting all 9 as base wins would give 25 won and
+9 lost, $p=0.005$; the claim stays excluded as registered. The 4B runs under the same recipes after the 8B (\cref{app:deviations}).
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 
