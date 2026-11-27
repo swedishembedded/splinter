@@ -7,11 +7,12 @@
 % generated/numbers.tex (from data/vim-transfer/loop/loop.json).
 \begin{tikzpicture}
 \begin{axis}[paper, width=118mm, height=64mm, xmin=-0.35, xmax=3.35, ymin=0, ymax=12, xtick={0,1,2,3},
-    xticklabels={base, generation 1, generation 2, generation 3}, ylabel={exam attempts passed (\%)},
+    xticklabels={base, generation 1, generation 2, generation 3}, legend style={font=\scriptsize}, ylabel={exam attempts passed (\%)},
     legend style={at={(0.02,0.97)}, anchor=north west}, clip=false]
-  \fill[black!5] (axis cs:1.5,0) rectangle (axis cs:3.35,12);
-  \node[note, align=center] at (axis cs:2.42,4.6) {running:\\generation 2 of both sizes};
-  \node[note, align=center] at (axis cs:2.42,2.3) {Qwen3.8-27B as learner: not run\\(no time for two generations)};
+  \fill[black!5] (axis cs:2.5,0) rectangle (axis cs:3.35,12);
+  \node[note, align=center] at (axis cs:2.93,6.2) {running:\\Qwen3-4B\\generation 3,\\Qwen3-8B\\generation 2};
+  \node[note, align=center] at (axis cs:2.93,2.0) {Qwen3.8-27B\\as learner:\\not run};
+  \node[note, align=center, anchor=south] at (axis cs:2,5.8) {Qwen3-4B generation 2:\\not promoted};
   \draw[okGrey, densely dashed, line width=0.7pt] (axis cs:-0.35,12) -- (axis cs:3.35,12);
   \node[note, anchor=south east] at (axis cs:3.35,12) {27B teacher: \TeacherExamPct\% of attempts (\TeacherExamSolved{} of
     100 exams solved), off scale};
@@ -24,6 +25,13 @@
     table[x expr=\thisrow{generation}+0.06, y=pct, y error plus expr=\thisrow{hi}-\thisrow{pct},
       y error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/loop.csv};
   \addlegendentry{Qwen3-8B (mean of seeds)}
+  \addplot[only marks, mark=o, mark size=2pt, okBlue, thick, discard if not={who}{candidate}, error bars/.cd, y dir=both,
+    y explicit] table[x=generation, y=pct, y error plus expr=\thisrow{hi}-\thisrow{pct},
+      y error minus expr=\thisrow{pct}-\thisrow{lo}] {generated/loop-candidates.csv};
+  \addlegendentry{candidate not promoted}
+  \addplot[only marks, mark=x, mark size=2.4pt, okGrey, thick, discard if not={who}{champion}]
+    table[x expr=\thisrow{generation}+0.12, y=pct] {generated/loop-candidates.csv};
+  \addlegendentry{champion, same stage}
   \addplot[only marks, okOrange, mark=triangle, mark size=1.6pt, discard if not={size}{8B}, forget plot]
     table[x expr=\thisrow{generation}+0.14, y=pct] {generated/loop-seeds.csv};
 \end{axis}

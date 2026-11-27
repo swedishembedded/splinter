@@ -31,6 +31,57 @@
      "p_one_sided": 9.5367431640625e-07
     },
     "replicates": []
+   },
+   {
+    "generation": 2,
+    "fork": "loop-g2n",
+    "against": "champion",
+    "promoted": false,
+    "exam": {
+     "passes": 13,
+     "attempts": 400,
+     "champion_passes": 11,
+     "champion_attempts": 400,
+     "uncounted": 0,
+     "wins": 8,
+     "losses": 5,
+     "p_one_sided": 0.29052734375,
+     "diff": 0.005,
+     "ci95": [
+      -0.0175,
+      0.0275
+     ]
+    },
+    "heldout": {
+     "passes": 66,
+     "attempts": 264,
+     "champion_passes": 57,
+     "champion_attempts": 264,
+     "uncounted": 0,
+     "wins": 16,
+     "losses": 11,
+     "p_one_sided": 0.22103416919708252,
+     "diff": 0.03409090909090909,
+     "ci95": [
+      -0.030303030303030304,
+      0.09848484848484848
+     ]
+    },
+    "forget": {
+     "passes": 49,
+     "attempts": 204,
+     "champion_passes": 39,
+     "champion_attempts": 204,
+     "uncounted": 0,
+     "wins": 13,
+     "losses": 8,
+     "p_one_sided": 0.19165515899658203,
+     "diff": 0.049019607843137254,
+     "ci95": [
+      -0.014705882352941176,
+      0.12254901960784313
+     ]
+    }
    }
   ],
   "8B": [
@@ -116,7 +167,7 @@
  },
  "running": {
   "4B": [
-   2
+   3
   ],
   "8B": [
    2

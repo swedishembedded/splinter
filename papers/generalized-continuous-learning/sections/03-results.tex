@@ -211,29 +211,43 @@ replicates over two more training seeds of the same generation: seed~1 passes \L
 203 and 0 of 200. In all three seeds the base arm left more slots uncounted than the registered 2\% bound (19, 21 and 15 of
 400; the two replicates' were requests the server rejected, whose cause could not be determined afterwards), and the stages
 were not repeated (\cref{app:deviations}). The release gate of seeds 1 and 2 was inconclusive, so neither was promoted, and the
-8B curve continues on seed~3, whose held-out-task evaluation and release are running. Generation~2 of both
-sizes is running; the trend test needs at least two generations and has not been computed. Evidence: \nolinkurl{loop/loop.json}.
+8B curve continues on seed~3, whose held-out-task evaluation and release are running.
+
+Qwen3-4B, generation~2 (trained from the base on generation 1's and generation 2's records, measured against the generation-1
+champion in the same stages, every slot counted): \GTwoExam{} of 400 exam attempts against the champion's \GTwoChampExam{},
+\GTwoExamWins{} exams won and \GTwoExamLosses{} lost (one-sided $p=\GTwoExamP$), difference \GTwoExamDiff; on its own held-out
+tasks \GTwoHeld{} of \GTwoHeldAttempts{} against \GTwoChampHeld{} (\GTwoHeldWins{}/\GTwoHeldLosses{}, $p=\GTwoHeldP$); on
+generation~1's held-out tasks, the forgetting gate, \GTwoForget{} of \GTwoForgetAttempts{} against \GTwoChampForget{}
+(\GTwoForgetWins{}/\GTwoForgetLosses{}, $p=\GTwoForgetP$). Generation~2 did not beat generation~1 at 4B, and it lost nothing
+either; the release was inconclusive and the candidate was not promoted. The champion's own exam count here (\GTwoChampExam{}
+of 400) and when generation~1 was first measured (\LoopFourGOnePasses{} of 400) are two samples of the same adapter. By the
+loop's rule the champion is the latest promoted release, so generation~3 started at 07:00 from the generation-1 champion
+(528 new tasks, records of generations 1 to 3, released against generation~1); no human step chose anything. Generation~3 of
+the 4B and generation~2 of the 8B are running; the trend test is computed once a size has two promoted generations.
+Evidence: \nolinkurl{loop/loop.json}.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 
 \paragraph{Tested on.} The course's \RetainTasks{} hand-written practice tasks (168 exercises and 60 composites of the
 public course dataset's training side), which no arm trained on and which test skills the base already partly has. Three
-generation-1-era candidates (the 4B loop's generation~1, and one seed each of the productive-actions and one-per-task arms),
-each against the base, 4 attempts per task, with the plan of the held-out authored tasks. This is an exploratory measurement;
-the registered retention check of the loop compares each generation with its predecessor (\cref{sec:m-loop}).
+generation-1-era 4B candidates (the 4B loop's generation~1, and one seed each of the productive-actions and one-per-task arms)
+and the 8B's generation~1 (seed~1), each against its base, 4 attempts per task, with the plan of the held-out authored
+tasks. This is an exploratory measurement; the registered retention check of the loop compares each generation with its predecessor (\cref{sec:m-loop}).
 
 \paragraph{Measured.} No candidate is worse than the base overall; each gains (\cref{fig:retention}, \cref{tab:retention}). The
 4B's generation~1 passes \RetainPasses{} of \RetainAttempts{} attempts against the base's \RetainBasePasses{} of
-\RetainBaseAttempts{}, winning \RetainWins{} tasks and losing \RetainLosses{}; almost all of the gain is on the exercises, while
-on the composites both stay near zero. A candidate does lose on some tasks (13 to 17 of 228), so the absence of regression is
-net, not task by task. Evidence: \nolinkurl{retention/} of the evidence dataset (per-task outcomes; these tasks are public),
+\RetainBaseAttempts{}, winning \RetainWins{} tasks and losing \RetainLosses{}; the 8B's generation~1 passes
+\RetainEightPasses{} of 912 against its base's \RetainEightBasePasses{} of \RetainEightBaseAttempts{} (\RetainEightWins{} won,
+\RetainEightLosses{} lost). Almost all of the gain is on the exercises, while on the composites all stay near zero. A candidate
+does lose on some tasks (13 to 17 of 228), so the absence of regression is net, not task by task. The 8B base arm left 19 of
+912 slots uncounted (2.1\%). Evidence: \nolinkurl{retention/} of the evidence dataset (per-task outcomes; these tasks are public),
 recipes in bench \nolinkurl{recipes/vim-manual/transfer-arms/retention-*.yaml}.
 
 \begin{figure}[htbp]
 \centering
 \input{figures/retention-body}
 \caption{The gain carries over to hand-written practice tasks the base partly solves, with no net regression: each
-generation-1-era candidate against the base, 4 attempts per task, Wilson 95\% intervals over attempts.}\label{fig:retention}
+generation-1-era candidate against its base (4B or 8B), 4 attempts per task, Wilson 95\% intervals over attempts.}\label{fig:retention}
 \end{figure}
 
 \begin{table}[htbp]
@@ -245,6 +259,6 @@ Candidate & Passes & Base & Tasks won/lost, $p$ & Difference [95\%] \\
 \inputrows{generated/retention.tex}
 \bottomrule
 \end{tabular}
-\caption{Retention on the 228 practice tasks: one-sided exact sign test over tasks on passes, task-bootstrap interval of the
+\caption{Retention on the 228 practice tasks, each candidate against its base: one-sided exact sign test over tasks on passes, task-bootstrap interval of the
 pass-rate difference.}\label{tab:retention}
 \end{table}

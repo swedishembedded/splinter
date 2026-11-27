@@ -94,6 +94,10 @@ sign test; `papers/splinter-brain-sven-flywheel`, S4), with no forgetting gate a
 | 2026-11-27 04:45 | Inkling 2 Mini removed as a second teacher from generations 2 and 3 of the loop; the 27B stays the only teacher there. Generation 2 of the 4B continues as run `loop-g2n`, a fork of `loop-g2` that reuses every stage up to the 27B teacher attempts; only its dataset (champion and 27B records) and later stages differ | at the 48 concurrent sequences its three cards hold, the Inkling stage of generation 2 alone would have taken about three hours (2292 attempts) and pushed the third generation past the lease; Inkling's contribution is reported from the forward teacher round (8 of 80 tasks the 27B never solved) |
 | 2026-11-27 04:50 | Qwen3-8B generation 1 (seed 3) exam evaluation: 19 of 400 base-arm slots were never counted (4.75%, above the 2% bound); the stage was not repeated | the lease does not leave time to repeat it before the 8B generation 2; the candidate arm counted all 400; the unpaired slots are reported with the result |
 | 2026-11-27 05:40 | the loop's releases (promotion on held-out authored tasks) judge an evaluation with at most 2% uncounted slots on the slots both arms counted (`promotion` `max_unpaired_share: 0.02`, splinter 0a7434053), matching the registered 2% infrastructure bound; the Qwen3-8B generation-1 release is recomputed with it (held-out tasks 50/204 against the base's 1/200, 4 base slots uncounted, 1.96%) | under the sign test's strict rule a single uncounted slot left the release inconclusive and kept the base 8B as champion, so generation 2 would have attempted its tasks with the base model; the exams are not involved |
+| 2026-11-27 06:35 | brain's router: a fully idle upstream takes a model once the resident upstreams hold at least max(slots/8, 8) of its requests (brain 2104ee58f), deployed on two nodes at 06:35 and 06:58 | it had kept every request for a LoRA model on the one card where the base was resident, so evaluation and champion-attempt stages ran on one card of up to ten; throughput only, not what is measured |
+| 2026-11-27 | the harbor worker left the sandbox of a trial finished just before a kill and the stage publish failed on it; fixed in splinter 2fd05cc42, the one affected run cleaned up by hand | a manual step, recorded against part 4 of the definition |
+| 2026-11-27 07:00 | the 4B generation-3 recipe keeps generation 2's stages on their own champion (role champion-g2), so they are reused, not recomputed | generation 2 was not promoted; its tasks and attempts stay valid inputs |
+| 2026-11-27 | 27B teacher rounds on the tasks the teacher never solved (generation 2: 79 tasks, generation 3: 78; 8 more attempts each, no Inkling) | for the dataset only; not part of any arm or generation |
 
 ## Status
 
@@ -178,7 +182,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 4c394661): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit e6f32ac2): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).
@@ -213,6 +217,15 @@ Qwen3-8B generation 1 over three training seeds (`loop.py`, replicates `loop-g1-
 against 0 / 385, 16 / 0, p 1.5e-5; held-out authored tasks 53 / 204 and 54 / 204 against 0 / 203 and 0 / 200. Not promoted
 (release inconclusive); base arms 21 and 15 of 400 slots uncounted (server rejections, cause not determinable). The 8B curve
 continues on seed 3.
+
+Qwen3-4B generation 2 (2026-11-27, `loop.py`, run `loop-g2n`, candidate against the generation-1 champion in the same
+stages, every slot counted): exams 13 / 400 against 11 / 400, 8 / 5 exams won/lost, one-sided p 0.29, +0.005 [-0.018,
++0.028]; its held-out tasks 66 / 264 against 57 / 264, 16 / 11, p 0.22; forgetting gate on generation 1's held-out tasks
+49 / 204 against 39 / 204, 13 / 8, p 0.19. Not promoted (inconclusive): generation 2 did not beat generation 1 at 4B. By the
+loop's rule (the champion is the latest promoted release) generation 3 started at 07:00 from the generation-1 champion (run
+`loop-g3`, 528 new tasks, records of generations 1 to 3, released against generation 1); no human step chose anything.
+Qwen3-8B retention, seed 1, on the 228 course practice tasks: 463 / 912 against its base's 139 / 893, 129 / 14 tasks,
+p 8.9e-25, +0.361 [+0.305, +0.415]; base 19 slots uncounted (2.1%).
 
 Open: generation 2; a forgetting gate; an unattended restart from the recipe.
 

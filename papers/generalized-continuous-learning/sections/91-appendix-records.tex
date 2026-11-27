@@ -53,6 +53,16 @@ at the concurrency its cards hold \\
 (above the 2\% bound); in seeds 1 and 2 both requests of each such trial were rejected by the server, and the cause could not
 be determined after the trials' files were cleaned up & the lease leaves no time to repeat them; every candidate arm counted
 all 400 \\
+2026-11-27 & brain's router changed during the loop, on two of the four nodes from 06:35 and 06:58 (brain
+\texttt{2104ee58f}): an idle card now takes a LoRA model once the cards holding it carry enough of its requests & it had kept every request for a LoRA model on the one card
+holding the base, so evaluations ran on one card of up to ten; it changes throughput, not what is measured \\
+2026-11-27 & a stage whose trial finished just before a kill could not publish (the worker left that trial's sandbox); fixed
+in splinter \texttt{2fd05cc42}, the one affected run cleaned up by hand & a manual step; recorded against part (d) of the
+definition \\
+2026-11-27 & the 4B generation-3 recipe keeps generation~2's stages on their own champion, so they are reused, not recomputed &
+generation~2 was not promoted; its tasks and attempts stay valid inputs \\
+2026-11-27 & extra 27B teacher rounds (8 more attempts) on the tasks the teacher never solved in generations 2 (79) and 3 (78) &
+for the published dataset only; no arm or generation trains on them \\
 \bottomrule
 \end{tabular}
 \end{center}

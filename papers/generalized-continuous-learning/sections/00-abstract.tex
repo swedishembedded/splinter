@@ -6,7 +6,9 @@ generation after generation, with no human-written training tasks or labels and 
 reads. The registered estimand is the exam pass rate per generation, per model size. On 100 hand-written Vim exams, the first
 generation of Qwen3-4B, trained on verified trajectories of tasks that a 27B model authored from Vim's user manual, passes 17 of
 400 attempts against its base's 0 of 393 (12 exams won, 0 lost, one-sided sign test $p=0.00024$), and the first generation
-of Qwen3-8B 22 to 28 of 400 in each of three training seeds against bases that pass none (16 to 20 exams won, none lost); generation~2 of both sizes is running, and a 27B learner is not run. The steps that lead there were each measured: an
+of Qwen3-8B 22 to 28 of 400 in each of three training seeds against bases that pass none (16 to 20 exams won, none lost). The 4B's second generation did not beat its first (13 against 11 of 400 exam attempts, 8 exams won and 5
+lost, $p=0.29$) and was not promoted, so its third generation started from the first; the 8B's second generation is running,
+and a 27B learner is not run. The steps that lead there were each measured: an
 executable environment as the only judge of correctness (a Lua~5.1 interpreter, in a first family, raised a 4B model's share
 of a 2040-item sealed exam from 5.1\% to 13.2\% over four generations, +8.2 points [+5.1, +11.5], +3.3 [+0.7, +7.1] on program
 families no exam had used); oracle admission that replays every reference in the task image; outcome-first authoring (start and
@@ -14,7 +16,7 @@ end files first, the request last), whose trajectories pass 42 of 1200 exam atte
 a third of the records; and two controls. Trained on the same records with shuffled requests, the model passes no exam, so the
 gain comes from the pairing of request and action; trained on the 4B's own verified attempts alone, it passes none of 1166, so
 generation~1's gain comes from the 27B teacher's trajectories. On 228 hand-written practice tasks no candidate is worse
-than the base overall; generation~1 passes 378 of 912 attempts against the base's 138. Against the operational definition of continuous
-self-improvement stated in the introduction, one examined generation holds; three generations, retention against the previous
-generation and an unattended restart are not yet shown.
+than its base overall (the 4B's generation~1: 378 of 912 attempts against 138; the 8B's: 463 against 139). Against the operational definition of continuous
+self-improvement stated in the introduction, the first generation holds at both sizes and the second did not improve at
+4B; three improving generations and an unattended restart are not shown.
 \end{abstract}

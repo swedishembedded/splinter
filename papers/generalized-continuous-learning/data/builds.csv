@@ -4,6 +4,8 @@ splinter,cc5581333a14848d0c00c45c05a427a7077de1b9,,splinter-cc5581333/splinter,e
 splinter,d3ab644fafa2b6cd83be6f0e156c2a6b7dc27e6a,,splinter-d3ab644fa/splinter,faa5b47e3b360d9af7107d23c70064fcb784430b5c97b22411cdc30265dc0199,"Vim material run, authoring stages"
 brain,b726c045bb34211762e9c40dea37a6bbffb09da9,d6bd3baaff537ed69b9fdb23b2f0c702b43f7658,brain-b726c045b/brain,0d62d4c7ae404664efad0decfd31c6aa102cc5b590c24016fb90150de2bc5556,Vim serving and training from 2026-11-26 19:30: every arm
 brain,b726c045bb34211762e9c40dea37a6bbffb09da9,d6bd3baaff537ed69b9fdb23b2f0c702b43f7658,brain-b726c045b/brain-gpu-worker,ab5c2e8692370fedaa102f45260c5ae52cb0ce1cdb5ba477edbead09738eaf00,as above
+brain,2104ee58f960b2c7589a4b4ebfdcf5b1225e20d4,,brain-2104ee58f/brain,02d475dd9fdb6a44167a92d917c3ddb078cbe3e8c03eb600837e792b5998dc06,Vim loop serving from 2026-11-27 06:35 and 06:58 on two of the nodes: the router spreads a LoRA model's requests
+brain,2104ee58f960b2c7589a4b4ebfdcf5b1225e20d4,,brain-2104ee58f/brain-gpu-worker,62947d0d5d8600c17f6d19a3ed9d16658f8f17bcf0edccca9634240579785186,as above
 brain,62821de326bd03945209faed1d364a50119c835f,,brain-62821de32/brain,0b694249e8fb6ae4cbb31ffa92ec026ce8f3d8b42bd51661c134009f595d4a71,"Vim material run, attempt stages"
 brain,62821de326bd03945209faed1d364a50119c835f,,brain-62821de32/brain-gpu-worker,ab5c2e8692370fedaa102f45260c5ae52cb0ce1cdb5ba477edbead09738eaf00,as above
 sven,01eabb507058cb37d0254a0340cb4dfe87073576,,sven-01eabb507/sven,d63fc391f8ac687c2827ab656454bd79677353be758fc9c0e2d20702a2512226,the agent of every Vim attempt
@@ -13,3 +15,4 @@ bench,83e1b4f8def918459fcda711bfd75d48391812ff,,(recipes),,outcome-first authori
 bench,662ac1d6062cbdaa0c7378c7894e69ca1e3e75b8,,(recipes),,arm recipes and evaluation plans
 bench,f73ae591b05d698800480fe698f1b941530ad74f,,(admission),,byte- and locale-exact oracle admission
 bench,bcbc6dd458a072294bb0a03e099e494a62bfc220,,(recipes),,retention forks of the generation-1-era candidates
+splinter,2fd05cc42a7016c201454dbfa8711cb5543e3d58,,(worker fix),,removes a finished trial's sandbox left by a kill

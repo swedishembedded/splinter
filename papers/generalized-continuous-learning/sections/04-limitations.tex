@@ -3,8 +3,9 @@
 \section{Verdict and limitations}\label{sec:limitations}
 
 \Cref{tab:verdict} holds each family and model size against the operational definition of \cref{sec:introduction}. What is
-supported is continuous gain over two generations in the Lua family and one examined generation of the Vim loop for the 4B,
-whose gain comes from the teacher's trajectories; not continuous self-improvement.
+supported is continuous gain over two generations in the Lua family, and in the Vim family a first generation that beats the
+base at both sizes, with its gain coming from the teacher's trajectories, followed at 4B by a second generation that did not
+improve on the first; not continuous self-improvement.
 
 \begin{table}[htbp]
 \centering\footnotesize
@@ -14,9 +15,12 @@ whose gain comes from the teacher's trajectories; not continuous self-improvemen
 Part of the definition & Lua, Qwen3-4B (4 generations) & Vim, Qwen3-4B & Vim, Qwen3-8B \\
 \midrule
 (a) each generation beats its predecessor on sealed exams & generations 1 and 2 hold, 3 and 4 do not & generation~1 holds
-against the base; generation~2 running & generation~1 holds against the base in each of three seeds (\LoopEightGOneWins{} to
+against the base; generation~2 does not beat generation~1 (\GTwoExamWins{} exams won, \GTwoExamLosses{} lost, $p=\GTwoExamP$)
+and was not promoted; generation~3 running & generation~1 holds against the base in each of three seeds (\LoopEightGOneWins{} to
 \LoopEightRepOneWins{} exams won, none lost); generation~2 running \\
-(b) no forgetting of earlier skills & not measured & against the base on 228 hand-written practice tasks, no net regression for generation~1 (\RetainWins{} tasks won, \RetainLosses{} lost); against the previous champion: running & running \\
+(b) no forgetting of earlier skills & not measured & against the base on 228 hand-written practice tasks, no net regression for generation~1 (\RetainWins{} tasks won, \RetainLosses{} lost); generation~2 against
+generation~1 on its held-out tasks: no regression (\GTwoForgetWins{} won, \GTwoForgetLosses{} lost) & against the base on the
+practice tasks, no net regression for generation~1 (\RetainEightWins{} won, \RetainEightLosses{} lost, seed~1) \\
 (c) robust over seeds or lineages, above the shuffled-request control & generation~4 above the base in all four lineages; no
 control run & holds for generation~1 (every seed; every arm beats the control); the learner's own attempts alone give no gain
 & holds over three seeds for generation~1; no control run \\
