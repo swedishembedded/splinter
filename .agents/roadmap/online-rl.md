@@ -92,6 +92,38 @@ identity when it is the default.
       every run since versions became objects), and it kept an earlier invocation's brain event logs in a reused work
       directory, so brain's commits of another run failed "every group brain committed is an experience".
 
+- [x] **Episode pinning (round 2).** brain (15cad2670, b1536a552, c824e324d): a stream's `retain_versions` N also
+      serves each published version under `<publish_adapter>-v<version>` with its version and lineage (the N newest;
+      older withdrawn, requests already accepted finish), keeps each in the artifact store (`artifact_digest` in the
+      published frame), and `POST /v1/jobs/{id}/hold` keeps a referenced version served past the retention. Splinter:
+      `pin_episodes` asks retention (max_staleness + 2, at most 16) and starts each rollout on the newest version's id
+      (in-process through the stage's policy resolver, on the worker as the attempt's model). The watchdog evaluates
+      versions by those ids (an earlier copy of a published adapter served by the trainer would have replaced the
+      training's own release, which carries the same card id), holds its anchor and the candidate under evaluation,
+      and a rollback starts the next run from the anchor's stored adapter. Tests: brain `stream::a_stream_retaining_*`
+      (retention, hold, store), splinter `a_run_that_pins_its_episodes_*` (driver),
+      `a_rollout_pinned_to_a_version_asks_it_for_every_call_of_its_episode` (two calls across a publication, span 3..3).
+      CPU stack `make test/online/pinned` (toy, publish_every 1): 12 groups, 48 rollouts, every span one version, 8
+      versions each under its own id. The toy's episodes are one call, so multi-turn pinning is shown by the in-process
+      test, not the stack.
+- [x] **Cancel running worker attempts.** `ExecutionBackend::execute_cancellable`: the worker program and everything it
+      started are killed (process group and descendants); a cancelled or rolled-back online run kills its attempts.
+      Test `a_cancelled_batch_kills_the_worker_and_everything_it_started`.
+- [x] **Selector ageing by version.** `TaskSelector::observe_at`: frontier evidence weighs 0.9 per policy version
+      published since it was counted.
+- [x] **Merged sessions online.** `sessions: merged` writes an exact, append-only session as one `SessionRecord`
+      (`params.max_block` required, `pack_answers` set; `params.loss_agg` passes through), else one record per call
+      counted by `Unmergeable::reason()` in `rollouts.sessions`. CPU stack `make test/online/merged` (toy, 12 groups):
+      13 sessions merged, 35 stayed per call (not exact: replies the output bound cut), 1 group of merged sessions
+      trained. A per-call record longer than `max_block` is refused by brain whole, as before: the block must hold the
+      longest call, so `longer_than_block` falls back usefully only for multi-call sessions.
+- [x] **The GPU bench run, prepared.** `make test/online/bench` (scripts/online/bench-task-set.sh): 12 training, 8
+      monitor and 4 confirm tasks, disjoint, from a bench environment's training folders (a path naming an exam is
+      refused; sealed folders are refused on import), train.online with `agent: sven` and the environment file,
+      `selector: frontier`, `pin_episodes`, the watchdog; prints groups, rollouts, versions, per-version health and
+      the watchdog's decisions. `make test/online/bench/prepare` validated against the Vim manual set
+      (`splinter validate`: 24 tasks).
+
 ## Measured
 
 - Loss weighting of a long episode: with one record per model call, brain's stream objective trains each call as a
@@ -111,7 +143,8 @@ identity when it is the default.
       `tasks.pin` of the bench task set -> `train.online` with `agent: { agent: sven, environment:
       environments/<env>/environment.yaml }` (bench's environment file), run with `splinter run <recipe> --brain-endpoint
       ... --brain-artifact-store ... --brain-adapter-dir ...`. Validated with scripted models only.
-- [ ] Episode pinning to a version (needs brain to keep published releases addressable).
-- [ ] Watchdog evaluations on capacity of their own (they share the learner's server today) and a cancel for running
-      worker attempts.
-- [ ] Per-version aging of the frontier posterior by policy version (the selector sees no versions; it decays per group).
+- [ ] Watchdog evaluations on capacity of their own. Not built: a version exists only on the learner's server (its
+      bank, under its version id); another server could serve it only from the stored adapter, whose card names the
+      published id, and two versions of one card id cannot be served side by side there. Needs brain to serve a stored
+      adapter under an id the caller names (an additive `--serve-adapters` rule or an offer route). The evaluations
+      run at most `max_concurrent_attempts` rollouts of a version at once on the learner's server meanwhile.

@@ -47,6 +47,8 @@ pub(crate) struct Served<'a> {
     pub max_output_tokens: Option<u64>,
     /// The seed the rollouts' draws derive from.
     pub seed: u64,
+    /// Rollouts of one version an evaluation runs at once at most.
+    pub slots: usize,
 }
 
 impl Served<'_> {
@@ -86,21 +88,32 @@ impl Served<'_> {
                 sessions: Sessions::PerCall,
             },
             &mut |executor, _| {
+                // At most `slots` rollouts at once: an evaluation shares the
+                // learner's server with the training's own rollouts.
+                let mut queued = (0u64..).zip(tasks);
                 let mut left = 0;
-                for (seq, task) in (0u64..).zip(tasks) {
-                    let Ok(group) = GroupKey::numbered(namespace, seq) else {
-                        continue;
-                    };
-                    match executor.start(RolloutRequest {
-                        group,
-                        task: task.clone(),
-                        index: 0,
-                        policy: None,
-                    }) {
-                        Ok(()) => left += 1,
-                        Err(e) => failure = Some(e.to_string()),
+                let mut start = |executor: &mut dyn crate::online::seams::RolloutExecutor,
+                                 left: &mut usize,
+                                 failure: &mut Option<String>| {
+                    while *left < self.slots {
+                        let Some((seq, task)) = queued.next() else {
+                            return;
+                        };
+                        let Ok(group) = GroupKey::numbered(namespace, seq) else {
+                            continue;
+                        };
+                        match executor.start(RolloutRequest {
+                            group,
+                            task: task.clone(),
+                            index: 0,
+                            policy: None,
+                        }) {
+                            Ok(()) => *left += 1,
+                            Err(e) => *failure = Some(e.to_string()),
+                        }
                     }
-                }
+                };
+                start(executor, &mut left, &mut failure);
                 while left > 0 {
                     let ends = match executor.wait(SystemRunClock.now_ms() + WAIT_MS) {
                         Ok(ends) => ends,
@@ -126,6 +139,7 @@ impl Served<'_> {
                             graded.insert(task.clone(), reward >= 1.0);
                         }
                     }
+                    start(executor, &mut left, &mut failure);
                 }
             },
         )?;

@@ -204,6 +204,9 @@ pub(super) fn train(stage: &Stage<'_>) -> Result<Trained, RunError> {
                 temperature: params.temperature,
                 max_output_tokens: params.max_output_tokens,
                 seed: params.seed,
+                slots: usize::try_from(params.max_concurrent_attempts)
+                    .unwrap_or(usize::MAX)
+                    .max(1),
             })
         }
         (Some(_), None) => return Err(stage.fail("a watchdog needs its monitor and confirm tasks")),

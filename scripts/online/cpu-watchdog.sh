@@ -72,8 +72,8 @@ stamp "brain serve is ready (pid $brain_pid)"
 # The fixture family. The poisoned window counts the training tasks' gradings of a reply (a check of the starting
 # files, which hold no reply, is not counted): gradings warm..warm+window are flipped in fault mode.
 repo="$work/repo"
-warm=48
-window=$([ "$mode" = fault ] && echo 128 || echo 0)
+warm=160
+window=$([ "$mode" = fault ] && echo 160 || echo 0)
 task() {
     local split=$1 name=$2 poisoned=$3 dir="$repo/tasks/fault/$1/$2"
     mkdir -p "$dir/tests" "$dir/workspace" "$dir/solution"
@@ -116,7 +116,7 @@ elif [ "$mode" = merged ]; then
     groups=12
 else
     inputs='{ tasks: $stages.tasks.tasks, monitor: $stages.monitor.tasks, confirm: $stages.confirm.tasks }'
-    groups=48
+    groups=120
     watched="      watchdog:
         bounds: { guard_skip_rate: 1.0, ratio_max: 1000, truncation_rate: 1.0, infra_failure_rate: 1.0, window: 8, min_rollouts: 4 }
         drift: { slack: 0.05, threshold: 0.3, reference_window: 3 }
