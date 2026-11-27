@@ -41,7 +41,10 @@ $(BUILD)/figures/fig-%.pdf: figures/%.tex figures/%-body.tex figures/style.tex $
 
 $(BUILD)/previews/fig-%.png: $(BUILD)/figures/fig-%.pdf
 	mkdir -p $(BUILD)/previews
-	gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r192 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o $@ $<
+	# The shell opens both files: a gs confined by its host (an AppArmor profile, for one) is refused paths outside its
+	# allowed set and fails with "undefinedfilename ... Permission denied" on a readable PDF; stdin/stdout always work.
+	gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r192 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -sOutputFile=- - \
+	    < $< > $@.tmp && mv $@.tmp $@
 
 .PRECIOUS: $(BUILD)/figures/fig-%.pdf
 .PHONY: previews
