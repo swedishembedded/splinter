@@ -73,3 +73,21 @@ def test_a_crash_that_left_no_readable_trajectory_says_so_and_invents_none(tmp_p
     absent = crashed_trial(tmp_path / "other", None)
     report = build_report(tmp_path / "other", absent, {"task": "train/001", "slot": 0}, attempt=0).report
     assert report["trace"] is None and report["evidence"]["turns"] is None
+
+
+def test_a_model_looping_in_its_reasoning_or_in_a_tool_calls_arguments_is_reported_as_a_loop(tmp_path) -> None:
+    """sven ends a run whose model loops again after its one retry, in its reasoning or inside a tool call's
+    arguments; either is the model's failure, which the classifier counts, never an endpoint's refusal."""
+    for name, line in [
+        ("reasoning", "[sven:error] reasoning loop: the model is repeating itself in its reasoning"),
+        ("tool-call", "[sven:agent:error] tool-call loop: the model is repeating itself inside a tool call's "
+                      "arguments (the same block occurs 6 times in a row; ~88 argument tokens so far)"),
+    ]:
+        out = tmp_path / name
+        trial = crashed_trial(out, None)
+        (trial / "agent" / "stderr.txt").write_text(f"[sven:warn] asking again once\n{line}\n[sven:agent:aborted]\n")
+        report = build_report(out, trial, {"task": "train/001", "slot": 0}, attempt=0).report
+        assert report["evidence"]["agent_reasoning_loop"] is True, name
+    plain = build_report(tmp_path / "crash", crashed_trial(tmp_path / "crash", None),
+                         {"task": "train/001", "slot": 0}, attempt=0).report
+    assert plain["evidence"]["agent_reasoning_loop"] is False

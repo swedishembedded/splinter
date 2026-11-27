@@ -34,8 +34,9 @@ TIMEOUT_EXIT_CODE = 124  # `timeout(1)` and Sven both exit 124 when the time lim
 _AGENT_TIMEOUT = re.compile(r"^\[sven:(?:agent:)?error\].*\btimed out\b", re.M)
 # ... when the run's completion-token or turn budget ended it, e.g. `[sven:error] run budget exhausted: ...`.
 _AGENT_BUDGET = re.compile(r"^\[sven:(?:agent:)?error\].*\bbudget exhausted\b", re.M)
-# ... when its reasoning looped again after the one retry it gets, e.g. `[sven:error] reasoning loop: ...`.
-_AGENT_REASONING_LOOP = re.compile(r"^\[sven:(?:agent:)?error\] reasoning loop:", re.M)
+# ... when its reasoning, or the arguments of one of its tool calls, looped again after the one retry it gets, e.g.
+# `[sven:error] reasoning loop: ...` or `[sven:agent:error] tool-call loop: ...`.
+_AGENT_REASONING_LOOP = re.compile(r"^\[sven:(?:agent:)?error\] (?:reasoning|tool-call) loop:", re.M)
 
 
 @dataclass

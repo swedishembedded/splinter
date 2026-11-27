@@ -219,8 +219,8 @@ fn an_endpoint_rejecting_every_request_with_any_4xx_status_is_an_endpoint_reject
         .find(|c| c["name"] == "quit_after_one_turn")
         .expect("the case");
     let (mut evidence, policy) = evidence(failed);
-    // 400 and 499 are the first and last 4xx status.
-    for status in [400, 499] {
+    // 400 and 498 bound the statuses an endpoint answers with; 499 is the gateway's record of the agent hanging up.
+    for status in [400, 498] {
         evidence.requests = vec![ModelRequest {
             status: Some(status),
             error: Some("rejected".into()),
@@ -233,6 +233,33 @@ fn an_endpoint_rejecting_every_request_with_any_4xx_status_is_an_endpoint_reject
             "HTTP {status}"
         );
     }
+}
+
+#[test]
+fn an_agent_that_hung_up_on_its_model_was_not_rejected_by_the_endpoint() {
+    let cases = cases();
+    let failed = cases
+        .iter()
+        .find(|c| c["name"] == "quit_after_one_turn")
+        .expect("the case");
+    let (mut evidence, policy) = evidence(failed);
+    // The gateway records 499 when the agent closed the stream before the answer ended: sven does that when the
+    // model loops inside a tool call's arguments. The loop is the model's failure, counted, and not asked again.
+    evidence.requests = vec![ModelRequest {
+        status: Some(499),
+        error: Some("the agent closed the stream before the answer ended".into()),
+        ..ModelRequest::default()
+    }];
+    let hung_up = grade(&evidence, &policy);
+    assert_ne!(
+        hung_up.cause.map(|c| c.code),
+        Some("endpoint_rejected".to_owned())
+    );
+    evidence.agent_reasoning_loop = true;
+    let looped = grade(&evidence, &policy);
+    assert_eq!(looped.status, TrialStatus::ReasoningLoop);
+    assert!(looped.counted && looped.passed == Some(false));
+    assert!(!looped.status.is_retryable());
 }
 
 #[test]

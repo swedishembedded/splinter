@@ -531,7 +531,8 @@ pub fn classify(
             TrialStatus::ReasoningLoop,
             Some(Cause::new(
                 "reasoning_loop",
-                "the model's reasoning looped again after the agent's one retry, and that ended the run",
+                "the model looped, in its reasoning or inside a tool call's arguments, again after the agent's one retry, \
+                 and that ended the run",
             )),
         );
     }
@@ -639,7 +640,8 @@ pub fn classify(
     let rejected: Vec<&ModelRequest> = evidence
         .requests
         .iter()
-        .filter(|r| r.status.is_some_and(|s| (400..=499).contains(&s)))
+        // 499 is the gateway's record of the agent closing the stream, not an answer of the endpoint.
+        .filter(|r| r.status.is_some_and(|s| (400..499).contains(&s)))
         .collect();
     if !rejected.is_empty() && !statuses.iter().any(|s| (200..300).contains(s)) {
         let error = rejected
