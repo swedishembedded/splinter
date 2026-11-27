@@ -404,7 +404,10 @@ impl<'a> Factory<'a> {
                 let params: crate::ops::TrainParams =
                     stage.params().map_err(|e| stage_error(&stage.key, e))?;
                 trainer
-                    .resolve(&params.method, &params.params)
+                    .resolve(
+                        &params.method,
+                        &crate::budget::for_trainer_check(&params.params),
+                    )
                     .map_err(|e| stage_error(&stage.key, e))?;
             }
         }

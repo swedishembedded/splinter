@@ -108,6 +108,21 @@ pub fn in_epochs(params: &Value) -> bool {
     params.get(EPOCHS).is_some()
 }
 
+/// `params` as a trainer can check them before the records exist: an epoch
+/// budget stands in as one step, since what a trainer accepts does not depend
+/// on how many steps run; `params` unchanged when they state steps.
+#[must_use]
+pub fn for_trainer_check(params: &Value) -> Value {
+    let mut checked = params.clone();
+    if in_epochs(params) {
+        if let Some(object) = checked.as_object_mut() {
+            object.remove(EPOCHS);
+            object.insert(STEPS.into(), Value::from(1));
+        }
+    }
+    checked
+}
+
 /// `params` with an epoch budget resolved into `steps` over `draws`, and the
 /// budget as resolved; `params` unchanged and no budget when it states none.
 /// `records_per_step` is asked with the parameters the trainer will get,
@@ -168,6 +183,15 @@ pub fn resolve(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_trainer_checks_an_epoch_budget_as_one_step() {
+        let checked = super::for_trainer_check(&serde_json::json!({"rank": 8, "epochs": 1.9}));
+        assert_eq!(checked, serde_json::json!({"rank": 8, "steps": 1}));
+        let steps = serde_json::json!({"rank": 8, "steps": 800});
+        assert_eq!(super::for_trainer_check(&steps), steps);
+    }
+
     use serde_json::json;
 
     use super::*;
