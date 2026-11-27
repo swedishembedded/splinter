@@ -9,7 +9,7 @@
 PAPER := paper
 include ../paper.mk
 
-SOURCES := $(PAPER).tex status.txt references.bib $(wildcard sections/*.tex)
+SOURCES := $(PAPER).tex status.txt references.bib $(wildcard *.tex sections/*.tex)
 
 # The tables and figure data are made from data/ (the examiner's verdict of the Lua run, and data/vim-transfer/, a copy of
 # the aggregate files of the private evidence dataset swedishembedded/source-to-transfer-evidence) into the build

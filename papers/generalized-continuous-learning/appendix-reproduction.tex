@@ -1,4 +1,700 @@
 % SPDX-License-Identifier: CC-BY-4.0
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
-%
-% The full reproduction procedure (appendix), written and tested separately; this file is replaced by it.
+
+\section{Reproducing the Vim experiment step by step}\label{app:repro-vim}
+
+\begin{sloppypar}
+This appendix is the procedure a third party runs, from a fresh machine, to repeat the Vim source-to-transfer experiment
+(\cref{sec:introduction}) from the published material. Every command block below is meant to be pasted, in order, into one
+\texttt{bash} session; each block's first line names its part: \texttt{[setup]} (build, fetch, prepare), \texttt{[serve]}
+(the model servers), \texttt{[smoke]} (a check of the whole chain in minutes), \texttt{[full]} (the experiment) and
+\texttt{[analysis]}. The revisions it pins are those of \cref{tab:artifacts,tab:builds}. The procedure was run as written,
+\texttt{[setup]}, \texttt{[smoke]} and \texttt{[analysis]} end to end, on 2026-11-27 (\cref{app:repro-vim-test}).
+\end{sloppypar}
+
+\subsection{What is published and what each step needs}\label{app:repro-vim-scope}
+
+\begin{center}\footnotesize
+\begin{tabular}{p{38mm}p{56mm}p{50mm}}
+\toprule
+Step & Inputs & Reproducible from the published material \\
+\midrule
+Tasks from the manual (forward and outcome-first authoring, review, repair) & the manual, the authoring operators, prompts and
+schemas & no: the authoring pipeline is not published; its output, the 1026 forward and 467 outcome-first tasks, is, and is
+checked byte for byte against the runs' pinned tasks (step~\ref{app:repro-vim-verify}) \\
+Oracle admission & published tasks & yes \\
+Student and teacher attempts & published tasks, Qwen3-4B, Qwen3.8-27B-FP8 & yes (new samples, not the same trials) \\
+Arm datasets B, C, D, F, G & attempts of the step above & yes; the exact datasets the arms trained on are also published \\
+Training & an arm dataset & yes, from rebuilt or from the published datasets \\
+Exam evaluation (T2/T4) & 100 exams, candidate and base & yes: the exams, their checks and reference answers are public \\
+T1 evaluation & held-out authored tasks & yes \\
+Registered analysis & per-task outcomes & yes for a new run; for the published run only its aggregates \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{sloppypar}
+The exams are the evaluation side of the public dataset \nolinkurl{swedishembedded/vim-headless-mastery}: each exam's
+instruction, starting files, checker (\texttt{tests/test.sh} with the expected files) and reference answer are published, so a
+third party grades its own candidates exactly as the experiment did. At revision \texttt{ff83d49b} the published exams carry an
+older copy of the environment's three files (the image recipe, the vim tool and its configuration) than the run used; the
+procedure lays the run's copies, which every published practice task carries, over them, after which all 1263 exam files are
+byte-identical to the ones the run pinned (step~\ref{app:repro-vim-verify}). What a third party cannot recompute is the
+published run's own per-exam outcomes: they are item-level exam data kept with the examiner's private evidence, and the
+published run is checked through its aggregates (the evidence dataset's \texttt{evaluation/} and \texttt{decision/} files,
+\cref{tab:repro-vim-outputs}).
+\end{sloppypar}
+
+\subsection{Prerequisites and hardware}\label{app:repro-vim-prereq}
+
+\begin{sloppypar}
+\textbf{Software.} Linux (the run: Ubuntu 26.04 on aarch64, in a container on a cluster node) with unprivileged user
+namespaces or a Docker daemon (the sandbox of each attempt; \texttt{unshare -Ur true} must succeed); git with git-lfs; a Rust
+toolchain (the run: rustc 1.100.0; \texttt{rustup} stable); Python~3.12 or later with \texttt{venv} (the run: 3.14);
+\texttt{zstd}; the \texttt{hf} command-line client, logged in (\texttt{hf auth login}) with read access to the private
+\texttt{swedishembedded} datasets; for the model servers the CUDA toolkit~13 (\texttt{nvcc} on \texttt{PATH},
+\texttt{CUDA\_PATH} set) and an NVIDIA driver; network access to github.com, huggingface.co, the Debian snapshot archive and
+the Docker registry (each task image is built from its pinned \texttt{debian:trixie-slim} digest and a fixed snapshot of
+the archive). Vim is not needed on the host: every Vim the experiment runs is the task image's (Debian's 9.1.1230). Sources:
+brain is public (\nolinkurl{github.com/swedishembedded/brain}); splinter and sven at the commits used are in the authors'
+repositories \nolinkurl{github.com/mkschreder/splinter} and \nolinkurl{github.com/mkschreder/sven}, available on request.
+\end{sloppypar}
+
+\begin{sloppypar}
+\textbf{Hardware.} The run used four nodes of four NVIDIA GH200 (96~GB of device memory each, 288 Arm cores per node): one
+brain server per card (16), each node's attempts and evaluations through a router over its cards, each arm-seed's training on
+one card. The weights take 7.5~GiB (Qwen3-4B, bf16) and 28.8~GiB (Qwen3.8-27B-FP8); a machine with fewer or smaller cards
+was not tried. Disk: see \cref{app:repro-vim-test} for what the test used.
+\end{sloppypar}
+
+\subsection{Sources and builds}\label{app:repro-vim-build}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] Where everything goes, the pinned revisions, and where the model servers are.
+export REPRO=${REPRO:-$HOME/repro}
+mkdir -p "$REPRO/tmp" "$REPRO/cache" && chmod 700 "$REPRO" && cd "$REPRO"
+export TMPDIR=$REPRO/tmp CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-48}
+X=$REPRO/experiment   # the task repository the recipes run in
+SPLINTER_GIT=${SPLINTER_GIT:-https://github.com/mkschreder/splinter.git}
+SPLINTER_REV=bde8e09f94bb584796acfd9e792db788ba54d263
+SVEN_GIT=${SVEN_GIT:-https://github.com/mkschreder/sven.git}
+SVEN_REV=01eabb507058cb37d0254a0340cb4dfe87073576
+BRAIN_GIT=https://github.com/swedishembedded/brain.git
+BRAIN_REV=d6bd3baaff537ed69b9fdb23b2f0c702b43f7658
+# The model servers of [serve]; a machine that has servers elsewhere sets these first.
+export BRAIN_KEY_FILE=${BRAIN_KEY_FILE:-$REPRO/brain.key}
+export BRAIN_CHAT_URL=${BRAIN_CHAT_URL:-http://127.0.0.1:8990/v1}
+export BRAIN_TRAIN_URL=${BRAIN_TRAIN_URL:-http://127.0.0.1:8813/v1}
+export BRAIN_CA_FILE=${BRAIN_CA_FILE:-}
+export BRAIN_ARTIFACTS=${BRAIN_ARTIFACTS:-$REPRO/brain-store/artifacts}
+export BRAIN_ADAPTERS=${BRAIN_ADAPTERS:-$REPRO/brain-store/adapters}
+# What the builds below make, on PATH; the worker starts the agent from SPLINTER_SVEN_BIN.
+export PATH=$REPRO/splinter/target/release:$REPRO/splinter/workers/harbor/.venv/bin:$PATH
+export PATH=$REPRO/brain/target/release:$PATH SPLINTER_SVEN_BIN=$REPRO/sven/target/release/sven
+\end{verbatim}
+}
+
+\begin{sloppypar}
+Brain \texttt{d6bd3baa} is the published history's copy of \texttt{b726c045b}, the build every server of the run ran (a later
+rewrite of the history inserted a version bump; the two differ only in the version number, 7.0.0 for 6.0.0, and the lock
+file's entries for it). Sven \texttt{01eabb50} is the agent every attempt ran (\texttt{sven 5.9.2}); splinter's own lock pins
+the sven and brain library code it links. The run's controllers were splinter \texttt{cc5581333} (both material runs) and
+\texttt{f6661e34} (the arms); \texttt{SPLINTER\_REV} is the later commit this procedure was tested with, which holds every
+option the arms used.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] Clone at the pinned commits and build.
+git clone -q "$BRAIN_GIT" brain && git -C brain -c advice.detachedHead=false checkout -q $BRAIN_REV
+git clone -q "$SVEN_GIT" sven && git -C sven -c advice.detachedHead=false checkout -q $SVEN_REV
+git clone -q "$SPLINTER_GIT" splinter
+git -C splinter -c advice.detachedHead=false checkout -q $SPLINTER_REV
+make -C sven build/release JOBS=$CARGO_BUILD_JOBS
+make -C splinter build
+make -C splinter worker/install
+\end{verbatim}
+}
+
+{\scriptsize
+\begin{verbatim}
+# [serve-build] Brain, on the machine with the GPUs (CUDA 13 on PATH, CUDA_PATH set).
+make -C "$REPRO/brain" build/release
+\end{verbatim}
+}
+
+\subsection{Data at pinned revisions}\label{app:repro-vim-data}
+
+\begin{sloppypar}
+The task datasets hold tens of thousands of small files; a git clone fetches each in seconds, where per-file downloads run into
+the Hub's request limit. The credential helper hands git the \texttt{hf} login's token without writing it anywhere.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] Fetch the five repositories at the revisions the paper reports.
+hfgit() { git -c credential.helper= -c 'credential.helper=!f() { echo username=hf;
+  echo "password=$(hf auth token 2>/dev/null)"; }; f' \
+  -c filter.lfs.process='git-lfs filter-process' -c filter.lfs.required=true "$@"; }
+hfclone() { hfgit clone -q --no-checkout "https://huggingface.co/$1" "$3" &&
+  hfgit -C "$3" -c advice.detachedHead=false checkout -q "$2"; }
+mkdir -p data && cd data
+hfclone datasets/swedishembedded/vim-headless-mastery \
+  ff83d49b1b7d8636300eef73bcc61377af8829b1 vim-headless-mastery
+hfclone datasets/swedishembedded/vim-headless-mastery-manual \
+  3636839122fe6369d023e8d959576f30074a0373 vim-headless-mastery-manual
+hfclone datasets/swedishembedded/vim-headless-mastery-sft-manual \
+  bc55f91f923fc5bdc02b398e1eeebb75da421360 vim-headless-mastery-sft-manual
+hfclone datasets/swedishembedded/source-to-transfer-evidence \
+  413259d233569d0144154e1e2e5198e99095fdc4 source-to-transfer-evidence
+hfclone swedishembedded/vim-manual-transfer-adapters \
+  96e33e51d1e456b104e9c142d11f03ceb8e4ca3d vim-manual-transfer-adapters
+cd "$REPRO"
+\end{verbatim}
+}
+
+\begin{sloppypar}
+\texttt{vim-headless-mastery-manual} holds the practice tasks (\texttt{train-forward/}, 1026; \texttt{train-backward/}, 467);
+\texttt{vim-headless-mastery} the course, whose \texttt{eval/} side is the 100 exams; \texttt{source-to-transfer-evidence} the
+arm datasets exactly as trained, the runs' recipes, locks and revisions, every material stage's product manifest, the aggregates
+and the analysis code; \texttt{vim-manual-transfer-adapters} the 15 adapters with their training reports;
+\texttt{vim-headless-mastery-sft-manual} the same trajectories as chat records for other trainers (arm B's and G's seed-1 train
+and validation records with repeated solutions moved to \texttt{duplicates}, the T1 records in \texttt{heldout}, and
+policy-gradient records). The procedure below does not need the last one.
+\end{sloppypar}
+
+\subsection{The task repository}\label{app:repro-vim-repo}
+
+\begin{sloppypar}
+Splinter runs a recipe inside a task repository: the tasks, the collections that name them, the sandbox's environment, the
+evaluation plans and the files the agent is given. The task identifiers must be the run's (\texttt{train/manual-\ldots},
+\texttt{train/backward-\ldots}, \texttt{eval/exam-\ldots}), since the T1 hold-out is a hash of the seed and the task identifier;
+the layout below gives them.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] The tasks, with the run's environment files laid over the published exams.
+mkdir -p $X/tasks/forward $X/tasks/backward $X/tasks/course $X/collections $X/eval \
+  $X/environments/vim $X/presets $X/prompts $X/recipes $X/datasets
+cp -r data/vim-headless-mastery-manual/train-forward $X/tasks/forward/train
+cp -r data/vim-headless-mastery-manual/train-backward $X/tasks/backward/train
+cp -r data/vim-headless-mastery/eval $X/tasks/course/eval
+env_src=$X/tasks/forward/train/manual-0007c64a-update-menu-docs/environment
+for exam in $X/tasks/course/eval/*/; do
+  cp $env_src/Dockerfile $env_src/vim_mcp.py $env_src/sven.yaml "$exam/environment/"
+done
+for name in forward backward course; do
+  printf 'schema: splinter.collection/v1\nname: %s\nroot: tasks/%s\n' $name $name \
+    > $X/collections/$name.yaml
+done
+\end{verbatim}
+}
+
+\paragraph{Check against the run.}\label{app:repro-vim-verify}
+The material runs' manifests in the evidence dataset list every file of the tasks they pinned with its SHA-256; this compares
+the tree just built with them.
+
+{\scriptsize
+\begin{verbatim}
+# [setup] Every task file byte-identical to what the runs pinned (prints three lines).
+mkdir -p $REPRO/evidence && tar -C $REPRO/evidence --zstd \
+  -xf data/source-to-transfer-evidence/material/material-manifests.tar.zst
+cat > $REPRO/verify-tasks.py <<'EOF'
+import hashlib, json, os, sys
+evidence, tasks = sys.argv[1], sys.argv[2]
+for run, stage, tree in [("material2", "tasks", "forward"), ("backward2", "tasks", "backward"),
+                         ("material2", "exams", "course")]:
+    pinned = json.load(open(f"{evidence}/{run}/{stage}/manifest.json"))["files"]
+    want = {f["path"]: f["digest"] for f in pinned if "/" in f["path"]}
+    have = {}
+    for d, _, names in os.walk(os.path.join(tasks, tree)):
+        for n in names:
+            p = os.path.join(d, n)
+            have[os.path.relpath(p, os.path.join(tasks, tree))] = \
+                "sha256:" + hashlib.sha256(open(p, "rb").read()).hexdigest()
+    same = sum(have.get(k) == v for k, v in want.items())
+    gone = sorted({k.split("/")[1] for k in want if k not in have})
+    print(f"{tree}: {same} of {len(want)} pinned files identical, {len(have) - same} other files;"
+          f" tasks not published: {gone}")
+    if len(have) != same or any(k in have and have[k] != v for k, v in want.items()):
+        sys.exit(f"{tree}: the tree differs from the run's")
+EOF
+python3 -I $REPRO/verify-tasks.py $REPRO/evidence $X/tasks
+\end{verbatim}
+}
+
+\begin{sloppypar}
+Expected: \texttt{forward: 12709 of 12757 pinned files identical, 0 other files}, naming the four forward tasks the oracle
+did not solve and that are not published (their expected files were recorded wrongly, \cref{sec:r-admission});
+\texttt{backward: 5890 of 5890}; \texttt{course: 1263 of 1263}.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] The sandbox, the plans, the agent's files and the machine's connection.
+cat > $X/environments/vim/environment.yaml <<'EOF'
+schema: splinter.environment/v1
+isolation: confined
+sandbox:
+  resources: { cpus: 2, memory_gb: 4, timeout: 10m }
+network:
+  mode: model-gateway-only
+EOF
+for side in exam:eval unseen:train; do
+  cat > $X/eval/vim-${side%%:*}-transfer.yaml <<EOF
+schema: splinter.evalplan/v1
+split: ${side##*:}
+environment: environments/vim/environment.yaml
+attempts: 4
+concurrency: 64
+seed: 20261126
+decision: { alpha: 0.05, min_difference: 0.0 }
+EOF
+  sed 's/^attempts: 4$/attempts: 1/; s/^concurrency: 64$/concurrency: 8/' \
+    $X/eval/vim-${side%%:*}-transfer.yaml > $X/eval/smoke-${side%%:*}.yaml
+done
+cat > $X/presets/sven-no-thinking.yaml <<'EOF'
+providers:
+  gateway:
+    driver_options:
+      chat_template_kwargs:
+        enable_thinking: false
+model:
+  sampling_best_effort: true
+EOF
+echo 'Before each tool call, state in one or two short sentences what you observed and what you' \
+  'will do next. No long deliberation.' > $X/prompts/narrate-before-each-call.md
+printf 'connections:\n  brain: { protocol: openai, url: "http://127.0.0.1:8990/v1" }\n' \
+  > $X/connections.yaml
+printf 'connections:\n  brain: { protocol: openai, url: "%s", token: "env:SPLINTER_BRAIN_KEY" }\n' \
+  "$BRAIN_CHAT_URL" > $REPRO/machine.yaml
+\end{verbatim}
+}
+
+\begin{sloppypar}
+The system prompt's file is byte-identical to the run's: the narration is appended to sven's own prompt in every attempt
+and every evaluation, and the training records carry it. The sven preset makes the student answer without a reasoning block
+and send its sampling parameters; the teacher ran without it, in its default thinking mode, its reasoning removed from the
+records.
+\end{sloppypar}
+
+\subsection{The recipes}\label{app:repro-vim-recipes}
+
+\begin{sloppypar}
+One generator writes every recipe, so the stages a fork shares with its parent are the same text and are reused, never
+recomputed. A recipe is the material of one task family (the pinned tasks, the oracle's admission, eight student attempts and
+four teacher attempts per admitted task, and the T1 split: 10\% of the tasks by a hash of seed 41 and the task's identifier),
+optionally followed by the datasets of every arm of that family (\texttt{datasets}) or by one arm-seed: its dataset, a LoRA
+trained from the base and its evaluations on the exams and on T1 against the base in the same stage.
+\texttt{SMOKE=1} shrinks every count and binds the teacher role to the student's model; \texttt{DATA=published} makes an
+arm train on its published dataset instead of one rebuilt from the attempts (\cref{app:repro-vim-full}).
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] gen-recipe.sh FAMILY PART [SEED]: FAMILY forward|backward; PART material,
+# datasets, or an arm letter (b c d f on forward, g on backward) and its seed.
+cat > $X/gen-recipe.sh <<'GEN'
+#!/usr/bin/env bash
+set -euo pipefail
+family=$1 part=$2 seed=${3:-1}
+if [ "${SMOKE:-0}" = 1 ]; then
+  coll=smoke-$family exams=smoke-course author=brain:Qwen/Qwen3-4B
+  s_att=2 t_att=1 steps=4 every=2 plan=smoke
+else
+  coll=$family exams=course author=brain:Qwen/Qwen3.8-27B-FP8
+  s_att=8 t_att=4 steps=800 every=40 plan=vim
+fi
+student_args='[--config, presets/sven-no-thinking.yaml, --temperature, "0.7",
+            --top-p, "0.8", --top-k, "20"]'
+agent="agent: sven
+    system_prompt: prompts/narrate-before-each-call.md
+    budget: { completion_tokens: 16384, turns: 60 }"
+attempts() { # ID MODEL ATTEMPTS CONCURRENCY SEED [ARGS]
+  echo "- id: $1
+  uses: attempt.collect
+  inputs: { tasks: \$stages.tasks.tasks, solved_by: [\$stages.oracle.attempts] }
+  with:
+    $agent
+    model: $2
+    environment: environments/vim/environment.yaml
+    attempts: $3
+    concurrency: $4
+    seed: $5"
+  [ -z "${6:-}" ] || echo "    args: $6
+    files: [presets/sven-no-thinking.yaml]"
+}
+dataset() { # ID OPTIONS
+  echo "- id: $1
+  uses: dataset.project
+  inputs:
+    attempts: [\$stages.student-attempts.attempts, \$stages.teacher-attempts.attempts]
+    tasks: \$stages.practice.tasks
+  with:
+    projection: native-sft
+    target: student
+    max_block: 16384
+    validation: { group_by: task, percent: 10 }
+    seed: 4$2"
+}
+options() { case $1 in
+  c) printf '\n    per_task: 1\n    prefer: fewest-actions' ;;
+  d) printf '\n    supervise: productive' ;;
+  f) printf '\n    control: shuffled-requests' ;;
+esac; }
+course=""; [ "$part" = material ] || [ "$part" = datasets ] ||
+  course="
+  course: { kind: files, path: collections/$exams.yaml }"
+[ "${DATA:-attempts}" = attempts ] || course="$course
+  records: { kind: files, path: datasets/arm-$part }"
+cat <<EOF
+schema: splinter.recipe/v2
+name: vim-manual-$family-$part-s$seed
+inputs:
+  tasks: { kind: files, path: collections/$coll.yaml }$course
+models:
+  author: $author
+  student: brain:Qwen/Qwen3-4B
+stages:
+- id: tasks
+  uses: tasks.pin
+  inputs: { collection: \$inputs.tasks }
+  with: { split: train }
+- id: oracle
+  uses: attempt.collect
+  inputs: { tasks: \$stages.tasks.tasks }
+  with: { agent: oracle, environment: environments/vim/environment.yaml, attempts: 1,
+          seed: 1, concurrency: 64 }
+$(attempts student-attempts student $s_att 512 21 "$student_args")
+$(attempts teacher-attempts author $t_att 384 22)
+- id: practice
+  uses: tasks.pin
+  inputs: { collection: \$inputs.tasks }
+  with: { split: train, holdout: { percent: 10, seed: 41, side: kept } }
+- id: unseen
+  uses: tasks.pin
+  inputs: { collection: \$inputs.tasks }
+  with: { split: train, holdout: { percent: 10, seed: 41, side: held } }
+EOF
+case $part in
+  material) ;;
+  datasets) if [ $family = forward ]; then arms="b c d f"; else arms=g; fi
+    for a in $arms; do dataset sft-$a "$(options $a)"; done ;;
+  *) if [ "${DATA:-attempts}" = attempts ]; then dataset sft "$(options $part)"
+    else printf -- '- id: sft\n  uses: dataset.import\n  inputs: { records: $inputs.records }\n'
+      printf '  with: { target: student, max_block: 16384 }\n'; fi
+    cat <<EOF
+- id: lora
+  uses: model.train
+  inputs: { dataset: \$stages.sft.dataset }
+  with:
+    base: student
+    method: lora
+    seed: $seed
+    params: { rank: 16, alpha: 32, steps: $steps, grad_accum: 4, learning_rate: 0.0002,
+              weight_decay: 0, max_block: 16384, base_precision: bf16,
+              eval_every: $every, patience: 4 }
+- id: exams
+  uses: tasks.pin
+  inputs: { collection: \$inputs.course }
+  with: { split: eval }
+EOF
+    for ev in exam:exams unseen:unseen; do cat <<EOF
+- id: eval-${ev%%:*}
+  uses: evaluation
+  inputs: { candidate: \$stages.lora.model, tasks: \$stages.${ev##*:}.tasks }
+  with:
+    plan: eval/$plan-${ev%%:*}$( [ $plan = vim ] && echo -transfer ).yaml
+    $agent
+    baseline: student
+    args: $student_args
+    files: [presets/sven-no-thinking.yaml]
+    comparisons: 1
+EOF
+    done ;;
+esac
+GEN
+chmod +x $X/gen-recipe.sh
+\end{verbatim}
+}
+
+{\scriptsize
+\begin{verbatim}
+# [setup] factory NAME RECIPE [PARENT]: run a recipe (or fork PARENT's run) into $RUNS/NAME.
+factory() {
+  local runs=${RUNS:-$REPRO/runs} verb=(run "$2")
+  [ -z "${3:-}" ] || verb=(fork "$runs/$3" --recipe "$2")
+  ( cd "$X" && export XDG_CACHE_HOME=$REPRO/cache SPLINTER_BRAIN_KEY=$(cat "$BRAIN_KEY_FILE")
+    splinter "${verb[@]}" \
+      --out "$runs/$1" --state "$runs/.state/$1" --config "$REPRO/machine.yaml" \
+      --brain-endpoint "$BRAIN_TRAIN_URL" ${BRAIN_CA_FILE:+--brain-ca-file "$BRAIN_CA_FILE"} \
+      --brain-key-file "$BRAIN_KEY_FILE" --brain-artifact-store "$BRAIN_ARTIFACTS" \
+      --brain-adapter-dir "$BRAIN_ADAPTERS" --cluster off --job-launcher local )
+}
+mkdir -p $REPRO/runs
+for f in forward backward; do
+  $X/gen-recipe.sh $f material > $X/recipes/$f.yaml
+  $X/gen-recipe.sh $f datasets > $X/recipes/$f-datasets.yaml
+done
+for a in b c d f g; do for s in 1 2 3; do
+  f=forward; [ $a = g ] && f=backward
+  $X/gen-recipe.sh $f $a $s > $X/recipes/arm-$a-s$s.yaml
+done; done
+(cd $X && for r in recipes/*.yaml; do splinter validate "$r" --config "$REPRO/machine.yaml" \
+  >/dev/null || exit 1; done && echo "every recipe valid")
+\end{verbatim}
+}
+
+\subsection{Model servers}\label{app:repro-vim-serve}
+
+\begin{sloppypar}
+On a fresh machine, the models come from the Hub at the revisions the run's store held, and brain serves one server per card
+(here four, ports 8810--8813) behind a router on port 8990 that the attempts and evaluations use; training jobs go to one card's
+server directly (a router does not route jobs). With one card, serve one server on port 8990 and set
+\texttt{BRAIN\_TRAIN\_URL} to it. Servers run without speculative decoding (\cref{app:deviations}).
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [serve] Models, a key, four servers and a router (one card: start only gpu0, on 8990).
+S=$REPRO/brain-data && mkdir -p $S $BRAIN_ARTIFACTS $BRAIN_ADAPTERS
+brain pull --brain-data-dir $S \
+  https://huggingface.co/Qwen/Qwen3-4B/tree/1cfa9a7208912126459214e8b04321603b3df60c
+brain pull --brain-data-dir $S \
+  https://huggingface.co/Qwen/Qwen3.8-27B-FP8/tree/c3a462cc3d38cf351f3b26cbd763469eeb74ef81
+[ -s "$BRAIN_KEY_FILE" ] || (umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' \
+  > "$BRAIN_KEY_FILE")
+for n in 0 1 2 3; do
+  mkdir -p $S/rt-$n && chmod 700 $S/rt-$n && rm -f $S/ready-$n
+  setsid brain serve --openai 127.0.0.1:$((8810 + n)) --device gpu$n --backend cuda --max-batch 64 \
+    --speculative off --api-key-file "$BRAIN_KEY_FILE" --training \
+    --artifact-store $BRAIN_ARTIFACTS --serve-adapters $BRAIN_ADAPTERS --adapter-targets all \
+    --models-dir $S/models --ready-file $S/ready-$n --runtime-dir $S/rt-$n \
+    --cache-dir $S/cache-$n > $S/serve-$n.log 2>&1 < /dev/null &
+  echo http://127.0.0.1:$((8810 + n))
+done > $S/upstreams
+mkdir -p $S/rt-router && chmod 700 $S/rt-router
+CUDA_VISIBLE_DEVICES= setsid brain serve --openai 127.0.0.1:8990 --upstreams-file $S/upstreams \
+  --upstream-key-file "$BRAIN_KEY_FILE" --api-key-file "$BRAIN_KEY_FILE" --models-dir $S/models \
+  --runtime-dir $S/rt-router --ready-file $S/ready-router > $S/router.log 2>&1 < /dev/null &
+until [ -e $S/ready-0 ] && [ -e $S/ready-1 ] && [ -e $S/ready-2 ] && [ -e $S/ready-3 ] &&
+  [ -e $S/ready-router ]; do sleep 5; done
+\end{verbatim}
+}
+
+\subsection{Smoke check}\label{app:repro-vim-smoke}
+
+\begin{sloppypar}
+Before the full run, a few tasks go through every stage: six forward practice tasks and two of the T1 hold-out, three
+outcome-first tasks and one of its hold-out, four exams; two student attempts and one ``teacher'' attempt (the student's model)
+per task, the datasets of all five arms, and arm B trained for four steps and evaluated once per exam and T1 task, against the
+base; then arm B again, four steps on its published dataset.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [smoke] A handful of tasks through every stage.
+smoke_coll() { # NAME ROOT ID...
+  local name=$1 root=$2; shift 2
+  { printf 'schema: splinter.collection/v1\nname: %s\nroot: %s\ninclude:\n' $name $root
+    printf '  - %s\n' "$@"; } > $X/collections/$name.yaml
+}
+smoke_coll smoke-forward tasks/forward train/manual-044db1d4-clean-the-log-header \
+  train/manual-0c9875ff-remove-trailing-spaces \
+  train/manual-10df275c-strip-trailing-spaces-from-log \
+  train/manual-18ebaac5-replace-tabs-with-spaces \
+  train/manual-2d97698f-remove-first-line-of-notes-md train/manual-2fe2f268-update-navigation-help \
+  train/manual-023bed0c-fix-log-timestamps train/manual-11a434a1-fix-config-indentation
+smoke_coll smoke-backward tasks/backward train/backward-3a1b4802-reformat-netrw-help-tabs \
+  train/backward-b05f6cc7-sort-log-lines-by-timestamp \
+  train/backward-f827e63d-remove-trailing-whitespace-in-config-fil \
+  train/backward-0570782d-clean-up-vim-plugin-configs
+smoke_coll smoke-course tasks/course eval/exam-001-shopping-list eval/exam-002-sensor-readings \
+  eval/exam-003-release-checklist eval/exam-004-request-builder
+for f in forward backward; do SMOKE=1 $X/gen-recipe.sh $f datasets > $X/recipes/smoke-$f.yaml; done
+SMOKE=1 $X/gen-recipe.sh forward b 1 > $X/recipes/smoke-arm-b.yaml
+tar -C $X/datasets --zstd -xf data/source-to-transfer-evidence/arm-datasets/arm-b.tar.zst \
+  arm-b/train.jsonl arm-b/validation.jsonl
+SMOKE=1 DATA=published $X/gen-recipe.sh forward b 1 > $X/recipes/smoke-published-b.yaml
+mkdir -p $REPRO/smoke-runs
+( export RUNS=$REPRO/smoke-runs   # the smoke's runs, apart from the experiment's
+  factory forward recipes/smoke-forward.yaml
+  factory backward recipes/smoke-backward.yaml
+  factory arm-b-s1 recipes/smoke-arm-b.yaml forward
+  factory published-b-s1 recipes/smoke-published-b.yaml forward )
+for r in arm-b-s1 published-b-s1; do grep -A4 '^| arm ' $REPRO/smoke-runs/$r/report.md; done
+\end{verbatim}
+}
+
+\begin{sloppypar}
+What the test printed (counts are samples and vary): the oracle solved all 8 forward and 4 outcome-first tasks; the student
+passed 12 of 16 and 6 of 8 attempts, the 4B as teacher 6 of 8 and 3 of 4; the datasets of B, D and F held 18 records (15
+train, 3 validation) of 6 tasks, C 6 records, G 9; the two T1 tasks were left out of every dataset (\texttt{not\_in\_tasks}),
+as in the run. Arm B's four steps took its validation loss from 0.93 to 0.39; on its published dataset the base's validation
+loss was 2.4885, the published arm~B seed~1's own (\texttt{lora/report.json}, the same 380 validation records), and 1.06
+after four steps. No candidate and no base passed one of the four exams or two T1 tasks.
+A run stopped at any point is continued by running the same commands again: every committed stage is reused and only lost
+attempts are run again.
+\end{sloppypar}
+
+\subsection{The full experiment}\label{app:repro-vim-full}
+
+{\scriptsize
+\begin{verbatim}
+# [full] Material of both families, every arm's dataset, then 15 arm-seeds as forks.
+factory forward recipes/forward.yaml
+factory backward recipes/backward.yaml
+factory forward-datasets recipes/forward-datasets.yaml forward
+factory backward-datasets recipes/backward-datasets.yaml backward
+for a in b c d f g; do for s in 1 2 3; do
+  parent=forward; [ $a = g ] && parent=backward
+  factory arm-$a-s$s recipes/arm-$a-s$s.yaml $parent
+done; done
+\end{verbatim}
+}
+
+\begin{sloppypar}
+The arm-seeds are independent: the run started each on its own card (\texttt{BRAIN\_TRAIN\_URL} that card's server), all 15 at
+once over 16 cards. Each run directory's \texttt{report.md} (\texttt{splinter report}) gives every stage's counts;
+\texttt{splinter inspect RUN --stage STAGE} its products. \Cref{tab:repro-vim-outputs} lists what to compare with the published
+run.
+\end{sloppypar}
+
+\begin{table}[t]\centering\footnotesize
+\caption{What the full procedure produces, what the published run measured (in the evidence file named), and the run's wall
+clock on 16 GH200, read from the commit times of its stages' products.}
+\label{tab:repro-vim-outputs}
+\begin{tabular}{p{30mm}p{80mm}p{34mm}}
+\toprule
+Product & Published run & Wall clock (run) \\
+\midrule
+forward material & oracle 1026 of 1026 solved; student 8204 counted attempts, pass rate 0.100, 231 tasks solved; teacher 4095,
+0.811, 944 (\texttt{material/funnel.json}) & attempts of both models 5.0~h (14:50--19:48), a restart included \\
+outcome-first material & oracle 467 of 467; student 3688, 0.031, 36 solved; teacher 1868, 0.722, 410 & student 33~min,
+teacher 32~min \\
+arm datasets & B and D 3359 train and 380 validation records of 857 tasks, C 771 train, F as B with the requests deranged, G
+1100 train records of 348 tasks (\texttt{arm-datasets/*/composition.json}) & under a minute \\
+training & 800 steps, the checkpoint of lowest validation loss of every 40 (arm B seed 1: 2.49 to 0.60;
+\texttt{evaluation/aggregates.json}) & 16--51~min per arm-seed on one card \\
+exam evaluation & passes of 1200 attempts per arm: B 22, C 10, D 22, F 0, G 42; the paired base 0
+(\texttt{decision/decision-eval-exam.json}) & 49--71~min per arm-seed (800 attempts, four arm-seeds per node) \\
+T1 evaluation & B 705 of 1128, C 642, D 723, F 9, G 127 of 612 (\texttt{decision/decision-eval-unseen.json}) & not recorded
+in the evidence \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Training on the exact published datasets.}
+The attempts are new samples, so rebuilt datasets differ from the published ones in their trials. To train on exactly what the
+arms trained on, an arm's recipe imports its published dataset (\texttt{dataset.import}, the records carried over byte for byte) in place
+of its \texttt{dataset.project} stage; the three seeds of an arm trained on byte-identical files:
+
+{\scriptsize
+\begin{verbatim}
+# [full] Arm ARM, seed SEED trained on its published dataset (here arm B, seed 1).
+ARM=b SEED=1 F=forward; [ $ARM = g ] && F=backward
+tar -C $X/datasets --zstd -xf data/source-to-transfer-evidence/arm-datasets/arm-$ARM.tar.zst \
+  arm-$ARM/train.jsonl arm-$ARM/validation.jsonl
+DATA=published $X/gen-recipe.sh $F $ARM $SEED > $X/recipes/published-$ARM-s$SEED.yaml
+factory published-$ARM-s$SEED recipes/published-$ARM-s$SEED.yaml $F
+\end{verbatim}
+}
+
+\subsection{Registered analysis, tables and figures}\label{app:repro-vim-analysis}
+
+\begin{sloppypar}
+The analysis code is the evidence dataset's. \texttt{export-results.py} reads the per-task outcomes of every arm run's two
+evaluations (it names the run's own directory, which the first line below replaces); \texttt{decide.py} makes the registered
+decision (per exam, the passes of an arm's 12 attempts over three seeds against its paired base's; one-sided exact sign test,
+Holm over B, C, D, G against the base; each arm against F) and \texttt{secondary.py} the secondary comparisons with
+task-bootstrap intervals (\texttt{random.Random(20261126)}, 10000 resamples).
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [analysis] The decision and secondary comparisons of this repetition, and its aggregates.
+A=$REPRO/analysis && mkdir -p $A/results && cp data/source-to-transfer-evidence/analysis/*.py $A/
+sed -i "s|glob.glob(\"[^\"]*/runs/arm-\*\")|glob.glob(\"${RUNS:-$REPRO/runs}/arm-*\")|" \
+  $A/export-results.py
+python3 -I $A/export-results.py
+for ev in eval-exam eval-unseen; do
+  python3 -I $A/decide.py $A/results $ev > $A/decision-$ev.json
+  python3 -I $A/secondary.py $A/results $ev > $A/secondary-$ev.json
+done
+\end{verbatim}
+}
+
+\begin{sloppypar}
+The paper's tables and figures are generated from the evidence dataset's aggregate files, which \texttt{data/vim-transfer/} in
+the paper's directory holds as byte copies. This takes the paper from the current main branch, fetches the evidence revision
+its \texttt{data/artifacts.csv} names (later revisions add arms and files to the earlier ones), copies the aggregates over the paper's
+and builds the PDF (pdflatex and latexmk). To typeset a repetition's own results, copy its decision and secondary files over
+\texttt{paper-evidence/decision/} before \texttt{make vim-data}.
+\end{sloppypar}
+
+{\scriptsize
+\begin{verbatim}
+# [analysis] Tables and figures from the evidence revision the paper pins, and the paper.
+git -C splinter fetch -q origin main
+git -C splinter worktree add -q --detach $REPRO/paper FETCH_HEAD
+P=$REPRO/paper/papers/generalized-continuous-learning
+rev=$(awk -F, '$2 == "swedishembedded/source-to-transfer-evidence" { print $4 }' $P/data/artifacts.csv)
+hfclone datasets/swedishembedded/source-to-transfer-evidence $rev $REPRO/paper-evidence
+make -C $P vim-data EVIDENCE=$REPRO/paper-evidence
+make -C $REPRO/paper papers/generalized-continuous-learning/pdf
+git -C $REPRO/paper status --short papers/generalized-continuous-learning/data
+\end{verbatim}
+}
+
+\begin{sloppypar}
+An empty status means the paper's data equal the published evidence byte for byte; the PDF is
+\texttt{paper/target/papers/generalized-continuous-learning.pdf}. The experiment's code is \texttt{SPLINTER\_REV}'s; the
+paper's text, which includes this appendix, is main's.
+\end{sloppypar}
+
+\subsection{Not reproducible from the published material}\label{app:repro-vim-limits}
+
+\begin{sloppypar}
+Authoring the tasks from the manual (both pipelines: proposing, Vim's admission of each reference, repair, review, the
+outcome-first reproduction and request writing) needs the authoring operators, their prompts and output schemas and the
+manual's section headings, which are not published; the procedure starts from their published output, which
+step~\ref{app:repro-vim-verify} shows identical to the tasks the run used. The published run's per-exam outcomes are not
+published (exam item data); its registered decision is checked through \texttt{decision/*.json} and
+\texttt{evaluation/aggregates.json}, and a repetition makes its own. The published adapters themselves are not evaluated by a command
+here: a repetition trains again on the published datasets (above), and its adapters differ from the published ones in their
+weights (in the test, two trainings of the same records on the same server with the same seed logged the same losses to four
+decimals and left adapters of different digests), so its exam counts are a new sample of the same measurement.
+\end{sloppypar}
+
+\subsection{The test of this procedure}\label{app:repro-vim-test}
+
+\begin{sloppypar}
+The procedure was run on 2026-11-27 in an empty directory on one node of the cluster that ran the experiment (GH200, Ubuntu
+26.04 aarch64 in a container; rustc 1.100.0, Python 3.14.4, git-lfs 3.7.1, \texttt{hf} 2.4.0), the blocks extracted from
+this file's source and run in one shell, unchanged: \texttt{[setup]}, \texttt{[serve-build]}, \texttt{[smoke]} and
+\texttt{[analysis]} (the latter over the smoke's runs, \texttt{RUNS} set to them). The \texttt{[serve]} block was not run,
+because every card of the job served the live experiment: \texttt{BRAIN\_CHAT\_URL} was left at its default, that node's
+router over the running fleet (brain \texttt{b726c045b}, serving Qwen3-4B), and \texttt{BRAIN\_TRAIN\_URL},
+\texttt{BRAIN\_CA\_FILE}, \texttt{BRAIN\_KEY\_FILE}, \texttt{BRAIN\_ARTIFACTS} and \texttt{BRAIN\_ADAPTERS} named one of its
+card servers and its shared stores; \texttt{SPLINTER\_GIT} and \texttt{SVEN\_GIT} were the repositories' SSH addresses. Its
+two \texttt{brain pull} lines were run alone: every weight file they fetched is byte-identical to the run's model store (3
+files of Qwen3-4B, 66 of Qwen3.8-27B-FP8). The \texttt{[full]} blocks were not run; every recipe they use passed
+\texttt{splinter validate}.
+\end{sloppypar}
+
+\begin{sloppypar}
+Wall clock, with a warm Cargo registry and 48 build jobs: clones and builds 8~min (sven 2.1, splinter 2.1, the worker 0.4,
+brain 3.4); data 17~s; the task repository and its check 25~s; smoke: forward material and its four datasets 6.0~min
+(the task image built from the Debian snapshot included), outcome-first 1.4~min, arm~B 20.6~min, arm~B on its published
+dataset 53~min (its training waited behind the shared card's own jobs); analysis and the paper under a minute; 1~h~30~min in
+all, 16~GB on disk. The paper block failed in that run, because main's paper had moved to a later evidence revision; it
+was changed to read the revision from the paper's own \texttt{data/artifacts.csv} and its commands were then run in the same
+directory, building the PDF with the paper's data unchanged. The test found one defect, fixed before this run in splinter \texttt{bde8e09f} (its knowledge entry 233):
+an earlier test run, stopped by a time limit while evaluating, could not be continued, because the stopped worker's sandboxes
+stayed in the batch directory the controller publishes. With the fix, a smoke run stopped during its evaluations, first by
+SIGTERM and then by SIGKILL of its whole process group, was continued by running the smoke block again and committed every
+stage. Two trainings of the same records on the same server with the same seed logged the same losses to four decimals and
+left adapters of different digests.
+\end{sloppypar}
