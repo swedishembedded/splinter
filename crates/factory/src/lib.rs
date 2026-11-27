@@ -19,6 +19,7 @@
 //!   pinned in a lock.
 //! * [`graph`] - a `splinter.recipe/v2` recipe compiled into a typed graph
 //!   of operations.
+//! * [`fan_out`] - the bounds a recipe puts on a stage run once per item.
 //! * [`ops`] - the built-in operations a v2 recipe uses.
 //! * [`online`] - online policy-gradient runs: groups of rollouts streamed
 //!   to a learner as they complete, under staleness and token bounds.
@@ -47,6 +48,7 @@ pub mod eval_plan;
 pub mod execute;
 pub mod external_op;
 pub mod failures_op;
+pub mod fan_out;
 pub mod grants;
 pub mod graph;
 pub mod harness_op;

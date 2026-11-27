@@ -48,7 +48,7 @@ use serde_json::Value;
 use splinter_core::factory::operation::{plain_name, ArtifactKind, Port};
 
 use crate::recipe::{ModelRef, RecipeError};
-use crate::registry::{OperationSpec, Registry};
+use crate::registry::Registry;
 
 /// The schema every v2 recipe names.
 pub const RECIPE_V2_SCHEMA: &str = "splinter.recipe/v2";
@@ -107,6 +107,10 @@ pub struct StageSpec {
     /// How many items of `foreach` run at once (one by default).
     #[serde(default)]
     pub concurrency: Option<u32>,
+    /// How many items of `foreach` may fail, after their retries, and be
+    /// recorded as absent rather than fail the stage (none by default).
+    #[serde(default)]
+    pub tolerate_failed_items: Option<crate::fan_out::FailedItems>,
 }
 
 fn empty_object() -> Value {
@@ -205,6 +209,8 @@ pub struct CompiledStage {
     pub foreach: Option<Source>,
     /// How many items run at once.
     pub concurrency: u32,
+    /// How many items may fail and be recorded as absent.
+    pub tolerate_failed_items: Option<crate::fan_out::FailedItems>,
     /// The stages it consumes.
     pub depends_on: Vec<String>,
 }
@@ -391,7 +397,9 @@ impl Compiler<'_> {
                 }
             }
         });
-        let concurrency = self.concurrency(id, stage, operation, foreach.is_some());
+        let (concurrency, problems) =
+            crate::fan_out::bounds(id, stage, operation, foreach.is_some());
+        self.problems.extend(problems);
         if operation.executor().is_some() && descriptor.outputs.len() != 1 {
             self.problems.push(format!(
                 "stage {id}: {} computes one product, and it declares {} outputs",
@@ -464,42 +472,9 @@ impl Compiler<'_> {
             params,
             foreach,
             concurrency,
+            tolerate_failed_items: stage.tolerate_failed_items,
             depends_on: depends_on.into_iter().collect(),
         });
-    }
-
-    /// The bound on a fan-out's items at once, checked: only a stage that
-    /// runs once per item has one, only an operation the controller runs as
-    /// a computation runs once per item, and the bound is a number of
-    /// workers this machine can hold.
-    fn concurrency(
-        &mut self,
-        id: &str,
-        stage: &StageSpec,
-        operation: &dyn OperationSpec,
-        fans_out: bool,
-    ) -> u32 {
-        if fans_out && operation.executor().is_none() {
-            self.problems.push(format!(
-                "stage {id}: {} does not run once per item; foreach is for an operation that computes one product from its inputs",
-                stage.uses
-            ));
-        }
-        match stage.concurrency {
-            None => 1,
-            Some(_) if !fans_out => {
-                self.problems.push(format!(
-                    "stage {id}: concurrency bounds a foreach, and the stage has none"
-                ));
-                1
-            }
-            Some(0) => {
-                self.problems
-                    .push(format!("stage {id}: concurrency is 0; it is at least 1"));
-                1
-            }
-            Some(n) => n,
-        }
     }
 
     fn check_kind(
@@ -546,9 +521,12 @@ impl Compiler<'_> {
                 "stage {id}: a subrecipe stage takes only `recipe`, not {extra:?}"
             ));
         }
-        if stage.foreach.is_some() || stage.concurrency.is_some() {
+        if stage.foreach.is_some()
+            || stage.concurrency.is_some()
+            || stage.tolerate_failed_items.is_some()
+        {
             self.problems.push(format!(
-                "stage {id}: a subrecipe runs once; foreach and concurrency belong on its stages"
+                "stage {id}: a subrecipe runs once; foreach, concurrency and tolerate_failed_items belong on its stages"
             ));
         }
         let Some(path) = stage.params.get("recipe").and_then(Value::as_str) else {

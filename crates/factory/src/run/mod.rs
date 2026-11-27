@@ -25,6 +25,7 @@
 pub mod behaviour;
 mod commit;
 mod compute;
+pub use compute::ItemRetry;
 pub mod corpus;
 pub mod dataset;
 pub mod dataset_extend;
@@ -321,6 +322,8 @@ pub struct Factory<'a> {
     cancel: Box<dyn Fn() -> bool + Send + Sync + 'a>,
     /// How many stages may run at once.
     concurrent_stages: NonZeroUsize,
+    /// How a fan-out's item that failed transiently is asked again.
+    pub(crate) item_retry: ItemRetry,
     /// The stage identities being produced now.
     producing: Producing,
     /// Renews the lease while this controller lives; stopped before the
@@ -433,6 +436,7 @@ impl<'a> Factory<'a> {
             collections: collection_cells(resolved),
             cancel: Box::new(|| false),
             concurrent_stages: DEFAULT_CONCURRENT_STAGES,
+            item_retry: ItemRetry::default(),
             producing: Producing::default(),
             heartbeat,
             served,
@@ -454,6 +458,15 @@ impl<'a> Factory<'a> {
     #[must_use]
     pub fn with_concurrent_stages(mut self, bound: NonZeroUsize) -> Self {
         self.concurrent_stages = bound;
+        self
+    }
+
+    /// Ask a fan-out's item that failed transiently again as `retry` says
+    /// ([`ItemRetry::default`] unless told). An item's identity and product
+    /// do not depend on it.
+    #[must_use]
+    pub fn with_item_retry(mut self, retry: ItemRetry) -> Self {
+        self.item_retry = retry;
         self
     }
 

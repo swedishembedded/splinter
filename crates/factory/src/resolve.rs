@@ -269,6 +269,7 @@ pub fn resolve_with(
                 params: s.params.clone(),
                 foreach: s.foreach.clone(),
                 concurrency: s.concurrency,
+                tolerate_failed_items: s.tolerate_failed_items,
             })
             .collect(),
     };

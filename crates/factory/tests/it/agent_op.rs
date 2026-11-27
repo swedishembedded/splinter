@@ -22,7 +22,7 @@ use splinter_core::factory::execution::ModelBinding;
 use splinter_core::factory::items::{ItemIndex, ITEMS_FILE};
 use splinter_factory::execute::Models;
 use splinter_factory::resolve::{resolve, Resolved};
-use splinter_factory::run::{Factory, RunError, Services};
+use splinter_factory::run::{Factory, ItemRetry, RunError, Services};
 use sven_sdk::model::{CompletionRequest, ModelProvider, ResponseEvent, ResponseStream};
 
 use crate::fakes::{FakeBackend, Outcome as Trial};
@@ -210,4 +210,167 @@ fn a_run_without_models_is_refused_before_any_item_runs() {
         .unwrap_err()
         .to_string();
     assert!(error.contains("model"), "{error}");
+}
+
+/// A model that answers every note, except that it fails the first
+/// `transient` asks about zeta as an unreachable server does, and every ask
+/// about zeta when `down`.
+struct Flaky {
+    transient: usize,
+    down: bool,
+    zeta_asked: Mutex<usize>,
+    requests: Mutex<Vec<String>>,
+}
+
+impl Flaky {
+    fn new(transient: usize, down: bool) -> Arc<Self> {
+        Arc::new(Self {
+            transient,
+            down,
+            zeta_asked: Mutex::new(0),
+            requests: Mutex::new(Vec::new()),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelProvider for Flaky {
+    fn name(&self) -> &str {
+        "flaky"
+    }
+    fn model_name(&self) -> &str {
+        "writer-1"
+    }
+    async fn complete(&self, request: CompletionRequest) -> anyhow::Result<ResponseStream> {
+        let text = serde_json::to_string(&request.messages).unwrap_or_default();
+        self.requests.lock().unwrap().push(text.clone());
+        if text.contains("zeta") {
+            let mut asked = self.zeta_asked.lock().unwrap();
+            *asked += 1;
+            if self.down {
+                anyhow::bail!("HTTP 400 Bad Request: the model is not served here");
+            }
+            if *asked <= self.transient {
+                anyhow::bail!("no response headers from brain after 600 s");
+            }
+        }
+        Ok(Box::pin(futures::stream::iter(vec![
+            Ok(ResponseEvent::TextDelta(r#"{"fact": "a letter"}"#.into())),
+            Ok(ResponseEvent::Done),
+        ])))
+    }
+}
+
+struct Serving(Arc<Flaky>);
+
+impl Models for Serving {
+    fn model(&self, _: &ModelBinding) -> Result<Model, String> {
+        Ok(Model::new(self.0.clone(), "flaky/writer-1"))
+    }
+}
+
+/// Retries quick enough for a test: three asks, a millisecond apart.
+fn quick() -> ItemRetry {
+    ItemRetry {
+        attempts: 3,
+        first_pause: std::time::Duration::from_millis(1),
+    }
+}
+
+fn run_with(resolved: &Resolved, dir: &Path, models: &dyn Models) -> Result<(), RunError> {
+    let backend = FakeBackend::with(Trial::Pass);
+    let services = Services {
+        backend: &backend,
+        trainer: None,
+        models: Some(models),
+        variables: None,
+        online: None,
+        build: splinter_core::build::BuildInfo::this_executable(),
+    };
+    let mut factory = Factory::open(resolved, dir, services, "test")?.with_item_retry(quick());
+    let ran = factory.run().map(|_| ());
+    drop(factory);
+    ran
+}
+
+fn index_of(dir: &Path) -> ItemIndex {
+    serde_json::from_str(&std::fs::read_to_string(dir.join("facts").join(ITEMS_FILE)).unwrap())
+        .unwrap()
+}
+
+#[test]
+fn an_item_that_fails_transiently_is_asked_again_and_the_stage_completes() {
+    let repo = repo();
+    let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
+    let flaky = Flaky::new(2, false);
+    let dir = tempfile::tempdir().unwrap();
+    run_with(&resolved, dir.path(), &Serving(flaky.clone())).unwrap();
+    assert_eq!(
+        *flaky.zeta_asked.lock().unwrap(),
+        3,
+        "two failures, then the answer"
+    );
+    let index = index_of(dir.path());
+    assert_eq!(index.items.len(), 2, "{index:?}");
+}
+
+#[test]
+fn a_persistent_item_failure_fails_the_stage_naming_it_and_a_resume_asks_only_for_it() {
+    let repo = repo();
+    let resolved = resolve(&repo.root, RECIPE, connections()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    // Transient past every retry: the other item still completes.
+    let flaky = Flaky::new(usize::MAX, false);
+    let error = run_with(&resolved, dir.path(), &Serving(flaky.clone()))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("z.md") && !error.contains("a.md"), "{error}");
+    assert_eq!(*flaky.zeta_asked.lock().unwrap(), 3, "bounded: {error}");
+    // A failure that asking again cannot pass is not retried.
+    let down = Flaky::new(0, true);
+    let other = tempfile::tempdir().unwrap();
+    let error = run_with(&resolved, other.path(), &Serving(down.clone()))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("z.md"), "{error}");
+    assert_eq!(*down.zeta_asked.lock().unwrap(), 1, "{error}");
+
+    // Resumed with the server back: only the failed item is asked for.
+    let healthy = Flaky::new(0, false);
+    run_with(&resolved, dir.path(), &Serving(healthy.clone())).unwrap();
+    let asked = healthy.requests.lock().unwrap().clone();
+    assert!(
+        !asked.is_empty() && asked.iter().all(|r| r.contains("zeta")),
+        "only zeta is asked again: {asked:?}"
+    );
+    assert_eq!(index_of(dir.path()).items.len(), 2);
+}
+
+#[test]
+fn a_stage_that_tolerates_failed_items_records_them_as_absent() {
+    let repo = repo();
+    let tolerant = RECIPE.replace(
+        "    concurrency: 2\n",
+        "    concurrency: 2\n    tolerate_failed_items: 1\n",
+    );
+    let resolved = resolve(&repo.root, &tolerant, connections()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    run_with(&resolved, dir.path(), &Serving(Flaky::new(0, true))).unwrap();
+    let index = index_of(dir.path());
+    assert_eq!(index.items.len(), 1);
+    assert_eq!(index.rejected.len(), 1);
+    assert_eq!(index.rejected[0].id, "z.md");
+    assert!(index.rejected[0].reason.contains("failed"), "{index:?}");
+
+    // A share is a bound too, and past it the stage fails.
+    let strict = RECIPE.replace(
+        "    concurrency: 2\n",
+        "    concurrency: 2\n    tolerate_failed_items: 0.4\n",
+    );
+    let resolved = resolve(&repo.root, &strict, connections()).unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let error = run_with(&resolved, other.path(), &Serving(Flaky::new(0, true)))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("z.md"), "{error}");
 }

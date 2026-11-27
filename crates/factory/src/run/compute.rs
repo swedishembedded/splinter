@@ -24,11 +24,22 @@
 //! product reduces them, in id order: each produced item's output under its
 //! id, and an item index listing every item produced and every item
 //! rejected.
+//!
+//! An item whose operation fails in a way that may pass (a timeout, a
+//! dropped or refused connection, a 5xx answer) is asked again, a bounded
+//! number of times after growing pauses ([`ItemRetry`]); any other failure,
+//! or one that outlasts its retries, fails the item. A failed item stops
+//! nothing else: every other item still runs and commits, and the stage
+//! then fails naming the failed items, which a resume computes again (and
+//! only them). A stage that states `tolerate_failed_items` (a count, or a
+//! share of the items) within that bound records its failed items as
+//! rejected, with the failure as the reason, instead of failing.
 
 use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -368,20 +379,131 @@ fn fan_out(
             path,
         });
     }
-    let committed = run_items(ctx, pending)?;
-    reduce(factory, stage, ctx.executor, &committed)
+    let items = pending.len();
+    let (committed, mut failed) = run_items(ctx, pending)?;
+    failed.sort_by(|a, b| a.id.cmp(&b.id));
+    let tolerated = stage
+        .tolerate_failed_items
+        .is_some_and(|bound| bound.allows(failed.len(), items));
+    if !failed.is_empty() && !tolerated {
+        let named: Vec<String> = failed
+            .iter()
+            .map(|f| format!("{}: {}", f.id, f.reason))
+            .collect();
+        return Err(stage_error(
+            &stage.key,
+            format!(
+                "{} of {items} items failed (a resume computes only these):\n  {}",
+                failed.len(),
+                named.join("\n  ")
+            ),
+        ));
+    }
+    reduce(factory, stage, ctx.executor, &committed, &failed)
 }
 
-/// Every item committed, at most `concurrency` computing at once; the
-/// first failure stops new items from starting, lets the running ones
-/// finish (and commit), and is the result.
-fn run_items(
-    ctx: &Context<'_, '_>,
-    pending: Vec<Pending>,
-) -> Result<Vec<(String, ProductManifest)>, RunError> {
+/// How a fan-out's item that failed transiently is asked again: up to
+/// `attempts` asks in all, the pause before the second `first_pause` and
+/// each later one twice the one before. Deterministic: no jitter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ItemRetry {
+    /// Asks in all, the first included (at least 1).
+    pub attempts: u32,
+    /// The pause before the first repeat.
+    pub first_pause: Duration,
+}
+
+impl Default for ItemRetry {
+    /// Five asks, 30 s, 60 s, 120 s and 240 s apart: 7.5 minutes of pauses,
+    /// enough for a model server to restart and load its weights.
+    fn default() -> Self {
+        Self {
+            attempts: 5,
+            first_pause: Duration::from_secs(30),
+        }
+    }
+}
+
+/// Whether an item's failure may pass when it is asked again: the
+/// connection-level failures a model call retries, a timeout, a refused
+/// connection or a server error.
+fn transient(error: &str) -> bool {
+    let text = error.to_lowercase();
+    splinter_agent::retry::is_transient_text(&text)
+        || [
+            "timed out",
+            "timeout",
+            "no response headers",
+            "connection refused",
+            "connection aborted",
+            "http 500",
+            "500 internal server error",
+        ]
+        .iter()
+        .any(|marker| text.contains(marker))
+}
+
+/// `execute` until it does not fail transiently, at most `retry.attempts`
+/// times; a cancelled run is not asked again. A panic is a failure that
+/// asking again does not pass.
+fn execute_retried(
+    retry: ItemRetry,
+    cancelled: &(dyn Fn() -> bool + Send + Sync),
+    out: &Path,
+    execute: impl Fn() -> Result<Outcome, String>,
+) -> Result<Outcome, String> {
+    let mut pause = retry.first_pause;
+    let mut asked = 1;
+    loop {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Each ask begins from an empty output directory.
+            let _ = std::fs::remove_dir_all(out);
+            std::fs::create_dir_all(out)
+                .map_err(|e| e.to_string())
+                .and_then(|()| execute())
+        }))
+        .unwrap_or_else(|panic| {
+            Err(format!(
+                "the operation panicked: {}",
+                panic_message(&*panic)
+            ))
+        });
+        match result {
+            Err(why) if transient(&why) && asked < retry.attempts.max(1) => {
+                let until = std::time::Instant::now() + pause;
+                while std::time::Instant::now() < until {
+                    if cancelled() {
+                        return Err(why);
+                    }
+                    std::thread::sleep(PAUSE_SLICE.min(pause));
+                }
+                pause = pause.saturating_mul(2);
+                asked += 1;
+            }
+            Err(why) if asked > 1 => return Err(format!("{why} (asked {asked} times)")),
+            other => return other,
+        }
+    }
+}
+
+/// How often a pause between asks looks whether the run was cancelled.
+const PAUSE_SLICE: Duration = Duration::from_millis(500);
+
+/// A fan-out's items: each committed one by id, and each that failed with
+/// its reason.
+type ItemsRun = (Vec<(String, ProductManifest)>, Vec<Rejection>);
+
+/// Every item committed, at most `concurrency` computing at once. An item
+/// that fails (after its retries) stops nothing: it is recorded as failed
+/// in the run state and returned with its reason. Any other error stops new
+/// items from starting, lets the running ones finish (and commit), and is
+/// the result.
+fn run_items(ctx: &Context<'_, '_>, pending: Vec<Pending>) -> Result<ItemsRun, RunError> {
     let (factory, stage, executor) = (ctx.factory, ctx.stage, ctx.executor);
     let workers = stage.concurrency.max(1) as usize;
+    let (retry, cancelled) = (factory.item_retry, &*factory.cancel);
     let mut committed = Vec::new();
+    let mut failed = Vec::new();
     let mut failure = None;
     std::thread::scope(|scope| -> Result<(), RunError> {
         let (done, results) = mpsc::channel();
@@ -434,17 +556,7 @@ fn run_items(
                             // result is sent like any other, or the loop
                             // below would wait for it for ever.
                             let result =
-                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    std::fs::create_dir_all(&out)
-                                        .map_err(|e| e.to_string())
-                                        .and_then(|()| executor.execute(&call))
-                                }))
-                                .unwrap_or_else(|panic| {
-                                    Err(format!(
-                                        "the operation panicked: {}",
-                                        panic_message(&*panic)
-                                    ))
-                                });
+                                execute_retried(retry, cancelled, &out, || executor.execute(&call));
                             let _ = done.send((key, result));
                         });
                         running.insert(item.key.clone(), (item, version, staging, claim));
@@ -460,6 +572,23 @@ fn run_items(
             let Some((item, version, staging, claim)) = running.remove(&key) else {
                 continue;
             };
+            if let Err(reason) = result {
+                // Recorded as failed in the run state, so a resume computes
+                // it again; what the recording itself returns is this error.
+                let _ = factory.finish(
+                    &item.key,
+                    &item.identity,
+                    version,
+                    staging,
+                    claim,
+                    Err(stage_error(&item.key, &reason)),
+                );
+                failed.push(Rejection {
+                    id: item.id,
+                    reason,
+                });
+                continue;
+            }
             let produced = record(&item, &staging, result);
             match factory.finish(&item.key, &item.identity, version, staging, claim, produced) {
                 Ok(manifest) => committed.push((item.id, manifest)),
@@ -471,7 +600,7 @@ fn run_items(
     })?;
     match failure {
         Some(e) => Err(e),
-        None => Ok(committed),
+        None => Ok((committed, failed)),
     }
 }
 
@@ -502,15 +631,22 @@ fn reduce(
     stage: &PlannedStage,
     executor: &dyn Execute,
     committed: &[(String, ProductManifest)],
+    failed: &[Rejection],
 ) -> Result<(StageIdentity, (ProductManifest, bool)), RunError> {
     let inputs = committed
         .iter()
         .map(|(id, manifest)| (format!("item:{id}"), manifest.digest()))
         .collect();
+    let mut parameters = json!({ "params": stage.params });
+    if !failed.is_empty() {
+        // Tolerated failures are absent items: another product than the
+        // complete one, and one a resume that computes them replaces.
+        parameters["failed"] = json!(failed.iter().map(|f| &f.id).collect::<Vec<_>>());
+    }
     let identity = super::identity_of(
         &stage.versioned_operation(),
         &stage.key,
-        json!({ "params": stage.params }),
+        parameters,
         inputs,
         &format!("{}; {REDUCTION}", executor.implementation()),
         None,
@@ -538,6 +674,10 @@ fn reduce(
                 }),
             }
         }
+        rejected.extend(failed.iter().map(|f| Rejection {
+            id: f.id.clone(),
+            reason: format!("failed: {}", f.reason),
+        }));
         let index = ItemIndex::new(items, rejected).map_err(|e| stage_error(&stage.key, e))?;
         write_json(&staging.path().join(ITEMS_FILE), &index)
     };

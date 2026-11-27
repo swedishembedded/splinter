@@ -9,7 +9,7 @@
 //! `foreach`: a stage runs its operation once per item of a collection, at
 //! most `concurrency` at once; every item is committed on its own, so a
 //! crashed run resumes without repeating a finished item and a changed item
-//! recomputes only itself; the stage's product is a deterministic reduction
+//! recomputes only itself; a failed item stops no other item; the stage's product is a deterministic reduction
 //! listing every item produced and every item the operation rejected.
 
 use std::collections::BTreeMap;
@@ -266,7 +266,6 @@ fn a_crashed_fan_out_resumes_without_repeating_a_finished_item() {
 
     let error = run(&resolved, dir.path()).unwrap_err().to_string();
     assert!(error.contains("b.txt"), "{error}");
-    assert_eq!(log.calls().get("c.txt"), None, "nothing after the failure");
 
     run(&resolved, dir.path()).unwrap();
     assert_eq!(
@@ -305,10 +304,10 @@ fn a_panicking_item_fails_its_stage_and_never_hangs_the_controller() {
     );
 }
 
-/// The first failed item stops the fan-out from starting more: the items
-/// already running finish and are committed, and the stage fails naming it.
+/// A failed item stops no other item: every other item runs and is
+/// committed, and the stage then fails naming the failed one and why.
 #[test]
-fn the_first_failed_item_starts_no_further_item_and_the_stage_fails_with_it() {
+fn a_failed_item_stops_no_other_item_and_the_stage_fails_naming_it() {
     let repo = Repo::new();
     books(&repo);
     let log = Arc::new(Log::default());
@@ -317,13 +316,21 @@ fn the_first_failed_item_starts_no_further_item_and_the_stage_fails_with_it() {
     let resolved = resolved(&repo, &one_at_a_time, &log);
     let dir = tempfile::tempdir().unwrap();
     let error = run(&resolved, dir.path()).unwrap_err().to_string();
-    assert!(error.contains("b.txt"), "{error}");
-    let calls = log.calls.lock().unwrap().clone();
-    assert_eq!(calls.get("a.txt"), Some(&1));
-    assert_eq!(calls.get("b.txt"), Some(&1));
     assert!(
-        !calls.contains_key("c.txt") && !calls.contains_key("d.txt"),
-        "an item started after the failure: {calls:?}"
+        error.contains("1 of 4 items failed")
+            && error.contains("b.txt: b.txt: the model endpoint went away"),
+        "{error}"
+    );
+    let calls = log.calls.lock().unwrap().clone();
+    assert_eq!(
+        calls,
+        BTreeMap::from([
+            ("a.txt".into(), 1),
+            ("b.txt".into(), 1),
+            ("c.txt".into(), 1),
+            ("d.txt".into(), 1),
+        ]),
+        "a failure that asking again cannot pass is not retried, and stops nothing else"
     );
 }
 

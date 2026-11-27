@@ -228,3 +228,4 @@ in the same commit.
 | [240](240-start-champion-was-ignored-by-supervised-training-while-the-stage-identity-named-it.md) | `start: champion` was ignored by supervised training while the stage identity named it |
 | [241](241-champion-of-a-run-read-the-stage-called-release-whatever-generation-it-was.md) | `champion:RUN` read the stage called `release`, whatever generation it was |
 | [242](242-a-retention-gate-with-no-counted-pairs-passed-as-retained.md) | A retention gate with no counted pairs passed as retained |
+| [243](243-one-failed-item-of-a-foreach-stopped-a-three-generation-authoring-run.md) | One failed item of a foreach stopped a three-generation authoring run |

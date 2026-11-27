@@ -321,7 +321,20 @@ stages:
 
 Each item is committed on its own, under its content: a run stopped halfway
 resumes without asking again for a finished item, and a fork after one note
-changed asks only for that note. The stage's product lists every item in
+changed asks only for that note.
+
+An item that fails in a way that may pass (a timeout, a dropped or refused
+connection, a 5xx answer from a server) is asked again, up to 5 times in all,
+30 s, 60 s, 120 s and 240 s apart. Any other failure, or one that outlasts
+those retries, fails the item, and a failed item stops nothing else: every
+other item still runs and commits, then the stage fails and names each failed
+item with its reason. A resume computes only those. A `foreach` stage may
+instead state `tolerate_failed_items`, a number of items (`3`) or a share of
+them (`0.01`): within it, the stage completes and lists its failed items among
+the rejected ones, each reason beginning `failed:`; past it, the stage fails as
+above. The default tolerates none. Neither the retries nor the bound change an
+item's identity; a product with failed items is another product than the
+complete one, which a later resume that computes them replaces. The stage's product lists every item in
 `items.json` (`splinter.items/1`), the rejected ones with their reasons, and
 holds each answered item's `output.json` and `call.json` (the model that
 answered and the tokens it spent) under the item's id. The model is called

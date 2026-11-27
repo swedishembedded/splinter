@@ -48,6 +48,9 @@ pub struct PlannedStage {
     /// How many of its items run at once.
     #[serde(skip)]
     pub concurrency: u32,
+    /// How many of its items may fail and be recorded as absent.
+    #[serde(skip)]
+    pub tolerate_failed_items: Option<crate::fan_out::FailedItems>,
 }
 
 impl PlannedStage {
