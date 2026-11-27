@@ -229,3 +229,5 @@ in the same commit.
 | [241](241-champion-of-a-run-read-the-stage-called-release-whatever-generation-it-was.md) | `champion:RUN` read the stage called `release`, whatever generation it was |
 | [242](242-a-retention-gate-with-no-counted-pairs-passed-as-retained.md) | A retention gate with no counted pairs passed as retained |
 | [243](243-one-failed-item-of-a-foreach-stopped-a-three-generation-authoring-run.md) | One failed item of a foreach stopped a three-generation authoring run |
+| [244](244-a-generation-whose-own-records-come-only-from-tasks-it-already-passes-stalls.md) | A generation whose own records come only from tasks it already passes stalls |
+| [245](245-a-champion-claims-completion-on-most-of-the-attempts-it-fails.md) | A champion claims completion on most of the attempts it fails |
