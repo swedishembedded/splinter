@@ -241,26 +241,68 @@ Generation~2 does not beat generation~1 at either size (4B \GTwoExamWins{}/\GTwo
 criterion that every generation improves on its predecessor is not met at generation~2. Generations 3 and 4 are pending; the
 trend test of the pass rate over generations is computed once a size has two promoted generations. Evidence: \nolinkurl{loop/loop.json}.
 
-\paragraph{What limited generation~2.} An analysis of the generation-2 runs at both sizes measured four things.
+\paragraph{What limited generation~2.} Two independent analyses of the generation-2 runs at both sizes measured the
+following.
 \begin{itemize}
+\item \emph{Effect size.} Pooled over both measurements of the 4B generation-1 champion, it passes 28 of 800 exam attempts
+  (3.5\%) against generation~2's 13 of 400 (3.25\%): no exam gain at 4B. At 8B, generation~1 over three seeds and four
+  measurements passes 97 of 1600 (6.1\%) against generation~2's 30 of 400 (7.5\%). On generation~1's held-out tasks
+  generation~2 gains about 1.18-fold at both sizes (4B 0.240 against 0.203, 8B 0.294 against 0.249). The variance between
+  training seeds is within binomial noise (8B exams 22, 24, 28 of 400).
 \item \emph{Training budget.} The recipe capped training at 800 LoRA steps while each generation trains from the base on a
-  growing dataset (new records plus all earlier generations' as replay). At the selected step generation~1 had seen its
-  records 1.89 (4B) and 1.92 (8B) times, generation~2 0.97 times at both sizes, still improving at the cap. From generation~3
-  the recipe holds the epochs constant (\cref{app:deviations}).
-\item \emph{Training material.} 40--45\% of generation~2's new records are the champion's own (6--8\% at generation~1), and
-  64\% of those are on tasks the champion already passes at least 5 of 8 times. Replay is a plain union, so the teacher's share
-  of the gradient rose only 11--13\%. The generation-2 tasks are as large and as hard as generation~1's (workspace 11.9 against
-  13.0 lines, teacher pass rate 0.72 against 0.68); 15.7\% meet the authoring prompt's 15-line specification.
+  growing dataset (new records plus all earlier generations' as replay); the learning rate follows a cosine to a tenth of its
+  peak after a warmup of a twentieth of the steps. At the selected step generation~1 had seen its records 1.89 (4B) and 1.92
+  (8B) times, generation~2 0.97 times at both sizes, still improving at the cap. From generation~3 the recipe holds the epochs
+  constant (\cref{app:deviations}). This restores generation~1's exposure in records; generation~1 stopped at step 520 of an
+  800-step cosine with the rate still at about 35\% of its peak, so a full cosine over the same epochs gives each record
+  about 26\% less cumulative learning rate, and the patience of 160 steps is 0.58 epoch at generation~1 and 0.13 at
+  generation~3.
+\item \emph{Training material.} 45\% of the 8B generation~2's new records (42\% of its supervised characters) are the
+  champion's own (6--8\% at generation~1), and 64\% of those are on tasks the champion already passes at least 5 of 8 times;
+  replay is a plain union, so the teacher's share of the gradient rose only about 12\%. Validation uses only the new
+  generation's records, 41\% of whose characters are the champion's (3\% at generation~1), so checkpoint selection rewards
+  imitating the champion.
+\item \emph{What it learned.} Generation~2 made the 8B commit sooner; it did not edit better (\cref{tab:calls}). The champion's
+  records explain it: 34\% are exactly two calls and 48\% contain no error, against 8\% and 13\% of the teacher's. Median
+  completion tokens per exam trial fell from about 1530 to about 1000. Repeated identical calls (same call, same result) are
+  42\% of the champion's exam calls and 62\% of generation~2's; 5.3\% of the champion's supervised calls carry sven's repeat
+  note (teacher 0.6\%).
+\item \emph{Tasks.} Generation~2's tasks are as large and as hard as generation~1's (workspace 11.9 against 13.0 lines, teacher
+  pass rate 0.72 against 0.68); 15.7\% meet the authoring prompt's 15-to-80-line specification, because the prompt's own
+  worked example has files of 12 and 5 lines. Output was not length-limited (median 1.7k of 16k tokens).
+\item \emph{Release gate.} The forgetting evaluation had no declared purpose and defaulted to a target, so promotion required
+  two superiority tests at once; the probability of promoting a true 1.25-fold step is about 0.19 at 4 attempts per task,
+  about 0.85 at 16. The 8B generation~2 was held back with its forgetting evaluation reading $+0.069$ and its own held-out test
+  inconclusive.
 \item \emph{Exam resolution.} With 4 attempts per exam the sign test has 13 to 19 discordant exams; its power to detect a
-  1.25- to 1.5-fold improvement of the pass rate is 0.12 to 0.44, against 0.40 to 0.94 with 40 attempts. All six comparisons
-  of generation~2 with generation~1 (three measurements, two sizes) favour generation~2; pooled over the sizes, exams 20 won
-  and 12 lost ($p=0.11$), held-out tasks 31/21 ($p=0.11$), the forgetting gate 29/18 ($p=0.07$).
-\item \emph{Failure modes on the exams.} A failing attempt declares the job done with wrong content in 65--78\% of failures,
-  repeats an identical tool call in 62--66\% of failing trials, meets Ex errors (mostly E486, pattern not found), and stalls on
-  a single request until the 480-second limit in 5--8\%.
+  1.25- to 1.5-fold improvement is 0.12 to 0.44 (0.40 to 0.94 at 40 attempts). The course's practice tier (228 tasks, base
+  rate 0.47) has power 0.98 for a 1.15-fold effect at 4 attempts and is the most sensitive measurement available.
+\item \emph{Failure modes and time.} A failing exam attempt declares the job done with wrong content in 65--78\% of failures,
+  repeats an identical call in 62--66\% of failing trials, meets Ex errors (mostly E486, pattern not found), and stalls on a
+  single request until the 480-second limit in 5--8\%. Trials ended by wall clock or budget are 6\% of trials, use 27--31\% of
+  trial time and pass none; sven's own limit of tool rounds defaults to 200, above the registered 60 turns.
 \end{itemize}
 Measured and excluded as causes: a prompt or mode mismatch (the system prompts are byte-identical), truncation, duplicate
 records, context exhaustion, budget differences, forgetting, leakage, and uncounted slots.
+
+\begin{table}[htbp]
+\centering\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Tool calls per trial & \multicolumn{2}{c}{Generation-1 champion} & \multicolumn{2}{c}{Generation 2} \\
+ & passes/trials & rate & passes/trials & rate \\
+\midrule
+$\le 2$ & 47/116 & 0.41 & 75/189 & 0.40 \\
+3--6 & 64/284 & 0.23 & 79/350 & 0.23 \\
+7--15 & 31/280 & 0.11 & 17/170 & 0.10 \\
+$>15$ & 5/188 & 0.03 & 0/159 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Qwen3-8B, pooled over the exams and both held-out sets: generation~2 shifts trials to fewer calls; the pass rate
+within each length is unchanged.}\label{tab:calls}
+\end{table}
+
+\paragraph{Next.} Generation~3 trains under the epoch rule at both sizes and is compared with generation~1 on the exams; generation~2 is retrained on its own records under the same rule, and generation~4 follows. The further measures these analyses support (a release gate powered for a 1.25-fold step, the registered 60-turn limit in sven, the teacher's and the champion's records projected separately, a warm-started candidate) are recorded in the ledger.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 

@@ -221,3 +221,6 @@ in the same commit.
 | [233](233-a-run-stopped-during-an-evaluation-could-not-be-continued-by-the-same-command.md) | A run stopped during an evaluation could not be continued by the same command: the dead batch kept its sandbox |
 | [234](234-a-stage-computed-again-in-another-run-is-not-the-product-its-downstream-stages-were-keyed-on.md) | A stage computed again in another run is another product, so the stages downstream of it were not reused by a fork |
 | [235](235-a-fixed-step-cap-over-a-growing-replay-dataset-undertrains-every-later-generation.md) | A fixed step cap over a growing replay dataset undertrains every later generation |
+| [236](236-a-release-gate-of-two-superiority-tests-at-four-attempts-promotes-a-real-step-one-time-in-five.md) | A release gate of two superiority tests at four attempts promotes a real step one time in five |
+| [237](237-validation-drawn-from-the-new-generation-alone-selects-checkpoints-that-imitate-the-champion.md) | Validation drawn from the new generation alone selects checkpoints that imitate the champion |
+| [238](238-an-authoring-prompt-whose-worked-example-breaks-its-own-size-rule-produces-tasks-at-the-example-size.md) | An authoring prompt whose worked example breaks its own size rule produces tasks at the example's size |

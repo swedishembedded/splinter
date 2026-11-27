@@ -246,13 +246,77 @@ generation 2's new records are the champion's own (6-8% at generation 1) and 64%
 least 5 of 8 times, replay is a plain union and the teacher's gradient share rose only 11-13%; tasks, generation 2's are as
 large and as hard as generation 1's (workspace 11.9 against 13.0 lines, teacher pass rate 0.72 against 0.68; 15.7% meet the
 prompt's 15-line specification); exam resolution, 13-19 discordant exams at 4 attempts, power 0.12-0.44 for a 1.25-1.5x rate
-improvement (0.40-0.94 with 40 attempts); all six generation-2 against generation-1 comparisons favour generation 2, pooled
-over sizes exams 20 / 12 (p 0.11), held-out 31 / 21 (p 0.11), forgetting gate 29 / 18 (p 0.07). Exam failure modes: done
+improvement (0.40-0.94 with 40 attempts); pooled over sizes exams 20 / 12 (p 0.11), held-out 31 / 21
+(p 0.11), forgetting gate 29 / 18 (p 0.07). Exam failure modes: done
 declared with wrong content (65-78% of failures), identical-call loops (62-66% of failing trials), Ex errors (mostly E486),
 single-request stalls at 480 s (5-8%). Excluded: prompt or mode mismatch, truncation, duplicates, context exhaustion, budget
 differences, forgetting, leakage, uncounted slots.
 
+Second analysis of generation 2 (2026-11-27; scripts in the n457 run archive of 2026-11-27, critic scripts and tmp/rca).
+Corrections: the learning rate follows a cosine to a tenth of its peak after a warmup of steps / 20 (brain
+crates/sdk/src/finetune.rs), not to zero. Pooled over both measurements of the 4B generation-1 champion, 28 / 800 (3.5%)
+against generation 2's 13 / 400 (3.25%): no exam gain at 4B. 8B generation 1 over three seeds and four measurements 97 /
+1600 (6.1%) against generation 2's 30 / 400 (7.5%). On generation 1's held-out tasks generation 2 gains about 1.18x at both
+sizes (4B 0.240 against 0.203 pooled, 8B 0.294 against 0.249). Training-seed variance is within binomial noise (8B exams 22,
+24, 28). The champion's share of the 8B generation-2 new records is 45% by record, 42% by supervised characters; teacher
+exposure by characters rose about 12%. Findings: (1) generation 2 made the 8B commit sooner, not edit better: passes / trials
+by tool calls per trial, pooled over exam and both held-out sets, champion against generation 2: at most 2 calls 47 / 116
+against 75 / 189, 3-6 64 / 284 against 79 / 350, 7-15 31 / 280 against 17 / 170, over 15 5 / 188 against 0 / 159; precision
+in the shortest bucket unchanged (0.41 against 0.40); median completion tokens per exam trial about 1530 to about 1000; 34% of
+generation-2 champion records are exactly two calls and 48% contain no error (teacher 8% and 13%). (2) Repeated identical
+calls are 42% of the champion's exam calls and 62% of generation 2's; 5.3% of supervised champion calls carry sven's repeat
+note (teacher 0.6%). (3) The release gate as run: eval-forget had no purpose and defaulted to target, so promotion needed two
+superiority tests; the probability of promoting a true 1.25x step is about 0.19 at 4 attempts per task, about 0.85 at 16; the
+8B generation 2 was held back with its forgetting evaluation at +0.069 and its own held-out test inconclusive (knowledge
+236). (4) The 15-to-80-line specification was missed because the prompt's worked example has files of 12 and 5 lines; output
+was not length-limited (median 1.7k of 16k tokens) (knowledge 238). (5) Validation uses only the new generation's records;
+generation-2 validation is 41% champion characters (generation 1: 3%), so selection rewards imitating the champion
+(knowledge 237). (6) Scaled steps restore generation 1's exposure in records, but generation 1 stopped at step 520 of an
+800-step cosine (rate about 35% of peak), so a full cosine over 1.89 epochs carries about 26% less cumulative learning rate
+per record; patience stays 160 steps, 0.58 epoch at generation 1 and 0.13 at generation 3. (7) Trials ended by wall clock or
+budget are 6% of trials, 27-31% of trial time, and pass none; sven's max_tool_rounds defaults to 200, beyond the registered
+60 turns. (8) The course practice tier (228 tasks, base rate 0.47) has power 0.98 for a 1.15x effect at 4 attempts, the most
+sensitive measurement available.
+
+
 Open: generations 3 and 4 (and the trend test once a size has two promoted generations); an unattended restart from the recipe.
+
+## Plan set by the user (2026-11-27 10:00)
+
+1. Generation 3 at both sizes under the epoch rule (4B loop-g3s5: 2385 steps on 5045 records; 8B loop-g3-8b-s: steps from its
+   dataset at E 1.92), exam, held-out and forgetting evaluations, compared with generation 1 on the exams.
+2. If generation 3 succeeds: generation 2 retrained on its own records under the same rule (4B loop-g2-s: 1482 steps on 3134
+   records; 8B loop-g2-8b-s: 1586 steps on 3299 records; started at 10:21 on spare cards, used only if step 1 succeeds).
+3. Then generation 4. If generation 2 could not be retrained on its own data, generation 4 follows generation 3 directly.
+
+Restart record: the lease restarted at 09:35 (job 5831740, n541/n545/n547/n550, ends 2026-11-28 09:34). Every node's scratch
+was archived first (~/project/shared/runs-archive/2026-11-27/, one zstd tar per node, listings verified) and restored. Every
+committed stage is reused once the task repository's operator code matches the old runs byte for byte (bench 83e1b4f8:
+operators pin benchlib, environments, sandbox and pyproject.toml; HEAD's environments changed every operator digest).
+
+## Further mitigation (2026-11-27; planned, not run)
+
+In order of effect per hour:
+
+1. Power the gate: 16 attempts on the held-out and forgetting evaluations; eval-forget-gN gets purpose retention; release
+   requires [target, retention]. Re-judge generation 2 with the existing adapters first, with a deviation row before any
+   generation-3 gate result is read.
+2. Cap sven at the registered turn budget: agent.max_tool_rounds 60 in presets/sven-no-thinking.yaml.
+3. Project teacher and champion separately: the teacher-only dataset is the training `dataset` (validation teacher-only);
+   champion records go into replay with per_task 1 and prefer random; the champion share falls from 45% to about 18%.
+4. A warm-start candidate (start: champion, teacher-only new data, replay_share 0.5, lr 1e-4, about 575 steps; about 70
+   minutes for the 8B), an additional candidate under the same gate.
+5. A three-arm mix test on the existing generation-1 and generation-2 data: teacher only; teacher plus one champion record per
+   task; supervise productive; measured on the practice tier and with the calls-per-trial table.
+6. Scaled-steps runs with patience in epochs: patience 12 if a run stops early below 80% of its steps.
+7. Exams last, at 16 attempts per exam for the promoted candidate and its champion; report the sign test and a per-exam
+   permutation test.
+
+From generation 4: an author prompt whose worked example meets the size specification (20-40 lines, two files) and a
+reproduce-side rejection of undersized jobs; per-source per_task, exclusion of repeat-note records, and champion records
+only from tasks it passed at most 2 of 8 (about 30 lines in crates/factory/src/run/dataset/selection.rs); supervision that
+masks repeated identical calls; patience and eval_every scaled with steps; a thinking-mode teacher-only side arm.
+
 
 ## Transfer experiment support (2026-11-26)
 
