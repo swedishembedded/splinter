@@ -60,3 +60,25 @@ def test_a_destination_through_a_link_of_the_shared_tree_is_not_layered(tmp_path
     shared = {"dirs": [], "symlinks": ["/usr/local"]}
     steps = plan("FROM d\nRUN x\nCOPY tool.py /usr/local/bin/tool.py\n").steps[1:]
     assert _layer(steps, context, shared, tmp_path / "cache", "task-2", lambda m: None) is None
+
+
+def test_one_layer_built_by_many_threads_at_once_is_built_whole_for_each(tmp_path):
+    # Trials run as threads of one worker process: two attempts of one task build its layer at the same moment, and
+    # neither may lose its archive to the other's rename or leave a torn one.
+    from concurrent.futures import ThreadPoolExecutor
+
+    context = tmp_path / "context"
+    (context / "workspace").mkdir(parents=True)
+    for i in range(200):
+        (context / "workspace" / f"f{i}.txt").write_text(f"{i}\n" * 500)
+    (context / "tool.py").write_text("print()\n")
+    shared = {"dirs": ["/usr", "/usr/local", "/usr/local/bin"], "symlinks": []}
+    steps = plan(TASK).steps[1:]
+    cache = tmp_path / "cache"
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        built = list(pool.map(lambda _: _layer(steps, context, shared, cache, "task-1", lambda m: None), range(16)))
+    assert len(set(built)) == 1
+    with tarfile.open(built[0]) as archive:
+        names = {m.name for m in archive}
+    assert len([n for n in names if n.startswith("workspace/repo/f")]) == 200
+    assert not [p for p in (cache / "images").iterdir() if p.name != built[0].name], "nothing is left half written"

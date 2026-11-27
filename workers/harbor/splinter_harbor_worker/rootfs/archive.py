@@ -182,8 +182,6 @@ def build_layers(
 def _layer(steps: tuple, context: Path, shared: dict, cache: Path, name: str, log: Callable[[str], None]) -> Path | None:
     """The archive of exactly what ``steps`` (``COPY`` and ``WORKDIR``) write on top of the shared tree, or ``None`` when
     a destination passes through a symbolic link of that tree, which the layer cannot resolve without unpacking it."""
-    from splinter_harbor_worker.rootfs.build import run_step
-
     archive = cache / "images" / f"{name}.layer.tar"
     if archive.is_file():
         return archive
@@ -193,7 +191,21 @@ def _layer(steps: tuple, context: Path, shared: dict, cache: Path, name: str, lo
         path = PurePosixPath(destination)
         if any(str(parent) in symlinks for parent in (path, *path.parents)):
             return None
+    # Trials are threads of one process as well as other processes: the lock is held across both, and whoever comes
+    # second finds the archive the first built.
+    with locked(cache / "locks" / f"layer-{name}.lock"):
+        if archive.is_file():
+            return archive
+        _write_layer(steps, context, dirs, destinations, cache, name, archive)
+    log(f"{name}: layer {archive.name}")
+    return archive
+
+
+def _write_layer(steps: tuple, context: Path, dirs: set, destinations: list, cache: Path, name: str,
+                 archive: Path) -> None:
+    """Run ``steps`` on an empty tree and write it as ``archive``, under a name of its own until it is whole."""
     work = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=_workdir(cache)))
+    partial = None
     try:
         tree = work / "root"
         tree.mkdir()
@@ -202,8 +214,11 @@ def _layer(steps: tuple, context: Path, shared: dict, cache: Path, name: str, lo
             (tree / d.lstrip("/")).mkdir(parents=True, exist_ok=True)
         for step in steps:
             run_step(step, tree, context, {}, work / "layer.log", None)
-        partial = archive.with_name(f"{archive.name}.partial-{os.getpid()}")
         archive.parent.mkdir(parents=True, exist_ok=True)
+        handle, name_aside = tempfile.mkstemp(prefix=f".{archive.name}.", suffix=".partial", dir=archive.parent)
+        os.close(handle)
+        partial = Path(name_aside)
+        partial.chmod(0o644)  # as readable as a file written in place; mkstemp makes it the owner's alone
 
         def as_root(info: tarfile.TarInfo) -> tarfile.TarInfo:
             info.uid = info.gid = 0
@@ -217,10 +232,11 @@ def _layer(steps: tuple, context: Path, shared: dict, cache: Path, name: str, lo
                     continue  # the directory is already there, with its own mode
                 out.add(path, arcname=path.relative_to(tree).as_posix(), recursive=False, filter=as_root)
         partial.replace(archive)
+        partial = None
     finally:
+        if partial is not None:
+            partial.unlink(missing_ok=True)
         shutil.rmtree(work, ignore_errors=True)
-    log(f"{name}: layer {archive.name}")
-    return archive
 
 
 def _workdir(cache: Path) -> Path:
