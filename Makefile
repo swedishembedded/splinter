@@ -133,6 +133,38 @@ test/online:
 	$(CARGO) build $(PROFILE) -p splinter
 	bash scripts/online/cpu-stack.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)" "$(ONLINE_PORT)" "$(ESTIMATOR)"
 
+## test/online/watchdog - the online watchdog on the CPU stack, both runs: a poisoned grader must be rolled back and recovered from, a clean run never rolled back (needs BRAIN_BIN, QWEN3_BIN; ONLINE_WORK, ONLINE_PORT; minutes)
+test/online/watchdog: test/online/watchdog/fault test/online/watchdog/clean
+
+## test/online/watchdog/fault - train.online with a watchdog whose training grader flips its reward for a window after a warm-up: alarm, evaluation, rollback to the anchor, recovery in a later epoch, the audit and its numbers printed
+test/online/watchdog/fault:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/cpu-watchdog.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)/watchdog-fault" "$(ONLINE_PORT)" fault
+
+## test/online/watchdog/clean - the same run with an honest grader: evaluated, never rolled back
+test/online/watchdog/clean:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/cpu-watchdog.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)/watchdog-clean" "$(ONLINE_PORT)" clean
+
+## test/online/pinned - train.online with every episode pinned to the version it started on, under publish_every 1: every rollout's span one version, every version served under its own id
+test/online/pinned:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/cpu-watchdog.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)/pinned" "$(ONLINE_PORT)" pinned
+
+## test/online/merged - train.online with every exact, append-only session merged into one record: a merged session trained, the sessions that stayed one record per call counted by why
+test/online/merged:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/cpu-watchdog.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)/merged" "$(ONLINE_PORT)" merged
+
+## test/online/bench - GPU run: train.online over a small subset of a bench environment's training task set (BENCH_TASKS: its training task folders, never exams; BENCH_ENVIRONMENT: its environment file; BENCH_BASE: the base's model id) on a served brain (BRAIN_ENDPOINT, BRAIN_KEY_FILE, BRAIN_ARTIFACTS, BRAIN_ADAPTERS), with the declared tools, the frontier selector, pinned episodes and the watchdog; prints its groups, versions, health and watchdog
+test/online/bench:
+	$(CARGO) build $(PROFILE) -p splinter
+	bash scripts/online/bench-task-set.sh "$(abspath $(or $(CARGO_TARGET_DIR),target)/release/splinter)" "$(BENCH_TASKS)" "$(BENCH_ENVIRONMENT)" "$(BENCH_BASE)" "$(ONLINE_WORK)/bench" "$(BRAIN_ENDPOINT)" "$(BRAIN_KEY_FILE)" "$(BRAIN_ARTIFACTS)" "$(BRAIN_ADAPTERS)"
+
+## test/online/bench/prepare - the same run's repository, task subsets and recipe written, its command printed, nothing run
+test/online/bench/prepare:
+	bash scripts/online/bench-task-set.sh "$(abspath $(or $(CARGO_TARGET_DIR),target)/release/splinter)" "$(BENCH_TASKS)" "$(BENCH_ENVIRONMENT)" "$(BENCH_BASE)" "$(ONLINE_WORK)/bench" "$(BRAIN_ENDPOINT)" "$(BRAIN_KEY_FILE)" "$(BRAIN_ARTIFACTS)" "$(BRAIN_ADAPTERS)" prepare
+
 ## test/online/tools - train.online's rollouts on the execution worker in their tasks' own environment: an agent offered exactly the MCP tool its task's image declares, graded by the task's verifier, against a scripted policy and learner (needs `make worker/install`, sven on PATH and the network to build the task image; minutes)
 test/online/tools:
 	PATH="$(CURDIR)/workers/harbor/.venv/bin:$$PATH" $(CARGO) test $(PROFILE) -p splinter-factory --test it -- online::worker --ignored
@@ -612,7 +644,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/online/tools test/online/tools/tasks test/contract test/contract/brain test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/online/watchdog test/online/watchdog/fault test/online/watchdog/clean test/online/pinned test/online/merged test/online/bench test/online/bench/prepare test/online/tools test/online/tools/tasks test/contract test/contract/brain test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

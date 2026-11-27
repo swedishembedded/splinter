@@ -711,8 +711,8 @@ compiles its collection evaluates on the same compiled tasks:
             agent: { agent: sven, environment: environments/vim/environment.yaml } }
   ```
   `selector: frontier` draws each group's task in proportion to its learning signal (the
-  expected reward variance under a Beta posterior on its pass rate, recent groups weighing
-  most), keeps a task never passed at a floor of the largest weight so it is still visited, and
+  expected reward variance under a Beta posterior on its pass rate, evidence ageing for every
+  policy version published since it was counted), keeps a task never passed at a floor of the largest weight so it is still visited, and
   retires a task passed reliably (the run ends early when every task has); `report.json`
   `selector` holds each task's posterior. The default, `round_robin`, takes the tasks in turn.
   Its statistics are the run's own rollouts of the current epoch alone.
@@ -733,8 +733,8 @@ compiles its collection evaluates on the same compiled tasks:
   the same `monitor_size` tasks drawn afresh (a task at most `max_uses` times per epoch); a test
   martingale on the discordant pairs rolls back on evidence of a regression larger than
   `test.delta` (error `test.alpha`), and promotes on evidence the candidate is not worse by
-  `delta` (error `test.beta`) once the confirm set shows no regression; each comparison
-  spends half of what is left of `alpha` and `beta`, and one that reads `max_discordant`
+  `delta` (error `test.beta`) once the confirm set shows no regression; the k-th comparison
+  is held to `6 / (pi^2 k^2)` of `alpha` and `beta`, and one that reads `max_discordant`
   pairs undecided decides nothing. A rollback ends the epoch: the epoch's untrained groups are
   rolled back, never trained, the next learner starts from the anchor's adapter with fresh
   optimiser state and its `params.lr` multiplied by `cooldown` per rollback, and the stage
@@ -770,6 +770,13 @@ compiles its collection evaluates on the same compiled tasks:
   rollout asks the id of the version that was newest when it started, so its span is one
   version. The watchdog's evaluations ask versions by the same ids.
 
+  `sessions: merged` writes each exact, append-only session as one record (its every answer
+  supervised where it stands, the job started with `pack_answers`); it needs `params.max_block`
+  to hold the longest session, and a session that is not exact, not append-only or longer stays
+  one record per call, counted by why in the report's `rollouts.sessions`. `params.loss_agg`
+  weighs them: `token-sum` trains exactly what the per-call records train, `seq-mean` weighs
+  every episode alike.
+
   `pin_versions: true` trains only rollouts one policy version decoded from their first request
   to their last (a rollout that straddles a publication is scored and counted in
   `rollouts.version_mixed`, never trained); size `publish_every` so a version outlives a
@@ -786,6 +793,25 @@ compiles its collection evaluates on the same compiled tasks:
   (the same tool with the same arguments as an earlier call of the rollout). `splinter observe`
   shows the same per-version lines for every online stage of a run, read from its group log
   while it runs.
+
+  The watchdog holds its anchor (and the candidate it evaluates) served under its version id
+  past the retention for as long as it refers to it (brain's `POST /v1/jobs/{id}/hold`). A
+  rollback stops every running rollout: on the execution worker its attempt is killed with
+  everything it started.
+
+  `make test/online/watchdog` runs the watchdog on the CPU stack over a fixture task family
+  whose training grader flips its reward for a window after a warm-up (`fault`, which must roll
+  back and recover) and with an honest grader (`clean`, which must not); `make
+  test/online/pinned` and `make test/online/merged` check pinned episodes and merged sessions
+  there. `make test/online/bench` runs the same loop on a GPU node over a small subset of a
+  bench environment's training task set:
+  ```sh
+  make test/online/bench BENCH_TASKS=<training task folders> \
+    BENCH_ENVIRONMENT=<bench>/environments/vim/environment.yaml BENCH_BASE=Qwen/Qwen3-4B \
+    BRAIN_ENDPOINT=http://127.0.0.1:<port>/v1 BRAIN_KEY_FILE=<key> BRAIN_ARTIFACTS=<store> \
+    BRAIN_ADAPTERS=<adapter dir> ONLINE_WORK=<work>
+  ```
+  (`test/online/bench/prepare` writes the repository and recipe and prints the command only.)
 
   A rollout a limit ended (the served context, a reply's own token limit, the run's output
   budget, the turn cap, the deadline) is a scored failure (reward 0) counted by cause in the
