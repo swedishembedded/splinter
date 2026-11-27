@@ -663,7 +663,7 @@ fn wire_calls(step: &TraceStep) -> Vec<WireToolCall> {
             kind: "function".into(),
             function: WireFunction {
                 name: call.function_name.clone(),
-                arguments: call.arguments.to_string(),
+                arguments: crate::markers::argument_text(call),
             },
         })
         .collect()

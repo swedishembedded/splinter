@@ -302,9 +302,9 @@ pub fn trajectory_transcript(
                     .map(|call| ToolCallRecord {
                         id: call.tool_call_id.clone(),
                         name: call.function_name.clone(),
-                        // A call whose arguments were not JSON is recorded
-                        // with `{}` and the text the model sent beside it;
-                        // the model's text is what the runtime answered.
+                        // The text the model wrote, which the runtime sent
+                        // back as it was; a recording without it has the
+                        // parsed arguments only.
                         arguments: raw_arguments(call)
                             .unwrap_or_else(|| call.arguments.to_string()),
                     })
@@ -341,19 +341,11 @@ pub fn trajectory_transcript(
     Ok(turns)
 }
 
-/// The arguments a call's model sent, when the recording kept them apart
-/// because they were not valid JSON (`extra.raw_arguments`, flagged
-/// `extra.unparsed_arguments`).
+/// The argument text the call's model wrote, as the recording keeps it
+/// (`extra.raw_arguments`).
 fn raw_arguments(call: &sven_sdk::atif::ToolInvocation) -> Option<String> {
-    let extra = call.extra.as_ref()?;
-    if extra
-        .get("unparsed_arguments")
-        .and_then(serde_json::Value::as_bool)
-        != Some(true)
-    {
-        return None;
-    }
-    extra
+    call.extra
+        .as_ref()?
         .get("raw_arguments")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string)

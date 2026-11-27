@@ -68,7 +68,7 @@ fn requests(result: &str) -> Vec<ModelCall> {
     later.extend([
         json!({"role": "assistant", "content": "", "reasoning": "look"}),
         json!({"role": "assistant", "content": {"tool_call_id": "c0", "function": {
-            "name": "shell", "arguments": "{\"command\":\"ls\"}"}}}),
+            "name": "shell", "arguments": "{\"command\": \"ls\"}"}}}),
         json!({"role": "tool", "content": {"tool_call_id": "c0", "content": result}}),
     ]);
     let shell =

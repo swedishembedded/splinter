@@ -13,7 +13,7 @@
 //! The shapes are the ones an agent runtime writes (seen in real request
 //! logs): an answer the agent stopped and dropped from its history, with a
 //! note in its place; arguments the model wrote as text that is not JSON,
-//! repaired in the history the next request carries; a last request the run
+//! kept as written in the history the next request carries; a last request the run
 //! ended before it was answered, recorded as a step that said nothing; and a
 //! context rewritten between two requests (compaction, an edited note). Each
 //! action's record is the request it answered with the answer supervised: one
@@ -158,7 +158,7 @@ fn an_answer_the_agent_stopped_and_dropped_is_no_action_and_the_rest_is_read_as_
     let mut noted = opening.clone();
     noted.push(sent("user", NOTE));
     let mut later = noted.clone();
-    later.extend(called("c0", "{\"command\":\"ls\"}", "a.txt"));
+    later.extend(called("c0", "{\"command\": \"ls\"}", "a.txt"));
     let log = vec![
         request(1, opening, calls("x0", "{\"command\": \"ls ls ls ls")),
         request(2, noted, calls("c0", "{\"command\": \"ls\"}")),
@@ -178,7 +178,7 @@ fn an_answer_the_agent_stopped_and_dropped_is_no_action_and_the_rest_is_read_as_
     for (context, _) in &got {
         assert_eq!(context[..3], asked[..], "the context as it was sent");
     }
-    assert_eq!(got[0].1, "{\"command\":\"ls\"}");
+    assert_eq!(got[0].1, "{\"command\": \"ls\"}");
     assert_eq!(got[1].1, "Done.");
     assert!(outcomes(&projection).iter().all(|o| !o.baseline_only));
 
@@ -198,14 +198,13 @@ fn an_answer_the_agent_stopped_and_dropped_is_no_action_and_the_rest_is_read_as_
 #[test]
 fn arguments_that_are_not_json_are_left_out_and_counted_and_the_rest_keeps_the_context_sent() {
     // The model escaped a backslash JSON does not know; the next request
-    // carries the call as the agent repaired it, which is what the model was
-    // then sent.
+    // carries the call as the model wrote it.
     let opening = vec![sent("system", SYSTEM), sent("user", ASK)];
-    let repaired = "{\"command\":\"grep \\\\s a.txt\"}";
+    let written = "{\"command\": \"grep \\s a.txt\"}";
     let mut later = opening.clone();
-    later.extend(called("c0", repaired, "a.txt"));
+    later.extend(called("c0", written, "a.txt"));
     let log = vec![
-        request(1, opening, calls("c0", "{\"command\": \"grep \\s a.txt\"}")),
+        request(1, opening, calls("c0", written)),
         request(2, later, says("Done.")),
     ];
     let steps = steps(json!({"command": "grep \\s a.txt"}));
@@ -228,9 +227,9 @@ fn arguments_that_are_not_json_are_left_out_and_counted_and_the_rest_keeps_the_c
     let sent_call = messages
         .iter()
         .find(|m| !m.tool_calls.is_empty())
-        .expect("the repaired call is context");
+        .expect("the call is context");
     assert!(!sent_call.train);
-    assert_eq!(sent_call.tool_calls[0].function.arguments, repaired);
+    assert_eq!(sent_call.tool_calls[0].function.arguments, written);
     assert!(outcomes(&projection).iter().all(|o| !o.baseline_only));
 
     let native = native_record(&trajectory(steps), &log).unwrap();

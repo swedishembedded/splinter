@@ -240,7 +240,7 @@ fn answers(step: &atif::TraceStep, response: &ModelResponse) -> bool {
         return step
             .message
             .as_text()
-            .is_some_and(|text| text.trim() == response.text.trim());
+            .is_some_and(|text| text == response.text);
     }
     made.sort_unstable();
     answered.sort_unstable();
@@ -400,13 +400,7 @@ fn build(
                 at
             });
             answers.push((k, at, parsed));
-        } else if chain.get(at).is_some_and(|next| {
-            if parsed {
-                same_turn(next, &answer)
-            } else {
-                same_call_and_text(next, &answer)
-            }
-        }) {
+        } else if chain.get(at).is_some_and(|next| same_turn(next, &answer)) {
             answers.push((k, Some(at), parsed));
         }
         // Otherwise the agent dropped the answer: never its step.
@@ -495,51 +489,21 @@ pub(crate) fn scope_calls(
     Ok(())
 }
 
-/// A turn's reasoning, when it has any.
-fn reasoning(message: &WireMessage) -> Option<&str> {
-    message
-        .reasoning_content
-        .as_deref()
-        .map(str::trim)
-        .filter(|r| !r.is_empty())
-}
-
-/// Whether `history`, a turn as a later request repeats it, is `answer`: the
-/// text, the calls (with their ids, as the model and its history name them)
-/// and the reasoning when the history carries it. A runtime that does not
-/// send a turn's reasoning back (as a reasoning model's API asks) repeats
-/// the turn without it, and it is still the same turn.
+/// Whether `history`, a turn as a later request repeats it, is `answer`
+/// exactly: the runtime sends every answer back as it arrived, so its text,
+/// its reasoning and each call's id, name and argument text are the same
+/// bytes. Anything else is a history the runtime rewrote.
 fn same_turn(history: &WireMessage, answer: &WireMessage) -> bool {
     let (a, b) = (history, answer);
-    let arguments = |text: &str| serde_json::from_str::<Value>(text).ok();
     a.role == b.role
-        && a.content.trim() == b.content.trim()
-        && (reasoning(a).is_none() || reasoning(a) == reasoning(b))
+        && a.content == b.content
+        && a.reasoning_content == b.reasoning_content
         && a.tool_calls.len() == b.tool_calls.len()
         && a.tool_calls.iter().zip(&b.tool_calls).all(|(x, y)| {
             x.id == y.id
                 && x.function.name == y.function.name
-                && arguments(&x.function.arguments) == arguments(&y.function.arguments)
+                && x.function.arguments == y.function.arguments
         })
-}
-
-/// Whether `history` is `answer` apart from the arguments, which the
-/// model wrote as text that is not JSON and the agent repaired before
-/// sending them back: the same text and the same calls (ids and tools, in
-/// whatever order the agent sent them back).
-fn same_call_and_text(history: &WireMessage, answer: &WireMessage) -> bool {
-    let calls = |m: &WireMessage| {
-        let mut calls: Vec<(Option<String>, String)> = m
-            .tool_calls
-            .iter()
-            .map(|c| (c.id.clone(), c.function.name.clone()))
-            .collect();
-        calls.sort();
-        calls
-    };
-    history.role == answer.role
-        && history.content.trim() == answer.content.trim()
-        && calls(history) == calls(answer)
 }
 
 /// The request's messages as chat messages, none supervised, call ids as the
@@ -579,7 +543,9 @@ pub(crate) fn wire_messages(
                     out.push(turn);
                 }
                 call => {
-                    let call = wire_call(call, scrub, step)?;
+                    // A call in the history is context as it was sent, its
+                    // argument text as written whether or not it is JSON.
+                    let (call, _) = written_call(call, scrub, step)?;
                     match out.last_mut().filter(|m| m.role == "assistant") {
                         Some(turn) => turn.tool_calls.push(call),
                         None => {
@@ -663,17 +629,8 @@ fn check_markup(turn: &WireMessage, step: u64) -> Result<(), Unprojectable> {
 }
 
 /// A tool call of a request history, `{tool_call_id, function}`, or of a
-/// response, `{id, name, arguments}`, as a wire call with its arguments as
-/// compact JSON.
-fn wire_call(call: &Value, scrub: &Scrub, step: u64) -> Result<WireToolCall, Unprojectable> {
-    match written_call(call, scrub, step)? {
-        (call, true) => Ok(call),
-        (_, false) => Err(Unprojectable::UnparsedArguments { step }),
-    }
-}
-
-/// [`wire_call`], whether or not its arguments are JSON, and whether they
-/// are.
+/// response, `{id, name, arguments}`, as a wire call with its argument text as
+/// written, and whether that text is JSON.
 fn written_call(
     call: &Value,
     scrub: &Scrub,

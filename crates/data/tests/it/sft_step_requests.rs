@@ -52,13 +52,13 @@ fn text(role: &str, content: &str) -> Value {
     json!({"role": role, "content": content})
 }
 
-/// A sven history of the model's turn: its text with reasoning, one message
-/// per call, the call's result.
+/// A sven history of the model's turn, as the response gave it: its text with
+/// reasoning, one message per call, the call's result.
 fn turn_and_result(id: &str, result: Value) -> Vec<Value> {
     vec![
-        json!({"role": "assistant", "content": "\n\n\n", "reasoning": " look "}),
+        json!({"role": "assistant", "content": "\n\n\n", "reasoning": "look"}),
         json!({"role": "assistant", "content": {"tool_call_id": id, "function": {
-            "name": "shell", "arguments": "{\"command\":\"ls\"}"}}}),
+            "name": "shell", "arguments": "{\"command\": \"ls\"}"}}}),
         json!({"role": "tool", "content": {"tool_call_id": id, "content": result}}),
     ]
 }
@@ -126,6 +126,10 @@ fn conversation(
     shown_images: bool,
 ) -> Corpus {
     let mut call_step = call(3, "c0", "shell", json!({"command": "ls"}), "part.py");
+    // sven records the argument text the model wrote beside the parsed value.
+    if let Some(calls) = call_step.tool_calls.as_mut() {
+        calls[0].extra = Some(json!({"raw_arguments": "{\"command\": \"ls\"}"}));
+    }
     call_step.reasoning_content = Some("look".into());
     let mut steps = vec![TraceStep::new(1, StepOrigin::System, SYSTEM)];
     if let Some(instruction) = instruction {
@@ -206,7 +210,7 @@ fn a_conversation_of_text_gives_the_records_its_trajectory_gives() {
     // emitted is one assistant message with its reasoning, as sent.
     let (messages, tools) = chat(&from_requests.records[1]);
     assert_eq!(tools.len(), 1);
-    assert_eq!(messages[2].reasoning_content.as_deref(), Some(" look "));
+    assert_eq!(messages[2].reasoning_content.as_deref(), Some("look"));
     assert_eq!(messages[2].content, "\n\n\n");
     assert_eq!(messages[2].tool_calls[0].id.as_deref(), Some("s3-c0"));
     assert_eq!(messages[3].tool_call_id.as_deref(), Some("s3-c0"));

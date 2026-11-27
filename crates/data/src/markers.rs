@@ -13,9 +13,9 @@
 //! * A system step carrying `extra.context_management` of a compaction
 //!   (or any transformation that replaces or truncates the history) means
 //!   the steps before it are not what the agent saw afterwards.
-//! * A tool call carrying `extra.raw_arguments`, or flagged
-//!   `extra.unparsed_arguments`, was sent by the model as text that is not
-//!   JSON; its recorded `arguments` are a stand-in.
+//! * A tool call's `extra.raw_arguments` is its argument text as the model
+//!   wrote it; one flagged `extra.unparsed_arguments` was text that is not
+//!   JSON, and its recorded `arguments` are a stand-in.
 //! * `agent.tool_definitions` are OpenAI function-calling entries; a
 //!   record's `tools` are the same entries in brain's form.
 
@@ -25,7 +25,7 @@ use serde_json::Value;
 use crate::unprojectable::Unprojectable;
 
 /// The key of a tool call's `extra` holding the argument text the model
-/// sent when it was not valid JSON.
+/// wrote, verbatim.
 const RAW_ARGUMENTS_KEY: &str = "raw_arguments";
 
 /// The key of a tool call's `extra` flagging arguments that did not parse.
@@ -93,12 +93,23 @@ pub(crate) fn is_harness_prompt(step: &TraceStep) -> bool {
 }
 
 /// Whether `call`'s arguments are a stand-in for text the model sent that
-/// was not JSON.
+/// was not JSON (sven flags it `extra.unparsed_arguments`).
 pub(crate) fn has_unparsed_arguments(call: &ToolInvocation) -> bool {
-    call.extra.as_ref().is_some_and(|extra| {
-        extra.get(RAW_ARGUMENTS_KEY).is_some()
-            || extra.get(UNPARSED_ARGUMENTS_KEY).and_then(Value::as_bool) == Some(true)
-    })
+    call.extra
+        .as_ref()
+        .and_then(|extra| extra.get(UNPARSED_ARGUMENTS_KEY))
+        .and_then(Value::as_bool)
+        == Some(true)
+}
+
+/// `call`'s argument text as the model wrote it (`extra.raw_arguments`,
+/// which sven records for every call), else its recorded arguments as JSON.
+pub(crate) fn argument_text(call: &ToolInvocation) -> String {
+    call.extra
+        .as_ref()
+        .and_then(|extra| extra.get(RAW_ARGUMENTS_KEY))
+        .and_then(Value::as_str)
+        .map_or_else(|| call.arguments.to_string(), str::to_string)
 }
 
 /// The tool schemas `trajectory` records, as a chat record carries them:
