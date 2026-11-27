@@ -94,6 +94,7 @@ pub mod request_log;
 mod requests;
 mod sampled;
 mod scrub;
+pub mod session;
 pub mod split;
 mod store;
 mod strip;

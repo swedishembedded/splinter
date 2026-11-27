@@ -27,15 +27,16 @@ use splinter_core::harness::{ModelCall, ModelResponse, ModelToolCall};
 use splinter_data::calls::{project_calls, Sampler};
 use splinter_data::{dataset_line, Objective, ProxyReason};
 
-const DIGEST: &str = "sha256:c7ae3118aa233013ee286be9c64eed92aeb1d113ebd470a1a3e646b3d78192a3";
+pub(crate) const DIGEST: &str =
+    "sha256:c7ae3118aa233013ee286be9c64eed92aeb1d113ebd470a1a3e646b3d78192a3";
 
-fn sampler() -> Sampler {
+pub(crate) fn sampler() -> Sampler {
     Sampler::untruncated(0.8).unwrap()
 }
 
 /// What sven records of one request: its ids, the policy's figures and its
 /// identity.
-fn request(prompt: &[i64], generated: &[i64], version: &str) -> Value {
+pub(crate) fn request(prompt: &[i64], generated: &[i64], version: &str) -> Value {
     json!({
         "prompt_token_ids": prompt,
         "completion_token_ids": generated,
@@ -49,7 +50,7 @@ fn request(prompt: &[i64], generated: &[i64], version: &str) -> Value {
 
 /// The metrics of a step of one request: the request's ids in the step's
 /// own fields, its identity in `extra.sven`.
-fn single(request: &Value) -> StepMetrics {
+pub(crate) fn single(request: &Value) -> StepMetrics {
     fn ids<T: serde::de::DeserializeOwned>(request: &Value, key: &str) -> Option<T> {
         request
             .get(key)
@@ -86,7 +87,7 @@ fn several(requests: &[Value]) -> StepMetrics {
     }
 }
 
-fn step(n: u64, text: &str, metrics: StepMetrics) -> TraceStep {
+pub(crate) fn step(n: u64, text: &str, metrics: StepMetrics) -> TraceStep {
     let mut s = say(n, text);
     s.metrics = Some(metrics);
     s
@@ -98,7 +99,7 @@ fn shell() -> Value {
 
 /// The request log's two calls: the opening, which calls `shell`, and the
 /// request after its result, answered with text.
-fn calls() -> Vec<ModelCall> {
+pub(crate) fn calls() -> Vec<ModelCall> {
     let opening = vec![
         json!({"role": "system", "content": "Be brief."}),
         json!({"role": "user", "content": "List the files."}),
@@ -138,7 +139,7 @@ fn calls() -> Vec<ModelCall> {
     ]
 }
 
-fn with_span(mut trajectory: atif::Trajectory, span: [u64; 2]) -> atif::Trajectory {
+pub(crate) fn with_span(mut trajectory: atif::Trajectory, span: [u64; 2]) -> atif::Trajectory {
     let totals = atif::FinalMetrics {
         extra: Some(json!({ "sven": { "policy_version_span": span } })),
         ..Default::default()
