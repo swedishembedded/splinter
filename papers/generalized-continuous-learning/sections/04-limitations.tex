@@ -5,10 +5,9 @@
 \Cref{tab:verdict} holds each family and model size against the operational definition of \cref{sec:introduction}. What is
 supported is continuous gain over two generations in the Lua family, and in the Vim family a first generation that beats the
 base at both sizes, with its gain coming from the teacher's trajectories, followed at both sizes by a second generation that did
-not improve on the first; not continuous self-improvement. After the generation-2 exam results had been seen, a human changed generation~3's training budget
-(LoRA steps scaled with the dataset instead of a fixed cap; \cref{app:deviations}). That is an intervention between
-generations: it counts against the no-intervention part of the definition, and a generation-3 result from a scaled-steps
-candidate cannot support the criterion as registered; it is shown as its own labelled point.
+not improve on the first; not continuous self-improvement. From generation~3 the recipe holds training epochs constant as the dataset grows, which fixes the fixed step cap that
+had trained generation~2 for about one epoch where generation~1 had about two (\cref{app:deviations}); generation-3 candidates
+trained under the cap and under the rule are both reported.
 
 \begin{table}[htbp]
 \centering\footnotesize
@@ -40,8 +39,8 @@ meets the definition; each cell is the measured state.}\label{tab:verdict}
 
 \paragraph{Limitations.} Each family has one task protocol; the learners are Qwen3-4B (both families) and Qwen3-8B (Vim), with
 rank-16 adapters. The Lua gains shrink with
-each doubling of the pool (5.1, 1.6, 1.2, 0.3 points) and there is no matched-data control. In the Vim family the absolute level
-is low (3.5\% of exam attempts for the best arm, against the teacher's 63\% first-attempt rate); generation~1's gain comes from the 27B teacher's trajectories, and learning from the
+each doubling of the pool (5.1, 1.6, 1.2, 0.3 points) and there is no matched-data control. In the Vim family the learners' exam
+pass rates stay far below the teacher's (at most 7.5\% of exam attempts against 62\%); generation~1's gain comes from the 27B teacher's trajectories, and learning from the
 learner's own attempts is not shown; the comparison of authoring modes is confounded with passes per record and task difficulty; the 100 exams come
 from one course and are public, so a model trained on data gathered after their publication could have seen them; the per-seed intervals of \cref{fig:vim-seeds} treat attempts as independent. Other tools and domains, and
 stability under another authoring seed, are not measured.

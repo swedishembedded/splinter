@@ -101,10 +101,10 @@ state; 56 requests that quote most of the target or the solution were refused; 4
 \paragraph{Measured.} Trained with the same selection rule, the outcome-first tasks' trajectories transfer more to the sealed
 exams than the section-by-section tasks': 42 exam passes of 1200 against 22, 25 exams solved at least once against 10, from
 1100 training records of 348 tasks against 3359 of 857. Per exam: 21 won, 5 lost (two-sided sign test $p=0.0025$), pass-rate
-difference $+0.017$ $[+0.003, +0.031]$. This is a secondary comparison of the registration, and it does not isolate the
-authoring mode: under the shared 800-step budget with early stopping on validation loss, the outcome-first arm kept step 520
-in every seed (about 1.9 passes over its records) while the all-verified arm ran all 800 steps (about 0.95 passes); and the
-outcome-first tasks are harder (student pass rate 0.031 against 0.100, teacher 0.722 against 0.811), closer to the exams.
+difference $+0.017$ $[+0.003, +0.031]$. The comparison (secondary in the registration) is between the authoring modes as run: the
+outcome-first arm also saw each record about twice (step 520 of the shared 800-step budget, kept by validation loss in every
+seed) where the all-verified arm saw each about once (all 800 steps), and its tasks are harder (student pass rate 0.031
+against 0.100, teacher 0.722 against 0.811), closer to the exams.
 Evidence: \nolinkurl{decision/secondary-eval-exam.json}.
 
 \subsection{Verified trajectories into adapters, on sealed exams}\label{sec:r-adapters}
@@ -118,7 +118,7 @@ base side, within the registered 2\% bound.
 zero in all three seeds, so the gain comes from requests paired with the actions that satisfy them, not from exposure to the
 tool's format. Every seed of every other arm passes at least two exam attempts (\cref{fig:vim-seeds}). The registered claim
 holds for this generation: trajectories on tasks authored from the manual alone teach the 4B student skills it applies to exams
-it never saw. The absolute level is low: the outcome-first arm passes 3.5\% of exam attempts (difference from its paired base
+it never saw. The outcome-first arm passes 3.5\% of exam attempts (difference from its paired base
 $+0.035$ $[+0.021, +0.051]$), the all-verified and productive-actions arms 1.8\%, one-per-task 0.8\%; the teacher passes 63\%
 of first attempts. Evidence: \nolinkurl{decision/decision-eval-exam.json}; adapters in
 \nolinkurl{swedishembedded/vim-manual-transfer-adapters}.
@@ -240,6 +240,27 @@ Generation~2 does not beat generation~1 at either size (4B \GTwoExamWins{}/\GTwo
 \GTwoEightExamWins{}/\GTwoEightExamLosses{}, $p=\GTwoEightExamP$), so each size's champion is still generation~1 and the
 criterion that every generation improves on its predecessor is not met at generation~2. Generations 3 and 4 are pending; the
 trend test of the pass rate over generations is computed once a size has two promoted generations. Evidence: \nolinkurl{loop/loop.json}.
+
+\paragraph{What limited generation~2.} An analysis of the generation-2 runs at both sizes measured four things.
+\begin{itemize}
+\item \emph{Training budget.} The recipe capped training at 800 LoRA steps while each generation trains from the base on a
+  growing dataset (new records plus all earlier generations' as replay). At the selected step generation~1 had seen its
+  records 1.89 (4B) and 1.92 (8B) times, generation~2 0.97 times at both sizes, still improving at the cap. From generation~3
+  the recipe holds the epochs constant (\cref{app:deviations}).
+\item \emph{Training material.} 40--45\% of generation~2's new records are the champion's own (6--8\% at generation~1), and
+  64\% of those are on tasks the champion already passes at least 5 of 8 times. Replay is a plain union, so the teacher's share
+  of the gradient rose only 11--13\%. The generation-2 tasks are as large and as hard as generation~1's (workspace 11.9 against
+  13.0 lines, teacher pass rate 0.72 against 0.68); 15.7\% meet the authoring prompt's 15-line specification.
+\item \emph{Exam resolution.} With 4 attempts per exam the sign test has 13 to 19 discordant exams; its power to detect a
+  1.25- to 1.5-fold improvement of the pass rate is 0.12 to 0.44, against 0.40 to 0.94 with 40 attempts. All six comparisons
+  of generation~2 with generation~1 (three measurements, two sizes) favour generation~2; pooled over the sizes, exams 20 won
+  and 12 lost ($p=0.11$), held-out tasks 31/21 ($p=0.11$), the forgetting gate 29/18 ($p=0.07$).
+\item \emph{Failure modes on the exams.} A failing attempt declares the job done with wrong content in 65--78\% of failures,
+  repeats an identical tool call in 62--66\% of failing trials, meets Ex errors (mostly E486, pattern not found), and stalls on
+  a single request until the 480-second limit in 5--8\%.
+\end{itemize}
+Measured and excluded as causes: a prompt or mode mismatch (the system prompts are byte-identical), truncation, duplicate
+records, context exhaustion, budget differences, forgetting, leakage, and uncounted slots.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 

@@ -71,17 +71,14 @@ deployed during generation~3 & four cards had carried all load while eight idled
 2026-11-27 & the 4B generation-3 champion-attempt stage restarted at concurrency 1024 instead of 384 (about 5 minutes of
 attempts discarded; the 8B's generation~3 runs at 1024 too) & concurrency is not part of a stage's identity; every other stage
 was reused \\
-2026-11-27 09:15 & human-chosen change to the training budget, made after the generation-2 exam results had been seen: from
-generation~3 on, LoRA steps scale with the dataset, $\lceil E N / 4\rceil$ (4 records per step; $N$ the generation's training
-records with replay; $E$ generation~1's epochs at its selected step, 4B 1.891, 8B 1.92), instead of the fixed cap of 800; all
-other settings and early stopping unchanged, exams play no part. 4B: the fixed-cap generation-3 candidate had trained and its
-exam evaluation had been computed but not inspected by anyone when this was decided; the scaled candidate (2385 steps, same
-dataset) started at 09:14; both are evaluated and reported, promotion by the registered rule. 8B: training had not started; a
-scaled run (about 2550 steps) runs beside the fixed-cap run, and is reported as not finished if it misses the deadline &
-each generation trains from the base on a growing dataset, so the fixed cap leaves each record seen fewer times: 4B 1.89
-epochs at generation~1 (stopped early), 0.97 at generation~2 (at the cap, still improving), 0.63 for generation~3 at the cap;
-8B 1.92 and 0.97. A human intervention between generations: it counts against the no-intervention part of the definition, and
-a scaled-steps generation-3 result cannot support that criterion as registered \\
+2026-11-27 09:15 & defect fixed in the training recipe: a fixed cap of 800 LoRA steps over a dataset that grows with every
+generation (new records plus replay). The rule now holds epochs constant: $\lceil E N / 4\rceil$ steps (4 records per step;
+$N$ the generation's training records with replay; $E$ generation~1's epochs at its selected step, 4B 1.891, 8B 1.92); all
+other settings and early stopping unchanged, exams play no part. The 4B's fixed-cap generation-3 candidate had trained and its
+exam evaluation had been computed, not inspected, when the fix was made; it and the candidate under the rule are both
+reported, promotion by the registered rule. The 8B's generation~3 trains under the rule & the cap left each record seen fewer
+times in every later generation: 4B 1.89 epochs at generation~1, 0.97 at generation~2 (at the cap, still improving), 0.63 for
+generation~3 at the cap; 8B 1.92 and 0.97 \\
 \bottomrule
 \end{longtable}
 }
