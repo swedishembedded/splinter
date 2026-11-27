@@ -506,6 +506,15 @@ fn same_turn(history: &WireMessage, answer: &WireMessage) -> bool {
         })
 }
 
+/// The reasoning a history message `raw` carries, scrubbed; `None` when it
+/// carries none.
+fn reasoning_of(raw: &Value, scrub: &Scrub) -> Option<String> {
+    raw.get("reasoning")
+        .and_then(Value::as_str)
+        .filter(|r| !r.trim().is_empty())
+        .map(|r| scrub.text(r))
+}
+
 /// The request's messages as chat messages, none supervised, call ids as the
 /// request names them. The first user turn and the system turn are as sent;
 /// the rest is scrubbed like a trajectory's text.
@@ -534,11 +543,7 @@ pub(crate) fn wire_messages(
             "assistant" => match content {
                 Value::String(text) => {
                     let mut turn = message("assistant", &scrub.text(text), false);
-                    turn.reasoning_content = raw
-                        .get("reasoning")
-                        .and_then(Value::as_str)
-                        .filter(|r| !r.trim().is_empty())
-                        .map(|r| scrub.text(r));
+                    turn.reasoning_content = reasoning_of(raw, scrub);
                     check_markup(&turn, step)?;
                     out.push(turn);
                 }
@@ -549,8 +554,12 @@ pub(crate) fn wire_messages(
                     match out.last_mut().filter(|m| m.role == "assistant") {
                         Some(turn) => turn.tool_calls.push(call),
                         None => {
+                            // A turn that reasoned and called without text
+                            // carries its reasoning on its first call.
                             let mut turn = message("assistant", "", false);
+                            turn.reasoning_content = reasoning_of(raw, scrub);
                             turn.tool_calls.push(call);
+                            check_markup(&turn, step)?;
                             out.push(turn);
                         }
                     }

@@ -122,7 +122,7 @@ fn requests(c: &Conv, seq: &mut u64) -> String {
     later.extend([
         json!({"role": "assistant", "content": "\n\n\n", "reasoning": "Look first."}),
         json!({"role": "assistant", "content": {"tool_call_id": "c0", "function": {
-            "name": "shell", "arguments": "{\"command\":\"ls\"}"}}}),
+            "name": "shell", "arguments": "{\"command\": \"ls\"}"}}}),
         json!({"role": "tool", "content": {"tool_call_id": "c0", "content": result}}),
     ]);
     let tools = json!([{"name": "shell", "description": "Run a command.",
@@ -271,7 +271,7 @@ fn the_pictures_a_model_was_shown_are_built_into_the_records_of_a_base_that_read
         .clone();
     assert_eq!(call["reasoning_content"], "Look first.");
     assert_eq!(
-        call["tool_calls"][0]["function"]["arguments"],
-        "{\"command\":\"ls\"}"
+        call["tool_calls"][0]["function"]["arguments"], "{\"command\": \"ls\"}",
+        "the argument text as the model wrote it"
     );
 }
