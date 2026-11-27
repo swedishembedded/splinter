@@ -210,10 +210,14 @@ pub fn status(run: &Path) -> Result<Vec<StageStatus>, RunError> {
 /// report, in plan order.
 #[must_use]
 pub fn report_of(run: &Path, manifest: &RunManifest) -> String {
-    let mut out = format!(
-        "# Run of {}\n\n| stage | product | this invocation |\n|---|---|---|\n",
-        manifest.recipe
-    );
+    let mut out = format!("# Run of {}\n\n", manifest.recipe);
+    if manifest.at_once.bound > 0 {
+        out.push_str(&format!(
+            "Stages ran up to {} at once (the bound was {}).\n\n",
+            manifest.at_once.most, manifest.at_once.bound
+        ));
+    }
+    out.push_str("| stage | product | this invocation |\n|---|---|---|\n");
     for stage in &manifest.stages {
         let short = &stage.product.hex()[..12];
         let how = if stage.computed { "computed" } else { "reused" };

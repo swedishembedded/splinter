@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Args};
 use splinter_sdk::config::{LauncherKind, DEFAULT_REMOTE_CONCURRENCY, DEFAULT_SOLVE_DEADLINE};
+use splinter_sdk::factory::run::DEFAULT_CONCURRENT_STAGES;
 use splinter_sdk::vocabulary::prompt::CodingPrompt;
 
 /// Flags every command takes, meaning the same everywhere.
@@ -142,6 +143,13 @@ pub struct Global {
         help = format!("How many requests to a model reached over an API may be in flight at \
                         once [default: {DEFAULT_REMOTE_CONCURRENCY}]"))]
     pub remote_concurrency: Option<u32>,
+    /// How many stages of a factory run (`run`, `resume`, `fork`, `play`,
+    /// `eval`) may run at once: every stage whose inputs are committed
+    /// starts, up to this many; 1 runs them one at a time, in plan order.
+    #[arg(long, global = true, value_name = "N", value_parser = clap::value_parser!(u32).range(1..),
+        help = format!("How many stages of a factory run may run at once; 1 runs them one at a \
+                        time, in plan order [default: {DEFAULT_CONCURRENT_STAGES}]"))]
+    pub concurrent_stages: Option<u32>,
     /// The release manifest the brain endpoints follow
     /// (`brain serve --adapter-manifest FILE`): an adapter they do not list,
     /// such as a release candidate, is offered by publishing it there and

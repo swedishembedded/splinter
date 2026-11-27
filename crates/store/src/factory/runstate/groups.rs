@@ -209,7 +209,8 @@ impl RunState {
         size: u32,
         now: u64,
     ) -> Result<bool, RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let existing: Option<(String, u64, String, u32)> = optional(tx.query_row(
             "SELECT key, seq, task, size FROM groups WHERE key = ?1 OR seq = ?2",
             params![key.as_str(), seq],
@@ -262,7 +263,8 @@ impl RunState {
         index: u32,
         now: u64,
     ) -> Result<(), RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let rollout = fetch_rollout(&tx, key, index)?;
         if rollout.state.is_terminal() {
             return Err(illegal(
@@ -310,7 +312,8 @@ impl RunState {
                 reason: e.to_string(),
             })?;
         let text = serde_json::to_string(outcome).map_err(corrupt)?;
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let rollout = fetch_rollout(&tx, key, index)?;
         if rollout.state != RolloutState::Running {
             return Err(illegal(
@@ -353,7 +356,8 @@ impl RunState {
         } else {
             RolloutState::Pending
         };
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let rollout = fetch_rollout(&tx, key, index)?;
         if rollout.state != RolloutState::Running {
             return Err(illegal(format!("rollout {key}/{index}"), rollout.state, to));
@@ -388,7 +392,8 @@ impl RunState {
         staleness: Option<u64>,
         now: u64,
     ) -> Result<(), RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let group = fetch_group(&tx, key)?;
         if !group.state.may_become(to) {
             return Err(illegal(format!("group {key}"), group.state, to));
@@ -419,9 +424,9 @@ impl RunState {
     /// # Errors
     /// The database cannot be read or holds an unreadable value.
     pub fn group_entries(&self) -> Result<Vec<GroupEntry>, RunStateError> {
-        let mut groups = self
-            .conn
-            .prepare(&format!("SELECT {GROUP_COLUMNS} FROM groups ORDER BY seq"))?;
+        let conn = self.conn();
+        let mut groups =
+            conn.prepare(&format!("SELECT {GROUP_COLUMNS} FROM groups ORDER BY seq"))?;
         let mut entries: Vec<GroupEntry> = groups
             .query_map([], group_row)?
             .map(|row| {
@@ -436,7 +441,7 @@ impl RunState {
             .enumerate()
             .map(|(i, e)| (e.group.key.as_str().to_string(), i))
             .collect();
-        let mut rollouts = self.conn.prepare(
+        let mut rollouts = conn.prepare(
             "SELECT key, idx, state, failures, outcome, updated_at FROM group_rollouts ORDER BY key, idx",
         )?;
         let rows = rollouts.query_map([], |row| {
@@ -467,7 +472,8 @@ impl RunState {
     /// # Errors
     /// The database cannot be read.
     pub fn group_records(&self, key: &GroupKey) -> Result<Vec<(u32, String)>, RunStateError> {
-        let mut statement = self.conn.prepare(
+        let conn = self.conn();
+        let mut statement = conn.prepare(
             "SELECT idx, records FROM group_rollouts
              WHERE key = ?1 AND records IS NOT NULL ORDER BY idx",
         )?;

@@ -500,11 +500,19 @@ impl AdapterOffer {
                 if served.exists() {
                     return Ok(());
                 }
-                // Written aside under a hidden name and renamed into place:
-                // the server ignores hidden files and never reads half of one.
-                let aside = directory.join(format!(".{}.partial", digest.hex()));
-                std::fs::copy(file, &aside).map_err(io(file))?;
-                std::fs::rename(&aside, &served).map_err(io(&served))
+                // Written aside under a hidden name of its own and renamed
+                // into place: the server ignores hidden files and never reads
+                // half of one, and a stage offering the same adapter at the
+                // same time renames its own whole copy over it.
+                let name = format!("{}.safetensors", digest.hex());
+                let aside = crate::manifest::aside(&served, std::ffi::OsStr::new(&name));
+                let copied = std::fs::copy(file, &aside)
+                    .map_err(io(file))
+                    .and_then(|_| std::fs::rename(&aside, &served).map_err(io(&served)));
+                if copied.is_err() {
+                    let _ = std::fs::remove_file(&aside);
+                }
+                copied
             }
         }
     }

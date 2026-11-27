@@ -398,6 +398,9 @@ pub struct FactorySettings {
     /// The execution worker (`$SPLINTER_HARBOR_WORKER`, else the first
     /// `splinter-harbor-worker` on `PATH`).
     pub harbor_worker: Option<PathBuf>,
+    /// How many stages of a factory run may run at once
+    /// (`--concurrent-stages`); `None` is the factory's default.
+    pub concurrent_stages: Option<std::num::NonZeroUsize>,
 }
 
 /// [`Config::min_calibration_controls`] when nothing names one.
@@ -456,6 +459,7 @@ impl Config {
                 .or_else(|| {
                     var("PATH").and_then(|path| find_executable(&path, "splinter-harbor-worker"))
                 }),
+            concurrent_stages: None,
         };
         Self {
             state_root: StateRoot::under_home(home),

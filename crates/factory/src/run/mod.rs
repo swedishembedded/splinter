@@ -6,8 +6,9 @@
 // your team needs expertise in durable machine-learning orchestration, you
 // can procure our services by sending an email to info@swedishembedded.com.
 
-//! The controller: one run directory, one lease, every stage of the plan in
-//! order, each skipped when its product is already committed.
+//! The controller: one run directory, one lease, every stage of the plan,
+//! each skipped when its product is already committed. Stages whose inputs
+//! are committed run at once, up to a bound ([`Factory::with_concurrent_stages`]).
 //!
 //! A run directory holds the recipe and its lock, the run state
 //! (`state/controller.db`, `state/events.jsonl`), the content-addressed
@@ -22,6 +23,7 @@
 //! made.
 
 pub mod behaviour;
+mod commit;
 mod compute;
 pub mod corpus;
 pub mod dataset;
@@ -44,12 +46,15 @@ mod revisions;
 pub mod rollout;
 mod rollout_record;
 mod rollout_report;
+mod schedule;
 pub mod task_mutate;
 pub mod tasks;
 pub mod training;
 
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use splinter_core::clock::{unix_now, SystemClock};
@@ -57,7 +62,7 @@ use splinter_core::digest::Digest;
 use splinter_core::factory::identity::StageIdentity;
 use splinter_core::revision::{ServedRevision, REVISIONS_FILE};
 use splinter_store::factory::products::{ProductError, ProductManifest, ProductStore, Staging};
-use splinter_store::factory::runstate::{Fence, RunState, RunStateError, StageOutcome, StageState};
+use splinter_store::factory::runstate::{Fence, RunState, RunStateError};
 
 use crate::backend::{BackendError, ExecutionBackend};
 use crate::ops::names;
@@ -65,6 +70,10 @@ use crate::plan::PlannedStage;
 use crate::resolve::{Lock, Resolved};
 use crate::training::Trainer;
 use crate::tree::TreeError;
+
+pub(crate) use commit::Begun;
+use commit::Producing;
+pub use schedule::DEFAULT_CONCURRENT_STAGES;
 
 pub use directory::{
     fork, fork_from, report_of, status, verify, ForkOrigin, Forked, ForkedProduct, StageStatus,
@@ -145,6 +154,9 @@ pub enum RunError {
         /// Why.
         message: String,
     },
+    /// Several stages that ran at once failed: each with its key.
+    #[error("{} stages failed:\n  {}", .0.len(), several(.0))]
+    Stages(Vec<(String, RunError)>),
     /// The run was cancelled; what is committed stays.
     #[error("the run was cancelled; resume it to continue")]
     Cancelled,
@@ -169,6 +181,19 @@ pub enum RunError {
         /// What failed.
         message: String,
     },
+}
+
+/// Each failure on its own line, named by its stage.
+fn several(failures: &[(String, RunError)]) -> String {
+    failures
+        .iter()
+        .map(|(key, error)| match error {
+            // A stage's own error names it already.
+            RunError::Stage { stage, .. } if stage == key => error.to_string(),
+            _ => format!("stage {key}: {error}"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n  ")
 }
 
 fn not_a_run_message(dir: &Path) -> String {
@@ -265,19 +290,18 @@ pub struct RunManifest {
     pub lock: Lock,
     /// Every completed stage, in plan order.
     pub stages: Vec<StageEntry>,
+    /// How many stages ran at once.
+    #[serde(default)]
+    pub at_once: StagesAtOnce,
 }
 
-/// Where [`Factory::begin`] leaves a stage.
-pub(crate) enum Begun {
-    /// Its product is committed already.
-    Reused(ProductManifest),
-    /// It runs: produce into `staging`, then [`Factory::finish`].
-    Fresh {
-        /// Its run-state version.
-        version: u64,
-        /// Where to produce.
-        staging: Staging,
-    },
+/// How many of a run's stages ran at once in the invocation that finished it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StagesAtOnce {
+    /// The most that were allowed to.
+    pub bound: usize,
+    /// The most that did.
+    pub most: usize,
 }
 
 /// A controller over one run directory.
@@ -288,12 +312,17 @@ pub struct Factory<'a> {
     pub(crate) products: ProductStore,
     pub(crate) fence: Fence,
     pub(crate) services: Services<'a>,
-    /// Committed products by stage key, as this invocation knows them.
-    pub(crate) done: BTreeMap<String, (Digest, ProductManifest)>,
+    /// Committed products by stage key, as this invocation knows them: one
+    /// cell per stage of the plan, set once when it completes.
+    done: BTreeMap<String, OnceLock<(Digest, ProductManifest)>>,
     /// The tasks each `tasks.pin` stage pins: read when the recipe was
     /// resolved, or, for a collection a stage produced, when the pin runs.
-    pub(crate) collections: BTreeMap<String, crate::collection::LoadedCollection>,
-    cancel: Box<dyn Fn() -> bool + 'a>,
+    collections: BTreeMap<String, OnceLock<crate::collection::LoadedCollection>>,
+    cancel: Box<dyn Fn() -> bool + Send + Sync + 'a>,
+    /// How many stages may run at once.
+    concurrent_stages: NonZeroUsize,
+    /// The stage identities being produced now.
+    producing: Producing,
     /// Renews the lease while this controller lives; stopped before the
     /// lease is released.
     heartbeat: Option<lease::Heartbeat>,
@@ -395,9 +424,16 @@ impl<'a> Factory<'a> {
             products,
             fence,
             services,
-            done: BTreeMap::new(),
-            collections: resolved.collections.clone(),
+            done: resolved
+                .plan
+                .stages
+                .iter()
+                .map(|s| (s.key.clone(), OnceLock::new()))
+                .collect(),
+            collections: collection_cells(resolved),
             cancel: Box::new(|| false),
+            concurrent_stages: DEFAULT_CONCURRENT_STAGES,
+            producing: Producing::default(),
             heartbeat,
             served,
         }
@@ -407,8 +443,17 @@ impl<'a> Factory<'a> {
     /// Stop between stages and between rollout batches once `cancelled`
     /// returns true; what is committed stays, and a resume continues.
     #[must_use]
-    pub fn with_cancel(mut self, cancelled: impl Fn() -> bool + 'a) -> Self {
+    pub fn with_cancel(mut self, cancelled: impl Fn() -> bool + Send + Sync + 'a) -> Self {
         self.cancel = Box::new(cancelled);
+        self
+    }
+
+    /// Run at most `bound` stages at once ([`DEFAULT_CONCURRENT_STAGES`]
+    /// unless told); 1 runs them one at a time, in plan order. A stage's
+    /// identity and product do not depend on it.
+    #[must_use]
+    pub fn with_concurrent_stages(mut self, bound: NonZeroUsize) -> Self {
+        self.concurrent_stages = bound;
         self
     }
 
@@ -428,23 +473,21 @@ impl<'a> Factory<'a> {
         }
     }
 
-    /// Run every stage of the plan, in order; stop at the first that fails.
+    /// Run every stage of the plan: each once every stage it consumes is
+    /// committed, at most the bound at once. After a failure no stage
+    /// starts; those running finish (and commit).
     ///
     /// # Errors
-    /// The first failing stage, recorded as failed in the run state.
+    /// The failing stage, recorded as failed in the run state; several
+    /// that failed while running at once, [`RunError::Stages`].
     pub fn run(&mut self) -> Result<RunManifest, RunError> {
-        let stages = self.resolved.plan.stages.clone();
-        let mut entries = Vec::new();
-        for stage in &stages {
-            self.cancelled()?;
-            let entry = self.stage(stage)?;
-            entries.push(entry);
-        }
+        let (entries, at_once) = self.run_stages()?;
         let manifest = RunManifest {
             schema: "splinter.run/1".into(),
             recipe: self.resolved.name().to_owned(),
             lock: self.resolved.lock.clone(),
             stages: entries,
+            at_once,
         };
         write_json(&self.run.join(RUN_MANIFEST), &manifest)?;
         let report = self.run.join(REPORT_FILE);
@@ -452,10 +495,13 @@ impl<'a> Factory<'a> {
         Ok(manifest)
     }
 
-    fn stage(&mut self, stage: &PlannedStage) -> Result<StageEntry, RunError> {
-        if stage.operation == names::PIN && !self.collections.contains_key(&stage.key) {
+    fn stage(&self, stage: &PlannedStage) -> Result<StageEntry, RunError> {
+        if stage.operation == names::PIN && self.collection(&stage.key).is_none() {
             let produced = tasks::produced_collection(self, stage)?;
-            self.collections.insert(stage.key.clone(), produced);
+            // The plan holds a cell for every pin; one stage sets it.
+            if let Some(cell) = self.collections.get(&stage.key) {
+                let _ = cell.set(produced);
+            }
         }
         let (identity, (manifest, computed)) = match stage.operation.as_str() {
             names::PIN
@@ -475,7 +521,11 @@ impl<'a> Factory<'a> {
         };
         let id = identity.digest();
         let product = manifest.digest();
-        self.done.insert(stage.key.clone(), (id.clone(), manifest));
+        // Set once per invocation: a stage run again in it (a played pass's
+        // pin, then the run) reuses the product it committed.
+        if let Some(cell) = self.done.get(&stage.key) {
+            let _ = cell.set((id.clone(), manifest));
+        }
         Ok(StageEntry {
             key: stage.key.clone(),
             operation: stage.operation.clone(),
@@ -538,132 +588,6 @@ impl<'a> Factory<'a> {
         Ok((identity, committed))
     }
 
-    /// The committed product of the stage `identity` viewed at `key`:
-    /// reused when the product store holds it, produced into a staging area
-    /// and published otherwise. The run state follows; a failed production
-    /// is recorded as failed and leaves nothing committed. Returns the
-    /// manifest and whether this call produced it.
-    pub(crate) fn commit(
-        &self,
-        key: &str,
-        operation: &str,
-        identity: &StageIdentity,
-        produce: &dyn Fn(&Self, &Staging) -> Result<(), RunError>,
-    ) -> Result<(ProductManifest, bool), RunError> {
-        match self.begin(key, operation, identity)? {
-            Begun::Reused(manifest) => Ok((manifest, false)),
-            Begun::Fresh { version, staging } => {
-                let produced = produce(self, &staging);
-                self.finish(key, identity, version, staging, produced)
-                    .map(|manifest| (manifest, true))
-            }
-        }
-    }
-
-    /// The first half of [`Self::commit`]: the product of `identity`
-    /// reused, or the stage recorded as running with an empty staging area
-    /// to produce it in.
-    pub(crate) fn begin(
-        &self,
-        key: &str,
-        operation: &str,
-        identity: &StageIdentity,
-    ) -> Result<Begun, RunError> {
-        let id = identity.digest();
-        let record = self
-            .state
-            .upsert_pending(&self.fence, &id, key, operation, unix_now())?;
-        // Not committed: computed afresh. Committed: reused as committed,
-        // or refused (a rotted blob is never handed on, nor recomputed over).
-        let committed = match self.products.ensure_view(&id, &self.run.join(key)) {
-            Ok(manifest) => Some(manifest),
-            Err(ProductError::UnknownProduct(_)) => None,
-            Err(e) => return Err(e.into()),
-        };
-        if let Some(manifest) = committed {
-            if record.state != StageState::Completed {
-                let running = self.to_running(&id, record.version, record.state)?;
-                self.state.transition(
-                    &self.fence,
-                    &id,
-                    running,
-                    StageState::Completed,
-                    StageOutcome::Product(manifest.digest()),
-                    unix_now(),
-                )?;
-            }
-            return Ok(Begun::Reused(manifest));
-        }
-        let version = self.to_running(&id, record.version, record.state)?;
-        let staging = self.products.begin_staging()?;
-        Ok(Begun::Fresh { version, staging })
-    }
-
-    /// The second half of [`Self::commit`]: what was `produced` into
-    /// `staging` published as the product of `identity`, or the stage
-    /// recorded as failed (a cancelled one stays running, for the resume).
-    pub(crate) fn finish(
-        &self,
-        key: &str,
-        identity: &StageIdentity,
-        version: u64,
-        staging: Staging,
-        produced: Result<(), RunError>,
-    ) -> Result<ProductManifest, RunError> {
-        let id = identity.digest();
-        if let Err(error) =
-            produced.and_then(|()| write_json(&staging.path().join("stage.json"), identity))
-        {
-            if !matches!(error, RunError::Cancelled) {
-                let failed = StageOutcome::Error(error.to_string());
-                self.state.transition(
-                    &self.fence,
-                    &id,
-                    version,
-                    StageState::Failed,
-                    failed,
-                    unix_now(),
-                )?;
-            }
-            return Err(error);
-        }
-        let manifest = self
-            .products
-            .publish(&id, key, staging, &self.run.join(key))?;
-        self.state.transition(
-            &self.fence,
-            &id,
-            version,
-            StageState::Completed,
-            StageOutcome::Product(manifest.digest()),
-            unix_now(),
-        )?;
-        let work = self.work(key);
-        if work.exists() {
-            std::fs::remove_dir_all(&work).map_err(io(&work))?;
-        }
-        Ok(manifest)
-    }
-
-    /// Move a stage to running from wherever it stands; returns its version.
-    fn to_running(&self, id: &Digest, version: u64, state: StageState) -> Result<u64, RunError> {
-        match state {
-            StageState::Running => Ok(version),
-            StageState::Pending | StageState::Failed => Ok(self
-                .state
-                .transition(
-                    &self.fence,
-                    id,
-                    version,
-                    StageState::Running,
-                    StageOutcome::None,
-                    unix_now(),
-                )?
-                .version),
-            StageState::Completed => Ok(version),
-        }
-    }
-
     /// Where an unfinished stage keeps its work.
     #[must_use]
     pub fn work(&self, key: &str) -> PathBuf {
@@ -674,7 +598,18 @@ impl<'a> Factory<'a> {
     pub(crate) fn product(&self, key: &str) -> Result<&(Digest, ProductManifest), RunError> {
         self.done
             .get(key)
+            .and_then(OnceLock::get)
             .ok_or_else(|| stage_error(key, "is not completed"))
+    }
+
+    /// The tasks the `tasks.pin` stage `key` pins, once known.
+    pub(crate) fn collection(&self, key: &str) -> Option<&crate::collection::LoadedCollection> {
+        self.collections.get(key).and_then(OnceLock::get)
+    }
+
+    /// Whether the stage `key` has completed in this invocation.
+    pub(crate) fn is_done(&self, key: &str) -> bool {
+        self.product(key).is_ok()
     }
 
     /// The readable view of the completed stage `key`.
@@ -701,6 +636,22 @@ impl Drop for Factory<'_> {
         drop(self.heartbeat.take());
         let _ = self.state.release(&self.fence, unix_now());
     }
+}
+
+/// A cell for the collection of every `tasks.pin` stage of the plan, set
+/// where the recipe's resolution read it.
+fn collection_cells(
+    resolved: &Resolved,
+) -> BTreeMap<String, OnceLock<crate::collection::LoadedCollection>> {
+    let mut cells: BTreeMap<String, OnceLock<crate::collection::LoadedCollection>> = resolved
+        .plan
+        .of_operation(names::PIN)
+        .map(|s| (s.key.clone(), OnceLock::new()))
+        .collect();
+    for (key, loaded) in &resolved.collections {
+        let _ = cells.entry(key.clone()).or_default().set(loaded.clone());
+    }
+    cells
 }
 
 /// Write `value` as pretty JSON to `path`.

@@ -285,6 +285,9 @@ fn execute(config: &Config, json: bool, resolved: &Resolved, dir: &Path) -> Resu
             RunError::InputsChanged(_) | RunError::State(_) => refused(e),
             other => refused(other),
         })?;
+    if let Some(bound) = config.factory.concurrent_stages {
+        factory = factory.with_concurrent_stages(bound);
+    }
     match factory.run() {
         Ok(manifest) => {
             emit(

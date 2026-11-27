@@ -31,6 +31,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 use serde::Serialize;
@@ -205,9 +206,13 @@ pub struct Fence {
     pub token: u64,
 }
 
-/// A run directory's run state.
+/// A run directory's run state; shared by reference between the
+/// controller's threads.
 pub struct RunState {
-    conn: Connection,
+    /// One connection, shared by the controller's threads (concurrent
+    /// stages): SQLite serialises writers anyway, and a statement holds it
+    /// only while it runs.
+    conn: Mutex<Connection>,
     events: PathBuf,
 }
 
@@ -245,7 +250,7 @@ impl RunState {
         conn.execute_batch(groups::SCHEMA)?;
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         Ok(Self {
-            conn,
+            conn: Mutex::new(conn),
             events: root.join(EVENTS_FILE),
         })
     }
@@ -256,7 +261,8 @@ impl RunState {
     /// raised), or `owner` already holds it (the token is kept and the expiry
     /// extended). Otherwise [`RunStateError::LeaseHeld`].
     pub fn acquire(&self, owner: &str, ttl_secs: u64, now: u64) -> Result<Fence, RunStateError> {
-        let tx = self.begin()?;
+        let conn = self.conn();
+        let tx = begin(&conn)?;
         let current: Option<(String, u64, u64)> = optional(tx.query_row(
             "SELECT owner, token, expires_at FROM lease WHERE id = 1",
             [],
@@ -302,7 +308,8 @@ impl RunState {
     /// # Errors
     /// The fence is stale (someone else holds the lease).
     pub fn renew(&self, fence: &Fence, ttl_secs: u64, now: u64) -> Result<(), RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = begin_fenced(&conn, fence)?;
         tx.execute(
             "UPDATE lease SET expires_at = ?1 WHERE id = 1",
             params![now.saturating_add(ttl_secs)],
@@ -317,7 +324,8 @@ impl RunState {
     /// # Errors
     /// The fence is stale (someone else holds the lease).
     pub fn release(&self, fence: &Fence, now: u64) -> Result<(), RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = begin_fenced(&conn, fence)?;
         tx.execute(
             "UPDATE lease SET expires_at = ?1 WHERE id = 1",
             params![now],
@@ -346,7 +354,8 @@ impl RunState {
         ttl_secs: u64,
         now: u64,
     ) -> Result<Fence, RunStateError> {
-        let tx = self.begin()?;
+        let conn = self.conn();
+        let tx = begin(&conn)?;
         let current: Option<(String, u64, u64)> = optional(tx.query_row(
             "SELECT owner, token, expires_at FROM lease WHERE id = 1",
             [],
@@ -382,31 +391,12 @@ impl RunState {
         })
     }
 
-    /// A write transaction that holds the database's write lock from the start.
-    fn begin(&self) -> Result<Transaction<'_>, RunStateError> {
-        Ok(Transaction::new_unchecked(
-            &self.conn,
-            TransactionBehavior::Immediate,
-        )?)
-    }
-
-    /// A write transaction in which `fence` has been checked against the
-    /// lease, so a stale controller never reaches its statements.
-    fn begin_fenced(&self, fence: &Fence) -> Result<Transaction<'_>, RunStateError> {
-        let tx = self.begin()?;
-        let current: Option<(String, u64)> = optional(tx.query_row(
-            "SELECT owner, token FROM lease WHERE id = 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ))?;
-        match current {
-            Some((owner, token)) if token == fence.token && owner == fence.owner => Ok(tx),
-            other => Err(RunStateError::StaleFence {
-                presented: fence.token,
-                owner: fence.owner.clone(),
-                current: other.map_or(0, |(_, token)| token),
-            }),
-        }
+    /// The connection, held by this thread until the guard drops: one
+    /// statement or transaction at a time, whichever thread asks.
+    fn conn(&self) -> MutexGuard<'_, Connection> {
+        // A panic while the guard was held leaves no half-applied change: an
+        // open transaction rolls back when it drops.
+        self.conn.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Appends one event line after a commit. A failure is reported: the
@@ -438,6 +428,33 @@ impl RunState {
         // One write call keeps a line whole against a concurrent appender.
         file.write_all(&line).map_err(io_error)?;
         file.flush().map_err(io_error)
+    }
+}
+
+/// A write transaction that holds the database's write lock from the start.
+fn begin(conn: &Connection) -> Result<Transaction<'_>, RunStateError> {
+    Ok(Transaction::new_unchecked(
+        conn,
+        TransactionBehavior::Immediate,
+    )?)
+}
+
+/// A write transaction in which `fence` has been checked against the
+/// lease, so a stale controller never reaches its statements.
+fn begin_fenced<'c>(conn: &'c Connection, fence: &Fence) -> Result<Transaction<'c>, RunStateError> {
+    let tx = begin(conn)?;
+    let current: Option<(String, u64)> = optional(tx.query_row(
+        "SELECT owner, token FROM lease WHERE id = 1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ))?;
+    match current {
+        Some((owner, token)) if token == fence.token && owner == fence.owner => Ok(tx),
+        other => Err(RunStateError::StaleFence {
+            presented: fence.token,
+            owner: fence.owner.clone(),
+            current: other.map_or(0, |(_, token)| token),
+        }),
     }
 }
 

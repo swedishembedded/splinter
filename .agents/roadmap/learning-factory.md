@@ -195,10 +195,19 @@ and classified as a model error.
     the cards nearly idle for 18.8 of its 64.9 min. Grading attempts as the
     worker reports them and starting their retries while the batch still
     runs would overlap the two.
-  - *Stages run one after another.* `run::Run::run` walks the plan in order,
-    so independent stages (the student and teacher attempts of one task set,
-    several evaluations) never share the cards; the tail of one is idle time
-    the other could fill.
+  - *Stages run one after another* (fixed 2026-11-27). The controller runs
+    the plan's ready set, at most `--concurrent-stages` at once (default 3,
+    the widest ready set of the generational recipes: three evaluations of
+    one candidate, or a generation's three attempt passes); 1 is the old
+    order. A training stage holds the trainer alone; a trainer on a release
+    manifest forces one stage at a time. Stages that share a stage identity
+    (a baseline arm, a recipe input) produce it once (knowledge 239), and
+    concurrent offers of one adapter no longer rename each other's copy.
+    Measured: three independent external-operator stages of 5 s each, the
+    CLI on this node, 3 repetitions: 15.97, 15.96, 15.98 s at bound 1;
+    5.92, 5.90, 5.91 s at bound 3 (2.7x). Not yet measured on a GPU run;
+    deployment waits for the brain router fixes (more models served at once
+    means more eviction under the current router).
   - *Sandbox commands before the agent starts.* The sven adapter runs six
     sandbox commands (certificate probe, version probe, `mkdir`s, the token
     file) before Sven; each is an `nsenter` and a Python launcher. Agent

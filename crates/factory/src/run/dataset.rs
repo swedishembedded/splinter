@@ -343,7 +343,7 @@ fn tasks_offered(factory: &Factory<'_>, sources: &[String]) -> usize {
         .filter_map(|s| s.source("tasks"))
         .collect();
     pins.iter()
-        .filter_map(|p| factory.collections.get(*p))
+        .filter_map(|p| factory.collection(p))
         .map(|c| c.collection.tasks.len())
         .sum()
 }

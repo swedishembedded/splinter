@@ -153,7 +153,7 @@ impl Factory<'_> {
             .source("tasks")
             .ok_or_else(|| stage_error(&key, "is not a pass: it attempts no tasks"))?
             .to_owned();
-        if !self.done.contains_key(&pin) {
+        if !self.is_done(&pin) {
             let pin_stage = self
                 .resolved
                 .plan

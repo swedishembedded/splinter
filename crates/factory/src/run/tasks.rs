@@ -45,8 +45,7 @@ fn collection<'r>(
     stage: &PlannedStage,
 ) -> Result<&'r LoadedCollection, RunError> {
     factory
-        .collections
-        .get(&stage.key)
+        .collection(&stage.key)
         .ok_or_else(|| stage_error(&stage.key, "its collection was not resolved"))
 }
 

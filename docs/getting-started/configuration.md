@@ -361,5 +361,6 @@ can start, but rarely trains anything.
 `--remote-concurrency` is how many requests to a model reached over an API may be in flight at once (4 by
 default); a model on the local device is asked one at a time. `--temperature` is the sampling temperature (0 to
 2) asked of a model reached through sven's providers, the provider's own default when not given.
-`--solve-deadline` is how many seconds one attempt at a task may take on the wall clock (300 by default); raise it
+`--concurrent-stages` is how many stages of a factory run may run at once (3 by default; 1 runs them one at
+a time, in plan order). `--solve-deadline` is how many seconds one attempt at a task may take on the wall clock (300 by default); raise it
 when many tasks share one served model, so a task is not failed for waiting in the queue.

@@ -232,6 +232,10 @@ fn main() -> ExitCode {
     if let Some(width) = cli.global.remote_concurrency {
         config.remote_concurrency = width as usize;
     }
+    config.factory.concurrent_stages = cli
+        .global
+        .concurrent_stages
+        .and_then(|n| std::num::NonZeroUsize::new(n as usize));
     if let Err(e) = apply_brain_flags(&mut config, &cli.global) {
         output::error(cli.global.json, &splinter_sdk::Error::Refused(e));
         return session::Exit::Refused.into();

@@ -991,6 +991,29 @@ changed input like any other.
 optional index across runs (each trial an experience with the factory's grade as
 its verdict; indexing again files nothing new); the run's products stay its record.
 
+### Stages that run at once
+
+A run starts every stage whose inputs are committed, up to `--concurrent-stages N` at once (3 by default):
+the evaluations of one candidate, a generation's attempt passes, the next generation's authoring while this
+one trains. `--concurrent-stages 1` runs one stage at a time, in plan order. Each stage still runs as many
+trials at once as its own plan says, so the run's sandboxes, worker processes and requests in flight grow with
+the bound: raise it on a host and fleet with room for that. What a stage computes does not depend on the
+bound: its identity is the products it consumes, all committed before it starts, and a product two running
+stages both need (an evaluation's baseline arm shared with another evaluation of that baseline, a recipe
+input) is produced once while the other waits, then reused.
+
+A stage that trains (`model.train`, an online stage) holds the run's trainer: no other training starts beside
+it, though other stages do. brain places a second training on another card only where one has room, and
+refuses it once its admission deadline passes otherwise; a training spread over several cards or servers holds
+them all. A trainer whose servers follow a release manifest (`--brain-adapter-manifest`) serves one adapter at a
+time, so such a run takes one stage at a time and says so; serving adapters from a directory
+(`--brain-adapter-dir`) lets evaluations of different candidates run together.
+
+After a stage fails no other starts; the stages running finish and commit, and the run reports every failure.
+`splinter status RUN` shows each stage that is running, and the run's report says how many ran at once. A
+cancelled or interrupted run leaves each stage it was running in its own state, and a resume continues each
+from its own recorded slots.
+
 `splinter cancel RUN` stops a run at its next stage or batch boundary;
 `splinter resume RUN` continues it. One controller holds a run at a time, on a
 lease it renews while it lives, however long a stage takes; a resume takes the

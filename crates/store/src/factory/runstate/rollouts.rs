@@ -140,7 +140,8 @@ impl RunState {
         slots_per_task: u32,
         now: u64,
     ) -> Result<usize, RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         tx.execute(
             "INSERT OR IGNORE INTO stage_slots (stage_id, pass) VALUES (?1, ?2)",
             params![stage_id.as_str(), pass],
@@ -179,7 +180,8 @@ impl RunState {
     ) -> Result<Option<AttemptRecord>, RunStateError> {
         serde_json::from_str::<serde_json::Value>(backend)
             .map_err(RunStateError::InvalidBackend)?;
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let next = optional(tx.query_row(
             &format!(
                 "SELECT {SLOT_COLUMNS} FROM slots WHERE pass = ?1 AND state = 'pending'
@@ -238,7 +240,8 @@ impl RunState {
                 reason: "a result digest goes with exactly the succeeded state".to_string(),
             });
         }
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let current = fetch_attempt(&tx, attempt)?.ok_or(RunStateError::UnknownAttempt(attempt))?;
         let forward = match current.state {
             AttemptState::Launched => state != AttemptState::Launched,
@@ -292,7 +295,8 @@ impl RunState {
         trial: &Digest,
         now: u64,
     ) -> Result<SlotRecord, RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let current =
             fetch_slot(&tx, key)?.ok_or_else(|| RunStateError::UnknownSlot(key.clone()))?;
         match (current.state, &current.trial) {
@@ -338,7 +342,8 @@ impl RunState {
         key: &SlotKey,
         now: u64,
     ) -> Result<SlotRecord, RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let current =
             fetch_slot(&tx, key)?.ok_or_else(|| RunStateError::UnknownSlot(key.clone()))?;
         match current.state {
@@ -371,21 +376,22 @@ impl RunState {
 
     /// The slot `key`, if known.
     pub fn slot(&self, key: &SlotKey) -> Result<Option<SlotRecord>, RunStateError> {
-        fetch_slot(&self.conn, key)
+        fetch_slot(&self.conn(), key)
     }
 
     /// The slot namespaces the stage `stage_id` ran its slots in, in order.
     pub fn slot_namespaces(&self, stage_id: &Digest) -> Result<Vec<String>, RunStateError> {
-        let mut statement = self
-            .conn
-            .prepare("SELECT pass FROM stage_slots WHERE stage_id = ?1 ORDER BY pass")?;
+        let conn = self.conn();
+        let mut statement =
+            conn.prepare("SELECT pass FROM stage_slots WHERE stage_id = ?1 ORDER BY pass")?;
         let rows = statement.query_map([stage_id.as_str()], |row| row.get::<_, String>(0))?;
         rows.map(|row| row.map_err(RunStateError::from)).collect()
     }
 
     /// Every slot of `pass`, by task then index.
     pub fn list_slots(&self, pass: &str) -> Result<Vec<SlotRecord>, RunStateError> {
-        let mut statement = self.conn.prepare(&format!(
+        let conn = self.conn();
+        let mut statement = conn.prepare(&format!(
             "SELECT {SLOT_COLUMNS} FROM slots WHERE pass = ?1 ORDER BY task, idx"
         ))?;
         let rows = statement.query_map([pass], slot_row)?;
@@ -394,7 +400,8 @@ impl RunState {
 
     /// Every attempt at slot `key`, oldest first.
     pub fn attempts(&self, key: &SlotKey) -> Result<Vec<AttemptRecord>, RunStateError> {
-        let mut statement = self.conn.prepare(&format!(
+        let conn = self.conn();
+        let mut statement = conn.prepare(&format!(
             "SELECT {ATTEMPT_COLUMNS} FROM attempts
              WHERE pass = ?1 AND task = ?2 AND idx = ?3 ORDER BY id"
         ))?;
@@ -405,7 +412,8 @@ impl RunState {
     /// The attempts that were launched or running and have no outcome, oldest
     /// first: what a restarted controller reconciles with its backends.
     pub fn unfinished_attempts(&self) -> Result<Vec<AttemptRecord>, RunStateError> {
-        let mut statement = self.conn.prepare(&format!(
+        let conn = self.conn();
+        let mut statement = conn.prepare(&format!(
             "SELECT {ATTEMPT_COLUMNS} FROM attempts
              WHERE state IN ('launched', 'running') ORDER BY id"
         ))?;

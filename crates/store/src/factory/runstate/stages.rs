@@ -93,7 +93,8 @@ impl RunState {
         kind: &str,
         now: u64,
     ) -> Result<StageRecord, RunStateError> {
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let inserted = tx.execute(
             "INSERT OR IGNORE INTO stages (stage_id, name, kind, state, version, updated_at)
              VALUES (?1, ?2, ?3, 'pending', 0, ?4)",
@@ -127,7 +128,8 @@ impl RunState {
         now: u64,
     ) -> Result<StageRecord, RunStateError> {
         check_outcome(new_state, &outcome)?;
-        let tx = self.begin_fenced(fence)?;
+        let conn = self.conn();
+        let tx = super::begin_fenced(&conn, fence)?;
         let current =
             fetch(&tx, stage_id)?.ok_or_else(|| RunStateError::UnknownStage(stage_id.clone()))?;
         if current.version != expected_version {
@@ -174,12 +176,13 @@ impl RunState {
 
     /// The stage `stage_id`, if known.
     pub fn get(&self, stage_id: &Digest) -> Result<Option<StageRecord>, RunStateError> {
-        fetch(&self.conn, stage_id)
+        fetch(&self.conn(), stage_id)
     }
 
     /// Every stage, ordered by name then id.
     pub fn list(&self) -> Result<Vec<StageRecord>, RunStateError> {
-        let mut statement = self.conn.prepare(&format!(
+        let conn = self.conn();
+        let mut statement = conn.prepare(&format!(
             "SELECT {COLUMNS} FROM stages ORDER BY name, stage_id"
         ))?;
         let rows = statement.query_map([], record)?;

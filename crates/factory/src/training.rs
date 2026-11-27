@@ -123,6 +123,13 @@ pub trait Trainer: Send + Sync {
     /// The endpoint does not serve it.
     fn serve(&self, base: &ModelRef, adapter: Option<&Path>) -> Result<String, TrainError>;
 
+    /// Whether the trainer's servers serve one adapter at a time: offering
+    /// one withdraws the one offered before, so no two stages that serve a
+    /// candidate may run at once.
+    fn serves_one_adapter_at_a_time(&self) -> bool {
+        false
+    }
+
     /// What every brain server the trainer reaches says it is (its build,
     /// backend, record contract and devices), for the revision manifest of
     /// a stage it trains or evaluates; empty for a trainer that reaches
@@ -456,6 +463,10 @@ fn error(e: impl ToString) -> TrainError {
 impl Trainer for BrainTrainer {
     fn identity(&self) -> String {
         "brain served-train".into()
+    }
+
+    fn serves_one_adapter_at_a_time(&self) -> bool {
+        self.endpoints.offers_adapters()
     }
 
     fn served_revisions(&self) -> Result<Vec<splinter_core::revision::ServedRevision>, TrainError> {

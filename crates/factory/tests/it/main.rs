@@ -8,6 +8,7 @@
 mod agent_op;
 mod brain_trainer;
 mod closed_book;
+mod concurrent_passes;
 mod dataset_extend;
 mod dataset_import;
 mod eval_given;
@@ -43,6 +44,7 @@ mod resolve;
 mod reuse;
 mod revisions;
 mod sft_arms;
+mod stage_concurrency;
 mod template_runs;
 mod templates;
 mod text_dataset;

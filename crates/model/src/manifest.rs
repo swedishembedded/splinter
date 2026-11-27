@@ -18,6 +18,7 @@
 
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use splinter_core::digest::Digest;
 
@@ -72,15 +73,27 @@ pub fn write_adapter_manifest(manifest: &Path, adapter: &Path, digest: &Digest) 
             format!("manifest path {} has no file name", manifest.display()),
         )
     })?;
-    let mut beside = std::ffi::OsString::from(".");
-    beside.push(name);
-    beside.push(format!(".{}.tmp", std::process::id()));
-    let beside = manifest.with_file_name(beside);
+    let beside = aside(manifest, name);
     let written = std::fs::write(&beside, body).and_then(|()| std::fs::rename(&beside, manifest));
     if written.is_err() {
         let _ = std::fs::remove_file(&beside);
     }
     written
+}
+
+/// A hidden name beside `target` (whose file name is `name`) that no other
+/// writer in any process uses: what is written there and renamed over
+/// `target` is never another thread's half-written copy.
+pub(crate) fn aside(target: &Path, name: &std::ffi::OsStr) -> std::path::PathBuf {
+    static WRITTEN: AtomicU64 = AtomicU64::new(0);
+    let mut beside = std::ffi::OsString::from(".");
+    beside.push(name);
+    beside.push(format!(
+        ".{}-{}.tmp",
+        std::process::id(),
+        WRITTEN.fetch_add(1, Ordering::Relaxed)
+    ));
+    target.with_file_name(beside)
 }
 
 /// Withdraws the manifest at `manifest`: a server following it then keeps

@@ -398,7 +398,11 @@ fn run_items(
                 };
                 match factory.begin(&item.key, &stage.operation, &item.identity)? {
                     Begun::Reused(manifest) => committed.push((item.id, manifest)),
-                    Begun::Fresh { version, staging } => {
+                    Begun::Fresh {
+                        version,
+                        staging,
+                        claim,
+                    } => {
                         let models = match ctx.models() {
                             Ok(models) => models,
                             Err(e) => {
@@ -407,6 +411,7 @@ fn run_items(
                                     &item.identity,
                                     version,
                                     staging,
+                                    claim,
                                     Err(e),
                                 );
                                 failure = failed.err();
@@ -442,7 +447,7 @@ fn run_items(
                                 });
                             let _ = done.send((key, result));
                         });
-                        running.insert(item.key.clone(), (item, version, staging));
+                        running.insert(item.key.clone(), (item, version, staging, claim));
                     }
                 }
             }
@@ -452,11 +457,11 @@ fn run_items(
             let Ok((key, result)) = results.recv() else {
                 return Ok(());
             };
-            let Some((item, version, staging)) = running.remove(&key) else {
+            let Some((item, version, staging, claim)) = running.remove(&key) else {
                 continue;
             };
             let produced = record(&item, &staging, result);
-            match factory.finish(&item.key, &item.identity, version, staging, produced) {
+            match factory.finish(&item.key, &item.identity, version, staging, claim, produced) {
                 Ok(manifest) => committed.push((item.id, manifest)),
                 Err(e) => {
                     failure.get_or_insert(e);
@@ -541,7 +546,7 @@ fn reduce(
 }
 
 /// What a panic said, when it said it with a string.
-fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+pub(super) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     panic
         .downcast_ref::<&str>()
         .map(|s| (*s).to_owned())

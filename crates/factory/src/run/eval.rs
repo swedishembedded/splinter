@@ -187,8 +187,7 @@ fn collection<'r>(
 ) -> Result<&'r crate::collection::LoadedCollection, RunError> {
     match &section.tasks_from {
         Some(pin) => factory
-            .collections
-            .get(pin)
+            .collection(pin)
             .ok_or_else(|| stage_error(pin, "pins no tasks")),
         None => factory
             .resolved

@@ -420,3 +420,40 @@ fn an_embedding_model_the_endpoint_does_not_serve_is_refused_by_name() {
 
     assert!(refused.contains("Qwen3-Embedding-0.6B"), "{refused}");
 }
+
+/// Stages run at once offer one candidate together (the evaluations of one
+/// trained adapter): each offer is written aside under a name of its own, so
+/// none renames another's half-written copy.
+#[test]
+fn an_adapter_offered_by_several_threads_at_once_is_served_to_each() {
+    let dir = tempfile::tempdir().unwrap();
+    let served = dir.path().join("adapters");
+    std::fs::create_dir(&served).unwrap();
+    let adapter = adapter_file(dir.path(), &vec![7u8; 8 << 20]);
+    let server = ScriptedEndpoint::start(vec![Card::base("Qwen/Qwen3-0.6B")])
+        .serving_adapters(served.clone());
+    let brain = endpoints(&[server.url()]).with_adapter_directory(served.clone());
+    let wanted = weights("/models/Qwen/Qwen3-0.6B", Some(&adapter));
+    let offered: Vec<Result<Vec<String>, String>> = std::thread::scope(|scope| {
+        let offers: Vec<_> = (0..8)
+            .map(|_| scope.spawn(|| brain.locate(&wanted).map_err(|e| e.to_string())))
+            .collect();
+        offers.into_iter().map(|t| t.join().unwrap()).collect()
+    });
+    for result in &offered {
+        assert!(result.is_ok(), "{result:?}");
+    }
+    assert_eq!(
+        std::fs::read(served.join(format!(
+            "{}.safetensors",
+            digest_of(&adapter).trim_start_matches("sha256:")
+        )))
+        .unwrap(),
+        std::fs::read(&adapter).unwrap()
+    );
+    let hidden = std::fs::read_dir(&served)
+        .unwrap()
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().starts_with('.'));
+    assert!(!hidden, "nothing is left half written");
+}
