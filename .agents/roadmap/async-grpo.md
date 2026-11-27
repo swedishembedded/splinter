@@ -260,6 +260,14 @@ re-sent until brain reports it committed (applied is not durable).
       when the projection is exact and the run merges, write `SessionRecord::merge(projection)` as the rollout's one
       line, else the call records, counting `Unmergeable::reason()`; in `crate::online::brain::records_of`, read such
       a line as a `SessionRecord` and write `record(member.reward, key, &rollout)`; start the stream job with
-      `pack_answers`, a `max_block` holding the longest session and `loss_agg`; sven to send each
-      call's arguments back as generated; the merge rate on traced online sessions; `token-sum` against `seq-mean`.
+      `pack_answers`, a `max_block` holding the longest session and `loss_agg`; turn on the two history options
+      below in that run; the merge rate on traced online sessions; `token-sum` against `seq-mean`.
+      History as generated (lane args-verbatim, 2026-11-27): sven `agent.history_as_generated: true` (set
+      `config.agent.history_as_generated` in `solve::engine_config`) sends each call's arguments back as generated and
+      the reasoning untrimmed; brain `history_as_generated: true` (add it to `chat_template_kwargs` in
+      `model::selection`, beside `enable_thinking`) writes every earlier assistant turn with its think block. Both
+      default off and change every prompt after the first, so turn them on together from a run's first call, under a
+      `sessions: merged` run only. Simulated on the same 178 sessions: 50/59 (4B), 41/59 (8B), 60/60 (27B) mergeable,
+      from 0/0/58; forwarded ids of the mergeable ones 96%, 87% and 80% fewer merged. The rest are the model's own
+      output (repaired or non-JSON arguments, calls stopped as a tool-call loop) and fall back per call.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.
