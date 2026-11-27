@@ -43,11 +43,27 @@ variable (an observation path) it is meant to move. `splinter probe` perturbs on
 other parameter fixed, runs the perturbed recipe as a fork of the run (every stage upstream of the knob is reused,
 so the cost is the stages downstream of it: keep the probe recipe a cheap slice), observes both, and reports
 whether the variable moved and whether held-out capability followed, with intervals. A knob whose variable did not
-move is reported as a defect. Not built yet.
+move is reported as a defect.
+
+Done (2026-11-27): the `knobs:` section (`splinter_factory::knobs`: `KnobSpec { set, clears, moves, min_change }`,
+checked at compile against the recipe's stages and the variables below, outside the plan so no stage identity
+changes) and `splinter probe RUN --knob NAME=VALUE --out DIR` (`splinter_factory::observe::probe`), tested with the fake
+worker and trainer: the epoch knob moves `training.epochs_at_selected` and the rank, declared to move it too, is
+reported as a defect (exit 1). No GPU probe has run yet.
+
+Open:
+
+- A slice option: the probe runs whatever the control run ran downstream of the knob. A task subset and a short
+  training are the control's recipe's to state today (probe a run of a cheap slice recipe); a `--slice` that
+  narrows the tasks and the budget of the forked recipe would make any run probeable cheaply.
+- Variability: `moved` compares one control and one probe. A stochastic variable (the frontier share, a pass rate)
+  needs repeated probes (seeds) and an interval before `did not move` is a defect rather than noise.
+- Knobs as parameters: a frontier rule (which tasks' records `dataset.project` keeps, by the own policy's pass rate)
+  and difficulty steering do not exist as stage parameters yet, so they cannot be declared.
 
 | Knob | Moves | Measured |
 |---|---|---|
-| `model.train` `params.epochs` (or `steps`) | `training.epochs_at_selected` | 4B generation 2 retrained from 0.97 to 1.89 epochs at the selected step: the budget moved, capability did not follow (against the champion: exam 6/399 against 11/400, own held-out 53/260 against 57/264; the 0.97-epoch candidate had 13/400 and 66/264 against the same champion). |
+| `model.train` `params.epochs` (or `steps`) | `training.epochs_at_selected` | 4B generation 2 retrained from 0.97 to 1.89 epochs at the selected step: the budget moved, capability did not follow (against the champion: exam 6/399 against 11/400, own held-out 53/260 against 57/264; the 0.97-epoch candidate had 13/400 and 66/264 against the same champion). Knowledge 246. |
 | a frontier rule (which tasks' records to keep) | `data.frontier.frontier_share`, `data.own_share_records` | not yet a recipe parameter |
 | difficulty steering (authoring) | `data.sources[].pass_rate` of the champion | not yet a recipe parameter |
 | `model.train` `replay_share`, the teacher's share | `data.own_share_records`, `training.draws_per_epoch` | not measured |

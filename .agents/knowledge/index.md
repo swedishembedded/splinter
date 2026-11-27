@@ -231,3 +231,4 @@ in the same commit.
 | [243](243-one-failed-item-of-a-foreach-stopped-a-three-generation-authoring-run.md) | One failed item of a foreach stopped a three-generation authoring run |
 | [244](244-a-generation-whose-own-records-come-only-from-tasks-it-already-passes-stalls.md) | A generation whose own records come only from tasks it already passes stalls |
 | [245](245-a-champion-claims-completion-on-most-of-the-attempts-it-fails.md) | A champion claims completion on most of the attempts it fails |
+| [246](246-twice-the-epochs-moved-the-training-budget-and-not-capability.md) | Twice the epochs moved the training budget and not capability |
