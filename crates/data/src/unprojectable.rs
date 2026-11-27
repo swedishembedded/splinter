@@ -98,6 +98,14 @@ pub enum Unprojectable {
         /// The agent step the request was answered at.
         step: u64,
     },
+    /// Read request by request, no agent step is the answer to any of the
+    /// recorded requests (no answer makes its tool calls, or says its text),
+    /// so none has a context its model was sent.
+    #[error("no agent step, from step {step} on, answers any of the recorded requests")]
+    RequestsUnpaired {
+        /// The agent step.
+        step: u64,
+    },
     /// The projection lost or invented a call or a result of its source.
     #[error(
         "the projection holds {calls} tool calls and {results} tool results where its source has \
@@ -150,6 +158,7 @@ impl From<Unprojectable> for Exclusion {
                 Self::Compacted
             }
             Unprojectable::UnparsedArguments { .. } => Self::UnparsedArguments,
+            Unprojectable::RequestsUnpaired { .. } => Self::RequestsUnpaired,
             Unprojectable::DuplicateCallId { .. } => Self::DuplicateCallId,
             Unprojectable::NotConserved { .. } => Self::NotConserved,
             _ => Self::Unrepresentable,

@@ -189,4 +189,12 @@ pub enum Exclusion {
     /// An observation whose task, call and answer the view has already
     /// supervised as often as its cap allows: it stays context.
     RepeatedTransition,
+    /// An agent step none of the recorded requests answered (no answer makes
+    /// its tool calls or says its text), in a single agent's requests that do
+    /// not extend one another: it has no context its model was sent, so it is
+    /// no record; when no step of the attempt pairs with a request, the
+    /// attempt, which keeps only what a view keeps of an unrenderable one (a
+    /// policy-gradient baseline). The trajectory is never rendered in its
+    /// place: its context is one the model never saw.
+    RequestsUnpaired,
 }

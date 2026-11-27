@@ -111,6 +111,9 @@ pub enum ProxyReason {
     UnreadableRequest,
     /// The answer says nothing and calls nothing.
     EmptyAnswer,
+    /// The answer's tool-call arguments are text that is not JSON, which no
+    /// record carries (the agent sent the call back repaired, as context).
+    UnparsedArguments,
 }
 
 /// How many rewarded actions carry the tokens the policy sampled, and why the

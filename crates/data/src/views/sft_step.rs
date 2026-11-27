@@ -241,11 +241,17 @@ impl SftStep {
                 return;
             }
         }
-        let conversation = match self.rendering.conversation_of(entry, conversation.as_ref()) {
-            Ok(conversation) => conversation,
+        let conversations = match self
+            .rendering
+            .conversations_of(entry, conversation.as_ref())
+        {
+            Ok(conversations) => conversations,
             Err(reason) => return projection.exclude(reason),
         };
-        if conversation.actions.is_empty() {
+        if conversations
+            .iter()
+            .all(|c| c.actions.is_empty() && c.left_out.is_empty())
+        {
             return projection.exclude(Exclusion::NoAction);
         }
         let judge = |action: &crate::trajectory::Action| {
@@ -259,7 +265,7 @@ impl SftStep {
                 Judgement::Skip
             }
         };
-        for record in self.rendering.records(&conversation, projection, judge) {
+        for record in self.rendering.records(&conversations, projection, judge) {
             projection.push(record, Provenance::of(vec![entry.id.clone()]));
         }
     }

@@ -166,6 +166,12 @@ pub(crate) struct Conversation {
     /// a reconstruction from the trajectory (the task's instruction, the
     /// strip policy), whose context the model never saw.
     pub(crate) as_sent: bool,
+    /// Agent steps of the conversation that are no action, each with why: an
+    /// answer whose tool-call arguments are not JSON, which no record can
+    /// carry (a later request holds the call as the agent repaired it, as
+    /// context), or a step no recorded request answered. The views that train
+    /// on actions count each.
+    pub(crate) left_out: Vec<crate::Exclusion>,
 }
 
 impl Conversation {
@@ -414,6 +420,7 @@ fn try_conversation(
         tool_sets: vec![tools],
         scrubbed: scrub.changed_anything(),
         as_sent: false,
+        left_out: Vec::new(),
     })
 }
 

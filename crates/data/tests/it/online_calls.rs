@@ -353,3 +353,27 @@ fn a_call_without_its_exact_trace_makes_the_rollout_inexact_counted_by_reason() 
     let projection = case(exact(), set(later(), "truncated", json!(true)));
     assert!(projection.truncated && projection.records.iter().all(|r| r.truncated));
 }
+
+#[test]
+fn a_call_whose_arguments_are_not_json_is_counted_as_such_and_never_a_record() {
+    // The model escaped a character JSON does not know; the next request
+    // carries the call as the agent repaired it. The offline views count the
+    // same answer under the same name.
+    let first = request(&[1, 2], &[7, 8], "4");
+    let second = request(&[1, 2, 7, 8, 9], &[5], "4");
+    let t = trajectory(vec![
+        user(1, "List the files."),
+        step(2, "", single(&first)),
+        step(3, "One file: a.txt.", single(&second)),
+    ]);
+    let mut calls = calls();
+    calls[0].response.tool_calls[0].arguments = "{\"command\":\"ls \\s\"}".into();
+    let projection = project_calls(&t, &calls, &sampler());
+    assert!(!projection.exact());
+    assert_eq!(
+        projection.proxy.get(&ProxyReason::UnparsedArguments),
+        Some(&1),
+        "{projection:#?}"
+    );
+    assert_eq!(projection.records.len(), 1, "the other call alone");
+}

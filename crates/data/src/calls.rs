@@ -45,7 +45,7 @@ use splinter_core::harness::ModelCall;
 
 use crate::markers::chat_tool_list;
 use crate::record::{Record, RecordBody, RecordMetadata, RolloutOutcome};
-use crate::requests::{answer_of, scope_calls, wire_messages};
+use crate::requests::{scope_calls, sent_and_answered};
 use crate::sampled::{ProxyReason, SampledTurn, SampledTurns, POLICY_KIND};
 use crate::scrub::Scrub;
 use crate::Objective;
@@ -375,10 +375,12 @@ fn messages_of(
 ) -> Result<(Vec<WireMessage>, Vec<Value>), ProxyReason> {
     let scrub = Scrub::of(trajectory);
     let unreadable = |_| ProxyReason::UnreadableRequest;
-    let mut messages = wire_messages(&call.messages, &scrub, call.seq).map_err(unreadable)?;
-    let mut answer = answer_of(&call.response, &scrub, call.seq)
-        .map_err(unreadable)?
-        .ok_or(ProxyReason::EmptyAnswer)?;
+    let (mut messages, answer) = sent_and_answered(call, &scrub, call.seq).map_err(unreadable)?;
+    let answer = answer.ok_or(ProxyReason::EmptyAnswer)?;
+    if !answer.parsed {
+        return Err(ProxyReason::UnparsedArguments);
+    }
+    let mut answer = answer.turn;
     if scrub.changed_anything() {
         return Err(ProxyReason::Scrubbed);
     }

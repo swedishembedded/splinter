@@ -48,7 +48,13 @@
 //!   [`AdvantageKind::norm`] names, counting a trial once however many records
 //!   it has), rendered exactly as `sft-step` renders it
 //!   (the requests the model was sent, `images`, `only_roles`; see
-//!   [`Rendering`]), and the records are in the corpus's order. Step labels
+//!   [`Rendering`]), and the records are in the corpus's order. A single
+//!   agent's requests that do not extend one another are read request by
+//!   request, each action's context the request it answered; a step no
+//!   request answered is counted ([`Exclusion::RequestsUnpaired`]), and a
+//!   trial none of whose steps pairs with a request keeps only its baseline
+//!   record. A context rebuilt from the
+//!   trajectory is never trained where the requests were recorded. Step labels
 //!   judge nothing here: the reward is the only judge.
 //!
 //! * An action whose agent step recorded the policy's own trace (the ids it
@@ -543,26 +549,29 @@ impl View for PolicyGradient {
                 }
                 _ => None,
             };
-            let conversation = match self.rendering.conversation_of(entry, harness.as_ref()) {
-                Ok(conversation) => conversation,
+            let conversations = match self.rendering.conversations_of(entry, harness.as_ref()) {
+                Ok(conversations) => conversations,
                 Err(reason) => {
                     projection.exclude(reason);
                     continue;
                 }
             };
-            if conversation.actions.is_empty() {
+            if conversations
+                .iter()
+                .all(|c| c.actions.is_empty() && c.left_out.is_empty())
+            {
                 projection.exclude(Exclusion::NoAction);
                 continue;
             }
-            for (record, actions) in
+            for (record, actions, conversation) in
                 self.rendering
-                    .records_of_actions(&conversation, &mut projection, |_| Judgement::Admit)
+                    .records_of_actions(&conversations, &mut projection, |_| Judgement::Admit)
             {
                 let record = match (treatment, &teacher) {
                     (Treatment::Reward(outcome), _) => {
                         let sampled = sampled_tokens(
                             &entry.experience.trajectory,
-                            &conversation,
+                            conversation,
                             &actions,
                             &mut projection.tokens,
                         );
