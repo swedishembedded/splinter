@@ -739,8 +739,9 @@ compiles its collection evaluates on the same compiled tasks:
   rolled back, never trained, the next learner starts from the anchor's adapter with fresh
   optimiser state and its `params.lr` multiplied by `cooldown` per rollback, and the stage
   halts after `max_rollbacks`. Each rollback's audit (trigger, evidence, anchor, groups
-  discarded) is a line of `groups.jsonl` and is in `report.json` `watchdog.audits`; the epochs
-  are kept in `work/<stage>/epochs.json`.
+  discarded) is a line of `groups.jsonl` and is in `report.json` `watchdog.audits`, each
+  rolled-back epoch's comparisons, promotions and alarms in `watchdog.rolled_back_epochs` (the
+  last epoch's are `watchdog`'s own); the epochs are kept in `work/<stage>/epochs.json`.
   ```yaml
   - id: online
     uses: train.online
@@ -800,8 +801,9 @@ compiles its collection evaluates on the same compiled tasks:
   everything it started.
 
   `make test/online/watchdog` runs the watchdog on the CPU stack over a fixture task family
-  whose training grader flips its reward for a window after a warm-up (`fault`, which must roll
-  back and recover) and with an honest grader (`clean`, which must not); `make
+  whose training grader flips its reward for a window after a short warm-up (`fault`, which must
+  roll back and recover: no second rollback, and the training tasks' honest pass rate after the
+  window above the one inside it) and with an honest grader (`clean`, which must not); `make
   test/online/pinned` and `make test/online/merged` check pinned episodes and merged sessions
   there. `make test/online/bench` runs the same loop on a GPU node over a small subset of a
   bench environment's training task set:

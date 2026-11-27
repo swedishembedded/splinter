@@ -224,6 +224,9 @@ fn train_in<'s, 'e>(
     let mut epochs = stage.epochs()?;
     let mut restarts = 0;
     let mut audits: Vec<Value> = Vec::new();
+    // Each rolled-back epoch's watchdog report (its comparisons, promotions and alarms), in epoch order: the last
+    // epoch's report is the stage's own.
+    let mut rolled_back: Vec<Value> = Vec::new();
     loop {
         let epoch = epochs.epoch;
         let anchor_adapter = match &epochs.anchor {
@@ -397,6 +400,7 @@ fn train_in<'s, 'e>(
                 });
                 note(stage, &record)?;
                 audits.push(record);
+                rolled_back.push(json!({"epoch": epoch, "watchdog": watched}));
                 let max = params.watchdog.as_ref().map_or(0, |w| w.max_rollbacks);
                 if epochs.rollbacks > max {
                     return Err(stage.fail(format!(
@@ -416,6 +420,7 @@ fn train_in<'s, 'e>(
                 let mut watchdog = watched;
                 if !watchdog.is_null() {
                     watchdog["audits"] = json!(audits);
+                    watchdog["rolled_back_epochs"] = json!(rolled_back);
                     watchdog["epochs"] = json!(epochs);
                 }
                 return Ok(Trained {
