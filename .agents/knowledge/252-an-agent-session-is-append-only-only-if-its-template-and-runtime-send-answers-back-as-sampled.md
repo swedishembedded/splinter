@@ -30,3 +30,7 @@ the generated ids are taken as the template's rendering of the parsed answer; an
 nothing on Qwen3 until the history is sent back as sampled: keep the earlier think block (a template choice the
 policy was not trained under, so not a fix here) or train with thinking on, and have sven send each call's arguments
 back as the model wrote them (text and key order), which is sven's to fix.
+
+**Superseded (2026-11-28, knowledge 254):** brain now splices a turn sent back with its `sampled` record as its ids
+and sven sends every answer back verbatim, so neither the template nor the runtime re-renders an earlier answer; a
+session merges per segment between history rewrites.

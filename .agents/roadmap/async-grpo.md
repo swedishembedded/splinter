@@ -256,18 +256,20 @@ re-sent until brain reports it committed (applied is not durable).
       merged group and refuses a rewritten one with `session_not_append_only` (`make test/contract/brain`). Measured on
       178 recorded vim sessions (knowledge 252): 0 of 118 Qwen3 sessions are append-only (the template drops the
       earlier empty think block), 58 of 60 Qwen3.8-27B sessions are (the two others: sven reordered argument keys),
-      and those forward 4.9x fewer ids merged. Open: the online seam (lane A's files): in `crate::online::rollout::rollout_of`,
-      when the projection is exact and the run merges, write `SessionRecord::merge(projection)` as the rollout's one
-      line, else the call records, counting `Unmergeable::reason()`; in `crate::online::brain::records_of`, read such
-      a line as a `SessionRecord` and write `record(member.reward, key, &rollout)`; start the stream job with
-      `pack_answers`, a `max_block` holding the longest session and `loss_agg`; turn on the two history options
-      below in that run; the merge rate on traced online sessions; `token-sum` against `seq-mean`.
-      History as generated (lane args-verbatim, 2026-11-27): sven `agent.history_as_generated: true` (set
-      `config.agent.history_as_generated` in `solve::engine_config`) sends each call's arguments back as generated and
-      the reasoning untrimmed; brain `history_as_generated: true` (add it to `chat_template_kwargs` in
-      `model::selection`, beside `enable_thinking`) writes every earlier assistant turn with its think block. Both
-      default off and change every prompt after the first, so turn them on together from a run's first call, under a
-      `sessions: merged` run only. Simulated on the same 178 sessions: 50/59 (4B), 41/59 (8B), 60/60 (27B) mergeable,
-      from 0/0/58; forwarded ids of the mergeable ones 96%, 87% and 80% fewer merged. The rest are the model's own
-      output (repaired or non-JSON arguments, calls stopped as a tool-call loop) and fall back per call.
+      and those forward 4.9x fewer ids merged.
+      History as sampled, the standard (lane args-verbatim, 2026-11-28, knowledge 254, supersedes 252): brain sends
+      each reply's `sampled` record (generated ids, prompt length, digest and generation header) and splices a turn
+      sent back with it as its ids; sven sends every answer back verbatim with its record, with no option, and a
+      rewrite of the history (compaction, system prompt, tool list, a deferred tool's load) is a `ContextRewritten`
+      segment boundary. The producer is now `SessionRecord::segments`: one merged record per append-only segment,
+      each with the rollout's one reward, cut before a call that would pass the block; it falls back per call only
+      when a call is untraced or the samplers differ (`untraced`, `mixed_sampler`). A call trains its traced ids when
+      the server's record names them. Online: `rollout_of` writes the segments under `Sessions::Merged`, and
+      `records_of` already reads each line as a `SessionRecord`. Offline: `sessions: merged` writes the same segments.
+      The comparisons that trimmed text before matching a request's history to the answer it repeats are gone.
+      Verified on a CPU brain (Qwen3-0.6B, f32 KV): two two-call sessions merged into one record each, brain's
+      `check_dataset` accepted both (packed, 2 records, 86 supervised ids) and its `score` reproduced every call's
+      behaviour log-probabilities (worst per-id difference 5.6e-5 over 4 calls). Open: start the stream job with
+      `pack_answers`, a `max_block` holding the longest segment and `loss_agg`; the merge rate on traced online
+      sessions; `token-sum` against `seq-mean`.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.

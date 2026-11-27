@@ -239,3 +239,4 @@ in the same commit.
 | [251](251-a-model-looping-in-a-tool-call-is-a-counted-fail.md) | A model looping inside a tool call's arguments is a counted fail, not an endpoint rejection |
 | [252](252-an-agent-session-is-append-only-only-if-its-template-and-runtime-send-answers-back-as-sampled.md) | An agent session is append-only only if its template and its runtime send each answer back as it was sampled |
 | [253](253-a-poisoned-grader-shows-a-rollback-only-on-a-criterion-the-model-learns-while-its-rewards-still-vary.md) | A poisoned grader shows a rollback only on a criterion the model learns, poisoned while its rewards still vary |
+| [254](254-an-agent-session-merges-per-segment-because-the-history-is-sent-back-as-sampled.md) | An agent session merges per segment, because the history is sent back as sampled |
