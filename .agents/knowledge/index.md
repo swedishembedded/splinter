@@ -217,3 +217,4 @@ in the same commit.
 | [229](229-a-fork-already-linked-its-products-and-still-reread-and-silently-copied-them.md) | A fork linked its products but re-read every byte of them, and fell back to copying without saying so |
 | [230](230-outcome-first-tasks-transferred-more-to-the-vim-exams-at-a-third-of-the-records.md) | Outcome-first tasks transferred more to the Vim exams than section-by-section tasks, at a third of the records |
 | [231](231-a-shuffled-request-control-separates-trajectory-content-from-tool-format-exposure.md) | A shuffled-request control separates what trajectories teach from exposure to the tool's format |
+| [232](232-a-request-log-that-is-not-one-conversation-was-trained-as-a-context-the-model-never-saw.md) | A request log that did not read as one conversation was trained as a context the model never saw |

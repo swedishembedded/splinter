@@ -118,6 +118,16 @@ re-sent until brain reports it committed (applied is not durable).
       identity a provider reports of its reply` (sven branch `agrpo-exec`), plus sven's per-request identity and
       top-K; the lock pins the public sven remote, which has none of them, so this builds with `make deps/local`
       until those commits are published and the lock is re-pinned.
+- [x] One rendering of a request on its own, offline and online (2026-11-27, knowledge 232): the policy-gradient and
+      step views read a single agent's requests that do not extend one another request by request, each action's
+      context the request it answered, through the same `requests::sent_and_answered` the per-call records use; a
+      step no request answered is counted `requests_unpaired`, a rollout with none paired keeps only its baseline
+      record, and the trajectory is never rendered where requests were recorded (it had been, under Splinter's
+      generic prompt and no tools: 134 forward and 79 backward rollouts of the Vim runs). An answer whose arguments
+      are not JSON is counted `unparsed_arguments` on both paths (online it was `unreadable_request`). Open: an
+      answer sven's runaway-argument guard stopped has no trajectory step; offline it is no action, online the
+      rollout's calls outnumber its traced requests unless sven files that request's trace, so the rollout is
+      counted `unpaired` and never trained. Check on an online run before relying on rollouts that hit the guard.
 - [x] Learner adapter for brain's streaming policy-gradient job: the client `splinter_model::served_train::StreamJob`
       (create with the stream document, offer complete groups with `?epoch=N`, events read on a thread and resumed
       with Last-Event-ID, finish; 404/409/410 or another epoch is `StreamError::Restarted`), its scripted double
