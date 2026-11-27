@@ -4,7 +4,7 @@
 
 Each subsection reports one step of \cref{sec:method}: what it was tested on, the measurement with its interval, and where the
 evidence is. Every number is regenerated from the files under \texttt{data/} by \texttt{scripts/paper\_data.py}
-(\cref{app:reproduction}).
+(\cref{app:artifacts}).
 
 \subsection{The growing pool of interpreter-labelled programs (Lua)}\label{sec:r-pool}
 
@@ -19,7 +19,7 @@ $[+5.12, +11.52]$ (bootstrap over program families and lineages). On the 58 neve
 $[+0.66, +7.10]$. The first two generations each improve on their predecessor (\cref{tab:lua}, \cref{fig:generations}). All
 four lineages move together: generation~4's shares are 12.3\% to 14.0\%.
 
-\begin{table}[tbp]
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{lrrrl}
 \toprule
@@ -40,37 +40,13 @@ Generation 4 vs base & 13.24\% & 5.05\% & $+8.19$ [$+5.12$, $+11.52$] & holds (l
 \label{tab:lua}
 \end{table}
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 1, horizontal sep=18mm}, paper, width=0.47\linewidth, height=52mm,
-    yticklabel style={/pgf/number format/fixed}, scaled y ticks=false]
-\nextgroupplot[title={Lua: share of exam items right}, xmin=-0.3, xmax=4.3, ymin=0, ymax=0.16, xtick={0,1,2,3,4},
-    xticklabels={base,1,2,3,4}, xlabel={generation}]
-  \addplot[only marks, mark=o, mark size=1.4pt, okGrey] table[col sep=comma, x=generation, y=share]
-    {generated/lua-generations.csv};
-  \addplot[okBlue, thick, mark=*, mark size=1.6pt] table[col sep=comma, x=generation, y=mean, discard if not={lineage}{0}]
-    {generated/lua-generations.csv};
-\nextgroupplot[title={Vim: exam pass rate}, xmin=-0.3, xmax=3.3, ymin=0, ymax=0.06, xtick={0,1,2,3},
-    xticklabels={base,1,2,3}, xlabel={generation}, legend style={font=\tiny, at={(0.03,0.97)}, anchor=north west}]
-  \fill[black!6] (axis cs:1.5,0) rectangle (axis cs:3.3,0.06);
-  \node[font=\scriptsize, text=black!60] at (axis cs:2.4,0.02) {running / not run};
-  \addplot[okOrange, thick, mark=triangle*, discard if not={arm}{outcome first}, error bars/.cd, y dir=both, y explicit]
-    table[col sep=comma, x=generation, y=rate, y error plus expr=\thisrow{hi}-\thisrow{rate},
-      y error minus expr=\thisrow{rate}-\thisrow{lo}] {generated/vim-transfer-generations.csv};
-  \addlegendentry{outcome first}
-  \addplot[okBlue, thick, mark=*, discard if not={arm}{all verified}, error bars/.cd, y dir=both, y explicit]
-    table[col sep=comma, x=generation, y=rate, y error plus expr=\thisrow{hi}-\thisrow{rate},
-      y error minus expr=\thisrow{rate}-\thisrow{lo}] {generated/vim-transfer-generations.csv};
-  \addlegendentry{all verified}
-  \addplot[okGrey, thick, densely dotted, mark=diamond*, discard if not={arm}{shuffled requests}]
-    table[col sep=comma, x=generation, y=rate] {generated/vim-transfer-generations.csv};
-  \addlegendentry{shuffled requests}
-\end{groupplot}
-\end{tikzpicture}
-\caption{Generations. Left: the Lua run, each lineage (circles) and their mean (line), on the 2040-item sealed exam. Right:
-the Vim family on the 100 sealed exams (1200 attempts per point, Wilson 95\% intervals over attempts); one generation has been
-examined, generation~2 is running.}\label{fig:generations}
+\input{figures/generations-body}
+\caption{Gains on sealed exams by generation. Top: in the Lua family every lineage (circles) more than doubles the base's
+share of the 2040-item exam by generation~4, with the gain concentrated in the first two generations (filled points: the
+registered comparison holds; open: it does not). Bottom: in the Vim family generation~1 of every trained arm except the control
+beats its paired base; generation~2 is running.}\label{fig:generations}
 \end{figure}
 
 \subsection{Practice tasks authored from the Vim manual}\label{sec:r-authoring}
@@ -84,38 +60,25 @@ tasks and the teacher 81.1\% (\cref{tab:vim-attempts}); the funnel is in \cref{f
 \nolinkurl{material/funnel.json} and the material runs' manifests in \nolinkurl{swedishembedded/source-to-transfer-evidence};
 tasks in \nolinkurl{swedishembedded/vim-headless-mastery-manual}.
 
-\begin{table}[tbp]
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{llrrrr}
 \toprule
 Authoring & Model & Counted attempts & Pass rate & Tasks & Tasks solved \\
 \midrule
-section by section & Qwen3-4B & 8204 & 0.100 & 1026 & 231 \\
-section by section & Qwen3.8-27B-FP8 & 4095 & 0.811 & 1026 & 944 \\
-outcome first & Qwen3-4B & 3688 & 0.031 & 467 & 36 \\
-outcome first & Qwen3.8-27B-FP8 & 1868 & 0.722 & 467 & 410 \\
+\inputrows{generated/vim-transfer-attempts.tex}
 \bottomrule
 \end{tabular}
 \caption{Attempts on the authored tasks (\nolinkurl{material/funnel.json} of the evidence). For comparison, on the 100 exams
 the teacher's first-attempt pass rate is 0.63 and the base student passed none of 1012 counted attempts.}\label{tab:vim-attempts}
 \end{table}
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 1, horizontal sep=24mm}, paper, width=0.34\linewidth, height=50mm,
-    xmode=log, xmin=10, xmax=40000, ytick=data, y tick label style={font=\scriptsize},
-    every axis plot/.append style={xbar, /pgf/bar width=2.4mm},
-    xmajorgrids, ymajorgrids=false, nodes near coords, nodes near coords style={font=\scriptsize},
-    point meta=explicit symbolic, enlarge y limits=0.08, table/col sep=comma]
-\nextgroupplot[title={section by section}, yticklabels from table={generated/vim-transfer-funnel-forward.csv}{step}]
-  \addplot[draw=black!70, fill=okBlue!70] table[col sep=comma, x=count, y=y, meta=count] {generated/vim-transfer-funnel-forward.csv};
-\nextgroupplot[title={outcome first}, yticklabels from table={generated/vim-transfer-funnel-backward.csv}{step}]
-  \addplot[draw=black!70, fill=okOrange!80] table[col sep=comma, x=count, y=y, meta=count] {generated/vim-transfer-funnel-backward.csv};
-\end{groupplot}
-\end{tikzpicture}
-\caption{Counts through authoring (log scale). ``Proposal sets'' are the author's outputs per item and variant;
-``teacher/student solved'' count tasks with at least one verified attempt.}\label{fig:vim-funnel}
+\input{figures/funnel-body}
+\caption{Authoring from the manual yields about a thousand admitted tasks in one pass, and the oracle solves all but four;
+outcome-first authoring keeps fewer, harder tasks. Counts through both modes (log scale); ``proposal sets'' are the author's
+outputs per item and variant, ``teacher/student solved'' count tasks with at least one verified attempt.}\label{fig:vim-funnel}
 \end{figure}
 
 \subsection{Oracle admission}\label{sec:r-admission}
@@ -160,63 +123,59 @@ $+0.035$ $[+0.021, +0.051]$), the all-verified and productive-actions arms 1.8\%
 of first attempts. Evidence: \nolinkurl{decision/decision-eval-exam.json}; adapters in
 \nolinkurl{swedishembedded/vim-manual-transfer-adapters}.
 
-\begin{table}[tbp]
+\begin{table}[htbp]
 \centering\footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lrrlrrll}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrlrrll@{}}
 \toprule
-Training material & Train records & Teacher / student & Passes of 1200 (by seed) & Exams solved & Base & vs base: W/L, $p$ & vs control: W/L, $p$ \\
+Material & Records & Passes of 1200 (seeds) & Exams & Base & vs base: W/L, $p$ & vs control: W/L, $p$ \\
 \midrule
 \inputrows{generated/vim-transfer-table.tex}
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \caption{Generation~1 of the Vim family on the 100 sealed exams (registered analysis). ``Base'' is the passes of the arm's
-paired base runs over their counted attempts. One-sided exact sign tests over exams on passes pooled over seeds; all four
+paired base runs over their counted attempts; ``Exams'' the exams solved at least once. One-sided exact sign tests over exams on passes pooled over seeds; all four
 comparisons with the base hold under Holm (adjusted thresholds 0.0125 to 0.05). The control is not in the comparison family;
 it and its paired base both pass none.}\label{tab:vim-results}
 \end{table}
 
-\begin{figure}[tbp]
+\begin{figure}[htbp]
 \centering
-\begin{tikzpicture}
-\begin{axis}[paper, width=0.78\linewidth, height=55mm, xmin=0.4, xmax=5.6, ymin=0, ymax=0.075,
-    xtick={1,2,3,4,5}, xticklabels={all\\verified, one per\\task, productive\\actions, shuffled\\requests, outcome\\first},
-    x tick label style={font=\scriptsize, align=center}, ylabel={exam pass rate}, yticklabel style={/pgf/number format/fixed},
-    scaled y ticks=false, legend pos=north west]
-  \addplot[only marks, mark=*, mark size=1.5pt, okBlue, error bars/.cd, y dir=both, y explicit]
-    table[col sep=comma, x=x, y=rate, y error plus expr=\thisrow{hi}-\thisrow{rate}, y error minus expr=\thisrow{rate}-\thisrow{lo}]
-    {generated/vim-transfer-seeds.csv};
-  \addlegendentry{seed (Wilson 95\%)}
-  \addplot[only marks, mark=diamond*, mark size=3pt, okVermillion, error bars/.cd, y dir=both, y explicit]
-    table[col sep=comma, x expr=\thisrow{x}+0.36, y=rate, y error plus expr=\thisrow{hi}-\thisrow{diff},
-      y error minus expr=\thisrow{diff}-\thisrow{lo}] {generated/vim-transfer-arms.csv};
-  \addlegendentry{arm, 3 seeds (task bootstrap)}
-\end{axis}
-\end{tikzpicture}
-\caption{Exam pass rate per arm and seed (400 attempts each) with Wilson intervals, which treat attempts as independent and
-are therefore too narrow for exams that cluster; and the pooled arm (1200 attempts) with the task-bootstrap interval of its
-difference from the paired base. Every base run passed none.}\label{fig:vim-seeds}
+\input{figures/exams-body}
+\caption{Every trained arm except the shuffled-request control passes sealed exams that its paired base never passes, in every
+seed; outcome-first tasks transfer most. Left: the 100 sealed exams; right: the held-out authored tasks. Per seed (400 exam
+attempts; 376 or 204 held-out attempts) with Wilson 95\% intervals, which treat attempts as independent; pooled over three
+seeds with the task-bootstrap interval of the difference from the paired base.}\label{fig:vim-seeds}
 \end{figure}
 
 \paragraph{Held-out authored tasks.} On the 10\% of each authoring mode's tasks that no arm trained on (94 section-by-section
 tasks; 51 outcome-first tasks for that arm), the gain is an order of magnitude larger than on the exams: productive actions
-pass 64\% of attempts against the base's 11\%. Evidence: \nolinkurl{decision/decision-eval-unseen.json}.
+pass 64\% of attempts against the base's 11\%, and every arm on section-by-section tasks beats the shuffled-request control
+(all verified 86 tasks won, 0 lost; one per task 84/0; productive actions 87/0). Evidence:
+\nolinkurl{decision/decision-eval-unseen.json}.
 
 \begin{center}\footnotesize
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lrlrlll}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrlrll@{}}
 \toprule
-Training material & Tasks & Passes (rate) & Base & vs base: W/L, $p$ & Difference [95\%] & vs control: W/L, $p$ \\
+Training material & Tasks & Passes (rate) & Base & vs base: W/L, $p$ & Difference [95\%] \\
 \midrule
 \inputrows{generated/vim-transfer-t1.tex}
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{center}
 
 \paragraph{Teacher and student records.} Of the all-verified arm's 3359 training records, 2699 come from the teacher and 660
 from the student (outcome first: 1014 and 86; one per task: 629 and 142), by each record's \texttt{model} field in the
-dataset's lineage. A student-only arm (the all-verified rule on the 4B's own verified successes, 3 seeds) is being trained to
+dataset's lineage (\cref{fig:records}).
+
+\begin{figure}[htbp]
+\centering
+\input{figures/records-body}
+\caption{Most training records are the 27B teacher's verified trajectories, so the arms do not separate what the teacher
+teaches from what the loop's own verified attempts teach; a student-only arm is being trained to separate them.}\label{fig:records}
+\end{figure}
+ A student-only arm (the all-verified rule on the 4B's own verified successes, 3 seeds) is being trained to
 separate the teacher's contribution from the loop's; generation~2 (new outcome-first tasks authored by a generation-2 rule,
 attempted by the generation-1 champion, the teacher and Inkling-2-Mini, trained from the base with generation~1's data as replay, examined on
 the exams, its own held-out tasks and a forgetting gate on generation~1's held-out tasks) is running. Neither has a result yet.

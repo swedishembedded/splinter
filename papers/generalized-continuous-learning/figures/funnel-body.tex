@@ -1,0 +1,16 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Figure: counts through the two authoring modes, from generated/vim-transfer-funnel-*.csv.
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=30mm}, paper, width=62mm, height=64mm,
+    xmode=log, xmin=10, xmax=60000, ytick=data, y tick label style={font=\scriptsize}, xlabel={tasks or items (log scale)},
+    every axis plot/.append style={xbar, /pgf/bar width=2.6mm}, xmajorgrids, ymajorgrids=false,
+    nodes near coords, nodes near coords style={font=\scriptsize, anchor=west}, nodes near coords align={horizontal},
+    point meta=explicit symbolic, enlarge y limits=0.07]
+\nextgroupplot[title={section by section}, yticklabels from table={generated/vim-transfer-funnel-forward.csv}{step}]
+  \addplot[draw=black!70, fill=okBlue!70] table[x=count, y=y, meta=count] {generated/vim-transfer-funnel-forward.csv};
+\nextgroupplot[title={outcome first}, yticklabels from table={generated/vim-transfer-funnel-backward.csv}{step}]
+  \addplot[draw=black!70, fill=okOrange!80] table[x=count, y=y, meta=count] {generated/vim-transfer-funnel-backward.csv};
+\end{groupplot}
+\end{tikzpicture}

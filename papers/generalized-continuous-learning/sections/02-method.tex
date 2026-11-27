@@ -2,6 +2,18 @@
 % Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
 \section{Method}\label{sec:method}
 
+\Cref{fig:method} shows the method as one loop over both task families: a source document, an executable environment that
+produces or checks every label, training from the base, a separate examiner, and the examined candidate as the next
+generation's champion.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/method-body}
+\caption{The method. Both families end in the same steps: an adapter trained from the base, examined on sealed exams by a
+separate examiner, and, if promoted, the champion that proposes the next generation's programs or attempts its tasks. Counts
+are those of the Vim generation~1 run.}\label{fig:method}
+\end{figure}
+
 \subsection{An executable environment as the only teacher}\label{sec:m-teacher}
 
 No human writes a training task, a label or a solution. In the Lua family the pinned Lua~5.1 interpreter runs every program
@@ -17,7 +29,9 @@ only it holds, excludes any item that matches a program a candidate trained on, 
 grades each answer by the interpreter's output and returns signed aggregate verdicts. In the Vim family the exams are 100
 hand-written tasks of a Vim course (bench \texttt{tasks/vim}, evaluation side): unseen material, each combining several ideas,
 never authored from the manual and never read by any stage that produces training data. Every candidate is measured against a
-base run in the same evaluation stage. Per-item outcomes stay with the examiner's private evidence. The registered criteria
+base run in the same evaluation stage. Per-item outcomes stay with the examiner's private evidence. Here an exam is \emph{sealed} when no stage that produces training data or selects a
+checkpoint reads it. The Lua exams are also secret, drawn from the examiner's own seed; the Vim exams are published in the
+public dataset of the course (\cref{tab:artifacts}), so they are sealed only in the first sense. The registered criteria
 and analyses are fixed before any candidate is examined (\cref{app:registrations}).
 
 \subsection{A growing pool of interpreter-labelled programs}\label{sec:m-pool}
@@ -32,16 +46,14 @@ candidate replaces the champion only if it passes a gate on the learner's own de
 
 \subsection{Practice tasks authored from raw source material}\label{sec:m-authoring}
 
-\begin{sloppypar}
-The Vim family starts from the text of Vim~9.1's user manual (\texttt{usr\_*.txt} as the task image's Vim ships it), with
-chapter and section headings added by bench's \texttt{environments/vim/manual\_headings.py}: 222 sections split into 263
-items of at most about 1500 words. For each item the 27B author proposes tasks of one to six Ex-command steps in three
+The Vim family starts from the text of Vim~9.1's user manual, the \texttt{usr\_*.txt} files the task image's Vim ships,
+with chapter and section headings added by a bench script (\nolinkurl{environments/vim/manual_headings.py}): 222 sections
+split into 263 items of at most about 1500 words. For each item the 27B author proposes tasks of one to six Ex-command steps in three
 material variants, each with a request, starting files and a reference solution (bench
-\texttt{recipes/vim-manual/transfer.yaml}). Vim runs every reference; a reference Vim refuses is repaired once by the author;
+\nolinkurl{recipes/vim-manual/transfer.yaml}). Vim runs every reference; a reference Vim refuses is repaired once by the author;
 a reviewer (the same model) checks each result against its request, and refused results are fixed and reviewed again.
 Admission rejects malformed tasks, references that change nothing or err in Vim, duplicates, and requests that quote the
 reference's commands.
-\end{sloppypar}
 
 \subsection{Oracle admission in the task image}\label{sec:m-admission}
 
@@ -51,43 +63,17 @@ image's locale, so the expected files are what the image's Vim leaves; a result 
 
 \subsection{Outcome-first authoring}\label{sec:m-outcome}
 
-In the second authoring mode (bench \texttt{recipes/vim-manual/backward.yaml}) the author proposes, for each item, the
+In the second authoring mode (bench \nolinkurl{recipes/vim-manual/backward.yaml}) the author proposes, for each item, the
 starting files and the desired end files of a job of several changes, without a request. The teacher must reach each end state
 with the Vim tool within 4 attempts; the teacher's commands must reproduce the end state when Vim replays them, and must edit
 rather than retype the files. Only then is the request written, from the before and after files, and the teacher's verified
 solution becomes the reference; a request that quotes most of the target or the solution is refused.
 
-\begin{figure}[tbp]
-\centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[fig, node distance=5mm and 7mm]
-  \node[data] (man) {Vim 9.1 user manual\\{\scriptsize 263 items}};
-  \node[proc, right=of man, yshift=10mm] (fw) {section-by-section authoring\\{\scriptsize 3 variants per item}};
-  \node[proc, right=of fw] (adm) {Vim runs each reference; review, fix};
-  \node[data, right=of adm] (ft) {1030 tasks\\{\scriptsize oracle solves 1026}};
-  \node[proc, right=of man, yshift=-10mm] (bw) {outcome-first authoring\\{\scriptsize start and end files}};
-  \node[proc, right=of bw] (rep) {teacher reaches the end state};
-  \node[data, right=of rep] (bt) {467 tasks\\{\scriptsize request written last}};
-  \node[proc, right=of $(ft)!0.5!(bt)$, xshift=12mm] (tr) {attempts\\{\scriptsize student 8, teacher 4}};
-  \node[data] (ds) at ($(tr |- bt)+(0,-17mm)$) {training sets\\{\scriptsize one per arm}};
-  \node[proc, left=12mm of ds] (lora) {LoRA from the base\\{\scriptsize 3 seeds per arm}};
-  \node[data, left=12mm of lora] (ex) {100 sealed exams\\{\scriptsize 4 attempts, paired base}};
-  \draw[flow] (man.east) -- ++(3mm,0) |- (fw); \draw[flow] (man.east) -- ++(3mm,0) |- (bw);
-  \draw[flow] (fw) -- (adm); \draw[flow] (adm) -- (ft);
-  \draw[flow] (bw) -- (rep); \draw[flow] (rep) -- (bt);
-  \draw[flow] (ft) -| (tr); \draw[flow] (bt) -| (tr);
-  \draw[flow] (tr) -- node[edge label, right] {verified; 10\% of tasks held out} (ds);
-  \draw[flow] (ds) -- (lora); \draw[measure] (lora) -- (ex);
-\end{tikzpicture}}
-\caption{The Vim pipeline as run for generation~1. Rounded boxes run; boxes with a bar are stored. The author and teacher is
-Qwen3.8-27B-FP8, the student Qwen3-4B. 10\% of each authoring mode's tasks (by task id) are held out of every arm's training.
-The exams are hand-written and were never read by any stage.}\label{fig:vim-pipeline}
-\end{figure}
 
 \subsection{Verified trajectories into adapters}\label{sec:m-adapters}
 
 Every admitted task is attempted by the student (8 attempts, temperature 0.7, top-p 0.8, top-k 20) and the teacher (4
-attempts) through Sven with a budget of 60 turns and 16384 completion tokens. The registered arms (\cref{fig:vim-pipeline})
+attempts) through Sven with a budget of 60 turns and 16384 completion tokens. The registered arms
 start from the same base Qwen3-4B and train a LoRA adapter (rank 16, alpha 32, learning rate $2\times10^{-4}$, up to 800 steps
 of 4 records, block 16384, checkpoint chosen by held-out validation loss every 40 steps with patience 4), seeds 1, 2 and 3. They
 differ only in the training material: \emph{all verified} (every verified successful attempt of teacher and student on the

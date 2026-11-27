@@ -173,7 +173,7 @@ Claim as supported: one step of the loop in a second task family, not continuous
 - Paper: `papers/generalized-continuous-learning` ("Continuous Learning from Executable Environments"), where the Vim
   steps (authoring from the manual, oracle admission, outcome-first authoring, trajectories into adapters) follow the
   Lua pool in one method; registrations, arm letters, deviations and the comparisons without a gain are in its appendix.
-- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 7168133f): arm datasets with lineage, arm
+- Private HF dataset `swedishembedded/source-to-transfer-evidence` (commit 413259d2): arm datasets with lineage, arm
   recipes, locks and frozen revisions, training reports, exam aggregates, the decision and secondary outputs, the
   authoring funnel, the material runs' manifests, the analysis code (decide.py, secondary.py, export-results.py,
   analyse.py, aggregates.py, funnel.py, gen-arms.py).

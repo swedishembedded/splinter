@@ -20,11 +20,34 @@ VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decisio
 	material/funnel.json
 export TEXINPUTS := $(BUILD):
 
-$(GENERATED)/.stamp: scripts/paper_data.py data/rsi5-groups-G.json $(addprefix data/vim-transfer/,$(VIM_FILES))
+$(GENERATED)/.stamp: scripts/paper_data.py data/rsi5-groups-G.json data/artifacts.csv data/builds.csv $(addprefix data/vim-transfer/,$(VIM_FILES))
 	python3 scripts/paper_data.py data $(GENERATED)
 	touch $@
 
-$(PDF): $(SOURCES) $(GENERATED)/.stamp
+# Every figure is a TikZ/pgfplots picture in figures/<name>-body.tex that reads generated/ and shares figures/style.tex.
+# The paper inputs the body, so the figure is typeset as vector graphics in the paper's own fonts; figures/<name>.tex
+# wraps the same body as a standalone document, compiled to a vector PDF and a PNG preview at twice 96 dpi, which are
+# published with the figure data.
+FIGURES := method funnel exams generations records
+PREVIEWS := $(foreach f,$(FIGURES),$(BUILD)/previews/fig-$(f).png)
+
+$(BUILD)/figures/fig-%.pdf: figures/%.tex figures/%-body.tex figures/style.tex $(GENERATED)/.stamp
+	mkdir -p $(BUILD)/figures
+	# twice, so that a legend placed by name resolves
+	for pass in 1 2; do cd figures && TEXINPUTS=.:$(BUILD): pdflatex -interaction=nonstopmode -halt-on-error \
+	    -output-directory=$(BUILD)/figures -jobname=fig-$* $*.tex > /dev/null \
+	    || { tail -40 $(BUILD)/figures/fig-$*.log; exit 1; }; cd ..; done
+	! grep -E '^(Overfull|Underfull)|Warning' $(BUILD)/figures/fig-$*.log
+
+$(BUILD)/previews/fig-%.png: $(BUILD)/figures/fig-%.pdf
+	mkdir -p $(BUILD)/previews
+	gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r192 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o $@ $<
+
+.PRECIOUS: $(BUILD)/figures/fig-%.pdf
+.PHONY: previews
+previews: $(PREVIEWS)
+
+$(PDF): $(SOURCES) $(wildcard figures/*.tex) $(GENERATED)/.stamp $(PREVIEWS)
 	$(call latexmk-pdf,$(PAPER).tex)
 
 .PHONY: vim-data

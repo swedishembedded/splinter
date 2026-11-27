@@ -1,0 +1,42 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Figure: the method as one loop over both task families. Counts from generated/numbers.tex.
+\begin{tikzpicture}[fig, every node/.append style={execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}}]
+  \def\dx{27.5mm}
+  % row 1: Lua
+  \node[data] (lsrc) at (0,0) {Lua 5.1 manual\\{\scriptsize 3 sections}};
+  \node[proc=okBlue!10] (lprop) at (\dx,0) {champion proposes programs};
+  \node[proc=okBlue!10] (llab) at (2*\dx,0) {interpreter runs each program: the label};
+  \node[proc=okBlue!10] (lfr) at (3*\dx,0) {a program the champion misses enters the pool};
+  \node[data] (lpool) at (4*\dx,0) {labelled pool\\{\scriptsize doubles each generation}};
+  % row 2: Vim
+  \node[data] (vsrc) at (0,-28mm) {Vim 9.1 user manual\\{\scriptsize \VimItems{} items}};
+  \node[proc=okOrange!14] (vaut) at (\dx,-28mm) {27B authors tasks\\{\scriptsize section by section, or outcome first}};
+  \node[proc=okOrange!14] (vora) at (2*\dx,-28mm) {oracle admission in the task image\\{\scriptsize \VimAdmitted{} + \VimBwAdmitted{} tasks}};
+  \node[proc=okOrange!14] (vatt) at (3*\dx,-28mm) {teacher and student attempt; hidden check grades};
+  \node[data] (vtraj) at (4*\dx,-28mm) {verified trajectories\\{\scriptsize 10\% of tasks held out}};
+  % row 3: shared, right to left
+  \node[proc=black!6] (train) at (4*\dx,-54mm) {LoRA trained from the base};
+  \node[data] (cand) at (3*\dx,-54mm) {candidate adapter};
+  \node[proc=okGreen!14] (exam) at (2*\dx,-54mm) {separate examiner\\{\scriptsize sealed exams; aggregate verdicts}};
+  \node[data] (champ) at (\dx,-54mm) {champion of the next generation};
+  \begin{scope}[on background layer]
+    \node[lane=okBlue!4, fit=(lsrc)(lpool)] (lane1) {};
+    \node[lane=okOrange!5, fit=(vsrc)(vtraj)] (lane2) {};
+  \end{scope}
+  \node[note, anchor=south west] at (lane1.north west) {program output (Lua)};
+  \node[note, anchor=south west] at (lane2.north west) {file editing (Vim)};
+  \draw[flow] (lsrc) -- (lprop); \draw[flow] (lprop) -- (llab); \draw[flow] (llab) -- (lfr); \draw[flow] (lfr) -- (lpool);
+  \draw[flow] (vsrc) -- (vaut); \draw[flow] (vaut) -- (vora); \draw[flow] (vora) -- (vatt); \draw[flow] (vatt) -- (vtraj);
+  \draw[flow] (lpool.east) -- ++(4mm,0) |- (train.east);
+  \draw[flow] (vtraj.east) -- ++(4mm,0);
+  \draw[flow] (train) -- (cand);
+  \draw[measure] (cand) -- (exam);
+  \draw[flow] (exam) -- (champ);
+  % the champion of generation g + 1 proposes the programs and attempts the tasks
+  \coordinate (gapy) at ($(lane1.south)+(0,-2.5mm)$);
+  \draw[flow] (champ.west) -- (-18mm,-54mm) |- (gapy -| lprop) -- (lprop.south);
+  \draw[flow] (gapy -| lprop) -| (vatt.north);
+  \node[note, anchor=east, rotate=90] at (-20mm,-32mm) {next generation};
+\end{tikzpicture}

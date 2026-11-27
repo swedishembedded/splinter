@@ -1,0 +1,14 @@
+repo,commit,upstream_commit,binary,sha256,used_for
+splinter,f6661e34be6b4383a6fd978c272a4005be1a2f95,,splinter-f6661e34b/splinter,aa162ad978cfab42cffb1584fb099992b180f5ca3b9efdaae538ccdb0ac24b8a,"Vim arm datasets, training, evaluations"
+splinter,cc5581333a14848d0c00c45c05a427a7077de1b9,,splinter-cc5581333/splinter,eb814939016bbf040f8b941f210bd59e93acde3dbca065f5b804a21cca3288b5,"Vim material run, attempt stages"
+splinter,d3ab644fafa2b6cd83be6f0e156c2a6b7dc27e6a,,splinter-d3ab644fa/splinter,faa5b47e3b360d9af7107d23c70064fcb784430b5c97b22411cdc30265dc0199,"Vim material run, authoring stages"
+brain,b726c045bb34211762e9c40dea37a6bbffb09da9,d6bd3baaff537ed69b9fdb23b2f0c702b43f7658,brain-b726c045b/brain,0d62d4c7ae404664efad0decfd31c6aa102cc5b590c24016fb90150de2bc5556,Vim serving and training from 2026-11-26 19:30: every arm
+brain,b726c045bb34211762e9c40dea37a6bbffb09da9,d6bd3baaff537ed69b9fdb23b2f0c702b43f7658,brain-b726c045b/brain-gpu-worker,ab5c2e8692370fedaa102f45260c5ae52cb0ce1cdb5ba477edbead09738eaf00,as above
+brain,62821de326bd03945209faed1d364a50119c835f,,brain-62821de32/brain,0b694249e8fb6ae4cbb31ffa92ec026ce8f3d8b42bd51661c134009f595d4a71,"Vim material run, attempt stages"
+brain,62821de326bd03945209faed1d364a50119c835f,,brain-62821de32/brain-gpu-worker,ab5c2e8692370fedaa102f45260c5ae52cb0ce1cdb5ba477edbead09738eaf00,as above
+sven,01eabb507058cb37d0254a0340cb4dfe87073576,,sven-01eabb507/sven,d63fc391f8ac687c2827ab656454bd79677353be758fc9c0e2d20702a2512226,the agent of every Vim attempt
+sven,704496d626cbe6253527f8b34e9f45ba3c6efcb4,,"(library, in splinter)",,the sven revision splinter's runs record
+bench,fac113db48c6903e3f910f219d28e885830e1fe7,,(recipes),,section-by-section authoring recipe
+bench,83e1b4f8def918459fcda711bfd75d48391812ff,,(recipes),,outcome-first authoring recipe
+bench,662ac1d6062cbdaa0c7378c7894e69ca1e3e75b8,,(recipes),,arm recipes and evaluation plans
+bench,f73ae591b05d698800480fe698f1b941530ad74f,,(admission),,byte- and locale-exact oracle admission

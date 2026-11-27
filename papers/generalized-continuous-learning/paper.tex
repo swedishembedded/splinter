@@ -18,47 +18,22 @@
 \usepackage{amsmath,amssymb}
 \usepackage{xcolor}
 \usepackage{array}
-\usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta,calc}
-\usepackage{pgfplots}
-\usepgfplotslibrary{groupplots}
-\pgfplotsset{compat=1.17}
+\usepackage{graphicx}
+\input{figures/style}
+\input{generated/numbers}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
 \usepackage[hidelinks]{hyperref}
 \usepackage[capitalise,nameinlink]{cleveref}
+\widowpenalty=10000
+\clubpenalty=10000
 
 % \input inside a tabular breaks \bottomrule after it; the primitive input expands cleanly.
+\def\UrlBreaks{\do\/\do-\do.}
 \newcommand{\inputrows}[1]{\csname @@input\endcsname #1 }
 
-% Okabe-Ito palette: distinguishable with colour-blindness; series used together also differ in marker or line style.
-\definecolor{okBlue}{HTML}{0072B2}
-\definecolor{okOrange}{HTML}{E69F00}
-\definecolor{okGreen}{HTML}{009E73}
-\definecolor{okVermillion}{HTML}{D55E00}
-\definecolor{okGrey}{HTML}{6E6E6E}
-\tikzset{
-  fig/.style={font=\footnotesize, node distance=6mm and 6mm, >={Stealth[length=2mm]}},
-  box/.style={draw=black!75, align=center, inner sep=2.5pt, minimum height=9mm, text width=21mm, line width=0.5pt},
-  % a process: something that runs
-  proc/.style={box, rounded corners=2pt},
-  % an artefact: something that is stored (marked by the bar on its left edge)
-  data/.style={box, path picture={\draw[line width=2pt,black!60] (path picture bounding box.north west) --
-    (path picture bounding box.south west);}},
-  flow/.style={->, line width=0.7pt, black!80, rounded corners=1.5pt},
-  measure/.style={->, line width=0.7pt, dashed, black!60},
-  edge label/.style={font=\scriptsize, text=black!80, inner sep=2pt},
-}
-\pgfplotsset{
-  paper/.style={tick label style={font=\footnotesize}, label style={font=\footnotesize},
-    title style={font=\footnotesize\bfseries}, legend style={font=\scriptsize, draw=black!40}, legend cell align=left,
-    ymajorgrids, grid style={black!12}, axis line style={black!70}, tick align=outside, xtick pos=bottom, ytick pos=left},
-  % keep only the rows of a CSV table whose column #1 equals #2
-  discard if not/.style 2 args={x filter/.append code={\edef\tempa{\thisrow{#1}}\edef\tempb{#2}%
-    \ifx\tempa\tempb\else\def\pgfmathresult{inf}\fi}},
-}
-
 \title{Continuous Learning from Executable Environments\\[0.3em]
-  \large Interpreter-labelled programs and tasks authored from a manual, judged on sealed exams\\[0.3em]
-  \normalsize Draft}
+  \large Interpreter-labelled programs and tasks authored from a manual, judged on sealed exams}
 \author{Martin Schr\"oder\\Swedish Embedded AB\\\texttt{info@swedishembedded.com}}
 \date{}
 
@@ -75,4 +50,6 @@
 \bibliography{references}
 
 \input{sections/90-appendix}
+\input{appendix-reproduction}
+\input{sections/91-appendix-records}
 \end{document}

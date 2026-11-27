@@ -1,0 +1,49 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% The one palette and type style of every figure of the paper. Each figure is a standalone document that inputs this file
+% and reads its data from generated/ (made by scripts/paper_data.py); the Makefile compiles it to a vector PDF that the paper
+% includes at the text width, so 8 to 9 pt here is 8 to 9 pt on the page.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,fit,backgrounds}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.17}
+
+% Okabe-Ito palette: distinguishable with colour-blindness; series used together also differ in marker or line style.
+\definecolor{okBlue}{HTML}{0072B2}
+\definecolor{okOrange}{HTML}{E69F00}
+\definecolor{okGreen}{HTML}{009E73}
+\definecolor{okVermillion}{HTML}{D55E00}
+\definecolor{okSky}{HTML}{56B4E9}
+\definecolor{okPurple}{HTML}{CC79A7}
+\definecolor{okGrey}{HTML}{6E6E6E}
+
+\tikzset{
+  fig/.style={font=\footnotesize, >={Stealth[length=2mm]}},
+  box/.style={draw=black!75, align=center, inner sep=3pt, minimum height=10mm, text width=22mm, line width=0.5pt,
+    font=\footnotesize},
+  % a process: something that runs
+  proc/.style={box, rounded corners=2.5pt, fill=#1},
+  proc/.default=white,
+  % an artefact: something that is stored (marked by the bar on its left edge)
+  data/.style={box, fill=white, path picture={\draw[line width=2pt,black!55] (path picture bounding box.north west) --
+    (path picture bounding box.south west);}},
+  flow/.style={->, line width=0.7pt, black!80, rounded corners=2pt},
+  measure/.style={->, line width=0.7pt, dashed, black!65, rounded corners=2pt},
+  note/.style={font=\scriptsize, text=black!75, align=center, inner sep=1.5pt},
+  lane/.style={draw=black!25, rounded corners=4pt, fill=#1, inner sep=4pt},
+}
+\pgfplotsset{
+  paper/.style={tick label style={font=\footnotesize}, label style={font=\footnotesize},
+    title style={font=\footnotesize\bfseries}, legend style={font=\scriptsize, draw=black!35, fill=white},
+    legend cell align=left, ymajorgrids, grid style={black!12}, axis line style={black!70}, tick align=outside,
+    xtick pos=bottom, ytick pos=left, yticklabel style={/pgf/number format/fixed}, scaled y ticks=false,
+    /pgf/number format/1000 sep={}},
+  % keep only the rows of a CSV table whose column #1 equals #2
+  discard if not/.style 2 args={x filter/.append code={\edef\tempa{\thisrow{#1}}\edef\tempb{#2}%
+    \ifx\tempa\tempb\else\def\pgfmathresult{inf}\fi}},
+  table/col sep=comma,
+}

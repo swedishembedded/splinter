@@ -1,0 +1,16 @@
+% SPDX-License-Identifier: CC-BY-4.0
+% Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+%
+% Figure: who made the training records of each Vim arm (train split, by each record's model field). Data:
+% generated/vim-records.csv.
+\begin{tikzpicture}
+\begin{axis}[paper, width=120mm, height=50mm, xbar stacked, /pgf/bar width=4mm, xmin=0, xmax=3900,
+    ytick={1,2,3,4,5}, y dir=reverse, ymin=0.4, ymax=5.6, ymajorgrids=false, xmajorgrids,
+    yticklabels from table={generated/vim-records.csv}{arm}, xlabel={training records},
+    legend style={at={(0.5,1.03)}, anchor=south}, legend columns=2, legend cell align=left]
+  \addplot[draw=black!70, fill=okOrange!80] table[x=teacher, y=y] {generated/vim-records.csv};
+  \addlegendentry{teacher (Qwen3.8-27B-FP8)}
+  \addplot[draw=black!70, fill=okBlue!70] table[x=student, y=y] {generated/vim-records.csv};
+  \addlegendentry{student (Qwen3-4B)}
+\end{axis}
+\end{tikzpicture}
