@@ -5,7 +5,10 @@
 \Cref{tab:verdict} holds each family and model size against the operational definition of \cref{sec:introduction}. What is
 supported is continuous gain over two generations in the Lua family, and in the Vim family a first generation that beats the
 base at both sizes, with its gain coming from the teacher's trajectories, followed at both sizes by a second generation that did
-not improve on the first; not continuous self-improvement.
+not improve on the first; not continuous self-improvement. After the generation-2 exam results had been seen, a human changed generation~3's training budget
+(LoRA steps scaled with the dataset instead of a fixed cap; \cref{app:deviations}). That is an intervention between
+generations: it counts against the no-intervention part of the definition, and a generation-3 result from a scaled-steps
+candidate cannot support the criterion as registered; it is shown as its own labelled point.
 
 \begin{table}[htbp]
 \centering\footnotesize
