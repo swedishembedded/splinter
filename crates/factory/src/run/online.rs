@@ -55,11 +55,12 @@ use super::online_worker::{self, OnlineAgent};
 use super::training::CANDIDATE_FILE;
 use super::{io, stage_error, write_json, Factory, RunError, LEASE_SECONDS};
 use crate::online::driver::{run, Ended, OnlineError, Report, RunLedger, Seams};
+use crate::online::frontier::{Selector, SelectorKind};
 use crate::online::group_log::{GroupLog, LoggedLedger, GROUPS_FILE};
 use crate::online::health::VersionSeries;
 use crate::online::seams::{
-    GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RoundRobin, RunClock,
-    StreamLearner, SystemRunClock,
+    GroupLedger, LearnerTelemetry, OnlineRollouts, RolloutsRequest, RunClock, StreamLearner,
+    SystemRunClock,
 };
 use crate::online::Settings;
 use crate::plan::PlannedStage;
@@ -139,6 +140,12 @@ pub struct OnlineParams {
     pub max_failures: u32,
     /// The seed every rollout's draws derive from.
     pub seed: u64,
+    /// How each group's task is drawn: `round_robin` (the tasks in turn) or
+    /// `frontier` (in proportion to each task's learning signal under a
+    /// posterior on its pass rate; a task the policy passes reliably
+    /// retires, and the run ends early when every task has).
+    #[serde(default, skip_serializing_if = "SelectorKind::is_default")]
+    pub selector: SelectorKind,
     /// Train only rollouts that one policy version decoded from their first
     /// request to their last; a rollout that straddles a publication is
     /// scored and counted (`rollouts.version_mixed`), never trained. Size
@@ -381,6 +388,8 @@ struct Trained {
     restarts: u32,
     /// The rollouts each policy version decoded, as the group log saw them.
     series: VersionSeries,
+    /// What the task selector knew at the end.
+    selector: Value,
 }
 
 pub(crate) fn produce(
@@ -464,6 +473,7 @@ pub(crate) fn produce(
         let served = learner.served_as();
         let mut outcome: Option<Result<Report, OnlineError>> = None;
         let mut series = VersionSeries::default();
+        let mut selected: Option<Value> = None;
         rollouts
             .run(
                 &RolloutsRequest {
@@ -476,7 +486,12 @@ pub(crate) fn produce(
                     scratch: &scratch,
                 },
                 &mut |executor, task_ids| {
-                    let selector = RoundRobin::new(task_ids.to_vec(), params.groups);
+                    let selector = Selector::new(
+                        params.selector,
+                        task_ids.to_vec(),
+                        params.groups,
+                        params.seed,
+                    );
                     let mut selector = match selector {
                         Ok(selector) => selector,
                         Err(e) => {
@@ -513,6 +528,7 @@ pub(crate) fn produce(
                         },
                     ));
                     series = ledger.log().series().clone();
+                    selected = Some(selector.report());
                 },
             )
             .map_err(fail)?;
@@ -527,6 +543,7 @@ pub(crate) fn produce(
                     learner,
                     restarts,
                     series,
+                    selector: selected.unwrap_or(Value::Null),
                 }
             }
             Some(Err(OnlineError::Learner(e))) if e.restarted && restarts < RESTARTS => {
@@ -666,6 +683,7 @@ fn report(trained: &Trained, started: Instant) -> Value {
         "useful_tokens_per_second": (wall > 0.0).then(|| trained_tokens as f64 / wall),
         "wall_seconds": wall,
         "learner_restarts": trained.restarts,
+        "selector": trained.selector,
         // Which run-level identity served each version: the weights every
         // rollout of that version was drawn from, named across servers.
         "versions": telemetry.published,

@@ -45,6 +45,7 @@ pub const VARIABLES: &[&str] = &[
     "data.action_sequences",
     "data.own_pass_rate",
     "data.other_pass_rate",
+    "online.zero_variance_share",
 ];
 
 /// One knob as a recipe declares it.

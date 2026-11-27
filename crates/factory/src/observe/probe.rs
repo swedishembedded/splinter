@@ -128,6 +128,7 @@ pub fn variable(generation: &Generation, name: &str) -> Option<f64> {
         "data.action_sequences" => data.map(|d| d.action_sequences as f64),
         "data.own_pass_rate" => pooled(Policy::Own),
         "data.other_pass_rate" => pooled(Policy::Other),
+        "online.zero_variance_share" => candidate.online.as_ref()?.zero_variance_share,
         _ => None,
     }
 }

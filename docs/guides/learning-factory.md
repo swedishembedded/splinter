@@ -710,6 +710,13 @@ compiles its collection evaluates on the same compiled tasks:
             queue_tokens: 65536, seed: 1,
             agent: { agent: sven, environment: environments/vim/environment.yaml } }
   ```
+  `selector: frontier` draws each group's task in proportion to its learning signal (the
+  expected reward variance under a Beta posterior on its pass rate, recent groups weighing
+  most), keeps a task never passed at a floor of the largest weight so it is still visited, and
+  retires a task passed reliably (the run ends early when every task has); `report.json`
+  `selector` holds each task's posterior. The default, `round_robin`, takes the tasks in turn.
+  Its statistics are the run's own rollouts of the current epoch alone.
+
   `pin_versions: true` trains only rollouts one policy version decoded from their first request
   to their last (a rollout that straddles a publication is scored and counted in
   `rollouts.version_mixed`, never trained); size `publish_every` so a version outlives a
@@ -1181,8 +1188,11 @@ The variables a knob may name are `training.epochs_at_selected`, `training.epoch
 `training.steps`, `training.selected_step`, `training.draws_per_epoch`, `training.tokens`,
 `data.train_records`, `data.own_share_records`, `data.own_share_characters`,
 `data.validation_own_share_records`, `data.frontier_share`, `data.action_sequences`,
-`data.own_pass_rate` and `data.other_pass_rate`, each of the first candidate of the generation
-the knob's stage feeds. Declaring a knob changes no stage identity.
+`data.own_pass_rate`, `data.other_pass_rate` and `online.zero_variance_share` (the share of an
+online stage's scored groups whose rewards do not differ), each of the first candidate of the
+generation the knob's stage feeds. Declaring a knob changes no stage identity. An online stage's
+task selector is such a knob: `selector: { set: online.selector, moves:
+online.zero_variance_share }`, probed with `--knob selector=frontier`.
 
 ```sh
 splinter probe runs/vim-g2 --knob epochs=1.89 --out runs/vim-g2-epochs

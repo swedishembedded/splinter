@@ -101,6 +101,8 @@ pub struct Candidate {
     pub cards: Vec<CardUse>,
     /// What its dataset is made of.
     pub data: Option<Data>,
+    /// Its health, when an online stage trained it.
+    pub online: Option<online::OnlineStage>,
 }
 
 /// The release of a generation and why it decided as it did.
@@ -161,7 +163,8 @@ pub struct RunObservation {
     pub attempts: Vec<AttemptStage>,
     /// Whether every task its reference solutions ran on is solvable.
     pub solvability: Solvability,
-    /// Its online training stages' health, finished or running.
+    /// Its online training stages' health, finished or running (a candidate
+    /// an online stage trained carries its own).
     pub online: Vec<online::OnlineStage>,
 }
 
@@ -273,6 +276,7 @@ fn release_of(records: &RunRecords, id: &str) -> Release {
 /// Its recipe cannot be read.
 pub fn observe(run: &Path, options: &Options) -> Result<RunObservation, ObserveError> {
     let records = RunRecords::open(run)?;
+    let online_stages = online::observe(&records, run);
     let (witnesses, reference_stages) = witnesses(&records);
     let windows = records.stage_windows();
     let utilisation = options.utilisation.as_ref();
@@ -343,6 +347,7 @@ pub fn observe(run: &Path, options: &Options) -> Result<RunObservation, ObserveE
                     _ => Vec::new(),
                 };
                 Candidate {
+                    online: online_stages.iter().find(|o| o.stage == stage).cloned(),
                     stage,
                     training,
                     cards,
@@ -400,6 +405,6 @@ pub fn observe(run: &Path, options: &Options) -> Result<RunObservation, ObserveE
         generations,
         attempts,
         solvability: Solvability::of(&all_tasks, &witnesses),
-        online: online::observe(&records, run),
+        online: online_stages,
     })
 }

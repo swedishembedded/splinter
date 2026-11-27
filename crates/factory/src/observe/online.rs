@@ -35,6 +35,21 @@ pub struct OnlineStage {
     pub versions: BTreeMap<u64, Value>,
     /// The run's own records of its log (a rollback's audit), in order.
     pub notes: Vec<Value>,
+    /// The share of its scored groups whose rewards do not differ, over
+    /// every version: what a task selector is meant to lower.
+    pub zero_variance_share: Option<f64>,
+}
+
+/// The share of `versions`' groups whose rewards do not differ.
+fn zero_variance_share(versions: &BTreeMap<u64, Value>) -> Option<f64> {
+    let (zero, groups) = versions.values().fold((0.0, 0.0), |(z, g), v| {
+        let n = v["groups"].as_f64().unwrap_or(0.0);
+        (
+            z + v["zero_variance_share"].as_f64().unwrap_or(0.0) * n,
+            g + n,
+        )
+    });
+    (groups > 0.0).then(|| zero / groups)
 }
 
 /// The per-version series and the run's own records the log at `path` holds.
@@ -79,21 +94,30 @@ pub(super) fn observe(records: &RunRecords, run: &Path) -> Vec<OnlineStage> {
                 .and_then(|p| p.json::<Value>("report.json"));
             let (series, notes) = log.unwrap_or_default();
             match report {
-                Some(report) => Some(OnlineStage {
-                    stage: s.id.clone(),
-                    finished: true,
-                    steps: report["health"]["steps"].clone(),
-                    versions: serde_json::from_value(report["health"]["versions"].clone())
-                        .unwrap_or_default(),
-                    notes,
-                }),
-                None if !series.versions.is_empty() || !notes.is_empty() => Some(OnlineStage {
-                    stage: s.id.clone(),
-                    finished: false,
-                    steps: Value::Null,
-                    versions: series.summary(),
-                    notes,
-                }),
+                Some(report) => {
+                    let versions: BTreeMap<u64, Value> =
+                        serde_json::from_value(report["health"]["versions"].clone())
+                            .unwrap_or_default();
+                    Some(OnlineStage {
+                        stage: s.id.clone(),
+                        finished: true,
+                        steps: report["health"]["steps"].clone(),
+                        zero_variance_share: zero_variance_share(&versions),
+                        versions,
+                        notes,
+                    })
+                }
+                None if !series.versions.is_empty() || !notes.is_empty() => {
+                    let versions = series.summary();
+                    Some(OnlineStage {
+                        stage: s.id.clone(),
+                        finished: false,
+                        steps: Value::Null,
+                        zero_variance_share: zero_variance_share(&versions),
+                        versions,
+                        notes,
+                    })
+                }
                 None => None,
             }
         })

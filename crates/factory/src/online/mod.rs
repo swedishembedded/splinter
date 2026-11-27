@@ -21,6 +21,7 @@
 //! * [`group_log`] - `groups.jsonl`, the live log of every group's
 //!   transitions.
 //! * [`health`] - the run's training health, per step and per version.
+//! * [`frontier`] - the frontier selector: groups drawn where they teach.
 //! * [`brain`] - the learner on brain's streaming policy-gradient job.
 //! * [`rollout`] - a finished rollout from its projected model calls, the
 //!   same for every executor.
@@ -28,6 +29,7 @@
 pub mod brain;
 pub mod control;
 pub mod driver;
+pub mod frontier;
 pub mod group_log;
 pub mod health;
 pub mod rollout;
