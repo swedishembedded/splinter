@@ -47,7 +47,8 @@ use crate::markers::chat_tool_list;
 use crate::record::{Record, RecordBody, RecordMetadata, RolloutOutcome};
 use crate::requests::{scope_calls, sent_and_answered};
 use crate::sampled::{
-    token_ids, trained_ids, ProxyReason, SampledTurn, SampledTurns, StepIds, POLICY_KIND,
+    sampled_record, token_ids, trained_ids, ProxyReason, SampledTurn, SampledTurns, StepIds,
+    POLICY_KIND,
 };
 use crate::scrub::Scrub;
 use crate::Objective;
@@ -215,12 +216,13 @@ impl Traced {
     /// request step's `extra.sven`), with its ids and log-probabilities.
     fn of(
         facts: &Value,
+        sampled: Option<&Value>,
         prompt: Option<Vec<i64>>,
         completion: Option<Vec<i64>>,
         logprobs: Option<Vec<f64>>,
     ) -> Self {
         Self {
-            ids: trained_ids(Some(facts), prompt.as_deref(), completion.as_deref()),
+            ids: trained_ids(sampled, prompt.as_deref(), completion.as_deref()),
             logprobs,
             kind: field(facts, "logprob_kind"),
             temperature: field(facts, "logprob_temperature"),
@@ -250,10 +252,13 @@ fn requests(trajectory: &Trajectory) -> Vec<Traced> {
             .as_ref()
             .and_then(|e| e.get("sven"))
             .unwrap_or(&empty);
+        let sampled = sampled_record(step);
         match sven.get("requests").and_then(Value::as_array) {
-            Some(entries) => out.extend(entries.iter().map(|entry| {
+            // The step's sampled record is its last reply's.
+            Some(entries) => out.extend(entries.iter().enumerate().map(|(k, entry)| {
                 Traced::of(
                     entry,
+                    sampled.filter(|_| k + 1 == entries.len()),
                     field(entry, "prompt_token_ids"),
                     field(entry, "completion_token_ids"),
                     field(entry, "logprobs"),
@@ -261,6 +266,7 @@ fn requests(trajectory: &Trajectory) -> Vec<Traced> {
             })),
             None => out.push(Traced::of(
                 sven,
+                sampled,
                 metrics.prompt_token_ids.clone(),
                 metrics.completion_token_ids.clone(),
                 metrics.logprobs.clone(),

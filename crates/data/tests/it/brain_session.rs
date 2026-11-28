@@ -87,10 +87,11 @@ fn projected(record: impl Fn(&Value) -> String) -> CallProjection {
                 "logprob_temperature": t["log_prob_temperature"],
                 "tokenizer_digest": t["tokenizer_digest"],
                 "policy_version": r["brain"]["policy_version"].to_string(),
-                "sampled": record(&m["sampled"]),
             }})),
             ..StepMetrics::default()
         });
+        // sven keeps the record beside the step's metrics.
+        step.extra = Some(json!({"sven": {"sampled": record(&m["sampled"])}}));
         steps.push(step);
         let messages: Vec<Value> = serde_json::from_value(session["requests"][k].clone()).unwrap();
         calls.push(ModelCall {

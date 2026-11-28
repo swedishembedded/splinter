@@ -155,14 +155,12 @@ pub(crate) fn trace_of(
         .steps
         .iter()
         .filter(|s| s.source == StepOrigin::Agent && s.step_id == step_id);
-    let metrics = steps
-        .next()
-        .and_then(|s| s.metrics.as_ref())
-        .ok_or(ProxyReason::NoTrace)?;
+    let step = steps.next().ok_or(ProxyReason::NoTrace)?;
+    let metrics = step.metrics.as_ref().ok_or(ProxyReason::NoTrace)?;
     let sven = |key: &str| metrics.extra.as_ref()?.pointer(&format!("/sven/{key}"));
     let (Some((prompt, completion)), Some(logprobs)) = (
         trained_ids(
-            metrics.extra.as_ref().and_then(|e| e.get("sven")),
+            sampled_record(step),
             metrics.prompt_token_ids.as_deref(),
             metrics.completion_token_ids.as_deref(),
         )?,
@@ -239,6 +237,13 @@ pub(crate) fn turns_of(
 /// A step's prompt ids and generated ids.
 pub(crate) type StepIds = (Vec<u32>, Vec<u32>);
 
+/// The server's record of what it sampled for an agent step's reply, as sven
+/// keeps it: `extra.sven.sampled` of the step (beside its metrics), the
+/// exact text the server sent.
+pub(crate) fn sampled_record(step: &atif::TraceStep) -> Option<&Value> {
+    step.extra.as_ref()?.get("sven")?.get("sampled")
+}
+
 /// Ids as a trace records them, each a token id.
 pub(crate) fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
     ids.iter()
@@ -248,9 +253,8 @@ pub(crate) fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
 
 /// The prompt and generated ids an agent step trains: its trace's `prompt`
 /// and `completion` ids, when the server's record of what it sampled
-/// (`sampled` in its `extra.sven` facts `sven`, the exact text the server
-/// sent) names them too, or the step kept no record. `None` when the step
-/// traced no ids.
+/// (`record`, [`sampled_record`]) names them too, or the step kept no
+/// record. `None` when the step traced no ids.
 ///
 /// The record names the generated ids (`token_ids`) and the prompt by its
 /// length (`context_len`), its digest (`context_hash`, the sha256 of the ids
@@ -262,7 +266,7 @@ pub(crate) fn token_ids(ids: &[i64]) -> Result<Vec<u32>, ProxyReason> {
 /// other ids than the trace (whose log-probabilities belong to the trace's
 /// ids); [`ProxyReason::InvalidIds`] when a trace id is not a token id.
 pub(crate) fn trained_ids(
-    sven: Option<&Value>,
+    record: Option<&Value>,
     prompt: Option<&[i64]>,
     completion: Option<&[i64]>,
 ) -> Result<Option<StepIds>, ProxyReason> {
@@ -270,7 +274,7 @@ pub(crate) fn trained_ids(
         return Ok(None);
     };
     let ids = (token_ids(prompt)?, token_ids(completion)?);
-    let Some(record) = sven.and_then(|s| s.get("sampled")) else {
+    let Some(record) = record else {
         return Ok(Some(ids));
     };
     let record: Value = match record {

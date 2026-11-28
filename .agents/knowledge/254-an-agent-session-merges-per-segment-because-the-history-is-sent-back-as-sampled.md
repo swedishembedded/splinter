@@ -14,7 +14,9 @@ runtime re-renders an earlier answer any more.
   header the prompt ends with (`prefill_token_ids`), the prompt's length (`context_len`) and its digest
   (`context_hash`, sha256 of the ids as little-endian u32), the ids LEB128 varints, base64. It does not hold the
   whole prompt: the prompt ids come from the policy trace, and a call trains them only when the record agrees on all
-  four (`ProxyReason::SampledDiffers` otherwise).
+  four (`ProxyReason::SampledDiffers` otherwise). sven keeps the record on the step itself
+  (`extra.sven.sampled`), beside its metrics, not in them; reading it from the metrics found nothing on every real
+  session, and the check silently passed.
 - **Tool schemas keep their key order by convention.** brain renders a request's tool list as sent; sven and
   splinter both write JSON objects with sorted keys, so a record's tools render as the request did. A client that
   sends tools with other key orders (a script, another runtime) makes brain refuse the record as
