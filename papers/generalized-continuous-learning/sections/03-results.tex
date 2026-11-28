@@ -305,12 +305,12 @@ within each length is unchanged.}\label{tab:calls}
 \begin{figure}[htbp]
 \centering
 \input{figures/rerun-body}
-\caption{Qwen3-8B, three generations of the fixed loop. Left: each generation (filled) against the model it replaces (open),
-on its own held-out authored tasks, every earlier generation's held-out tasks and the 100 hand-written exams, measured in the
-same stage, Wilson 95\% intervals over counted attempts; $^\dagger$faded: 9 of the base's 400 slots uncounted, above the 2\%
-bound, reported and excluded from claims. Middle: exam passes per measurement; each adapter is measured twice, as a new
-generation and as the champion the next one faces. Right: the share of generation~1's claims of completion that the grader
-found false, against the base's.}\label{fig:rerun}
+\caption{Three generations of the fixed loop, Qwen3-8B (top) and Qwen3-4B (bottom). Left: each generation (filled) against
+the champion it would replace (open), on its own held-out authored tasks, every earlier generation's held-out tasks and the 100
+hand-written exams, measured in the same stage, Wilson 95\% intervals over counted attempts; $^\dagger$faded: 9 of the base's
+400 slots uncounted, above the 2\% bound, reported and excluded from claims; $^\ddagger$not promoted, so the 4B's generation~3
+faces generation~1. Middle: exam passes per measurement; each champion is measured again in the next generation's stage.
+Right: the share of generation~1's claims of completion that the grader found false, against the base's.}\label{fig:rerun}
 \end{figure}
 
 \paragraph{Three generations after the fixes (Qwen3-8B).} The defects above were fixed in place in the loop's recipes
@@ -341,7 +341,24 @@ this rerun; generations 2 and 3 pass 30 and 32 of 400, as many as the champion e
 trial in which the base model repeated itself inside a tool call's arguments until sven ended the run; the worker recorded the
 hang-up as HTTP 499 and the classifier took it for an endpoint's refusal, retried it and left it uncounted (fixed in splinter
 \texttt{27372f64b}, after these runs; the live runs kept one rule throughout). Counting all 9 as base wins would give 25 won and
-9 lost, $p=0.005$; the claim stays excluded as registered. The 4B runs under the same recipes after the 8B (\cref{app:deviations}).
+9 lost, $p=0.005$; the claim stays excluded as registered.
+
+\paragraph{Three generations after the fixes (Qwen3-4B).} The same recipes, bound to Qwen3-4B, ran after the 8B's three
+generations, from 23:59 on 2026-11-27 to 04:57 on 2026-11-28 (generation~1 resumed where it had been stopped,
+\cref{app:deviations}).
+\begin{itemize}
+\item \emph{Generation 1 against the base.} Own held-out tasks 64 of 224 against 6 of 222 (62 won, 4 lost,
+  $p=1.0\times10^{-14}$); exams 11 of 400 against 0 of 397 (11 won, 0 lost, $p=0.00049$), with 3 of the base's slots
+  uncounted, within the 2\% bound. Promoted.
+\item \emph{Generation 2 against generation 1.} Own held-out tasks 35 of 188 against 31 (17/13, $p=0.29$); generation~1's
+  held-out tasks 76 of 224 against 68 (27/19, $p=0.15$); exams 11 of 400 against 12 (10/11, $p=0.67$). Not promoted.
+\item \emph{Generation 3 against generation 1}, still the champion: own held-out tasks 41 of 196 against 27 (24 won, 10 lost,
+  $p=0.012$); generation~2's held-out tasks 30 of 188 against 31 (11/12); generation~1's 83 of 224 against 68 (28/13,
+  $p=0.014$); exams 13 of 400 against 12 (11/10, $p=0.50$). Promoted.
+\end{itemize}
+At 4B the exams show one claimable step of transfer, generation~1 over the base; no later generation beats its champion on
+them. On authored tasks generation~2 did not beat generation~1, and generation~3 did, both on its own tasks and on
+generation~1's.
 
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 

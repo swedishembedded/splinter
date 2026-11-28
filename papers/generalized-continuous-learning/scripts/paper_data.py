@@ -317,35 +317,37 @@ def main(data: str, out: str) -> None:
     g1r = ret["g-s3"]["all"]
     e1r = ret["8b-s1"]["all"]
 
-    # The 8B loop rerun after the recipe fixes: per generation step, each evaluation's two arms measured in one stage
-    # (predecessor and new generation), the exam per measurement, and the completion claims of generation 1's arms.
-    rerun = json.load(open(os.path.join(ev, "loop", "rerun-8b.json")))
+    # The loop rerun after the recipe fixes, per size: per generation step, each evaluation's two arms measured in one
+    # stage (the champion it would replace and the new generation), the exam per measurement, and the completion claims
+    # of generation 1's arms.
     kinds = {"target": "own held-out", "retention-g1": "gen.~1 held-out", "retention-g2": "gen.~2 held-out", "exam": "exams"}
-    steps, exams, row = [], [], 0
-    for g in rerun["generations"]:
-        for e in g["evaluations"]:
-            row += 1
-            for side in ("baseline", "candidate"):
-                k, n = e[side]["passed"], e[side]["counted"]
-                lo, hi = wilson(k, n)
-                steps.append([row, g["generation"], e["purpose"], kinds[e["purpose"]], side, k, n, 100 * k / n, 100 * lo, 100 * hi,
-                              "excluded" if e["unpaired_slots"] > 0.02 * e[side]["trials"] else "counted"])
-            if e["purpose"] == "exam":
-                for side, x in (("baseline", g["generation"] - 0.5), ("candidate", g["generation"])):
+    steps, exams, claims = [], [], []
+    for size in ("8b", "4b"):
+        rerun = json.load(open(os.path.join(ev, "loop", f"rerun-{size}.json")))
+        row = 0
+        for g in rerun["generations"]:
+            for e in g["evaluations"]:
+                row += 1
+                for side in ("baseline", "candidate"):
                     k, n = e[side]["passed"], e[side]["counted"]
                     lo, hi = wilson(k, n)
-                    exams.append([x, g["generation"], side, k, n, 100 * k / n, 100 * lo, 100 * hi])
+                    steps.append([size, row, g["generation"], e["purpose"], kinds[e["purpose"]], side, k, n, 100 * k / n,
+                                  100 * lo, 100 * hi, "excluded" if e["unpaired_slots"] > 0.02 * e[side]["trials"] else "counted"])
+                if e["purpose"] == "exam":
+                    for side, x in (("baseline", g["generation"] - 0.5), ("candidate", g["generation"])):
+                        k, n = e[side]["passed"], e[side]["counted"]
+                        lo, hi = wilson(k, n)
+                        exams.append([size, x, g["generation"], side, k, n, 100 * k / n, 100 * lo, 100 * hi])
+        for y, (stage, label) in enumerate((("eval-unseen", "own held-out"), ("eval-exam", "exams")), start=1):
+            for side in ("baseline", "candidate"):
+                c = rerun["generations"][0]["claims"][stage][side]
+                k, n = c["claimed_failed"], c["claimed_failed"] + c["claimed_passed"]
+                lo, hi = wilson(k, n)
+                claims.append([size, y, label, side, k, n, 100 * k / n, 100 * lo, 100 * hi])
     write_csv(os.path.join(out, "rerun-steps.csv"),
-              ["y", "generation", "purpose", "kind", "side", "passes", "attempts", "pct", "lo", "hi", "claim"], steps)
-    write_csv(os.path.join(out, "rerun-exam.csv"), ["x", "generation", "side", "passes", "attempts", "pct", "lo", "hi"], exams)
-    claims = []
-    for y, (stage, label) in enumerate((("eval-unseen", "own held-out"), ("eval-exam", "exams")), start=1):
-        for side in ("baseline", "candidate"):
-            c = rerun["generations"][0]["claims"][stage][side]
-            k, n = c["claimed_failed"], c["claimed_failed"] + c["claimed_passed"]
-            lo, hi = wilson(k, n)
-            claims.append([y, label, side, k, n, 100 * k / n, 100 * lo, 100 * hi])
-    write_csv(os.path.join(out, "rerun-claims.csv"), ["y", "set", "side", "false", "claims", "pct", "lo", "hi"], claims)
+              ["size", "y", "generation", "purpose", "kind", "side", "passes", "attempts", "pct", "lo", "hi", "claim"], steps)
+    write_csv(os.path.join(out, "rerun-exam.csv"), ["size", "x", "generation", "side", "passes", "attempts", "pct", "lo", "hi"], exams)
+    write_csv(os.path.join(out, "rerun-claims.csv"), ["size", "y", "set", "side", "false", "claims", "pct", "lo", "hi"], claims)
 
     # Counts the method diagram prints, as macros.
     macros = {"VimItems": st["sections"]["items"], "VimCandidates": fw["admission"]["candidates"],

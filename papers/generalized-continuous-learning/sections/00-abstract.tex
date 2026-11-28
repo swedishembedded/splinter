@@ -13,7 +13,9 @@ hours and each was promoted: each beats its predecessor on its own held-out auth
 attempts; generation~2 55 against 40 of 188, $p=0.016$; generation~3 59 against 45 of 196, $p=0.014$) without forgetting an
 earlier generation's; on the exams generations 2 and 3 do not beat their champions (30 against 30, 32 against 32 of 400),
 and generation~1's 25 of 400 against the base's 0 is excluded from claims because 2.25\% of the base's slots went
-uncounted (bound 2\%). A 27B learner is not run. The steps that lead there were each measured: an
+uncounted (bound 2\%). At 4B the fixed loop's generation~1 beats the base on the exams (11 of 400 against 0, 11 exams won and
+none lost, $p=0.0005$), generation~2 is not promoted, and generation~3 beats generation~1 on authored tasks (41 against 27 of
+196, $p=0.012$) but not on the exams (13 against 12). A 27B learner is not run. The steps that lead there were each measured: an
 executable environment as the only judge of correctness (a Lua~5.1 interpreter, in a first family, raised a 4B model's share
 of a 2040-item sealed exam from 5.1\% to 13.2\% over four generations, +8.2 points [+5.1, +11.5], +3.3 [+0.7, +7.1] on program
 families no exam had used); oracle admission that replays every reference in the task image; outcome-first authoring (start and
@@ -23,5 +25,6 @@ gain comes from the pairing of request and action; trained on the 4B's own verif
 generation~1's gain comes from the 27B teacher's trajectories. On 228 hand-written practice tasks no candidate is worse
 than its base overall (the 4B's generation~1: 378 of 912 attempts against 138; the 8B's, in each of three seeds, 408 to 463 against 134 to 139). Against the operational definition of continuous
 self-improvement stated in the introduction, the first generation holds at both sizes; after the fixes three 8B
-generations each improve within the authored task distribution, and the rerun shows no claimable exam step.
+generations each improve within the authored task distribution, at 4B two of three steps do, and the only claimable exam step is
+the 4B's first.
 \end{abstract}

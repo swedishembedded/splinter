@@ -366,6 +366,17 @@ tests null; g1-vs-base excluded). The 9 uncounted slots were base tool-call loop
 (HTTP 499), fixed in 27372f64b after the runs. 4B resumed at 23:59 after the 8B finished, per the user. Two seed replicates
 of 8B g1 were stopped unused (one named g1's own seed 3 by mistake, so its adapter was rightly reused by identity; no defect).
 
+## Rerun on the fixed loop: 4B results (2026-11-27 23:59 - 2026-11-28 04:57)
+
+| step | own held-out (target) | earlier held-out (retention) | exam (primary) | release |
+|---|---|---|---|---|
+| g1 vs base | 64/224 vs 6/222 (62/4, p 1e-14) | - | 11/400 vs 0/397 (11/0, p 0.00049; 3 uncounted, within 2%) | promoted |
+| g2 vs g1 | 35/188 vs 31 (17/13, p 0.29) | g1's: 76/224 vs 68 (27/19, p 0.15) | 11/400 vs 12 (10/11) | not promoted |
+| g3 vs g1 | 41/196 vs 27 (24/10, p 0.012) | g2's: 30/188 vs 31 (11/12); g1's: 83/224 vs 68 (28/13, p 0.014) | 13/400 vs 12 (11/10) | promoted |
+
+Verdict: one claimable exam step (4B g1 over the base); on authored tasks two of three 4B steps improve. Data:
+`papers/generalized-continuous-learning/data/vim-transfer/loop/rerun-4b.json`, figure `fig:rerun` (bottom row).
+
 ## Seed replicates of the generation steps: registration (2026-11-28 05:20, before any replicate result)
 
 Known limit 5 above (one training seed per generation). Each completed step is repeated with only its newest LoRA stage's

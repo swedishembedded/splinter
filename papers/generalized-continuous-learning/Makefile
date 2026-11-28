@@ -17,7 +17,7 @@ SOURCES := $(PAPER).tex status.txt references.bib $(wildcard *.tex sections/*.te
 GENERATED := $(BUILD)/generated
 VIM_FILES := evaluation/aggregates.json decision/decision-eval-exam.json decision/secondary-eval-exam.json \
 	decision/decision-eval-unseen.json decision/secondary-eval-unseen.json decision/student-only-decision-eval-exam.json \
-	decision/student-only-secondary-eval-exam.json loop/loop.json loop/rerun-8b.json \
+	decision/student-only-secondary-eval-exam.json loop/loop.json loop/rerun-8b.json loop/rerun-4b.json \
 	retention/retention.json material/funnel.json
 export TEXINPUTS := $(BUILD):
 
