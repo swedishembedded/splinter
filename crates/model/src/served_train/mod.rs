@@ -54,7 +54,7 @@ pub use checkpoint::{full_fine_tune_served, merge_served, Install};
 pub use feedback::train_feedback_served;
 pub use job::REFUSED_WAIT;
 pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
-pub use score::score_chat;
+pub use score::{score_chat, score_tokens};
 pub use served_adapter::{serve_adapter, withdraw_adapter};
 pub(crate) use served_job::action_params;
 pub use served_job::{

@@ -300,6 +300,34 @@ pub fn served_model_sampled(
     })
 }
 
+/// A policy served by a `brain serve` at `base_url` as `model`, asked
+/// through sven's brain driver rather than a generic OpenAI one: a request
+/// that wants log-probabilities gets brain's policy trace (the policy's own
+/// over the whole vocabulary), and every reply's `sampled` record goes back
+/// with the answer it belongs to. Sampled as `sampling` says, every setting
+/// on every request.
+///
+/// # Errors
+/// The driver cannot be built or the server's context cannot be read.
+pub fn served_policy_model(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    sampling: &ServedSampling,
+) -> Result<LoadedModel, PolicyError> {
+    let spec = format!("{LOCAL_SERVER_PROVIDER}/{model}");
+    let config = served_config(&spec, base_url, api_key, sampling)?;
+    let driver = probed_provider(&config).map_err(|e| PolicyError::Remote {
+        spec: spec.clone(),
+        reason: format!("{e:#}"),
+    })?;
+    Ok(LoadedModel {
+        provider: Arc::from(driver),
+        identity: format!("{spec}@{base_url}"),
+        served: None,
+    })
+}
+
 /// The configuration [`served_model`] builds its driver from. Every
 /// request asks the server not to open with a reasoning block
 /// (`chat_template_kwargs.enable_thinking: false`) unless `sampling` lets

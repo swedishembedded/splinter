@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+
+[package]
+name = "splinter-brain-session"
+description = "The append-only session contract on a real brain: a sven tool session served by brain on the CPU merges into one record per segment that brain's trainer accepts and whose behaviour log-probabilities brain's score reproduces."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "brain-session"
+path = "src/main.rs"
+
+[dependencies]
+splinter-sdk = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

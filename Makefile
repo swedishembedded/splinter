@@ -22,6 +22,10 @@ QWEN3_BIN ?= $(BRAIN_DIR)/target/release/sample-models-qwen3
 ONLINE_WORK ?= $(CURDIR)/target/online-cpu
 ONLINE_PORT ?= 8813
 ESTIMATOR ?= clipped
+# The small Qwen3 checkpoint (brain's store layout), port and work directory of `make test/contract/brain/session`.
+BRAIN_SESSION_MODEL ?= $(MODELS_DIR)/Qwen/Qwen3-0.6B
+BRAIN_SESSION_PORT ?= 8910
+BRAIN_SESSION_WORK ?= $(CURDIR)/target/brain-session
 SVEN_BIN ?= $(SVEN_DIR)/target/release/sven
 SPLINTER_BIN ?= target/release/splinter
 MODELS_DIR ?= $(HOME)/.local/share/brain/models
@@ -187,6 +191,12 @@ test/contract:
 ## test/contract/brain - the records Splinter's views write are the records a served brain's trainer reads: every record accepted, only the assistant's actions supervised (counted independently), sampled ids and a refused broken record, on a tokenizer-only model on the CPU (BRAIN_BIN, no weights, no GPU, seconds; exit 3 means no brain binary)
 test/contract/brain:
 	bash scripts/contract/brain.sh "$(CARGO)" "$(PROFILE)" "$(BRAIN_BIN)"
+
+## test/contract/brain/session - a sven tool session served by a real brain on the CPU (a small Qwen3, BRAIN_SESSION_MODEL, f32 KV, a port in 8910-8919): every call's history append-only, each rollout merged into one record per segment, the group accepted by brain's check_dataset and every behaviour log-probability reproduced by brain's score (BRAIN_BIN; refused, never skipped, without a brain binary or the checkpoint; tens of minutes)
+test/contract/brain/session:
+	$(CARGO) build $(PROFILE) -p splinter-brain-session
+	"$(or $(CARGO_TARGET_DIR),target)/release/brain-session" --brain "$(BRAIN_BIN)" --model "$(BRAIN_SESSION_MODEL)" \
+		--port "$(BRAIN_SESSION_PORT)" --work "$(BRAIN_SESSION_WORK)"
 
 ## test/conformance - the per-PR validation tier: every per-PR row of the validation map (docs/contributing/validation.md) run once and written to target/conformance/evidence.jsonl (no model, no GPU, seconds to minutes)
 test/conformance:
@@ -649,7 +659,7 @@ help:
 	@bash scripts/make-help.sh
 
 # Declared last so every generated list above is already defined.
-.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/online/watchdog test/online/watchdog/fault test/online/watchdog/clean test/online/pinned test/online/merged test/online/bench test/online/bench/prepare test/online/tools test/online/tools/tasks test/contract test/contract/brain test/package test/worker worker worker/install fmt \
+.PHONY: schemas schemas/generate help build build/crate $(BUILD_CRATE_TARGETS) test test/crate $(TEST_CRATE_TARGETS) test/e2e test/e2e/brain-sven test/families test/methods test/online test/online/watchdog test/online/watchdog/fault test/online/watchdog/clean test/online/pinned test/online/merged test/online/bench test/online/bench/prepare test/online/tools test/online/tools/tasks test/contract test/contract/brain test/contract/brain/session test/package test/worker worker worker/install fmt \
 	install package package/deb package/deb/release package/deb/publish release release/patch release/minor release/major release/notes release/publish _release/preflight _release/finalize \
 	check check/fmt check/clippy check/papers check/gates check/gates/text-hygiene check/gates/spdx $(GATE_TARGETS) \
 	lease lease/test lease/doctor lease/gpu lease/gpu/run lease/card lease/card/run lease/worktree lease/worktree/add lease/worktree/list lease/worktree/remove \

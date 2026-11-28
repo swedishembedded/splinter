@@ -29,8 +29,8 @@ use splinter_orchestrator::config::Config;
 
 pub use splinter_factory::{
     backend, collection, connections, environment, eval_plan, execute, graph, knobs,
-    machine_config, observe, ops, plan, recipe, registry, resolve as resolution, run, templates,
-    training, tree,
+    machine_config, observe, online, ops, plan, recipe, registry, resolve as resolution, run,
+    templates, training, tree,
 };
 
 /// The models a run's computed stages call in process: each binding's

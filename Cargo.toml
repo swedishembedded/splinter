@@ -10,6 +10,7 @@ members = [
     "samples/absorb",
     "samples/absorb-story",
     "samples/adams",
+    "samples/brain-session",
     "samples/agent/loop",
     "samples/campaign-lua",
     "samples/goal-selection",

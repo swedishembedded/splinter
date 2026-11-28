@@ -7,7 +7,8 @@
 // procure our services by sending an email to info@swedishembedded.com.
 
 //! A base, or a base with an adapter, scored teacher-forced on chat records:
-//! the `score` action a served chat model takes through `POST /v1/run`.
+//! the `score` action a served chat model takes through `POST /v1/run`; and
+//! given token ids scored after given context ids ([`score_tokens`]).
 //!
 //! Every message marked `"train": true` is an answer, scored under the
 //! model's full distribution at temperature 1 as the model is asked for it
@@ -127,4 +128,79 @@ pub fn score_chat(
         records: scored,
         skipped: 0,
     })
+}
+
+/// The log-probability `model` (an id the endpoints serve) gives each of
+/// `token_ids` after `prompt_token_ids`, both as given, teacher-forced at
+/// `temperature` over the whole vocabulary: one list per pair of `answers`,
+/// in order. The figure a sampled answer's behaviour log-probabilities are
+/// checked against.
+///
+/// # Errors
+/// More answers than one call scores, the service refused a pair (it names
+/// it), or answered without a log-probability per id.
+pub fn score_tokens(
+    brain: &BrainEndpoints,
+    model: &str,
+    answers: &[(Vec<u32>, Vec<u32>)],
+    temperature: f64,
+) -> Result<Vec<Vec<f64>>, PolicyError> {
+    let refused = |reason: String| PolicyError::Endpoint {
+        url: brain.urls().join(", "),
+        reason,
+    };
+    if answers.len() > CALL_RECORDS {
+        return Err(refused(format!(
+            "{} answers to score, more than the {CALL_RECORDS} one call takes",
+            answers.len()
+        )));
+    }
+    let mut records = String::new();
+    for (prompt, generated) in answers {
+        records.push_str(&json!({"prompt_token_ids": prompt, "token_ids": generated}).to_string());
+        records.push('\n');
+    }
+    let body = json!({
+        "model": model,
+        "action": "score",
+        "params": {"per_token": true, "temperature": temperature},
+        "blobs": {"records": {
+            "media": "text",
+            "data": base64::engine::general_purpose::STANDARD.encode(&records),
+        }},
+    });
+    let result = super::job::call(
+        brain.urls(),
+        brain.key(),
+        brain.refused_wait(),
+        brain.pin(model.as_bytes()),
+        &body,
+    )
+    .map_err(|e| match e {
+        super::job::JobError::Transport(url, reason) => PolicyError::Endpoint { url, reason },
+        super::job::JobError::Failed(reason) => refused(format!("scoring under {model}: {reason}")),
+        super::job::JobError::Cancelled(_) => {
+            refused(format!("scoring under {model} was cancelled"))
+        }
+    })?;
+    let scored = result["outputs"]["records"]
+        .as_array()
+        .filter(|r| r.len() == answers.len())
+        .ok_or_else(|| refused(format!("the score of {model} names no record per answer")))?;
+    scored
+        .iter()
+        .zip(answers)
+        .map(|(record, (_, generated))| {
+            let values: Option<Vec<f64>> = record["answers"][0]["token_logprobs"]
+                .as_array()
+                .map(|v| v.iter().filter_map(Value::as_f64).collect());
+            values
+                .filter(|v| v.len() == generated.len())
+                .ok_or_else(|| {
+                    refused(format!(
+                        "the score of {model} names no log-probability per generated id"
+                    ))
+                })
+        })
+        .collect()
 }

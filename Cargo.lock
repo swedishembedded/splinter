@@ -5052,6 +5052,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "splinter-brain-session"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde_json",
+ "splinter-sdk",
+]
+
+[[package]]
 name = "splinter-campaign-lua"
 version = "0.2.0"
 dependencies = [
