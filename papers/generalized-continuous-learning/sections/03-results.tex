@@ -360,6 +360,24 @@ At 4B the exams show one claimable step of transfer, generation~1 over the base;
 them. On authored tasks generation~2 did not beat generation~1, and generation~3 did, both on its own tasks and on
 generation~1's.
 
+\paragraph{Training-seed replicates of the steps (secondary).} Each step after generation~1 was repeated with only its newest
+LoRA's training seed changed, registered before any replicate result (\nolinkurl{loop/seed-replicates.json}): 4 seeds of each
+8B step (generation~3's fourth did not finish its evaluations before the lease ended and is not counted, so 3) and 5 of each
+4B step. Pooled over seeds (tasks won and lost summed, one-sided sign test), against the same champion:
+\begin{itemize}
+\item \emph{8B generation~2.} Own held-out tasks 99 won, 53 lost ($p=0.0001$); generation~1's held-out tasks 115/84
+  ($p=0.017$); exams 63/64 ($p=0.57$). Every seed gains on its own tasks (49 to 55 of 188 against 40).
+\item \emph{8B generation~3.} Own held-out tasks 64/35 ($p=0.002$); generation~2's 61/59, generation~1's 52/48; exams 66/57
+  ($p=0.24$).
+\item \emph{4B generation~2.} Own held-out tasks 76/65 ($p=0.20$; one seed of five loses, 25 against 31); generation~1's
+  held-out tasks 154/84 ($p<10^{-5}$); exams 58/46 ($p=0.14$).
+\item \emph{4B generation~3} (against generation~1). Own held-out tasks 102/51 ($p=2\times10^{-5}$); generation~2's 88/56
+  ($p=0.005$); generation~1's 172/74 ($p<10^{-9}$); exams 56/44 ($p=0.14$).
+\end{itemize}
+Over seeds, three of the four steps improve on held-out authored tasks and none loses an earlier generation's tasks; the
+4B's second step improves on the first generation's tasks rather than its own. No step improves on the hand-written exams
+(the strongest is 66 won to 57 lost); the single-seed results above are not a seed's accident in either direction.
+
 \subsection{Retention on hand-written practice tasks}\label{sec:r-retention}
 
 \paragraph{Tested on.} The course's \RetainTasks{} hand-written practice tasks (168 exercises and 60 composites of the

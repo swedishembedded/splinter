@@ -377,6 +377,20 @@ of 8B g1 were stopped unused (one named g1's own seed 3 by mistake, so its adapt
 Verdict: one claimable exam step (4B g1 over the base); on authored tasks two of three 4B steps improve. Data:
 `papers/generalized-continuous-learning/data/vim-transfer/loop/rerun-4b.json`, figure `fig:rerun` (bottom row).
 
+## Seed replicates: results (2026-11-28 09:05)
+
+Pooled over seeds (tasks won/lost, one-sided sign test), each step against its champion; data
+`papers/generalized-continuous-learning/data/vim-transfer/loop/seed-replicates.json`:
+
+| step | seeds | own held-out | earlier held-out | exam |
+|---|---|---|---|---|
+| 8B g2 | 1-4 | 99/53, p 0.0001 | g1's 115/84, p 0.017 | 63/64 |
+| 8B g3 | 1-3 (seed 4 unfinished at lease end) | 64/35, p 0.002 | g2's 61/59; g1's 52/48 | 66/57, p 0.24 |
+| 4B g2 | 1-5 | 76/65, p 0.20 | g1's 154/84, p 3e-6 | 58/46, p 0.14 |
+| 4B g3 | 1-5 | 102/51, p 2e-5 | g2's 88/56, p 0.005; g1's 172/74, p 2e-10 | 56/44, p 0.14 |
+
+Verdict: three of four steps improve on held-out authored tasks over seeds, none forgets; no step improves on the exams.
+
 ## Seed replicates of the generation steps: registration (2026-11-28 05:20, before any replicate result)
 
 Known limit 5 above (one training seed per generation). Each completed step is repeated with only its newest LoRA stage's

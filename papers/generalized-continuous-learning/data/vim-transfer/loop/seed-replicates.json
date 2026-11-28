@@ -1,0 +1,1045 @@
+{
+ "schema": "source-to-transfer.seed-replicates/1",
+ "test": "one-sided exact sign test over tasks, pooled over seeds",
+ "steps": [
+  {
+   "size": "8B",
+   "generation": 2,
+   "seeds": [
+    {
+     "seed": 1,
+     "run": "s8b-g2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        40,
+        188
+       ],
+       "candidate": [
+        55,
+        188
+       ],
+       "wins": 29,
+       "losses": 14,
+       "p_one_sided": 0.015769748676575504,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        86,
+        224
+       ],
+       "candidate": [
+        92,
+        224
+       ],
+       "wins": 29,
+       "losses": 23,
+       "p_one_sided": 0.2442278346899455,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        30,
+        400
+       ],
+       "candidate": [
+        30,
+        400
+       ],
+       "wins": 17,
+       "losses": 17,
+       "p_one_sided": 0.5679168797796589,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 2,
+     "run": "s8b-g2-r2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        40,
+        188
+       ],
+       "candidate": [
+        51,
+        188
+       ],
+       "wins": 28,
+       "losses": 17,
+       "p_one_sided": 0.06757822542283515,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        86,
+        224
+       ],
+       "candidate": [
+        91,
+        224
+       ],
+       "wins": 28,
+       "losses": 23,
+       "p_one_sided": 0.28792467386592474,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        30,
+        400
+       ],
+       "candidate": [
+        27,
+        400
+       ],
+       "wins": 11,
+       "losses": 14,
+       "p_one_sided": 0.7878218889236461,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 3,
+     "run": "s8b-g2-r3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        40,
+        188
+       ],
+       "candidate": [
+        51,
+        188
+       ],
+       "wins": 22,
+       "losses": 11,
+       "p_one_sided": 0.04007165622897463,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        86,
+        224
+       ],
+       "candidate": [
+        96,
+        224
+       ],
+       "wins": 30,
+       "losses": 20,
+       "p_one_sided": 0.10131937553226988,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        30,
+        400
+       ],
+       "candidate": [
+        29,
+        400
+       ],
+       "wins": 16,
+       "losses": 17,
+       "p_one_sided": 0.6358337595593213,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 4,
+     "run": "s8b-g2-r4",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        40,
+        188
+       ],
+       "candidate": [
+        49,
+        188
+       ],
+       "wins": 20,
+       "losses": 11,
+       "p_one_sided": 0.07480639219284052,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        86,
+        224
+       ],
+       "candidate": [
+        96,
+        224
+       ],
+       "wins": 28,
+       "losses": 18,
+       "p_one_sided": 0.09196241068849542,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        30,
+        400
+       ],
+       "candidate": [
+        33,
+        400
+       ],
+       "wins": 19,
+       "losses": 16,
+       "p_one_sided": 0.3679394004284417,
+       "unpaired_slots": 0
+      }
+     }
+    }
+   ],
+   "unfinished": [],
+   "evaluations": {
+    "target": {
+     "wins": 99,
+     "losses": 53,
+     "p_one_sided": 0.00011871346008988656
+    },
+    "retention-g1": {
+     "wins": 115,
+     "losses": 84,
+     "p_one_sided": 0.016593957797313732
+    },
+    "exam": {
+     "wins": 63,
+     "losses": 64,
+     "p_one_sided": 0.5703860921700151
+    }
+   }
+  },
+  {
+   "size": "8B",
+   "generation": 3,
+   "seeds": [
+    {
+     "seed": 1,
+     "run": "s8b-g3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        45,
+        196
+       ],
+       "candidate": [
+        59,
+        196
+       ],
+       "wins": 25,
+       "losses": 11,
+       "p_one_sided": 0.014408359827939381,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        54,
+        188
+       ],
+       "candidate": [
+        49,
+        188
+       ],
+       "wins": 14,
+       "losses": 19,
+       "p_one_sided": 0.8518968157004577,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        105,
+        224
+       ],
+       "candidate": [
+        109,
+        224
+       ],
+       "wins": 18,
+       "losses": 14,
+       "p_one_sided": 0.298307447927072,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        32,
+        400
+       ],
+       "candidate": [
+        32,
+        400
+       ],
+       "wins": 18,
+       "losses": 18,
+       "p_one_sided": 0.5660302997857795,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 2,
+     "run": "s8b-g3-r2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        45,
+        196
+       ],
+       "candidate": [
+        51,
+        196
+       ],
+       "wins": 17,
+       "losses": 11,
+       "p_one_sided": 0.17246422544121784,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        54,
+        188
+       ],
+       "candidate": [
+        57,
+        188
+       ],
+       "wins": 23,
+       "losses": 20,
+       "p_one_sided": 0.38039582128067295,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        105,
+        224
+       ],
+       "candidate": [
+        106,
+        224
+       ],
+       "wins": 17,
+       "losses": 16,
+       "p_one_sided": 0.5000000000000009,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        32,
+        400
+       ],
+       "candidate": [
+        37,
+        400
+       ],
+       "wins": 23,
+       "losses": 18,
+       "p_one_sided": 0.2663546276180582,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 3,
+     "run": "s8b-g3-r3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        45,
+        196
+       ],
+       "candidate": [
+        54,
+        196
+       ],
+       "wins": 22,
+       "losses": 13,
+       "p_one_sided": 0.08773262449540253,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        54,
+        188
+       ],
+       "candidate": [
+        58,
+        188
+       ],
+       "wins": 24,
+       "losses": 20,
+       "p_one_sided": 0.325793913604456,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        105,
+        224
+       ],
+       "candidate": [
+        104,
+        224
+       ],
+       "wins": 17,
+       "losses": 18,
+       "p_one_sided": 0.6320605995715608,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        32,
+        400
+       ],
+       "candidate": [
+        36,
+        400
+       ],
+       "wins": 25,
+       "losses": 21,
+       "p_one_sided": 0.3293690385118285,
+       "unpaired_slots": 0
+      }
+     }
+    }
+   ],
+   "unfinished": [
+    4
+   ],
+   "evaluations": {
+    "target": {
+     "wins": 64,
+     "losses": 35,
+     "p_one_sided": 0.0023203270442171534
+    },
+    "retention-g2": {
+     "wins": 61,
+     "losses": 59,
+     "p_one_sided": 0.46365751054494164
+    },
+    "retention-g1": {
+     "wins": 52,
+     "losses": 48,
+     "p_one_sided": 0.3821767172013334
+    },
+    "exam": {
+     "wins": 66,
+     "losses": 57,
+     "p_one_sided": 0.23542537281969125
+    }
+   }
+  },
+  {
+   "size": "4B",
+   "generation": 2,
+   "seeds": [
+    {
+     "seed": 1,
+     "run": "s4b-g2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        35,
+        188
+       ],
+       "wins": 17,
+       "losses": 13,
+       "p_one_sided": 0.2923323558643458,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        76,
+        224
+       ],
+       "wins": 27,
+       "losses": 19,
+       "p_one_sided": 0.15099780659483072,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        11,
+        400
+       ],
+       "wins": 10,
+       "losses": 11,
+       "p_one_sided": 0.6681880950927759,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 2,
+     "run": "s4b-g2-r2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        33,
+        188
+       ],
+       "wins": 14,
+       "losses": 12,
+       "p_one_sided": 0.42250949144363487,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        83,
+        224
+       ],
+       "wins": 27,
+       "losses": 12,
+       "p_one_sided": 0.011851351235236538,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        13,
+        400
+       ],
+       "wins": 12,
+       "losses": 11,
+       "p_one_sided": 0.49999999999999994,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 3,
+     "run": "s4b-g2-r3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        32,
+        188
+       ],
+       "wins": 17,
+       "losses": 16,
+       "p_one_sided": 0.5000000000000009,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        88,
+        224
+       ],
+       "wins": 39,
+       "losses": 19,
+       "p_one_sided": 0.0059640698578815425,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        18,
+        400
+       ],
+       "wins": 13,
+       "losses": 7,
+       "p_one_sided": 0.13158798217773435,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 4,
+     "run": "s4b-g2-r4",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        41,
+        188
+       ],
+       "wins": 20,
+       "losses": 10,
+       "p_one_sided": 0.049368573352694546,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        85,
+        224
+       ],
+       "wins": 34,
+       "losses": 17,
+       "p_one_sided": 0.012046453849224712,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        17,
+        400
+       ],
+       "wins": 12,
+       "losses": 7,
+       "p_one_sided": 0.17964172363281244,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 5,
+     "run": "s4b-g2-r5",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        25,
+        188
+       ],
+       "wins": 8,
+       "losses": 14,
+       "p_one_sided": 0.9330997467041,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        78,
+        224
+       ],
+       "wins": 27,
+       "losses": 17,
+       "p_one_sided": 0.08708557363536329,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        13,
+        400
+       ],
+       "wins": 11,
+       "losses": 10,
+       "p_one_sided": 0.5000000000000018,
+       "unpaired_slots": 0
+      }
+     }
+    }
+   ],
+   "unfinished": [],
+   "evaluations": {
+    "target": {
+     "wins": 76,
+     "losses": 65,
+     "p_one_sided": 0.19989336008661113
+    },
+    "retention-g1": {
+     "wins": 154,
+     "losses": 84,
+     "p_one_sided": 3.345139129260196e-06
+    },
+    "exam": {
+     "wins": 58,
+     "losses": 46,
+     "p_one_sided": 0.14034516451708962
+    }
+   }
+  },
+  {
+   "size": "4B",
+   "generation": 3,
+   "seeds": [
+    {
+     "seed": 1,
+     "run": "s4b-g3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        27,
+        196
+       ],
+       "candidate": [
+        41,
+        196
+       ],
+       "wins": 24,
+       "losses": 10,
+       "p_one_sided": 0.012153255054727188,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        30,
+        188
+       ],
+       "wins": 11,
+       "losses": 12,
+       "p_one_sided": 0.6611802577972401,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        83,
+        224
+       ],
+       "wins": 28,
+       "losses": 13,
+       "p_one_sided": 0.01376657791479381,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        13,
+        400
+       ],
+       "wins": 11,
+       "losses": 10,
+       "p_one_sided": 0.5000000000000018,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 2,
+     "run": "s4b-g3-r2",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        27,
+        196
+       ],
+       "candidate": [
+        34,
+        196
+       ],
+       "wins": 16,
+       "losses": 9,
+       "p_one_sided": 0.114761471748352,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        41,
+        188
+       ],
+       "wins": 22,
+       "losses": 12,
+       "p_one_sided": 0.06072474247775964,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        75,
+        224
+       ],
+       "wins": 29,
+       "losses": 22,
+       "p_one_sided": 0.20053099551396966,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        16,
+        400
+       ],
+       "wins": 14,
+       "losses": 10,
+       "p_one_sided": 0.2706280946731572,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 3,
+     "run": "s4b-g3-r3",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        27,
+        196
+       ],
+       "candidate": [
+        33,
+        196
+       ],
+       "wins": 16,
+       "losses": 10,
+       "p_one_sided": 0.16346979141235382,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        38,
+        188
+       ],
+       "wins": 16,
+       "losses": 9,
+       "p_one_sided": 0.114761471748352,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        96,
+        224
+       ],
+       "wins": 40,
+       "losses": 12,
+       "p_one_sided": 6.376939192787014e-05,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        14,
+        400
+       ],
+       "wins": 10,
+       "losses": 8,
+       "p_one_sided": 0.4072647094726553,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 4,
+     "run": "s4b-g3-r4",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        27,
+        196
+       ],
+       "candidate": [
+        37,
+        196
+       ],
+       "wins": 20,
+       "losses": 10,
+       "p_one_sided": 0.049368573352694546,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        38,
+        188
+       ],
+       "wins": 18,
+       "losses": 11,
+       "p_one_sided": 0.1324654482305045,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        89,
+        224
+       ],
+       "wins": 37,
+       "losses": 16,
+       "p_one_sided": 0.002743172438380075,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        17,
+        400
+       ],
+       "wins": 12,
+       "losses": 7,
+       "p_one_sided": 0.17964172363281244,
+       "unpaired_slots": 0
+      }
+     }
+    },
+    {
+     "seed": 5,
+     "run": "s4b-g3-r5",
+     "evaluations": {
+      "target": {
+       "baseline": [
+        27,
+        196
+       ],
+       "candidate": [
+        41,
+        196
+       ],
+       "wins": 26,
+       "losses": 12,
+       "p_one_sided": 0.016776219839812218,
+       "unpaired_slots": 0
+      },
+      "retention-g2": {
+       "baseline": [
+        31,
+        188
+       ],
+       "candidate": [
+        40,
+        188
+       ],
+       "wins": 21,
+       "losses": 12,
+       "p_one_sided": 0.08137782872654512,
+       "unpaired_slots": 0
+      },
+      "retention-g1": {
+       "baseline": [
+        68,
+        224
+       ],
+       "candidate": [
+        95,
+        224
+       ],
+       "wins": 38,
+       "losses": 11,
+       "p_one_sided": 7.098534259952781e-05,
+       "unpaired_slots": 0
+      },
+      "exam": {
+       "baseline": [
+        12,
+        400
+       ],
+       "candidate": [
+        12,
+        400
+       ],
+       "wins": 9,
+       "losses": 9,
+       "p_one_sided": 0.5927352905273432,
+       "unpaired_slots": 0
+      }
+     }
+    }
+   ],
+   "unfinished": [],
+   "evaluations": {
+    "target": {
+     "wins": 102,
+     "losses": 51,
+     "p_one_sided": 2.277003132930564e-05
+    },
+    "retention-g2": {
+     "wins": 88,
+     "losses": 56,
+     "p_one_sided": 0.004771640866215538
+    },
+    "retention-g1": {
+     "wins": 172,
+     "losses": 74,
+     "p_one_sided": 1.8369027185101424e-10
+    },
+    "exam": {
+     "wins": 56,
+     "losses": 44,
+     "p_one_sided": 0.13562651203691736
+    }
+   }
+  }
+ ],
+ "unfinished_at_lease_end": [
+  "s8b-g3-r4 (seed 4): exam evaluation still running at 09:05, not counted"
+ ]
+}
