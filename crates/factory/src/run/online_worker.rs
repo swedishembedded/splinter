@@ -272,6 +272,14 @@ impl<'a, 'r> WorkerRollouts<'a, 'r> {
     }
 }
 
+impl WorkerRollouts<'_, '_> {
+    /// These rollouts reaching the policy at `url` instead of the connection's: an evaluation server's.
+    pub(crate) fn reaching(mut self, url: &str) -> Self {
+        self.base.url = Some(url.to_string());
+        self
+    }
+}
+
 /// What every rollout of one `run` shares.
 struct Shared<'w, 'a, 'r> {
     rollouts: &'w WorkerRollouts<'a, 'r>,

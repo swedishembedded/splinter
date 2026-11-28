@@ -141,6 +141,10 @@ fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), St
     let Some(brain) = config.brain.take() else {
         let stray = [
             (
+                !global.brain_eval_endpoint.is_empty(),
+                "--brain-eval-endpoint",
+            ),
+            (
                 global.brain_adapter_manifest.is_some(),
                 "--brain-adapter-manifest",
             ),
@@ -171,6 +175,14 @@ fn apply_brain_flags(config: &mut Config, global: &cli::Global) -> Result<(), St
         let store = splinter_sdk::model::served_train::ArtifactStore::open(dir)
             .map_err(|e| e.to_string())?;
         brain = brain.with_artifact_store(store);
+    }
+    if !global.brain_eval_endpoint.is_empty() {
+        let eval = splinter_sdk::model::BrainEndpoints::new(
+            global.brain_eval_endpoint.clone(),
+            brain.key(),
+        )
+        .map_err(|e| format!("--brain-eval-endpoint: {e}"))?;
+        config.brain_eval = Some(eval);
     }
     config.brain = Some(brain);
     Ok(())

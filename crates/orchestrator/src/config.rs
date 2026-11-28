@@ -91,6 +91,9 @@ pub struct Config {
     /// With endpoints, attempts are asked as many at once as they say
     /// ([`splinter_model::BrainEndpoints::attempt_concurrency`]).
     pub brain: Option<splinter_model::BrainEndpoints>,
+    /// Servers apart from `brain` that an online run's watchdog evaluates its versions on
+    /// (`--brain-eval-endpoint`), reached with `brain`'s key; `None` evaluates on the learner's server.
+    pub brain_eval: Option<splinter_model::BrainEndpoints>,
     /// The compute a brain server this process starts may schedule
     /// (`brain --device`); brain's own choice when `None`. Without
     /// [`Config::brain`], local models are requested from that server.
@@ -491,6 +494,7 @@ impl Config {
             min_calibration_controls: DEFAULT_MIN_CALIBRATION_CONTROLS,
             remote_concurrency: DEFAULT_REMOTE_CONCURRENCY,
             brain: BRAIN_DEFAULTS.get().and_then(|d| d.endpoints.clone()),
+            brain_eval: None,
             brain_device: BRAIN_DEFAULTS.get().and_then(|d| d.device.clone()),
             brain_backend: BRAIN_DEFAULTS.get().and_then(|d| d.backend.clone()),
             brain_max_batch: BRAIN_DEFAULTS.get().and_then(|d| d.max_batch),

@@ -47,8 +47,69 @@ pub(crate) struct Served<'a> {
     pub max_output_tokens: Option<u64>,
     /// The seed the rollouts' draws derive from.
     pub seed: u64,
-    /// Rollouts of one version an evaluation runs at once at most.
+    /// Rollouts of one version an evaluation runs at once at most (on each server).
     pub slots: usize,
+    /// The servers the evaluations run on instead of the learner's, when there are any.
+    pub elsewhere: Option<Elsewhere<'a>>,
+}
+
+/// Evaluation servers apart from the learner's: each version compared is served there, from the learner's artifact
+/// store, while a comparison refers to it, and withdrawn once none does.
+pub(crate) struct Elsewhere<'a> {
+    pub endpoints: &'a splinter_model::endpoint::BrainEndpoints,
+    /// The rollouts that reach each server, in the order of `endpoints`.
+    pub rollouts: Vec<&'a dyn OnlineRollouts>,
+    /// How many comparisons refer to each (server, version id) now.
+    pub served: std::sync::Mutex<BTreeMap<(usize, String), usize>>,
+}
+
+impl Elsewhere<'_> {
+    /// Serve `version` (as `id`) on server `server` unless a comparison serves it there already.
+    fn acquire(&self, server: usize, version: &Version, id: &str) -> Result<(), String> {
+        let mut served = self
+            .served
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let count = served.entry((server, id.to_string())).or_insert(0);
+        if *count == 0 {
+            let artifact = version.artifact.as_deref().ok_or_else(|| {
+                format!(
+                    "version {} is in no artifact store: an evaluation server cannot serve it",
+                    version.version
+                )
+            })?;
+            splinter_model::served_train::serve_adapter(
+                self.endpoints,
+                server,
+                artifact,
+                id,
+                version.version,
+            )?;
+        }
+        *count += 1;
+        Ok(())
+    }
+
+    /// The comparison is done with `id` on `server`: withdrawn there once no comparison refers to it.
+    fn release(&self, server: usize, id: &str) {
+        let mut served = self
+            .served
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let key = (server, id.to_string());
+        let Some(count) = served.get_mut(&key) else {
+            return;
+        };
+        *count -= 1;
+        if *count == 0 {
+            served.remove(&key);
+            if let Err(e) =
+                splinter_model::served_train::withdraw_adapter(self.endpoints, server, id)
+            {
+                eprintln!("watchdog: {e}");
+            }
+        }
+    }
 }
 
 impl Served<'_> {
@@ -68,6 +129,67 @@ impl Served<'_> {
                 version.version
             )
         })?;
+        let Some(elsewhere) = &self.elsewhere else {
+            return self.grade_on(self.rollouts, &id, tasks, namespace);
+        };
+        // On the evaluation servers, under the same id, the tasks spread over them.
+        let servers = elsewhere.rollouts.len();
+        let mut acquired = Vec::new();
+        let mut failure = None;
+        for server in 0..servers {
+            match elsewhere.acquire(server, version, &id) {
+                Ok(()) => acquired.push(server),
+                Err(e) => {
+                    failure = Some(e);
+                    break;
+                }
+            }
+        }
+        let graded = match failure {
+            Some(e) => Err(e),
+            None => std::thread::scope(|scope| {
+                let shares: Vec<_> = (0..servers)
+                    .map(|server| {
+                        let share: Vec<String> = tasks
+                            .iter()
+                            .skip(server)
+                            .step_by(servers)
+                            .cloned()
+                            .collect();
+                        let (id, namespace) = (&id, format!("{namespace}-s{server}"));
+                        scope.spawn(move || {
+                            if share.is_empty() {
+                                return Ok(BTreeMap::new());
+                            }
+                            self.grade_on(elsewhere.rollouts[server], id, &share, &namespace)
+                        })
+                    })
+                    .collect();
+                let mut all = BTreeMap::new();
+                for share in shares {
+                    all.extend(
+                        share
+                            .join()
+                            .map_err(|_| "an evaluation server's share panicked".to_string())??,
+                    );
+                }
+                Ok(all)
+            }),
+        };
+        for server in acquired {
+            elsewhere.release(server, &id);
+        }
+        graded
+    }
+
+    /// The pass or fail of each task the version served as `id` was graded on by `rollouts`.
+    fn grade_on(
+        &self,
+        rollouts: &dyn OnlineRollouts,
+        id: &str,
+        tasks: &[String],
+        namespace: &str,
+    ) -> Result<BTreeMap<String, bool>, String> {
         let dir = self
             .task_sets
             .iter()
@@ -76,10 +198,10 @@ impl Served<'_> {
             .ok_or("no held-out task collection holds the tasks asked for")?;
         let mut graded = BTreeMap::new();
         let mut failure = None;
-        self.rollouts.run(
+        rollouts.run(
             &RolloutsRequest {
                 tasks: &dir,
-                policy: &id,
+                policy: id,
                 temperature: self.temperature,
                 top_logprobs: None,
                 max_output_tokens: self.max_output_tokens,
@@ -234,4 +356,64 @@ impl Evaluator for ServedEvaluator<'_, '_> {
     fn idle(&self) -> bool {
         self.running == 0
     }
+}
+
+/// The worker rollouts that reach each evaluation server by its URL, for a stage whose rollouts run on the execution
+/// worker (`arm`); none otherwise.
+pub(super) fn workers<'a, 'r>(
+    factory: &'a crate::run::Factory<'_>,
+    stage: &crate::plan::PlannedStage,
+    arm: Option<&'a super::rollout::Arm<'r>>,
+    base: &crate::recipe::ModelRef,
+    evaluation: Option<&crate::online::seams::EvaluationServers<'_>>,
+) -> Result<Vec<super::online_worker::WorkerRollouts<'a, 'r>>, crate::run::RunError> {
+    let (Some(arm), Some(servers)) = (arm, evaluation) else {
+        return Ok(Vec::new());
+    };
+    servers
+        .endpoints
+        .urls()
+        .iter()
+        .enumerate()
+        .map(|(i, url)| {
+            super::online_worker::WorkerRollouts::new(
+                factory,
+                arm,
+                base,
+                factory.work(&stage.key).join(format!("worker-eval{i}")),
+            )
+            .map(|w| w.reaching(url))
+        })
+        .collect()
+}
+
+/// Where the stage's watchdog evaluates: the evaluation servers with the rollouts that reach each (the worker's for
+/// an agent's rollouts, `workers`; the in-process ones given with the servers otherwise), or `None` for the learner's.
+///
+/// # Errors
+/// The servers and the rollouts given for them do not pair up.
+pub(super) fn elsewhere<'a>(
+    evaluation: Option<&'a crate::online::seams::EvaluationServers<'a>>,
+    on_worker: bool,
+    workers: &'a [super::online_worker::WorkerRollouts<'_, '_>],
+) -> Result<Option<super::online_train::Elsewhere<'a>>, String> {
+    let Some(servers) = evaluation else {
+        return Ok(None);
+    };
+    let rollouts: Vec<&dyn OnlineRollouts> = if on_worker {
+        workers.iter().map(|w| w as &dyn OnlineRollouts).collect()
+    } else {
+        servers.rollouts.clone()
+    };
+    if rollouts.is_empty() || rollouts.len() != servers.endpoints.urls().len() {
+        return Err(format!(
+            "{} evaluation servers and {} rollouts reaching them: one each",
+            servers.endpoints.urls().len(),
+            rollouts.len()
+        ));
+    }
+    Ok(Some(super::online_train::Elsewhere {
+        endpoints: &servers.endpoints,
+        rollouts,
+    }))
 }

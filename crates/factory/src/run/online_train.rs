@@ -87,6 +87,13 @@ pub(super) struct HeldOut {
     pub confirm: PathBuf,
 }
 
+/// Where the watchdog's evaluations run when not on the learner's server: the servers and the rollouts that reach
+/// each, in order.
+pub(super) struct Elsewhere<'a> {
+    pub endpoints: &'a splinter_model::endpoint::BrainEndpoints,
+    pub rollouts: Vec<&'a dyn OnlineRollouts>,
+}
+
 /// One `train.online` stage, resolved.
 pub(super) struct Stage<'a> {
     pub factory: &'a Factory<'a>,
@@ -104,6 +111,8 @@ pub(super) struct Stage<'a> {
     pub groups_log: &'a Path,
     pub start: Option<&'a Path>,
     pub held_out: Option<HeldOut>,
+    /// The servers the watchdog evaluates on; `None`: the learner's.
+    pub elsewhere: Option<Elsewhere<'a>>,
 }
 
 /// The ids of the tasks the folder `dir` holds, as the rollouts name them.
@@ -207,6 +216,14 @@ pub(super) fn train(stage: &Stage<'_>) -> Result<Trained, RunError> {
                 slots: usize::try_from(params.max_concurrent_attempts)
                     .unwrap_or(usize::MAX)
                     .max(1),
+                elsewhere: stage
+                    .elsewhere
+                    .as_ref()
+                    .map(|e| super::online_eval::Elsewhere {
+                        endpoints: e.endpoints,
+                        rollouts: e.rollouts.clone(),
+                        served: std::sync::Mutex::default(),
+                    }),
             })
         }
         (Some(_), None) => return Err(stage.fail("a watchdog needs its monitor and confirm tasks")),

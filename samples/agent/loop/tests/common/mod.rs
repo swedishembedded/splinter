@@ -229,6 +229,7 @@ impl Fixture {
             bf16_base: false,
             remote_concurrency: 1,
             brain: None,
+            brain_eval: None,
             brain_device: None,
             brain_backend: None,
             brain_max_batch: None,

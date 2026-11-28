@@ -50,6 +50,7 @@ use splinter_core::factory::product::{CandidateKind, ModelCandidate, CANDIDATE_S
 use splinter_core::revision::{ModelDigests, REVISIONS_FILE};
 use splinter_store::factory::products::Staging;
 
+use super::online_eval;
 use super::online_train::{self, Trained};
 use super::online_worker::{self, OnlineAgent};
 use super::training::CANDIDATE_FILE;
@@ -532,6 +533,10 @@ pub(crate) fn produce(
             .online
             .ok_or_else(|| fail("no online rollouts".into()))?,
     };
+    let evaluation = factory.evaluation.filter(|_| params.watchdog.is_some());
+    let eval_workers = online_eval::workers(factory, stage, arm.as_ref(), &base, evaluation)?;
+    let elsewhere =
+        online_eval::elsewhere(evaluation, arm.is_some(), &eval_workers).map_err(fail)?;
     let held_out = match (stage.source("monitor"), stage.source("confirm")) {
         (Some(monitor), Some(confirm)) => Some(online_train::HeldOut {
             monitor: factory.view(monitor),
@@ -553,6 +558,7 @@ pub(crate) fn produce(
         groups_log: &groups_log,
         start: start.as_deref(),
         held_out,
+        elsewhere,
     })?;
     let mut trained = trained;
     let candidate = candidate(factory, stage, &params, &base, &mut trained, staging)?;

@@ -561,3 +561,140 @@ fn a_watched_run_whose_policy_does_not_regress_is_evaluated_and_never_rolled_bac
         .iter()
         .all(|l| l["audit"].is_null()));
 }
+
+#[test]
+fn a_watched_run_evaluates_on_its_evaluation_server_and_withdraws_what_it_served_there() {
+    let scratch = Scratch::new("online-watched-elsewhere");
+    let root = scratch.0.join("repo");
+    repo(&root);
+    for (id, file) in [
+        ("monitor/one", "greeting.txt"),
+        ("monitor/two", "count.txt"),
+        ("confirm/sealed", "greeting.txt"),
+    ] {
+        let (instruction, check) = if file == "count.txt" {
+            (
+                "Make count.txt hold the number three.",
+                "grep -qx 3 count.txt",
+            )
+        } else {
+            (
+                "Write hello world into greeting.txt.",
+                "grep -q 'hello world' greeting.txt",
+            )
+        };
+        task(&root, id, instruction, file, check);
+    }
+    let store = scratch.0.join("artifacts");
+    let adapters = scratch.0.join("adapters");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&adapters).unwrap();
+    let service = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")])
+        .with_training(JobScript::over(store.clone()))
+        .serving_adapters(adapters.clone());
+    let endpoints = BrainEndpoints::new(vec![service.url()], SCRIPTED_KEY)
+        .unwrap()
+        .with_artifact_store(ArtifactStore::open(&store).unwrap())
+        .with_adapter_directory(adapters)
+        .with_refused_wait(Duration::from_millis(50));
+    let trainer = BrainTrainer::new(endpoints, scratch.0.join("models"));
+    let connections = Connections::parse(&format!(
+        "connections:\n  brain: {{ protocol: openai, url: \"{}\" }}\n",
+        service.url()
+    ))
+    .unwrap();
+    let resolved = resolve(&root, WATCHED, connections).unwrap();
+    let policy = Arc::new(Policy);
+    let ctx = Context::new(config(&scratch), false)
+        .unwrap()
+        .with_clock(Box::new(FixedClock::new("2026-11-27T09:00:00.000Z")))
+        .with_model(
+            ModelRef::policy_default(),
+            Model::new(policy.clone(), "scripted/policy-1"),
+        );
+    // Which policy ids each server's rollouts were asked for.
+    let asked = |log: Arc<std::sync::Mutex<Vec<String>>>| {
+        move |served: &str| {
+            log.lock().unwrap().push(served.to_string());
+            Ok(OnlinePolicy::Reference(ModelRef::policy_default()))
+        }
+    };
+    let (learner_asked, eval_asked) = (Arc::default(), Arc::default());
+    // seed: episodes draw their own seeds from the stage's.
+    let rollouts = FactoryRollouts::new(
+        &ctx,
+        EpisodeSettings::new(1, 0),
+        asked(Arc::clone(&learner_asked)),
+    );
+    // seed: as above.
+    let eval_rollouts = FactoryRollouts::new(
+        &ctx,
+        EpisodeSettings::new(1, 0),
+        asked(Arc::clone(&eval_asked)),
+    );
+    let eval = ScriptedEndpoint::start(vec![Card::base("Qwen/Toy")]);
+    let servers = splinter_factory::run::EvaluationServers {
+        endpoints: BrainEndpoints::new(vec![eval.url()], SCRIPTED_KEY).unwrap(),
+        rollouts: vec![&eval_rollouts],
+    };
+    let backend = FakeBackend::with(Outcome::Fail);
+    let services = Services {
+        backend: &backend,
+        trainer: Some(&trainer),
+        models: None,
+        variables: None,
+        online: Some(&rollouts),
+        build: splinter_core::build::BuildInfo::this_executable(),
+    };
+    let run = scratch.0.join("run");
+    Factory::open(&resolved, &run, services, "test")
+        .unwrap()
+        .with_evaluation_servers(&servers)
+        .run()
+        .unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(run.join("online/report.json")).unwrap())
+            .unwrap();
+    let watchdog = &report["watchdog"];
+    assert!(
+        watchdog["comparisons"].as_u64().unwrap() >= 1,
+        "the published versions were evaluated against the anchor: {watchdog:#}"
+    );
+    // Every version compared was served on the evaluation server from the learner's artifact store, under the id
+    // the learner serves it under, and withdrawn once its comparison ended; the learner's rollouts never asked one.
+    let runs = eval.runs_asked();
+    let ids = |action: &str| -> Vec<String> {
+        let mut ids: Vec<String> = runs
+            .iter()
+            .filter(|r| r["action"] == action)
+            .map(|r| r["params"]["id"].as_str().unwrap().to_string())
+            .collect();
+        ids.sort();
+        ids
+    };
+    let (served, withdrawn) = (ids("serve_adapter"), ids("withdraw_adapter"));
+    assert!(
+        !served.is_empty(),
+        "the compared versions were served on the evaluation server: {runs:?}"
+    );
+    assert_eq!(served, withdrawn, "each was withdrawn after its comparison");
+    assert!(
+        runs.iter()
+            .filter(|r| r["action"] == "serve_adapter")
+            .all(|r| r["params"]["adapter_digest"].is_string()),
+        "{runs:?}"
+    );
+    let eval_asked = eval_asked.lock().unwrap().clone();
+    assert!(
+        served.iter().all(|id| eval_asked.contains(id)),
+        "the evaluation server's rollouts asked them: {eval_asked:?}"
+    );
+    assert!(
+        learner_asked
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|id| !served.contains(id)),
+        "the learner's rollouts asked no compared version"
+    );
+}

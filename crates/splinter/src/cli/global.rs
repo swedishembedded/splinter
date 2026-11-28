@@ -168,6 +168,13 @@ pub struct Global {
         conflicts_with = "brain_adapter_manifest"
     )]
     pub brain_adapter_dir: Option<PathBuf>,
+    /// A brain server, apart from --brain-endpoint, that an online run's watchdog evaluates its versions on (its base
+    /// URL, ending in `/v1`); repeat for more. Each serves the base with `--training` and reaches the same
+    /// artifact store, and is reached with --brain-key-file's key: a version under comparison is served there from
+    /// the store, and the comparison's tasks are spread over them. Without one, evaluations run on the learner's
+    /// server.
+    #[arg(long, global = true, value_name = "URL")]
+    pub brain_eval_endpoint: Vec<String>,
     /// The artifact store the brain endpoints train through
     /// (`brain serve --training --artifact-store DIR`): a directory both
     /// they and this machine reach, in which datasets are published, named

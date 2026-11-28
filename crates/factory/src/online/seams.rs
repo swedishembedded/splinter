@@ -513,3 +513,14 @@ pub struct OnlineTrain<'a> {
     /// job of the run while one runs.
     pub job_place: &'a std::path::Path,
 }
+
+/// Servers apart from the learner's that an online stage's watchdog evaluates its versions on: each serves the version
+/// it is asked for from the learner's artifact store (brain's `serve_adapter`), so evaluations take no capacity from
+/// the training's rollouts.
+pub struct EvaluationServers<'a> {
+    /// The servers, reached with the learner's key, in order.
+    pub endpoints: splinter_model::endpoint::BrainEndpoints,
+    /// The in-process rollouts that reach each server, in the order of `endpoints`. A stage whose rollouts run on the
+    /// execution worker reaches each server by its URL instead.
+    pub rollouts: Vec<&'a dyn OnlineRollouts>,
+}

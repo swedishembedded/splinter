@@ -308,6 +308,8 @@ pub struct StagesAtOnce {
     pub most: usize,
 }
 
+pub use crate::online::seams::EvaluationServers;
+
 /// A controller over one run directory.
 pub struct Factory<'a> {
     pub(crate) resolved: &'a Resolved,
@@ -327,6 +329,8 @@ pub struct Factory<'a> {
     concurrent_stages: NonZeroUsize,
     /// How a fan-out's item that failed transiently is asked again.
     pub(crate) item_retry: ItemRetry,
+    /// The servers an online stage's watchdog evaluates on, apart from the learner's.
+    pub(crate) evaluation: Option<&'a crate::online::seams::EvaluationServers<'a>>,
     /// The stage identities being produced now.
     producing: Producing,
     /// Renews the lease while this controller lives; stopped before the
@@ -442,6 +446,7 @@ impl<'a> Factory<'a> {
             collections: collection_cells(resolved),
             cancel: Box::new(|| false),
             concurrent_stages: DEFAULT_CONCURRENT_STAGES,
+            evaluation: None,
             item_retry: ItemRetry::default(),
             producing: Producing::default(),
             heartbeat,
@@ -464,6 +469,18 @@ impl<'a> Factory<'a> {
     #[must_use]
     pub fn with_concurrent_stages(mut self, bound: NonZeroUsize) -> Self {
         self.concurrent_stages = bound;
+        self
+    }
+
+    /// Run an online stage's watchdog evaluations on `servers` instead of the learner's server: each compared version
+    /// is served there from the learner's artifact store while it is compared, and the comparison's tasks are spread
+    /// over them. Neither a stage's identity nor its product depends on where its evaluations run.
+    #[must_use]
+    pub fn with_evaluation_servers(
+        mut self,
+        servers: &'a crate::online::seams::EvaluationServers<'a>,
+    ) -> Self {
+        self.evaluation = Some(servers);
         self
     }
 

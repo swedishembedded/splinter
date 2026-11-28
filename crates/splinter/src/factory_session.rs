@@ -309,6 +309,27 @@ fn carry_out(
     let rollouts = context
         .as_ref()
         .and_then(|ctx| splinter_sdk::factory::online_rollouts(config, ctx));
+    // The servers an online run's watchdog evaluates on, each with the in-process rollouts that reach it.
+    let eval_rollouts: Vec<_> = match (&context, &config.brain_eval) {
+        (Some(ctx), Some(eval)) => eval
+            .urls()
+            .iter()
+            .filter_map(|url| {
+                let mut reaching = config.clone();
+                reaching.brain = eval.clone().reaching_only(url);
+                splinter_sdk::factory::online_rollouts(&reaching, ctx)
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let evaluation = config
+        .brain_eval
+        .clone()
+        .filter(|_| online)
+        .map(|endpoints| run::EvaluationServers {
+            endpoints,
+            rollouts: eval_rollouts.iter().map(|r| r as _).collect(),
+        });
     let services = Services {
         backend: backend.as_ref(),
         trainer: brain.as_ref().map(|b| b as _),
@@ -324,6 +345,9 @@ fn carry_out(
         })?;
     if let Some(bound) = config.factory.concurrent_stages {
         factory = factory.with_concurrent_stages(bound);
+    }
+    if let Some(servers) = &evaluation {
+        factory = factory.with_evaluation_servers(servers);
     }
     Ok(factory.run())
 }

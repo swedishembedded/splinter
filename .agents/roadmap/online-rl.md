@@ -149,8 +149,9 @@ identity when it is the default.
       `tasks.pin` of the bench task set -> `train.online` with `agent: { agent: sven, environment:
       environments/<env>/environment.yaml }` (bench's environment file), run with `splinter run <recipe> --brain-endpoint
       ... --brain-artifact-store ... --brain-adapter-dir ...`. Validated with scripted models only.
-- [ ] Watchdog evaluations on capacity of their own. Not built: a version exists only on the learner's server (its
-      bank, under its version id); another server could serve it only from the stored adapter, whose card names the
-      published id, and two versions of one card id cannot be served side by side there. Needs brain to serve a stored
-      adapter under an id the caller names (an additive `--serve-adapters` rule or an offer route). The evaluations
-      run at most `max_concurrent_attempts` rollouts of a version at once on the learner's server meanwhile.
+- [x] **Watchdog evaluations on capacity of their own** (2026-11-28). `--brain-eval-endpoint URL` (repeatable):
+      each compared version is served on those servers from the learner's artifact store (brain `serve_adapter`,
+      4392b6377) under its version id while a comparison refers to it, then withdrawn; the tasks are spread over the
+      servers; in-process rollouts per server, worker rollouts reach each by URL. Test:
+      `a_watched_run_evaluates_on_its_evaluation_server_and_withdraws_what_it_served_there` (splinter-pipelines
+      `it::online_factory`, two scripted servers). The worker path is wired but has no end-to-end test.

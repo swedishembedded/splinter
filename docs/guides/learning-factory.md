@@ -799,6 +799,12 @@ compiles its collection evaluates on the same compiled tasks:
   past the retention for as long as it refers to it (brain's `POST /v1/jobs/{id}/hold`). A
   rollback stops every running rollout: on the execution worker its attempt is killed with
   everything it started.
+  With `--brain-eval-endpoint URL` (repeatable) the evaluations run on servers of their own:
+  each serves the base with `--training`, reaches the learner's artifact store and takes
+  `--brain-key-file`'s key. A version under comparison is served there from the store under
+  the id the learner serves it under (brain's `serve_adapter`), the comparison's tasks are
+  spread over the servers, and the version is withdrawn once no comparison refers to it. A
+  stage whose rollouts run on the execution worker reaches each server by its URL.
 
   `make test/online/watchdog` runs the watchdog on the CPU stack over a fixture task family
   whose training grader flips its reward for a window after a short warm-up (`fault`, which must
