@@ -19,3 +19,8 @@ the device as a parameter of the call.
   `Lost`, or the 30 s wedge bound).
 - With `BRAIN_DEVICE=cpu BRAIN_BACKEND=cpu` (release build): two rounds of eight concurrent copies all passed, the
   slowest in 134 s. No test process appeared on any GPU.
+
+**Procedure on a shared node:** run every test binary, diagnostic loops included, with `CUDA_VISIBLE_DEVICES=`
+and `BRAIN_DEVICE=cpu BRAIN_BACKEND=cpu` set, until brain takes the device as a parameter of the call. Without
+them, the stress loop that found this defect put eight test processes on GPU 0 while a campaign's servers held
+the cards.
