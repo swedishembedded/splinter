@@ -65,8 +65,8 @@ recorded as HTTP 499 and classified as endpoint refusals; the classifier was fix
 rule for all three generations; with the 9 counted as base wins the test gives $p=0.005$ \\
 2026-11-27 & the 4B chain stopped during generation~1 and resumed after the 8B's generation~3 & the user put every card on
 the 8B until its three generations were evaluated \\
-2026-11-27 & two further 8B generation-1 training seeds started and stopped; not used & a fork of a run whose LoRA was
-already trained reused that adapter despite the changed seed, so the replicate would not have been one \\
+2026-11-27 & two further 8B generation-1 forks started and stopped; not used & one repeated generation~1's own
+training seed by mistake (its adapter was rightly reused), and the cards were needed for the 8B chain \\
 2026-11-27 & brain's router changed during the loop, on two of the four nodes from 06:35 and 06:58 (brain
 \texttt{2104ee58f}): an idle card now takes a LoRA model once the cards holding it carry enough of its requests & it had kept every request for a LoRA model on the one card
 holding the base, so evaluations ran on one card of up to ten; it changes throughput, not what is measured \\

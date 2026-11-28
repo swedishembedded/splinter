@@ -364,7 +364,7 @@ Paired, 4 attempts per task, one-sided sign test:
 Verdict: each generation improves on its own held-out authored tasks without forgetting; no claimable exam step (primary
 tests null; g1-vs-base excluded). The 9 uncounted slots were base tool-call loops misclassified as endpoint refusals
 (HTTP 499), fixed in 27372f64b after the runs. 4B resumed at 23:59 after the 8B finished, per the user. Two seed replicates
-of 8B g1 were stopped unused (one fork reused g1's adapter despite a changed seed: open defect).
+of 8B g1 were stopped unused (one named g1's own seed 3 by mistake, so its adapter was rightly reused by identity; no defect).
 
 ## Further mitigation (2026-11-27; planned, not run)
 
