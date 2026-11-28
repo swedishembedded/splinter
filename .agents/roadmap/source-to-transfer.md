@@ -366,6 +366,15 @@ tests null; g1-vs-base excluded). The 9 uncounted slots were base tool-call loop
 (HTTP 499), fixed in 27372f64b after the runs. 4B resumed at 23:59 after the 8B finished, per the user. Two seed replicates
 of 8B g1 were stopped unused (one named g1's own seed 3 by mistake, so its adapter was rightly reused by identity; no defect).
 
+## Seed replicates of the generation steps: registration (2026-11-28 05:20, before any replicate result)
+
+Known limit 5 above (one training seed per generation). Each completed step is repeated with only its newest LoRA stage's
+training seed changed (1 to 2): s8b-g2-r2 and s4b-g2-r2 (forks of s8b-g2/s4b-g2, `lora-g2` seed 2), s8b-g3-r2 and
+s4b-g3-r2 (forks of s8b-g3/s4b-g3, `lora-g3` seed 2). Same tasks, data, champions and stages; every evaluation re-measures
+the new candidate against the same champion at 4 attempts per task. Secondary only: a replicate selects nothing and does
+not replace a chain's champion. Reported: per step, both seeds' paired tests on target, retention and exam, and the step
+pooled over seeds (tasks won and lost summed).
+
 ## Further mitigation (2026-11-27; planned, not run)
 
 In order of effect per hour:
