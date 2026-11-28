@@ -165,6 +165,11 @@ test/online/bench:
 test/online/bench/prepare:
 	bash scripts/online/bench-task-set.sh "$(abspath $(or $(CARGO_TARGET_DIR),target)/release/splinter)" "$(BENCH_TASKS)" "$(BENCH_ENVIRONMENT)" "$(BENCH_BASE)" "$(ONLINE_WORK)/bench" "$(BRAIN_ENDPOINT)" "$(BRAIN_KEY_FILE)" "$(BRAIN_ARTIFACTS)" "$(BRAIN_ADAPTERS)" prepare
 
+## test/online/eval-servers - train.online with agent: sven on the Harbor worker and the watchdog on an evaluation server of its own (two CPU brain servers, ONLINE_PORT and the next port): every compared version served there and withdrawn afterwards, the evaluations' worker rollouts bound to it alone, the training's to the learner
+test/online/eval-servers:
+	$(CARGO) build $(PROFILE) -p splinter
+	PATH="$(CURDIR)/workers/harbor/.venv/bin:$$PATH" bash scripts/online/cpu-eval-servers.sh "$(or $(CARGO_TARGET_DIR),target)/release/splinter" "$(BRAIN_BIN)" "$(QWEN3_BIN)" "$(ONLINE_WORK)/eval-servers" "$(ONLINE_PORT)"
+
 ## test/online/tools - train.online's rollouts on the execution worker in their tasks' own environment: an agent offered exactly the MCP tool its task's image declares, graded by the task's verifier, against a scripted policy and learner (needs `make worker/install`, sven on PATH and the network to build the task image; minutes)
 test/online/tools:
 	PATH="$(CURDIR)/workers/harbor/.venv/bin:$$PATH" $(CARGO) test $(PROFILE) -p splinter-factory --test it -- online::worker --ignored

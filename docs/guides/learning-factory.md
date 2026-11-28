@@ -804,7 +804,8 @@ compiles its collection evaluates on the same compiled tasks:
   `--brain-key-file`'s key. A version under comparison is served there from the store under
   the id the learner serves it under (brain's `serve_adapter`), the comparison's tasks are
   spread over the servers, and the version is withdrawn once no comparison refers to it. A
-  stage whose rollouts run on the execution worker reaches each server by its URL.
+  stage whose rollouts run on the execution worker reaches each server by its URL; `make
+  test/online/eval-servers` runs that on two CPU brain servers.
 
   `make test/online/watchdog` runs the watchdog on the CPU stack over a fixture task family
   whose training grader flips its reward for a window after a short warm-up (`fault`, which must

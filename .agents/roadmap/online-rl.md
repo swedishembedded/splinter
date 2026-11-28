@@ -154,4 +154,7 @@ identity when it is the default.
       4392b6377) under its version id while a comparison refers to it, then withdrawn; the tasks are spread over the
       servers; in-process rollouts per server, worker rollouts reach each by URL. Test:
       `a_watched_run_evaluates_on_its_evaluation_server_and_withdraws_what_it_served_there` (splinter-pipelines
-      `it::online_factory`, two scripted servers). The worker path is wired but has no end-to-end test.
+      `it::online_factory`, two scripted servers). On the worker path end to end: `make test/online/eval-servers` (two CPU brain servers of one toy
+      checkpoint, the Harbor worker with sven, the toy-answers tasks with a coin verifier, since the worker writes no
+      reply to their answer file): 3 comparisons, 6 versions served on the evaluation server and 6 withdrawn, the
+      learner answered 40 requests for the published id and none for its 5 retained version ids, 6 pairs graded.
