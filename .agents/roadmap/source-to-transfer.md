@@ -388,6 +388,9 @@ pooled over seeds (tasks won and lost summed).
 Added 2026-11-28 06:30, before its result, while a card was free: s4b-g2-r3 (`lora-g2` seed 3), and s4b-g3-r3 (`lora-g3`
 seed 3) when a second card frees; reported the same way.
 Added 2026-11-28 06:50, before its result: s8b-g2-r3 (`lora-g2` seed 3) on the card s8b-g2-r2 freed; reported the same way.
+Added 2026-11-28 07:10, before any of their results, on cards otherwise idle: 4B seeds 4 and 5 of both steps (s4b-g2-r4,
+s4b-g3-r4, s4b-g2-r5, s4b-g3-r5) and 8B s8b-g3-r3 (seed 3), s8b-g2-r4 and s8b-g3-r4 (seed 4); a replicate whose evaluations
+do not finish before the lease ends (09:34) is reported as unfinished, never as a result.
 
 ## Further mitigation (2026-11-27; planned, not run)
 
