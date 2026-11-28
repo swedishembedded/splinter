@@ -35,6 +35,11 @@ CARGO ?= cargo
 # The tests a `make test` runs at once. Each one writes scratch directories and starts runtimes, and the default (one per
 # core) exhausts the disk quota and starves the timing assertions on a many-core shared node.
 TEST_THREADS ?= 16
+# The tests run brain in process (the timeline models train and serve there), and brain picks its
+# devices from its environment: left alone it opens every GPU on the machine, and on a node whose cards
+# another job has filled a device that cannot be created fails or wedges and the test never ends.
+# The test tiers need no GPU, so they say so.
+CPU_ONLY := BRAIN_DEVICE=cpu BRAIN_BACKEND=cpu
 
 # Shared-node lease kit (scripts/lease). One root holds the lane worktrees, the
 # per-lane cargo targets and the lock files: this user's state directory unless
@@ -89,7 +94,7 @@ $(BUILD_CRATE_TARGETS): build/crate/%:
 
 ## test - default: run every test (no model, no GPU needed)
 test: deps/lua-dialects
-	$(CARGO) test $(PROFILE) --workspace -- --test-threads=$(TEST_THREADS)
+	$(CPU_ONLY) $(CARGO) test $(PROFILE) --workspace -- --test-threads=$(TEST_THREADS)
 	python3 samples/adams/test_fetch.py
 	python3 scripts/qualify/test_qualify.py
 	python3 -I scripts/cluster/test_rank_env.py
@@ -102,7 +107,7 @@ test/crate:
 TEST_CRATE_TARGETS := $(addprefix test/crate/,$(CRATE_PACKAGES))
 test/crate/splinter-campaign-lua: deps/lua-dialects
 $(TEST_CRATE_TARGETS): test/crate/%:
-	$(CARGO) test $(PROFILE) -p $*
+	$(CPU_ONLY) $(CARGO) test $(PROFILE) -p $*
 
 ## test/package - the specs of the install and release publishing scripts against scratch directories, a fake make and a fake gh (bats; no build, seconds)
 test/package:

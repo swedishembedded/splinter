@@ -240,3 +240,4 @@ in the same commit.
 | [252](252-an-agent-session-is-append-only-only-if-its-template-and-runtime-send-answers-back-as-sampled.md) | An agent session is append-only only if its template and its runtime send each answer back as it was sampled |
 | [253](253-a-poisoned-grader-shows-a-rollback-only-on-a-criterion-the-model-learns-while-its-rewards-still-vary.md) | A poisoned grader shows a rollback only on a criterion the model learns, poisoned while its rewards still vary |
 | [254](254-an-agent-session-merges-per-segment-because-the-history-is-sent-back-as-sampled.md) | An agent session merges per segment, because the history is sent back as sampled |
+| [255](255-a-test-that-runs-brain-in-process-takes-the-machines-gpus-unless-told-the-cpu.md) | A test that runs brain in process takes the machine's GPUs unless told the CPU |
