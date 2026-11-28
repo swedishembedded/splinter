@@ -282,6 +282,13 @@ impl BrainEndpoints {
         matches!(self.adapter_offer, Some(AdapterOffer::Manifest(_)))
     }
 
+    /// These endpoints narrowed to `url`, one of them: what reaches that server alone. `None` when `url` is not one.
+    #[must_use]
+    pub fn reaching_only(mut self, url: &str) -> Option<Self> {
+        self.urls.retain(|u| u == url);
+        (!self.urls.is_empty()).then_some(self)
+    }
+
     /// The endpoints' base URLs, without a trailing slash.
     #[must_use]
     pub fn urls(&self) -> &[String] {

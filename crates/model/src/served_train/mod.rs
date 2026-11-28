@@ -41,6 +41,7 @@ mod parallel;
 mod preference;
 mod request;
 mod score;
+mod served_adapter;
 mod served_job;
 mod stream;
 
@@ -54,6 +55,7 @@ pub use feedback::train_feedback_served;
 pub use job::REFUSED_WAIT;
 pub use preference::{train_preference_served, DEFAULT_DPO_BETA};
 pub use score::score_chat;
+pub use served_adapter::{serve_adapter, withdraw_adapter};
 pub(crate) use served_job::action_params;
 pub use served_job::{
     run_served_job, Published, SeedUsed, ServedJob, ServedJobReport, RESULT_FILE,

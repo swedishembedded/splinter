@@ -408,6 +408,20 @@ fn handle(mut stream: TcpStream, shared: &Shared) {
                 base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b).ok()
             })
             .map(|b| String::from_utf8_lossy(&b).into_owned());
+        // As brain's training service: a stored adapter served under the caller's id, and withdrawn.
+        if matches!(
+            call["action"].as_str(),
+            Some("serve_adapter" | "withdraw_adapter")
+        ) {
+            let outputs = serde_json::json!({"id": call["params"]["id"], "version": call["params"]["version"]});
+            let _ = respond(
+                &mut stream,
+                "200 OK",
+                "application/json",
+                &serde_json::json!({"outputs": outputs, "blobs": {}}).to_string(),
+            );
+            return;
+        }
         let (Some("score"), Some(records)) = (call["action"].as_str(), records) else {
             let _ = respond(&mut stream, "400 Bad Request", "application/json", "{}");
             return;
