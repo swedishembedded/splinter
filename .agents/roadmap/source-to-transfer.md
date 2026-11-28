@@ -385,6 +385,8 @@ s4b-g3-r2 (forks of s8b-g3/s4b-g3, `lora-g3` seed 2). Same tasks, data, champion
 the new candidate against the same champion at 4 attempts per task. Secondary only: a replicate selects nothing and does
 not replace a chain's champion. Reported: per step, both seeds' paired tests on target, retention and exam, and the step
 pooled over seeds (tasks won and lost summed).
+Added 2026-11-28 06:30, before its result, while a card was free: s4b-g2-r3 (`lora-g2` seed 3), and s4b-g3-r3 (`lora-g3`
+seed 3) when a second card frees; reported the same way.
 
 ## Further mitigation (2026-11-27; planned, not run)
 
