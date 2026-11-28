@@ -277,10 +277,16 @@ re-sent until brain reports it committed (applied is not durable).
       Nothing was missing. On the CPU toy stack `make test/online/merged` trained one merged group (1 committed,
       241 ids, sessions 18 merged and 30 untraced). It is flaky: 2 of 3 runs failed with every group filtered
       `not-exact` or `zero-variance`, and so did a run at the previous sven pin. A rollout the run's output budget
-      ends keeps the request in the log but no agent step in the trajectory. The likely path, not yet traced in
-      sven: sven continues a cut turn, the budget refuses the continuation, and the cut reply is never filed. The
-      rollout is then unpaired and not exact, so a group trains only when an exact rollout happens to fail. The fix
-      is sven's: file a cut turn's reply even when its continuation is refused. `make test/contract/brain/session` (`samples/brain-session`) checks the whole path
+      ends keeps the request in the log but no agent step in the trajectory. Traced in sven: the SDK checked the
+      run's output budget on every usage report, and a server sends its usage frame before its stream ends, so the
+      run aborted the turn before its reply was filed. The rollout was then unpaired and not exact, and a group
+      trained only when an exact rollout happened to fail. Fixed in sven f536edda (the budget is checked on the
+      record that closes a request, after the reply is filed; `the_reply_that_spends_the_output_budget_is_recorded`
+      failed before it). Built with `make deps/local` against sven 9cd6cb91 plus that commit, `make
+      test/online/merged` trained in 3 of 3 runs (8, 10 and 9 groups committed; 40, 40 and 47 of 48 sessions
+      merged). Open: move the pin once the user publishes it; sven main also drops the request's dynamic suffix,
+      so the pin move removes `system_dynamic_suffix` from `crates/agent/src/system_prompt.rs`.
+      `make test/contract/brain/session` (`samples/brain-session`) checks the whole path
       on a real brain: a sven tool session over Qwen3-0.6B on the CPU, every call append-only, each rollout one
       merged record, `check_dataset` accepting the group, and `score` reproducing every behaviour
       log-probability (largest difference 1.2e-4 over 4 answers). Left for the GPU run: `token-sum` against
