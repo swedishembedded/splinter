@@ -269,7 +269,21 @@ re-sent until brain reports it committed (applied is not durable).
       The comparisons that trimmed text before matching a request's history to the answer it repeats are gone.
       Verified on a CPU brain (Qwen3-0.6B, f32 KV): two two-call sessions merged into one record each, brain's
       `check_dataset` accepted both (packed, 2 records, 86 supervised ids) and its `score` reproduced every call's
-      behaviour log-probabilities (worst per-id difference 5.6e-5 over 4 calls). Open: start the stream job with
-      `pack_answers`, a `max_block` holding the longest segment and `loss_agg`; the merge rate on traced online
-      sessions; `token-sum` against `seq-mean`.
+      behaviour log-probabilities (worst per-id difference 5.6e-5 over 4 calls).
+      Online side (2026-11-28): the stream job already starts as a merged run needs it. `sessions: merged` is
+      refused without `params.max_block`, and `rollout_of` cuts a segment before a call that would pass it, so the
+      block holds every segment (a single call longer than the block stays a record of its own). The learner's
+      params gain `pack_answers: true`, and `loss_agg` is the recipe's, else brain's online default `token-sum`.
+      Nothing was missing. On the CPU toy stack `make test/online/merged` trained one merged group (1 committed,
+      241 ids, sessions 18 merged and 30 untraced). It is flaky: 2 of 3 runs failed with every group filtered
+      `not-exact` or `zero-variance`, and so did a run at the previous sven pin. A rollout the run's output budget
+      ends keeps the request in the log but no agent step in the trajectory. The likely path, not yet traced in
+      sven: sven continues a cut turn, the budget refuses the continuation, and the cut reply is never filed. The
+      rollout is then unpaired and not exact, so a group trains only when an exact rollout happens to fail. The fix
+      is sven's: file a cut turn's reply even when its continuation is refused. `make test/contract/brain/session` (`samples/brain-session`) checks the whole path
+      on a real brain: a sven tool session over Qwen3-0.6B on the CPU, every call append-only, each rollout one
+      merged record, `check_dataset` accepting the group, and `score` reproducing every behaviour
+      log-probability (largest difference 1.2e-4 over 4 answers). Left for the GPU run: `token-sum` against
+      `seq-mean` on merged records, and the merge rate on traced online sessions at the real task set. A CPU toy
+      run measures neither.
 - [ ] Adaptive difficulty (tasks near the capability frontier) once the loop is measured.
