@@ -771,10 +771,12 @@ compiles its collection evaluates on the same compiled tasks:
   rollout asks the id of the version that was newest when it started, so its span is one
   version. The watchdog's evaluations ask versions by the same ids.
 
-  `sessions: merged` writes each exact, append-only session as one record (its every answer
-  supervised where it stands, the job started with `pack_answers`); it needs `params.max_block`
-  to hold the longest session, and a session that is not exact, not append-only or longer stays
-  one record per call, counted by why in the report's `rollouts.sessions`. `params.loss_agg`
+  `sessions: merged` writes each append-only segment of an exact session as one record (its every
+  answer supervised where it stands, the job started with `pack_answers`, every segment with the
+  rollout's one reward). A rewrite of the history (a compaction, a changed system prompt or tool
+  list) starts a segment, and so does a call that would take one past `params.max_block`, which
+  the run needs. A session with an untraced call, or calls under several samplers, stays one
+  record per call, counted by why in the report's `rollouts.sessions`. `params.loss_agg`
   weighs them: `token-sum` trains exactly what the per-call records train, `seq-mean` weighs
   every episode alike.
 

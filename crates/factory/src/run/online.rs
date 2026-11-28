@@ -149,10 +149,11 @@ pub struct OnlineParams {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub pin_versions: bool,
     /// How each rollout's session becomes the learner's records:
-    /// `per_call` (one record per model call) or `merged` (an exact,
-    /// append-only session as one record, its answers packed, at most
-    /// `params.max_block` ids; any other stays one per call and is counted
-    /// in `rollouts.sessions` by why). `params.loss_agg` weighs them:
+    /// `per_call` (one record per model call) or `merged` (each append-only
+    /// segment of an exact session as one record, its answers packed, cut
+    /// before a call that would pass `params.max_block` ids; a session with
+    /// an untraced call stays one record per call and is counted in
+    /// `rollouts.sessions` by why). `params.loss_agg` weighs them:
     /// `token-sum` trains exactly what the per-call records train,
     /// `seq-mean` weighs every episode alike.
     #[serde(default, skip_serializing_if = "SessionsMode::is_default")]
@@ -190,7 +191,7 @@ pub enum SessionsMode {
     /// One record per model call.
     #[default]
     PerCall,
-    /// An exact, append-only session as one record.
+    /// Each append-only segment of an exact session as one record.
     Merged,
 }
 
@@ -259,8 +260,8 @@ impl OnlineParams {
         if p.sessions == SessionsMode::Merged
             && p.params.get("max_block").and_then(Value::as_u64).is_none()
         {
-            return Err("sessions: merged trains a whole session as one sequence: set params.max_block to the \
-                 longest session the learner trains (a longer one stays one record per call)"
+            return Err("sessions: merged trains each segment of a session as one sequence: set params.max_block to \
+                 the learner's block (a segment is cut before a call that would pass it)"
                 .into());
         }
         if let Some(watchdog) = &p.watchdog {

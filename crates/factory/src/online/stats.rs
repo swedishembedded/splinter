@@ -102,8 +102,9 @@ pub struct Stats {
     /// Finished rollouts that hit a length limit: counted in the reward
     /// statistics, never sent (a learner trains none of them).
     pub rollouts_truncated: u64,
-    /// Finished rollouts of a run that merges sessions: `merged`, or why the
-    /// session stayed one record per call.
+    /// Finished rollouts of a run that merges sessions: `merged` (one record
+    /// per append-only segment), or why the session stayed one record per
+    /// call.
     pub sessions: BTreeMap<String, u64>,
     /// Finished rollouts a limit ended before their agent finished, by cause
     /// (scored failures, never retried).

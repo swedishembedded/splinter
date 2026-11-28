@@ -102,9 +102,9 @@ fn view_of<'s>(
             let shape = splinter_data::RewardShape::unshaped()
                 .penalising(penalties)
                 .map_err(|e| e.to_string())?;
-            // Merged, an attempt's append-only session is one record, and
-            // one longer than the dataset's block is written per call
-            // instead of being left out whole.
+            // Merged, each append-only segment of an attempt's session is
+            // one record, a segment cut before an action that would pass
+            // the dataset's block.
             let merged = dataset.sessions == crate::ops::Sessions::Merged;
             let view = PolicyGradient::new(strength)
                 .rewards(shape)
@@ -586,7 +586,7 @@ pub(super) fn produce(
             .map(|(why, n)| format!("{n} {}", why.name()))
             .collect();
         report.push_str(&format!(
-            "Sessions: {} merged into one record each ({} ids forwarded where their per-call records forward {}); {} without sampled tokens packed as text; {} written one record per call ({}).\n\n",
+            "Sessions: {} merged records, one per append-only segment ({} ids forwarded where their per-call records forward {}); {} without sampled tokens packed as text; {} written one record per call ({}).\n\n",
             sessions.merged,
             sessions.merged_tokens,
             sessions.per_call_tokens,

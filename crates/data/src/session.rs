@@ -421,17 +421,18 @@ impl SessionRecord {
     }
 }
 
-/// How the sessions of a dataset were written: merged into one record each,
-/// or one record per call and why, with the ids each form forwards.
+/// How the sessions of a dataset were written: one merged record per
+/// append-only segment, or one record per call and why, with the ids each
+/// form forwards.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionReport {
-    /// Sessions written as one record.
+    /// Merged records written, one per append-only segment.
     pub merged: u64,
     /// Sessions written one record per call, by reason.
     pub per_call: BTreeMap<FallbackReason, u64>,
-    /// The ids the merged sessions' records forward.
+    /// The ids the merged records forward.
     pub merged_tokens: u64,
-    /// The ids the same sessions' per-call records would have forwarded.
+    /// The ids the same calls' per-call records would have forwarded.
     pub per_call_tokens: u64,
     /// Sessions none of whose answers carried sampled tokens, written as one
     /// text record each (the trainer tokenises the text and weighs it
