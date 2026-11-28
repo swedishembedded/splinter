@@ -24,3 +24,11 @@ the device as a parameter of the call.
 and `BRAIN_DEVICE=cpu BRAIN_BACKEND=cpu` set, until brain takes the device as a parameter of the call. Without
 them, the stress loop that found this defect put eight test processes on GPU 0 while a campaign's servers held
 the cards.
+
+**Partly closed in brain b3a29ae7d (not yet in splinter's pin):** a timeline model is now built on a `Placement`
+the caller names: the CPU by default, `TimelineModel::load_on` and `TrainSpec::placement` for another device. Brain's
+own processes use the set their flags configured. Once the pin moves, splinter's timeline training and serving run
+on the CPU unless it passes a placement from its configuration; that is a follow-up for the pin move. The model's
+own device no longer comes from the environment. A bare test binary still probes the cards, though: brain's ambient
+compute set reads `BRAIN_DEVICE`/`BRAIN_BACKEND` and probes when nothing configured the process, and code beside the
+model reaches it. Until brain's ledger item EC-4 is done, the procedure above stands.
