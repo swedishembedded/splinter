@@ -161,6 +161,7 @@ impl Session {
                         },
                     },
                     reasoning: None,
+                    sampled: None,
                 });
                 self.history
                     .push(Message::tool_result(&made.id, &answered.1));

@@ -229,6 +229,7 @@ impl Answerer {
                 role,
                 content: MessageContent::Text((*text).to_string()),
                 reasoning: None,
+                sampled: None,
             });
         }
         let model = self.provider_with(decoding).map_err(anyhow::Error::from)?;
@@ -266,6 +267,7 @@ impl Answerer {
             role,
             content: MessageContent::Text(text.to_string()),
             reasoning: None,
+            sampled: None,
         };
         let messages = vec![message(Role::System, system), message(Role::User, user)];
         Self::complete_messages(model, messages, max_tokens, on_text).await
