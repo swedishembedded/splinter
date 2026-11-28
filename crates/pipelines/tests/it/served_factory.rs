@@ -40,8 +40,13 @@ fn compiled_store(dir: &std::path::Path) -> EnvironmentStore {
         instances_per_split: 4,
         ..AdmissionPolicy::default()
     };
-    let seed = splinter_model::seed::draw().value();
-    println!("seed {seed}");
+    // What is tested is which environments a campaign takes, so the easiest
+    // rung must be admitted on its gates. Its eight instances are drawn
+    // distinct, but at that rung about one draw in twenty still gives two
+    // programs one output, which the red team's cross-instance attack rightly
+    // counts against the environment.
+    // seed: a fixture whose outcome (both environments pass their gates) was measured at this seed
+    let seed = 1;
     compile(
         &spec,
         &builtin(),

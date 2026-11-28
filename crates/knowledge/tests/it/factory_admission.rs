@@ -15,7 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use splinter_core::verifiability::{Split, VerifierClass};
-use splinter_knowledge::factory::admission::{admit, AdmissionPolicy, Status};
+use splinter_knowledge::factory::admission::{admit, draw_instances, AdmissionPolicy, Status};
 use splinter_knowledge::factory::artifact::{
     environment_id, EnvMeta, Instance, Parts, SolverTools, SCHEMA_VERSION,
 };
@@ -428,6 +428,38 @@ fn a_repeated_instance_is_not_novel() {
     assert_ne!(report.status, Status::Admitted);
     assert!(!report.may_enter_campaign());
     assert_eq!(Split::Dev.as_str(), "dev");
+}
+
+/// A small program space gives two seeds one program now and then; the draw
+/// skips the repeat, so an honest plugin is never refused as not novel for
+/// the admission seed it happened to get.
+#[test]
+fn the_instances_an_admission_draws_never_repeat_one_another() {
+    let plugin = ProgramOutput::lua();
+    let easiest: BTreeMap<String, u32> = plugin
+        .knobs()
+        .iter()
+        .map(|k| (k.name.to_string(), k.min))
+        .collect();
+    let policy = AdmissionPolicy {
+        instances_per_split: 4,
+        ..AdmissionPolicy::default()
+    };
+    for admission_seed in 0..400 {
+        let drawn = draw_instances(&plugin, &easiest, &policy, admission_seed)
+            .unwrap()
+            .instances;
+        assert_eq!(drawn.len(), 8);
+        let texts: BTreeSet<String> = drawn
+            .iter()
+            .map(|(_, instance)| plugin.novelty_text(instance))
+            .collect();
+        assert_eq!(
+            texts.len(),
+            8,
+            "admission seed {admission_seed} drew a repeat"
+        );
+    }
 }
 
 #[test]

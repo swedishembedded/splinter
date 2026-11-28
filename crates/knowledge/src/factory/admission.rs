@@ -300,6 +300,82 @@ fn run_reference(
     Ok((session, Reference::between(&before, &after), verdict))
 }
 
+/// The instances an admission of `plugin` at the resolved `difficulty` samples
+/// from `admission_seed`: `policy.instances_per_split` train instances, then
+/// as many dev ones, each with the request that made it, and the seeds
+/// skipped on the way.
+///
+/// Seeds come from one stream, each used once. A seed for which the plugin
+/// finds no valid instance (a repository whose faults cannot be made to fail
+/// a few tests), or whose instance repeats one drawn already (two seeds of a
+/// small program space giving one program), is skipped and the next one
+/// drawn. Too many skips is the plugin's failure: a seed it cannot make an
+/// instance for fails the draw, and a repeat is kept for the novelty gate to
+/// refuse.
+///
+/// # Errors
+/// The plugin's error once the skips are spent, or any other plugin error.
+pub fn draw_instances(
+    plugin: &dyn Plugin,
+    difficulty: &BTreeMap<String, u32>,
+    policy: &AdmissionPolicy,
+    admission_seed: u64,
+) -> Result<Draw, AdmitError> {
+    let mut stream = SplitMix64::new(admission_seed);
+    let mut used = BTreeSet::new();
+    let mut seen = novelty();
+    let mut skipped = 0_usize;
+    let max_skipped = 8 * policy.instances_per_split.max(1);
+    let mut drawn = Vec::new();
+    for split in [Split::Train, Split::Dev] {
+        let mut made = 0;
+        while made < policy.instances_per_split {
+            let seed = stream.next_u64();
+            if !used.insert(seed) {
+                continue;
+            }
+            let request = InstanceRequest {
+                split,
+                seed,
+                difficulty: difficulty.clone(),
+            };
+            match plugin.generate(&request) {
+                Ok(instance) => {
+                    let text = plugin.novelty_text(&instance);
+                    if seen.repeats(&text).is_some() && skipped < max_skipped {
+                        skipped += 1;
+                        continue;
+                    }
+                    seen.admit(&text);
+                    drawn.push((request, instance));
+                    made += 1;
+                }
+                Err(PluginError::Generation(_)) if skipped < max_skipped => skipped += 1,
+                Err(other) => return Err(other.into()),
+            }
+        }
+    }
+    Ok(Draw {
+        instances: drawn,
+        skipped,
+    })
+}
+
+/// What an admission drew ([`draw_instances`]).
+#[derive(Debug)]
+pub struct Draw {
+    /// Each instance with the request that made it: train, then dev.
+    pub instances: Vec<(InstanceRequest, Instance)>,
+    /// The seeds skipped: no valid instance, or a repeat.
+    pub skipped: usize,
+}
+
+/// The one rule of what repeats an earlier instance, for the draw and the
+/// novelty gate alike.
+fn novelty() -> Seen {
+    Seen::new(3, 0.9)
+}
+
 /// Samples `plugin` at `difficulty`, holds every sampled instance to the
 /// gates and the red team, and reports. `known` holds the versions of
 /// instances already trained on, which a new one must not repeat. The
@@ -318,41 +394,17 @@ pub fn admit(
 ) -> Result<(AdmissionReport, Vec<Instance>), AdmitError> {
     let difficulty = resolve_difficulty(plugin.id(), plugin.knobs(), difficulty)?;
     let environment = environment_id(plugin.id(), plugin.version(), &difficulty);
-    // Seeds come from one stream, each used once. A seed for which the
-    // plugin finds no valid instance (a repository whose faults cannot be
-    // made to fail a few tests) is skipped and the next one drawn; too many
-    // skips is the plugin's failure.
-    let mut stream = SplitMix64::new(admission_seed);
-    let mut used = BTreeSet::new();
-    let mut skipped = 0_usize;
-    let max_skipped = 8 * policy.instances_per_split.max(1);
-    let mut samples = Vec::new();
-    for split in [Split::Train, Split::Dev] {
-        let mut made = 0;
-        while made < policy.instances_per_split {
-            let seed = stream.next_u64();
-            if !used.insert(seed) {
-                continue;
-            }
-            let request = InstanceRequest {
-                split,
-                seed,
-                difficulty: difficulty.clone(),
-            };
-            match plugin.generate(&request) {
-                Ok(instance) => {
-                    samples.push(Sample {
-                        instance,
-                        reference: Reference::default(),
-                        request,
-                    });
-                    made += 1;
-                }
-                Err(PluginError::Generation(_)) if skipped < max_skipped => skipped += 1,
-                Err(other) => return Err(other.into()),
-            }
-        }
-    }
+    let draw = draw_instances(plugin, &difficulty, policy, admission_seed)?;
+    let skipped = draw.skipped;
+    let mut samples: Vec<Sample> = draw
+        .instances
+        .into_iter()
+        .map(|(request, instance)| Sample {
+            instance,
+            reference: Reference::default(),
+            request,
+        })
+        .collect();
     let seeds_of = |split: Split| -> Vec<u64> {
         samples
             .iter()
@@ -708,7 +760,7 @@ fn check_novelty(
     samples: &[Sample],
     known: &BTreeSet<Digest>,
 ) {
-    let mut seen = Seen::new(3, 0.9);
+    let mut seen = novelty();
     let mut versions: BTreeSet<Digest> = BTreeSet::new();
     let mut by_split: BTreeMap<Split, BTreeSet<Digest>> = BTreeMap::new();
     for sample in samples {
